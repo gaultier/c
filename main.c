@@ -1,4 +1,4 @@
-#include "watch_fs.h"
+#include "fs_watch.h"
 
 int main(int argc, char* argv[]) {
     gbString path = gb_make_string(argv[1]);
