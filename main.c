@@ -8,6 +8,11 @@ int main(int argc, char* argv[]) {
     gb_arena_init_from_memory(&arena, memory, memory_size);
     gbAllocator allocator = gb_arena_allocator(&arena);
 
+    if (argc != 2) {
+        printf("Usage: %s <file>\n", argv[0]);
+        return 0;
+    }
+
     gbString path = gb_string_make(allocator, argv[1]);
     error* err = fs_watch_file(allocator, &path);
     if (err != NULL) {
