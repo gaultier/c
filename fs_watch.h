@@ -4,17 +4,14 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/event.h>
 #include <sys/fcntl.h>
 #include <sys/time.h>
 #include <sys/types.h>
 
-#define GB_STRING_IMPLEMENTATION
-// FIXME
-#define GB_ALLOC malloc
-#define GB_FREE free
-
-#include "./vendor/gb_string.h"
+#include "./error.h"
+#include "./vendor/gb.h"
 
 #define MAX_EVENT 1
 

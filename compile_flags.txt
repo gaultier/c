@@ -1,0 +1,4 @@
+-std=c99
+-g
+-fsanitize=address
+-Wall
