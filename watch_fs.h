@@ -18,7 +18,7 @@
 
 #define MAX_EVENT 1
 
-void fs_watch_file(gbString* path) {
+static void fs_watch_file(gbString* path) {
   assert(path != NULL);
 
   const int fd = open(*path, O_RDONLY);
