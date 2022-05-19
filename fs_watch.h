@@ -1,8 +1,6 @@
 #pragma once
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/event.h>
@@ -11,24 +9,25 @@
 #include <sys/types.h>
 
 #include "./error.h"
-#include "./vendor/gb.h"
 
 #define MAX_EVENT 1
 
-static void fs_watch_file(gbString* path) {
-  assert(path != NULL);
+static error* fs_watch_file(gbAllocator allocator, gbString* path) {
+  GB_ASSERT(path != NULL);
 
   const int fd = open(*path, O_RDONLY);
   if (fd == -1) {
-    fprintf(stderr, "Failed to open the file %s: %s\n", *path, strerror(errno));
-    return;
+    error* err = error_make(allocator);
+    error_record(allocator, err, "Failed to open the file %s: %s\n", *path,
+                 strerror(errno));
+    return err;
   }
 
   const int queue = kqueue();
   if (queue == -1) {
     fprintf(stderr, "Failed to create queue with kqueue(): %s\n",
             strerror(errno));
-    return;
+    return NULL;  // FIXME
   }
 
   int event_count = 0;
@@ -45,7 +44,7 @@ static void fs_watch_file(gbString* path) {
     if (event_count == -1) {
       fprintf(stderr, "Failed to get the events with kevent(): %s\n",
               strerror(errno));
-      return;
+      return NULL;  // FIXME
     }
 
     for (int i = 0; i < MAX_EVENT; i++) {
@@ -67,4 +66,5 @@ static void fs_watch_file(gbString* path) {
       }
     }
   }
+  return NULL;
 }
