@@ -5,12 +5,20 @@
 #include <string.h>
 #include <sys/event.h>
 #include <sys/fcntl.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 
 #include "./error.h"
+#include "vendor/gb.h"
 
 #define MAX_EVENT 1
+
+static bool path_is_directory(char* path) {
+  struct stat path_stat;
+  stat(path, &path_stat);
+  return S_ISDIR(path_stat.st_mode);
+}
 
 static error* fs_watch_file(gbAllocator allocator, gbString* path) {
   GB_ASSERT(path != NULL);
@@ -35,7 +43,7 @@ static error* fs_watch_file(gbAllocator allocator, gbString* path) {
          NOTE_WRITE | NOTE_DELETE | NOTE_RENAME | NOTE_REVOKE, 0, 0);
   struct kevent event_list[MAX_EVENT] = {};
 
-  printf("Watching file %s\n", *path);
+  printf("Watching %s\n", *path);
   while (1) {
     event_count =
         kevent(queue, change_list, MAX_EVENT, event_list, MAX_EVENT, NULL);
@@ -48,19 +56,19 @@ static error* fs_watch_file(gbAllocator allocator, gbString* path) {
 
     for (int i = 0; i < MAX_EVENT; i++) {
       struct kevent* e = &event_list[i];
-      if (e->fflags & NOTE_DELETE) {
+      if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_DELETE)) {
         printf("Deleted\n");
       }
-      if (e->fflags & NOTE_WRITE) {
-        printf("Written to\n");
+      if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_WRITE)) {
+        printf("Written to. Data=%p\n", e->data);
       }
-      if (e->fflags & NOTE_RENAME) {
+      if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_RENAME)) {
         printf("Renamed\n");
       }
-      if (e->fflags & NOTE_EXTEND) {
+      if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_EXTEND)) {
         printf("Extended\n");
       }
-      if (e->fflags & NOTE_REVOKE) {
+      if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_REVOKE)) {
         printf("Revoked\n");
       }
     }

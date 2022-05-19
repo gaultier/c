@@ -9,11 +9,18 @@ int main(int argc, char* argv[]) {
     gbAllocator allocator = gb_arena_allocator(&arena);
 
     if (argc != 2) {
-        printf("Usage: %s <file>\n", argv[0]);
+        printf("Usage: %s <directory>\n", argv[0]);
         return 0;
     }
 
-    gbString path = gb_string_make(allocator, argv[1]);
+    char* in_name = argv[1];
+    if (!path_is_directory(in_name)) {
+        fprintf(stderr, "%s is not a directory\n", in_name);
+        printf("Usage: %s <directory>\n", argv[0]);
+        return 0;
+    }
+
+    gbString path = gb_string_make(allocator, in_name);
     error* err = fs_watch_file(allocator, &path);
     if (err != NULL) {
         error_print(err);
