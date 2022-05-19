@@ -27,7 +27,7 @@ typedef struct {
 
 #define error_record(allocator, err, fmt, ...)                                 \
   do {                                                                         \
-    GB_ASSERT(err != NULL);                                                    \
+    if (err == NULL) err = error_make(allocator);                              \
     GB_ASSERT(fmt != NULL);                                                    \
                                                                                \
     gb_array_append(err->call_stack, CURRENT_LOCATION(allocator));             \
@@ -36,6 +36,7 @@ typedef struct {
                                         fmt, __VA_ARGS__);                     \
                                                                                \
     gb_array_append(err->errors, msg);                                         \
+    return err;                                                                \
   } while (0)
 
 static error* error_make(gbAllocator allocator) {

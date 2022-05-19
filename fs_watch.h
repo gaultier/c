@@ -17,10 +17,9 @@ static error* fs_watch_file(gbAllocator allocator, gbString* path) {
 
   const int fd = open(*path, O_RDONLY);
   if (fd == -1) {
-    error* err = error_make(allocator);
+    error* err = NULL;
     error_record(allocator, err, "Failed to open the file %s: %s\n", *path,
                  strerror(errno));
-    return err;
   }
 
   const int queue = kqueue();
