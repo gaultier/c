@@ -56,8 +56,6 @@ static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
     if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
       continue;
 
-    printf("dir walk: seen file %s\n", entry->d_name);
-
     gbString absolute_path_file =
         gb_string_append_rune(path, GB_PATH_SEPARATOR);
     absolute_path_file = gb_string_appendc(absolute_path_file, entry->d_name);
