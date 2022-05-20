@@ -2,6 +2,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/event.h>
@@ -11,10 +12,7 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
-#include "./error.h"
-#include "vendor/gb.h"
-
-#define MAX_EVENT 1
+#include "./util.h"
 
 static mode_t path_get_mode(char* path) {
   struct stat path_stat;
@@ -48,6 +46,7 @@ static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
             __LINE__, path, strerror(errno));
     return;
   }
+  fn(path, /* unused */ 0, allocator);
 
   struct dirent* entry;
 
@@ -65,58 +64,70 @@ static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
   closedir(dirp);
 }
 
-static error* fs_watch_file(gbAllocator allocator, gbString* path) {
-  GB_ASSERT(path != NULL);
+static void fs_watch_file(gbAllocator allocator, gbArray(gbString) paths) {
+  GB_ASSERT(paths != NULL);
 
-  const int fd = open(*path, O_RDONLY);
-  if (fd == -1) {
-    error* err = NULL;
-    error_record(allocator, err, "Failed to open the file %s: %s\n", *path,
-                 strerror(errno));
+  gbArray(int) fds = NULL;
+  gb_array_init_reserve(fds, allocator, gb_array_count(paths));
+  for (int i = 0; i < gb_array_count(paths); i++) {
+    gbString path = paths[i];
+    const int fd = open(path, O_RDONLY);
+    if (fd == -1) {
+      fprintf(stderr, "%s:%d:Failed to open the file %s: %s\n", __FILE__,
+              __LINE__, path, strerror(errno));
+    }
+
+    gb_array_append(fds, fd);
+    printf("Watching %s\n", paths[i]);
   }
 
   const int queue = kqueue();
   if (queue == -1) {
-    fprintf(stderr, "Failed to create queue with kqueue(): %s\n",
-            strerror(errno));
-    return NULL;  // FIXME
+    fprintf(stderr, "%s:%d:Failed to create queue with kqueue(): %s\n",
+            __FILE__, __LINE__, strerror(errno));
+    return;
   }
 
   int event_count = 0;
-  struct kevent change_list[MAX_EVENT] = {};
-  EV_SET(&change_list[0], fd, EVFILT_VNODE, EV_ADD | EV_CLEAR,
-         NOTE_WRITE | NOTE_DELETE | NOTE_RENAME | NOTE_REVOKE, 0, 0);
-  struct kevent event_list[MAX_EVENT] = {};
+  gbArray(struct kevent) change_list = NULL;
+  gb_array_init_reserve(change_list, allocator, gb_array_count(fds));
+  for (int i = 0; i < gb_array_count(fds); i++) {
+    struct kevent event = {};
+    EV_SET(&event, fds[i], EVFILT_VNODE, EV_ADD | EV_CLEAR,
+           NOTE_WRITE | NOTE_DELETE | NOTE_RENAME | NOTE_REVOKE, 0, 0);
+    gb_array_append(change_list, event);
+  }
 
-  printf("Watching %s\n", *path);
+  gbArray(struct kevent) event_list = NULL;
+  gb_array_init_reserve(event_list, allocator, gb_array_count(change_list));
+
   while (1) {
-    event_count =
-        kevent(queue, change_list, MAX_EVENT, event_list, MAX_EVENT, NULL);
+    event_count = kevent(queue, change_list, gb_array_count(change_list),
+                         event_list, gb_array_capacity(event_list), NULL);
 
     if (event_count == -1) {
-      fprintf(stderr, "Failed to get the events with kevent(): %s\n",
-              strerror(errno));
-      return NULL;  // FIXME
+      fprintf(stderr, "%s:%d:Failed to get the events with kevent(): %s\n",
+              __FILE__, __LINE__, strerror(errno));
+      return;
     }
 
-    for (int i = 0; i < MAX_EVENT; i++) {
+    for (int i = 0; i < gb_array_count(change_list); i++) {
       struct kevent* e = &event_list[i];
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_DELETE)) {
-        printf("Deleted\n");
+        printf("%s Deleted\n", paths[i]);
       }
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_WRITE)) {
-        printf("Written to\n");
+        printf("%s Written to\n", paths[i]);
       }
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_RENAME)) {
-        printf("Renamed\n");
+        printf("%s Renamed\n", paths[i]);
       }
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_EXTEND)) {
-        printf("Extended\n");
+        printf("%s Extended\n", paths[i]);
       }
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_REVOKE)) {
-        printf("Revoked\n");
+        printf("%s Revoked\n", paths[i]);
       }
     }
   }
-  return NULL;
 }
