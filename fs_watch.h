@@ -24,6 +24,21 @@ static bool path_is_directory(char* path) {
   return S_ISDIR(path_get_mode(path));
 }
 
+typedef enum {
+  FK_FILE = 0,
+  FK_DIR = 1,
+} file_kind;
+
+static const char* file_kind_str[2] = {
+    [FK_FILE] = "file",
+    [FK_DIR] = "directory",
+};
+
+typedef struct {
+  gbString absolute_path;
+  file_kind kind;
+} file_info;
+
 typedef void (*dir_walk_fn)(gbString, usize, void*);
 
 static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
@@ -32,7 +47,7 @@ static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
 
   const mode_t mode = path_get_mode(path);
   if (S_ISREG(mode)) {
-    fn(path, /* unused */ 0, allocator);
+    fn(path, /* HACK hijacking */ FK_FILE, allocator);
     return;
   }
 
@@ -46,7 +61,7 @@ static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
             __LINE__, path, strerror(errno));
     return;
   }
-  fn(path, /* unused */ 0, allocator);
+  fn(path, /* HACK hijacking the size */ FK_DIR, allocator);
 
   struct dirent* entry;
 
@@ -64,13 +79,13 @@ static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
   closedir(dirp);
 }
 
-static void fs_watch_file(gbAllocator allocator, gbArray(gbString) paths) {
-  GB_ASSERT(paths != NULL);
+static void fs_watch_file(gbAllocator allocator, gbArray(file_info) files) {
+  GB_ASSERT(files != NULL);
 
   gbArray(int) fds = NULL;
-  gb_array_init_reserve(fds, allocator, gb_array_count(paths));
-  for (int i = 0; i < gb_array_count(paths); i++) {
-    gbString path = paths[i];
+  gb_array_init_reserve(fds, allocator, gb_array_count(files));
+  for (int i = 0; i < gb_array_count(files); i++) {
+    gbString path = files[i].absolute_path;
     const int fd = open(path, O_RDONLY);
     if (fd == -1) {
       fprintf(stderr, "%s:%d:Failed to open the file %s: %s\n", __FILE__,
@@ -78,7 +93,8 @@ static void fs_watch_file(gbAllocator allocator, gbArray(gbString) paths) {
     }
 
     gb_array_append(fds, fd);
-    printf("Watching %s\n", paths[i]);
+    printf("(%s) Watching %s\n", file_kind_str[files[i].kind],
+           files[i].absolute_path);
   }
 
   const int queue = kqueue();
@@ -114,19 +130,27 @@ static void fs_watch_file(gbAllocator allocator, gbArray(gbString) paths) {
     for (int i = 0; i < gb_array_count(change_list); i++) {
       struct kevent* e = &event_list[i];
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_DELETE)) {
-        printf("%s Deleted\n", paths[i]);
+        printf("(%s) %s Deleted\n", file_kind_str[files[i].kind],
+               files[i].absolute_path);
       }
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_WRITE)) {
-        printf("%s Written to\n", paths[i]);
+        printf("(%s) %s Written to\n", file_kind_str[files[i].kind],
+               files[i].absolute_path);
       }
+
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_RENAME)) {
-        printf("%s Renamed\n", paths[i]);
+        printf("(%s) %s Renamed\n", file_kind_str[files[i].kind],
+               files[i].absolute_path);
       }
+
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_EXTEND)) {
-        printf("%s Extended\n", paths[i]);
+        printf("(%s) %s Extended\n", file_kind_str[files[i].kind],
+               files[i].absolute_path);
       }
+
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_REVOKE)) {
-        printf("%s Revoked\n", paths[i]);
+        printf("(%s) %s Revoked\n", file_kind_str[files[i].kind],
+               files[i].absolute_path);
       }
     }
   }

@@ -1,17 +1,17 @@
 #include "fs_watch.h"
 #include "vendor/gb.h"
-
 typedef struct {
     gbAllocator allocator;
-    gbArray(gbString) files;
+    gbArray(file_info) files;
 } on_file_arg;
 
-void on_file(gbString absolute_path, usize _len, void* arg) {
+void on_file(gbString absolute_path, usize file_kind, void* arg) {
     GB_ASSERT_NOT_NULL(arg);
 
     on_file_arg* fn_arg = arg;
     GB_ASSERT_NOT_NULL(fn_arg->files);
-    gb_array_append(fn_arg->files, absolute_path);
+    gb_array_append(fn_arg->files, ((file_info){.absolute_path = absolute_path,
+                                                .kind = file_kind}));
 }
 
 int main(int argc, char* argv[]) {
@@ -39,8 +39,5 @@ int main(int argc, char* argv[]) {
     gb_array_init_reserve(arg.files, allocator, 100);
     path_directory_walk(path, on_file, &arg);
 
-    for (int i = 0; i < gb_array_count(arg.files); i++) {
-        printf("[D008] %s\n", arg.files[i]);
-    }
     fs_watch_file(allocator, arg.files);
 }
