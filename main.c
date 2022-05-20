@@ -9,6 +9,10 @@ typedef struct {
 void on_file(gbString absolute_path, usize _len, void* arg) {
     GB_ASSERT_NOT_NULL(arg);
     printf("[D003] %s\n", absolute_path);
+
+    on_file_arg* fn_arg = arg;
+    GB_ASSERT_NOT_NULL(fn_arg->files);
+    gb_array_append(fn_arg->files, absolute_path);
 }
 
 int main(int argc, char* argv[]) {
@@ -34,7 +38,7 @@ int main(int argc, char* argv[]) {
     gbString path = gb_string_make(allocator, in_name);
     on_file_arg arg = {.allocator = allocator};
     gb_array_init(arg.files, allocator);
-    path_directory_walk(path, on_file, &allocator);
+    path_directory_walk(path, on_file, &arg);
     /* error* err = fs_watch_file(allocator, &path); */
     /* if (err != NULL) { */
     /*     error_print(err); */
