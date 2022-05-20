@@ -1,4 +1,9 @@
 #include "fs_watch.h"
+#include "vendor/gb.h"
+
+void on_file(gbString absolute_path, usize _len, void* arg) {
+    printf("[D003] %s\n", absolute_path);
+}
 
 int main(int argc, char* argv[]) {
     gbArena arena = {};
@@ -21,7 +26,7 @@ int main(int argc, char* argv[]) {
     }
 
     gbString path = gb_string_make(allocator, in_name);
-    path_directory_walk(path, NULL, &allocator);
+    path_directory_walk(path, on_file, &allocator);
     /* error* err = fs_watch_file(allocator, &path); */
     /* if (err != NULL) { */
     /*     error_print(err); */

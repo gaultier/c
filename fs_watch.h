@@ -26,15 +26,15 @@ static bool path_is_directory(char* path) {
   return S_ISDIR(path_get_mode(path));
 }
 
-typedef void (*dir_walk_fn)(char*, usize, void*);
+typedef void (*dir_walk_fn)(gbString, usize, void*);
 
 static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
   GB_ASSERT_NOT_NULL(arg);
   gbAllocator* allocator = arg;
-  fprintf(stderr, "[D001] %s\n", path);
 
   const mode_t mode = path_get_mode(path);
   if (S_ISREG(mode)) {
+    fn(path, /* unused */ 0, allocator);
     return;
   }
 
