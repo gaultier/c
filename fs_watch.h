@@ -1,4 +1,5 @@
 #pragma once
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -6,6 +7,7 @@
 #include <sys/event.h>
 #include <sys/fcntl.h>
 #include <sys/stat.h>
+#include <sys/syslimits.h>
 #include <sys/time.h>
 #include <sys/types.h>
 
@@ -14,10 +16,55 @@
 
 #define MAX_EVENT 1
 
-static bool path_is_directory(char* path) {
+static mode_t path_get_mode(char* path) {
   struct stat path_stat;
   stat(path, &path_stat);
-  return S_ISDIR(path_stat.st_mode);
+  return path_stat.st_mode;
+}
+
+static bool path_is_directory(char* path) {
+  return S_ISDIR(path_get_mode(path));
+}
+
+typedef void (*dir_walk_fn)(char*, usize, void*);
+
+static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
+  GB_ASSERT_NOT_NULL(arg);
+  gbAllocator* allocator = arg;
+  fprintf(stderr, "[D001] %s\n", path);
+
+  const mode_t mode = path_get_mode(path);
+  if (S_ISREG(mode)) {
+    return;
+  }
+
+  if (!S_ISDIR(mode)) {
+    return;
+  }
+
+  DIR* dirp = opendir(path);
+  if (dirp == NULL) {
+    fprintf(stderr, "%s:%d:Could not open `%s`: %s. Skipping.\n", __FILE__,
+            __LINE__, path, strerror(errno));
+    return;
+  }
+
+  struct dirent* entry;
+
+  while ((entry = readdir(dirp)) != NULL) {
+    // Skip the special `.` and `..`
+    if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
+      continue;
+
+    printf("dir walk: seen file %s\n", entry->d_name);
+
+    gbString absolute_path_file =
+        gb_string_append_rune(path, GB_PATH_SEPARATOR);
+    absolute_path_file = gb_string_appendc(absolute_path_file, entry->d_name);
+    path_directory_walk(absolute_path_file, fn, arg);
+  }
+
+  closedir(dirp);
 }
 
 static error* fs_watch_file(gbAllocator allocator, gbString* path) {
@@ -60,7 +107,7 @@ static error* fs_watch_file(gbAllocator allocator, gbString* path) {
         printf("Deleted\n");
       }
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_WRITE)) {
-        printf("Written to. Data=%p\n", e->data);
+        printf("Written to\n");
       }
       if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_RENAME)) {
         printf("Renamed\n");

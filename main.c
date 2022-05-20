@@ -21,9 +21,10 @@ int main(int argc, char* argv[]) {
     }
 
     gbString path = gb_string_make(allocator, in_name);
-    error* err = fs_watch_file(allocator, &path);
-    if (err != NULL) {
-        error_print(err);
-        return 1;
-    }
+    path_directory_walk(path, NULL, &allocator);
+    /* error* err = fs_watch_file(allocator, &path); */
+    /* if (err != NULL) { */
+    /*     error_print(err); */
+    /*     return 1; */
+    /* } */
 }
