@@ -155,11 +155,14 @@ static void fs_watch_file(gbAllocator allocator, gbArray(file_info) files) {
               f->absolute_path);
       if (e->fflags & NOTE_DELETE) {
         printf("(%s) %s Deleted\n", file_kind_str[f->kind], f->absolute_path);
-        // TODO: rm; close(fd)
+        close(fds[i]);
+        gb_free(allocator, f->absolute_path);
       }
       if (e->fflags & NOTE_WRITE) {
         printf("(%s) %s Written to\n", file_kind_str[f->kind],
                f->absolute_path);
+        // TODO: if directory and new files created in it then add then to the
+        // watch list
       }
 
       if (e->fflags & NOTE_RENAME) {
