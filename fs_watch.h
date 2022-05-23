@@ -163,10 +163,14 @@ static void fs_watch_file(gbAllocator allocator, gbArray(file_info) files) {
       }
 
       if (e->fflags & NOTE_RENAME) {
-        printf("(%s) %s Renamed\n", file_kind_str[f->kind], f->absolute_path);
-        printf("[D004] (%s) %s data=%p\n", file_kind_str[f->kind],
-               f->absolute_path, (void*)e->data);
-        // TODO: get new filename from fd e.g. `fcntl(fd, F_GETPATH, filePath)`
+        printf("(%s) %s Renamed to:", file_kind_str[f->kind], f->absolute_path);
+        if (fcntl(fds[f_i], F_GETPATH, f->absolute_path) == -1) {
+          fprintf(
+              stderr,
+              "Failed to get new file name from fd for renamed file: err=%s\n",
+              strerror(errno));
+        }
+        printf("%s\n", f->absolute_path);
       }
 
       if (e->fflags & NOTE_EXTEND) {
