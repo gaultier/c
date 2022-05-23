@@ -88,14 +88,15 @@ static void fs_watch_file(gbAllocator allocator, gbArray(file_info) files) {
   gb_array_init_reserve(fds, allocator, gb_array_count(files));
   for (int i = 0; i < gb_array_count(files); i++) {
     gbString path = files[i].absolute_path;
-    const int fd = open(path, O_RDONLY);
+    const int fd = open(path, O_EVTONLY);
     if (fd == -1) {
       fprintf(stderr, "%s:%d:Failed to open the file %s: %s\n", __FILE__,
               __LINE__, path, strerror(errno));
+      return;
     }
 
     gb_array_append(fds, fd);
-    printf("(%s) Watching %s\n", file_kind_str[files[i].kind],
+    printf("[%d] (%s) Watching %s\n", i, file_kind_str[files[i].kind],
            files[i].absolute_path);
   }
 
@@ -113,6 +114,7 @@ static void fs_watch_file(gbAllocator allocator, gbArray(file_info) files) {
     struct kevent event = {};
     EV_SET(&event, fds[i], EVFILT_VNODE, EV_ADD | EV_CLEAR,
            NOTE_WRITE | NOTE_DELETE | NOTE_RENAME | NOTE_REVOKE, 0, 0);
+    event.udata = i;
     gb_array_append(change_list, event);
   }
 
@@ -128,31 +130,52 @@ static void fs_watch_file(gbAllocator allocator, gbArray(file_info) files) {
               __FILE__, __LINE__, strerror(errno));
       return;
     }
+    fprintf(stderr, "[D010] event_count=%d\n", event_count);
 
-    for (int i = 0; i < gb_array_count(change_list); i++) {
+    for (int i = 0; i < event_count; i++) {
       struct kevent* e = &event_list[i];
-      if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_DELETE)) {
-        printf("(%s) %s Deleted\n", file_kind_str[files[i].kind],
-               files[i].absolute_path);
-      }
-      if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_WRITE)) {
-        printf("(%s) %s Written to\n", file_kind_str[files[i].kind],
-               files[i].absolute_path);
+      if (e->flags & EV_ERROR) {
+        // TODO: inspect e->data
+        fprintf(stderr, "Event failed: %s\n", strerror(errno));
+        return;
       }
 
-      if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_RENAME)) {
-        printf("(%s) %s Renamed\n", file_kind_str[files[i].kind],
-               files[i].absolute_path);
+      // Skip unrelated events (should not ever happen?)
+      if ((e->flags & EVFILT_VNODE) == 0) continue;
+
+      i64 f_i = (i64)e->udata;
+      GB_ASSERT(f_i >= 0);
+      GB_ASSERT(f_i < gb_array_count(files));
+      file_info* f = &files[f_i];
+
+      fprintf(stderr,
+              "[D011] [%d] data=%ld udata=%lld filter=%d fflags=%d f_i=%lld "
+              "absolute_path=%s\n",
+              i, e->data, (i64)e->udata, e->filter, e->fflags, f_i,
+              f->absolute_path);
+      if (e->fflags & NOTE_DELETE) {
+        printf("(%s) %s Deleted\n", file_kind_str[f->kind], f->absolute_path);
+        // TODO: rm; close(fd)
+      }
+      if (e->fflags & NOTE_WRITE) {
+        printf("(%s) %s Written to\n", file_kind_str[f->kind],
+               f->absolute_path);
       }
 
-      if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_EXTEND)) {
-        printf("(%s) %s Extended\n", file_kind_str[files[i].kind],
-               files[i].absolute_path);
+      if (e->fflags & NOTE_RENAME) {
+        printf("(%s) %s Renamed\n", file_kind_str[f->kind], f->absolute_path);
+        printf("[D004] (%s) %s data=%p\n", file_kind_str[f->kind],
+               f->absolute_path, (void*)e->data);
+        // TODO: get new filename from fd e.g. `fcntl(fd, F_GETPATH, filePath)`
       }
 
-      if ((e->flags & EVFILT_VNODE) && (e->fflags & NOTE_REVOKE)) {
-        printf("(%s) %s Revoked\n", file_kind_str[files[i].kind],
-               files[i].absolute_path);
+      if (e->fflags & NOTE_EXTEND) {
+        printf("(%s) %s Extended\n", file_kind_str[f->kind], f->absolute_path);
+      }
+
+      if (e->fflags & NOTE_REVOKE) {
+        printf("(%s) %s Revoked\n", file_kind_str[f->kind], f->absolute_path);
+        // TODO: rm
       }
     }
   }
