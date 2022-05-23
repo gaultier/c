@@ -41,13 +41,15 @@ typedef struct {
 
 typedef void (*dir_walk_fn)(gbString, usize, void*);
 
-static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
-  GB_ASSERT_NOT_NULL(arg);
-  gbAllocator* allocator = arg;
+static void path_directory_walk(gbAllocator allocator, gbString path,
+                                gbArray(file_info) * files) {
+  GB_ASSERT_NOT_NULL(path);
+  GB_ASSERT_NOT_NULL(files);
 
   const mode_t mode = path_get_mode(path);
   if (S_ISREG(mode)) {
-    fn(path, /* HACK hijacking */ FK_FILE, allocator);
+    gb_array_append(*files,
+                    ((file_info){.absolute_path = path, .kind = FK_FILE}));
     return;
   }
 
@@ -61,7 +63,7 @@ static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
             __LINE__, path, strerror(errno));
     return;
   }
-  fn(path, /* HACK hijacking the size */ FK_DIR, allocator);
+  gb_array_append(*files, ((file_info){.absolute_path = path, .kind = FK_DIR}));
 
   struct dirent* entry;
 
@@ -73,7 +75,7 @@ static void path_directory_walk(gbString path, dir_walk_fn fn, void* arg) {
     gbString absolute_path_file =
         gb_string_append_rune(path, GB_PATH_SEPARATOR);
     absolute_path_file = gb_string_appendc(absolute_path_file, entry->d_name);
-    path_directory_walk(absolute_path_file, fn, arg);
+    path_directory_walk(allocator, absolute_path_file, files);
   }
 
   closedir(dirp);
