@@ -157,6 +157,12 @@ static void fs_watch_file(gbAllocator allocator, gbArray(file_info) files) {
         printf("(%s) %s Deleted\n", file_kind_str[f->kind], f->absolute_path);
         close(fds[i]);
         gb_free(allocator, f->absolute_path);
+        pg_array_swap_remove_at_index(files, sizeof(file_info),
+                                      &gb_array_count(files), i);
+        pg_array_swap_remove_at_index(fds, sizeof(int), &gb_array_count(fds),
+                                      i);
+        pg_array_swap_remove_at_index(change_list, sizeof(struct kevent),
+                                      &gb_array_count(change_list), i);
       }
       if (e->fflags & NOTE_WRITE) {
         printf("(%s) %s Written to\n", file_kind_str[f->kind],
