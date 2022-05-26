@@ -1,5 +1,6 @@
 #pragma once
 #define GB_IMPLEMENTATION
+#define GB_STATIC
 #include "./vendor/gb.h"
 
 static void pg_array_swap_remove_at_index(void* array, usize elem_size,
