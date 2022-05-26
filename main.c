@@ -1,5 +1,4 @@
 #include "fs_watch.h"
-#include "vendor/gb.h"
 
 int main(int argc, char* argv[]) {
     gbArena arena = {};
