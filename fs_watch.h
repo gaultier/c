@@ -13,6 +13,7 @@
 #include <sys/types.h>
 
 #include "./util.h"
+#include "vendor/gb.h"
 
 static mode_t path_get_mode(char* path) {
   struct stat path_stat;
@@ -41,6 +42,10 @@ typedef struct {
 
 typedef void (*dir_walk_fn)(gbString, usize, void*);
 
+static char* extensions_to_watch[] = {"kt", "kts"};
+static const isize extensions_to_watch_count =
+    sizeof(extensions_to_watch) / sizeof(extensions_to_watch[0]);
+
 static void path_directory_walk(gbAllocator allocator, gbString path,
                                 gbArray(file_info) * files) {
   GB_ASSERT_NOT_NULL(path);
@@ -48,8 +53,12 @@ static void path_directory_walk(gbAllocator allocator, gbString path,
 
   const mode_t mode = path_get_mode(path);
   if (S_ISREG(mode)) {
-    gb_array_append(*files,
-                    ((file_info){.absolute_path = path, .kind = FK_FILE}));
+    const char* ext = gb_path_extension(path);
+    if (pg_string_array_contains(extensions_to_watch, extensions_to_watch_count,
+                                 ext)) {
+      gb_array_append(*files,
+                      ((file_info){.absolute_path = path, .kind = FK_FILE}));
+    }
     return;
   }
 

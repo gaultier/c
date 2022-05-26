@@ -13,3 +13,11 @@ static void pg_array_swap_remove_at_index(void* array, usize elem_size,
   bzero(elem_last, elem_size);
   *count -= 1;
 }
+
+static bool pg_string_array_contains(char** stack, isize count,
+                                     const char* needle) {
+  for (isize i = 0; i < count; i++) {
+    if (strcmp(stack[i], needle) == 0) return true;
+  }
+  return false;
+}
