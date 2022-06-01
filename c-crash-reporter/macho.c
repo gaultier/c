@@ -2,11 +2,8 @@
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
 #include <stab.h>
-#define GB_IMPLEMENTATION
 #include <stdio.h>
 #include <stdlib.h>
-
-#include "vendor/gb.h"
 
 int main(int argc, const char* argv[]) {
     assert(argc == 2);
