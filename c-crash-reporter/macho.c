@@ -1,3 +1,6 @@
+#include <_types/_uint16_t.h>
+#include <_types/_uint32_t.h>
+#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
@@ -5,6 +8,13 @@
 #include <stab.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+struct dwarf_file {
+    uint32_t unit_length;
+    uint16_t version;
+    uint32_t debug_abbrev_offset;
+    uint8_t address_size;
+};
 
 int main(int argc, const char* argv[]) {
     assert(argc == 2);
@@ -84,14 +94,14 @@ int main(int argc, const char* argv[]) {
                     assert(fseek(f, pos, SEEK_SET) == 0);
                 }
                 // string table
-                {
-                    const int pos = ftell(f);
-                    assert(fseek(f, sc.stroff, SEEK_SET) == 0);
-                    char* s = malloc(sc.strsize + 1);
-                    assert(fread(s, sc.strsize, 1, f) >= 0);
-                    printf("strings=%.*s\n", sc.strsize, s);
-                    assert(fseek(f, pos, SEEK_SET) == 0);
-                }
+                /* { */
+                /*     const int pos = ftell(f); */
+                /*     assert(fseek(f, sc.stroff, SEEK_SET) == 0); */
+                /*     char* s = malloc(sc.strsize + 1); */
+                /*     assert(fread(s, sc.strsize, 1, f) >= 0); */
+                /*     printf("strings=%.*s\n", sc.strsize, s); */
+                /*     assert(fseek(f, pos, SEEK_SET) == 0); */
+                /* } */
                 break;
             }
             case LC_SEGMENT_64: {
@@ -123,4 +133,10 @@ int main(int argc, const char* argv[]) {
                 assert(0 && "UNIMPLEMENTED - catch all");
         }
     }
+    assert(fseek(f, 0x2000, SEEK_SET) == 0);
+    struct dwarf_file df = {0};
+    assert(fread(&df, sizeof(df), 1, f) >= 0);
+    printf("DWARF %#x %#x %#x %#x\n", df.unit_length, df.version,
+           df.debug_abbrev_offset, df.address_size);
+    assert(df.version == 4);
 }
