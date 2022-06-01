@@ -74,11 +74,23 @@ int main(int argc, const char* argv[]) {
                              sizeof(sc) - sizeof(sc.cmd) - sizeof(sc.cmdsize),
                              1, f) >= 0);
                 printf(
-                    "LC_SEGMENT_64 segname=%16s vmaddr=%#llx vmsize=%#llx "
+                    "LC_SEGMENT_64 segname=%s vmaddr=%#llx vmsize=%#llx "
                     "fileoff=%#llx filesize=%#llx maxprot=%#x initprot=%#x "
                     "nsects=%d flags=%d\n",
                     sc.segname, sc.vmaddr, sc.vmsize, sc.fileoff, sc.filesize,
                     sc.maxprot, sc.initprot, sc.nsects, sc.flags);
+
+                for (int sec_count = 0; sec_count < sc.nsects; sec_count++) {
+                    struct section_64 sec = {0};
+                    assert(fread(&sec, sizeof(sec), 1, f) >= 0);
+                    printf(
+                        "SECTION sectname=%s segname=%s addr=%#llx size=%#llx "
+                        "offset=%#x align=%#x reloff=%#x nreloc=%d flags=%#x\n",
+                        sec.sectname, sec.segname, sec.addr, sec.size,
+                        sec.offset, sec.align, sec.reloff, sec.nreloc,
+                        sec.flags);
+                }
+
                 break;
             }
             default:
