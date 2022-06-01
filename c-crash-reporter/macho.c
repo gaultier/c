@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
+#include <mach-o/stab.h>
 #include <stab.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -66,6 +67,31 @@ int main(int argc, const char* argv[]) {
                              1, f) >= 0);
                 printf("LC_SYMTAB symoff=%#x nsyms=%d stroff=%#x strsize=%d\n",
                        sc.symoff, sc.nsyms, sc.stroff, sc.strsize);
+
+                // symbol table
+                {
+                    const int pos = ftell(f);
+                    assert(fseek(f, sc.symoff, SEEK_SET) == 0);
+                    for (int sym_count = 0; sym_count < sc.nsyms; sym_count++) {
+                        struct nlist_64 nl = {0};
+                        assert(fread(&nl, sizeof(nl), 1, f) >= 0);
+                        printf(
+                            "nlist_64 n_strx=%d n_type=%d n_sect=%d n_desc=%d "
+                            "n_value=%#llx\n",
+                            nl.n_un.n_strx, nl.n_type, nl.n_sect, nl.n_desc,
+                            nl.n_value);
+                    }
+                    assert(fseek(f, pos, SEEK_SET) == 0);
+                }
+                // string table
+                {
+                    const int pos = ftell(f);
+                    assert(fseek(f, sc.stroff, SEEK_SET) == 0);
+                    char* s = malloc(sc.strsize + 1);
+                    assert(fread(s, sc.strsize, 1, f) >= 0);
+                    printf("strings=%.*s\n", sc.strsize, s);
+                    assert(fseek(f, pos, SEEK_SET) == 0);
+                }
                 break;
             }
             case LC_SEGMENT_64: {
