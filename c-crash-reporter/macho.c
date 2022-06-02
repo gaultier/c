@@ -196,6 +196,34 @@ int main(int argc, const char* argv[]) {
                             ddlh->std_opcode_lengths[11]);
 
                         assert(ddlh->version == 4);
+                        puts("Directories:");
+                        while (offset < sec->offset + sec->size) {
+                            char* s = &contents.data[offset];
+                            char* end = memchr(&contents.data[offset], 0,
+                                               contents.size - offset);
+                            assert(end != NULL);
+                            printf("- %s\n", s);
+                            offset += end - s;
+                            if (*(end + 1) == 0) {
+                                offset += 2;
+                                break;
+                            }
+                        }
+                        puts("Files:");
+                        while (offset < sec->offset + sec->size) {
+                            char* s = &contents.data[offset];
+                            char* end = memchr(&contents.data[offset], 0,
+                                               contents.size - offset);
+                            assert(end != NULL);
+                            printf("- %s\n", s);
+                            offset += end - s;
+                            if (*(end + 1) == 0) {
+                                offset += 2;
+                                break;
+                            }
+                        }
+                        puts("");
+
                         offset = saved_offset;
                     }
                 }
