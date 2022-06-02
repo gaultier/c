@@ -57,7 +57,6 @@ int main(int argc, const char* argv[]) {
         h->magic, h->cputype, h->cpusubtype, h->filetype, h->ncmds,
         h->sizeofcmds, h->flags);
 
-    u64 dwarf_offset = 0;
     for (int cmd_count = 0; cmd_count < h->ncmds; cmd_count++) {
         struct load_command* c = &contents.data[offset];
         offset += sizeof(struct load_command);
@@ -138,10 +137,6 @@ int main(int argc, const char* argv[]) {
                 offset += sizeof(struct segment_command_64) -
                           sizeof(struct load_command);
 
-                if (dwarf_offset == 0 && strcmp(sc->segname, "__DWARF") == 0) {
-                    dwarf_offset = sc->fileoff;
-                }
-
                 printf(
                     "LC_SEGMENT_64 segname=%s vmaddr=%#llx vmsize=%#llx "
                     "fileoff=%#llx filesize=%#llx maxprot=%#x initprot=%#x "
@@ -159,6 +154,50 @@ int main(int argc, const char* argv[]) {
                         sec->sectname, sec->segname, sec->addr, sec->size,
                         sec->offset, sec->align, sec->reloff, sec->nreloc,
                         sec->flags);
+
+                    if (strcmp(sec->sectname, "__debug_line") == 0) {
+                        u64 saved_offset = offset;
+                        offset = sec->offset;
+                        dwarf_debug_line_header* ddlh = &contents.data[offset];
+                        offset += sizeof(dwarf_debug_line_header);
+                        printf(
+                            "DWARF length=%#x version=%#x header_length=%#x "
+                            "min_instruction_length=%#x max_ops_per_inst=%d "
+                            "default_is_stmt=%#x "
+                            "line_base=%d "
+                            "line_range=%d opcode_base=%d\n"
+                            "DWARF std_opcode_lengths[0]=%d\n"
+                            "DWARF std_opcode_lengths[1]=%d\n"
+                            "DWARF std_opcode_lengths[2]=%d\n"
+                            "DWARF std_opcode_lengths[3]=%d\n"
+                            "DWARF std_opcode_lengths[4]=%d\n"
+                            "DWARF std_opcode_lengths[5]=%d\n"
+                            "DWARF std_opcode_lengths[6]=%d\n"
+                            "DWARF std_opcode_lengths[7]=%d\n"
+                            "DWARF std_opcode_lengths[8]=%d\n"
+                            "DWARF std_opcode_lengths[9]=%d\n"
+                            "DWARF std_opcode_lengths[10]=%d\n"
+                            "DWARF std_opcode_lengths[11]=%d\n",
+                            ddlh->length, ddlh->version, ddlh->header_length,
+                            ddlh->min_instruction_length,
+                            ddlh->max_ops_per_inst, ddlh->default_is_stmt,
+                            ddlh->line_base, ddlh->line_range,
+                            ddlh->opcode_base, ddlh->std_opcode_lengths[0],
+                            ddlh->std_opcode_lengths[1],
+                            ddlh->std_opcode_lengths[2],
+                            ddlh->std_opcode_lengths[3],
+                            ddlh->std_opcode_lengths[4],
+                            ddlh->std_opcode_lengths[5],
+                            ddlh->std_opcode_lengths[6],
+                            ddlh->std_opcode_lengths[7],
+                            ddlh->std_opcode_lengths[8],
+                            ddlh->std_opcode_lengths[9],
+                            ddlh->std_opcode_lengths[10],
+                            ddlh->std_opcode_lengths[11]);
+
+                        assert(ddlh->version == 4);
+                        offset = saved_offset;
+                    }
                 }
 
                 break;
@@ -167,40 +206,4 @@ int main(int argc, const char* argv[]) {
                 assert(0 && "UNIMPLEMENTED - catch all");
         }
     }
-
-    assert(dwarf_offset > 0);
-    offset = dwarf_offset;
-    dwarf_debug_line_header* ddlh = &contents.data[offset];
-    offset += sizeof(dwarf_debug_line_header);
-    printf(
-        "DWARF length=%#x version=%#x header_length=%#x "
-        "min_instruction_length=%#x max_ops_per_inst=%d default_is_stmt=%#x "
-        "line_base=%d "
-        "line_range=%d opcode_base=%d\n"
-        "DWARF std_opcode_lengths[0]=%d\n"
-        "DWARF std_opcode_lengths[1]=%d\n"
-        "DWARF std_opcode_lengths[2]=%d\n"
-        "DWARF std_opcode_lengths[3]=%d\n"
-        "DWARF std_opcode_lengths[4]=%d\n"
-        "DWARF std_opcode_lengths[5]=%d\n"
-        "DWARF std_opcode_lengths[6]=%d\n"
-        "DWARF std_opcode_lengths[7]=%d\n"
-        "DWARF std_opcode_lengths[8]=%d\n"
-        "DWARF std_opcode_lengths[9]=%d\n"
-        "DWARF std_opcode_lengths[10]=%d\n"
-        "DWARF std_opcode_lengths[11]=%d\n",
-        ddlh->length, ddlh->version, ddlh->header_length,
-        ddlh->min_instruction_length, ddlh->max_ops_per_inst,
-        ddlh->default_is_stmt, ddlh->line_base, ddlh->line_range,
-        ddlh->opcode_base, ddlh->std_opcode_lengths[0],
-        ddlh->std_opcode_lengths[1], ddlh->std_opcode_lengths[2],
-        ddlh->std_opcode_lengths[3], ddlh->std_opcode_lengths[4],
-        ddlh->std_opcode_lengths[5], ddlh->std_opcode_lengths[6],
-        ddlh->std_opcode_lengths[7], ddlh->std_opcode_lengths[8],
-        ddlh->std_opcode_lengths[9], ddlh->std_opcode_lengths[10],
-        ddlh->std_opcode_lengths[11]);
-    assert(ddlh->version == 4);
-
-    // TODO: read opcodes
-    DW_OP opcode = 0;
 }
