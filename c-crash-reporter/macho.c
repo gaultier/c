@@ -1,6 +1,4 @@
-#include <_types/_uint16_t.h>
-#include <_types/_uint32_t.h>
-#include <_types/_uint8_t.h>
+#define GB_IMPLEMENTATION
 #include <assert.h>
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
@@ -8,6 +6,8 @@
 #include <stab.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#include "../vendor/gb.h"
 
 typedef struct __attribute__((packed)) {
     uint32_t length;
@@ -23,6 +23,7 @@ typedef struct __attribute__((packed)) {
 } dwarf_debug_line_header;
 
 typedef enum {
+    DW_LNS_extendend_op,
     DW_LNS_copy,
     DW_LNS_advance_pc,
     DW_LNS_advance_line,
@@ -41,79 +42,85 @@ int main(int argc, const char* argv[]) {
     assert(argc == 2);
     const char* path = argv[1];
 
-    FILE* f = fopen(path, "r");
-    assert(f);
+    gbAllocator allocator = gb_heap_allocator();
+    gbFileContents contents = gb_file_read_contents(allocator, true, path);
 
-    struct mach_header_64 h = {0};
-    assert(fread(&h, sizeof(h), 1, f) >= 0);
-    assert(h.cputype == CPU_TYPE_X86_64);
-    assert(h.filetype == MH_DSYM);
+    u64 offset = 0;
+    struct mach_header_64* h = &contents.data[offset];
+    offset += sizeof(struct mach_header_64);
+    assert(h->cputype == CPU_TYPE_X86_64);
+    assert(h->filetype == MH_DSYM);
 
     printf(
         "magic=%d\ncputype=%d\ncpusubtype=%d\nfiletype=%d\nncmds=%"
         "d\nsizeofcmds=%d\nflags=%d\n",
-        h.magic, h.cputype, h.cpusubtype, h.filetype, h.ncmds, h.sizeofcmds,
-        h.flags);
+        h->magic, h->cputype, h->cpusubtype, h->filetype, h->ncmds,
+        h->sizeofcmds, h->flags);
 
-    for (int cmd_count = 0; cmd_count < h.ncmds; cmd_count++) {
-        struct load_command c = {0};
-        assert(fread(&c, sizeof(c), 1, f) >= 0);
-        printf("command: cmd=%d cmdsize=%d\n", c.cmd, c.cmdsize);
+    u64 dwarf_offset = 0;
+    for (int cmd_count = 0; cmd_count < h->ncmds; cmd_count++) {
+        struct load_command* c = &contents.data[offset];
+        offset += sizeof(struct load_command);
+        printf("command: cmd=%d cmdsize=%d\n", c->cmd, c->cmdsize);
 
-        switch (c.cmd) {
+        switch (c->cmd) {
             case LC_UUID: {
-                struct uuid_command uc = {0};
-                assert(fread(&uc.uuid,
-                             sizeof(uc) - sizeof(uc.cmd) - sizeof(uc.cmdsize),
-                             1, f) >= 0);
+                struct uuid_command* uc =
+                    &contents.data[offset - sizeof(struct load_command)];
+                offset +=
+                    sizeof(struct uuid_command) - sizeof(struct load_command);
                 printf(
                     "LC_UUID uuid=%#x %#x %#x %#x %#x %#x %#x %#x %#x %#x %#x "
                     "%#x %#x "
                     "%#x "
                     "%#x %#x\n",
-                    uc.uuid[0], uc.uuid[1], uc.uuid[2], uc.uuid[3], uc.uuid[4],
-                    uc.uuid[5], uc.uuid[6], uc.uuid[7], uc.uuid[8], uc.uuid[9],
-                    uc.uuid[10], uc.uuid[11], uc.uuid[12], uc.uuid[13],
-                    uc.uuid[14], uc.uuid[15]);
+                    uc->uuid[0], uc->uuid[1], uc->uuid[2], uc->uuid[3],
+                    uc->uuid[4], uc->uuid[5], uc->uuid[6], uc->uuid[7],
+                    uc->uuid[8], uc->uuid[9], uc->uuid[10], uc->uuid[11],
+                    uc->uuid[12], uc->uuid[13], uc->uuid[14], uc->uuid[15]);
 
                 break;
             }
             case LC_BUILD_VERSION: {
-                struct build_version_command vc = {0};
-                assert(fread(&vc.platform,
-                             sizeof(vc) - sizeof(vc.cmd) - sizeof(vc.cmdsize),
-                             1, f) >= 0);
+                struct build_version_command* vc =
+                    &contents.data[offset - sizeof(struct load_command)];
+                offset += sizeof(struct build_version_command) -
+                          sizeof(struct load_command);
                 printf(
                     "LC_BUILD_VERSION platform=%#x minos=%#x sdk=%#x "
                     "ntools=%d\n",
-                    vc.platform, vc.minos, vc.sdk, vc.ntools);
+                    vc->platform, vc->minos, vc->sdk, vc->ntools);
 
-                assert(vc.ntools == 0 && "UNIMPLEMENTED");
+                assert(vc->ntools == 0 && "UNIMPLEMENTED");
                 break;
             }
             case LC_SYMTAB: {
-                struct symtab_command sc = {0};
-                assert(fread(&sc.symoff,
-                             sizeof(sc) - sizeof(sc.cmd) - sizeof(sc.cmdsize),
-                             1, f) >= 0);
+                struct symtab_command* sc =
+                    &contents.data[offset - sizeof(struct load_command)];
+                offset +=
+                    sizeof(struct symtab_command) - sizeof(struct load_command);
+
                 printf("LC_SYMTAB symoff=%#x nsyms=%d stroff=%#x strsize=%d\n",
-                       sc.symoff, sc.nsyms, sc.stroff, sc.strsize);
+                       sc->symoff, sc->nsyms, sc->stroff, sc->strsize);
 
                 // symbol table
-                {
-                    const int pos = ftell(f);
-                    assert(fseek(f, sc.symoff, SEEK_SET) == 0);
-                    for (int sym_count = 0; sym_count < sc.nsyms; sym_count++) {
-                        struct nlist_64 nl = {0};
-                        assert(fread(&nl, sizeof(nl), 1, f) >= 0);
-                        printf(
-                            "nlist_64 n_strx=%d n_type=%d n_sect=%d n_desc=%d "
-                            "n_value=%#llx\n",
-                            nl.n_un.n_strx, nl.n_type, nl.n_sect, nl.n_desc,
-                            nl.n_value);
-                    }
-                    assert(fseek(f, pos, SEEK_SET) == 0);
-                }
+                /* { */
+                /*     const int pos = ftell(f); */
+                /*     assert(fseek(f, sc.symoff, SEEK_SET) == 0); */
+                /*     for (int sym_count = 0; sym_count < sc.nsyms;
+                 * sym_count++) { */
+                /*         struct nlist_64 nl = {0}; */
+                /*         assert(fread(&nl, sizeof(nl), 1, f) >= 0); */
+                /*         printf( */
+                /*             "nlist_64 n_strx=%d n_type=%d n_sect=%d n_desc=%d
+                 * " */
+                /*             "n_value=%#llx\n", */
+                /*             nl.n_un.n_strx, nl.n_type, nl.n_sect, nl.n_desc,
+                 */
+                /*             nl.n_value); */
+                /*     } */
+                /*     assert(fseek(f, pos, SEEK_SET) == 0); */
+                /* } */
                 // string table
                 /* { */
                 /*     const int pos = ftell(f); */
@@ -126,26 +133,32 @@ int main(int argc, const char* argv[]) {
                 break;
             }
             case LC_SEGMENT_64: {
-                struct segment_command_64 sc = {0};
-                assert(fread(&sc.segname,
-                             sizeof(sc) - sizeof(sc.cmd) - sizeof(sc.cmdsize),
-                             1, f) >= 0);
+                struct segment_command_64* sc =
+                    &contents.data[offset - sizeof(struct load_command)];
+                offset += sizeof(struct segment_command_64) -
+                          sizeof(struct load_command);
+
+                if (dwarf_offset == 0 && strcmp(sc->segname, "__DWARF") == 0) {
+                    dwarf_offset = sc->fileoff;
+                }
+
                 printf(
                     "LC_SEGMENT_64 segname=%s vmaddr=%#llx vmsize=%#llx "
                     "fileoff=%#llx filesize=%#llx maxprot=%#x initprot=%#x "
                     "nsects=%d flags=%d\n",
-                    sc.segname, sc.vmaddr, sc.vmsize, sc.fileoff, sc.filesize,
-                    sc.maxprot, sc.initprot, sc.nsects, sc.flags);
+                    sc->segname, sc->vmaddr, sc->vmsize, sc->fileoff,
+                    sc->filesize, sc->maxprot, sc->initprot, sc->nsects,
+                    sc->flags);
 
-                for (int sec_count = 0; sec_count < sc.nsects; sec_count++) {
-                    struct section_64 sec = {0};
-                    assert(fread(&sec, sizeof(sec), 1, f) >= 0);
+                for (int sec_count = 0; sec_count < sc->nsects; sec_count++) {
+                    struct section_64* sec = &contents.data[offset];
+                    offset += sizeof(struct section_64);
                     printf(
                         "SECTION sectname=%s segname=%s addr=%#llx size=%#llx "
                         "offset=%#x align=%#x reloff=%#x nreloc=%d flags=%#x\n",
-                        sec.sectname, sec.segname, sec.addr, sec.size,
-                        sec.offset, sec.align, sec.reloff, sec.nreloc,
-                        sec.flags);
+                        sec->sectname, sec->segname, sec->addr, sec->size,
+                        sec->offset, sec->align, sec->reloff, sec->nreloc,
+                        sec->flags);
                 }
 
                 break;
@@ -154,9 +167,11 @@ int main(int argc, const char* argv[]) {
                 assert(0 && "UNIMPLEMENTED - catch all");
         }
     }
-    assert(fseek(f, 0x2000, SEEK_SET) == 0);
-    dwarf_debug_line_header ddlh = {0};
-    assert(fread(&ddlh, sizeof(ddlh), 1, f) >= 0);
+
+    assert(dwarf_offset > 0);
+    offset = dwarf_offset;
+    dwarf_debug_line_header* ddlh = &contents.data[offset];
+    offset += sizeof(dwarf_debug_line_header);
     printf(
         "DWARF length=%#x version=%#x header_length=%#x "
         "min_instruction_length=%#x max_ops_per_inst=%d default_is_stmt=%#x "
@@ -174,14 +189,18 @@ int main(int argc, const char* argv[]) {
         "DWARF std_opcode_lengths[9]=%d\n"
         "DWARF std_opcode_lengths[10]=%d\n"
         "DWARF std_opcode_lengths[11]=%d\n",
-        ddlh.length, ddlh.version, ddlh.header_length,
-        ddlh.min_instruction_length, ddlh.max_ops_per_inst,
-        ddlh.default_is_stmt, ddlh.line_base, ddlh.line_range, ddlh.opcode_base,
-        ddlh.std_opcode_lengths[0], ddlh.std_opcode_lengths[1],
-        ddlh.std_opcode_lengths[2], ddlh.std_opcode_lengths[3],
-        ddlh.std_opcode_lengths[4], ddlh.std_opcode_lengths[5],
-        ddlh.std_opcode_lengths[6], ddlh.std_opcode_lengths[7],
-        ddlh.std_opcode_lengths[8], ddlh.std_opcode_lengths[9],
-        ddlh.std_opcode_lengths[10], ddlh.std_opcode_lengths[11]);
-    assert(ddlh.version == 4);
+        ddlh->length, ddlh->version, ddlh->header_length,
+        ddlh->min_instruction_length, ddlh->max_ops_per_inst,
+        ddlh->default_is_stmt, ddlh->line_base, ddlh->line_range,
+        ddlh->opcode_base, ddlh->std_opcode_lengths[0],
+        ddlh->std_opcode_lengths[1], ddlh->std_opcode_lengths[2],
+        ddlh->std_opcode_lengths[3], ddlh->std_opcode_lengths[4],
+        ddlh->std_opcode_lengths[5], ddlh->std_opcode_lengths[6],
+        ddlh->std_opcode_lengths[7], ddlh->std_opcode_lengths[8],
+        ddlh->std_opcode_lengths[9], ddlh->std_opcode_lengths[10],
+        ddlh->std_opcode_lengths[11]);
+    assert(ddlh->version == 4);
+
+    // TODO: read opcodes
+    DW_OP opcode = 0;
 }
