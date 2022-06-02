@@ -22,6 +22,21 @@ typedef struct __attribute__((packed)) {
     uint8_t std_opcode_lengths[12];
 } dwarf_debug_line_header;
 
+typedef enum {
+    DW_LNS_copy,
+    DW_LNS_advance_pc,
+    DW_LNS_advance_line,
+    DW_LNS_set_file,
+    DW_LNS_set_column,
+    DW_LNS_negate_stmt,
+    DW_LNS_set_basic_block,
+    DW_LNS_const_add_pc,
+    DW_LNS_fixed_advance_pc,
+    DW_LNS_set_prologue_end,
+    DW_LNS_set_epilogue_begin,
+    DW_LNS_set_isa,
+} DW_OP;
+
 int main(int argc, const char* argv[]) {
     assert(argc == 2);
     const char* path = argv[1];
