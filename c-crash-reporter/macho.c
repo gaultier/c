@@ -229,38 +229,44 @@ int main(int argc, const char* argv[]) {
                         }
                         puts("");
 
-                        DW_OP* opcode = &contents.data[offset];
-                        offset += sizeof(DW_OP);
-                        printf("DW_OP=%d\n", *opcode);
-                        switch (*opcode) {
-                            case DW_LNS_extended_op:
-                                break;
-                            case DW_LNS_copy:
-                                break;
-                            case DW_LNS_advance_pc:
-                                break;
-                            case DW_LNS_advance_line:
-                                break;
-                            case DW_LNS_set_file:
-                                break;
-                            case DW_LNS_set_column:
-                                break;
-                            case DW_LNS_negate_stmt:
-                                break;
-                            case DW_LNS_set_basic_block:
-                                break;
-                            case DW_LNS_const_add_pc:
-                                break;
-                            case DW_LNS_fixed_advance_pc:
-                                break;
-                            case DW_LNS_set_prologue_end:
-                                break;
-                            case DW_LNS_set_epilogue_begin:
-                                break;
-                            case DW_LNS_set_isa:
-                                break;
-                            default:
-                                assert(0 && "UNIMPLEMENTED");
+                        while (offset < sec->offset + sec->size) {
+                            DW_OP* opcode = &contents.data[offset++];
+                            printf("DW_OP=%d\n", *opcode);
+                            switch (*opcode) {
+                                case DW_LNS_extended_op: {
+                                    uint8_t* leb128_encoded_bytes_num =
+                                        &contents.data[offset++];
+                                    printf("leb128_encoded_bytes_num=%#x\n",
+                                           *leb128_encoded_bytes_num);
+                                    break;
+                                }
+                                case DW_LNS_copy:
+                                    break;
+                                case DW_LNS_advance_pc:
+                                    break;
+                                case DW_LNS_advance_line:
+                                    break;
+                                case DW_LNS_set_file:
+                                    break;
+                                case DW_LNS_set_column:
+                                    break;
+                                case DW_LNS_negate_stmt:
+                                    break;
+                                case DW_LNS_set_basic_block:
+                                    break;
+                                case DW_LNS_const_add_pc:
+                                    break;
+                                case DW_LNS_fixed_advance_pc:
+                                    break;
+                                case DW_LNS_set_prologue_end:
+                                    break;
+                                case DW_LNS_set_epilogue_begin:
+                                    break;
+                                case DW_LNS_set_isa:
+                                    break;
+                                default:
+                                    assert(0 && "UNIMPLEMENTED");
+                            }
                         }
 
                         offset = saved_offset;
