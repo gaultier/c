@@ -23,7 +23,7 @@ typedef struct __attribute__((packed)) {
 } dwarf_debug_line_header;
 
 typedef enum {
-    DW_LNS_extendend_op,
+    DW_LNS_extended_op = 0,
     DW_LNS_copy,
     DW_LNS_advance_pc,
     DW_LNS_advance_line,
@@ -218,11 +218,44 @@ int main(int argc, const char* argv[]) {
                             printf("- %s\n", s);
                             offset += end - s;
                             if (*(end + 1) == 0) {
-                                offset += 2;
                                 break;
                             }
                         }
                         puts("");
+
+                        DW_OP* opcode = &contents.data[offset];
+                        offset += sizeof(DW_OP);
+                        printf("DW_OP=%d\n", *opcode);
+                        switch (*opcode) {
+                            case DW_LNS_extended_op:
+                                break;
+                            case DW_LNS_copy:
+                                break;
+                            case DW_LNS_advance_pc:
+                                break;
+                            case DW_LNS_advance_line:
+                                break;
+                            case DW_LNS_set_file:
+                                break;
+                            case DW_LNS_set_column:
+                                break;
+                            case DW_LNS_negate_stmt:
+                                break;
+                            case DW_LNS_set_basic_block:
+                                break;
+                            case DW_LNS_const_add_pc:
+                                break;
+                            case DW_LNS_fixed_advance_pc:
+                                break;
+                            case DW_LNS_set_prologue_end:
+                                break;
+                            case DW_LNS_set_epilogue_begin:
+                                break;
+                            case DW_LNS_set_isa:
+                                break;
+                            default:
+                                assert(0 && "UNIMPLEMENTED");
+                        }
 
                         offset = saved_offset;
                     }
