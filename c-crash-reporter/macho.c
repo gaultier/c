@@ -9,12 +9,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-struct dwarf_file {
-    uint32_t unit_length;
+typedef struct __attribute__((packed)) {
+    uint32_t length;
     uint16_t version;
-    uint32_t debug_abbrev_offset;
-    uint8_t address_size;
-};
+    uint32_t header_length;
+    uint8_t min_instruction_length;
+    uint8_t max_ops_per_inst;
+    uint8_t default_is_stmt;
+    int8_t line_base;
+    uint8_t line_range;
+    uint8_t opcode_base;
+    uint8_t std_opcode_lengths[12];
+} dwarf_debug_line_header;
 
 int main(int argc, const char* argv[]) {
     assert(argc == 2);
@@ -134,9 +140,33 @@ int main(int argc, const char* argv[]) {
         }
     }
     assert(fseek(f, 0x2000, SEEK_SET) == 0);
-    struct dwarf_file df = {0};
-    assert(fread(&df, sizeof(df), 1, f) >= 0);
-    printf("DWARF %#x %#x %#x %#x\n", df.unit_length, df.version,
-           df.debug_abbrev_offset, df.address_size);
-    assert(df.version == 4);
+    dwarf_debug_line_header ddlh = {0};
+    assert(fread(&ddlh, sizeof(ddlh), 1, f) >= 0);
+    printf(
+        "DWARF length=%#x version=%#x header_length=%#x "
+        "min_instruction_length=%#x max_ops_per_inst=%d default_is_stmt=%#x "
+        "line_base=%d "
+        "line_range=%d opcode_base=%d\n"
+        "DWARF std_opcode_lengths[0]=%d\n"
+        "DWARF std_opcode_lengths[1]=%d\n"
+        "DWARF std_opcode_lengths[2]=%d\n"
+        "DWARF std_opcode_lengths[3]=%d\n"
+        "DWARF std_opcode_lengths[4]=%d\n"
+        "DWARF std_opcode_lengths[5]=%d\n"
+        "DWARF std_opcode_lengths[6]=%d\n"
+        "DWARF std_opcode_lengths[7]=%d\n"
+        "DWARF std_opcode_lengths[8]=%d\n"
+        "DWARF std_opcode_lengths[9]=%d\n"
+        "DWARF std_opcode_lengths[10]=%d\n"
+        "DWARF std_opcode_lengths[11]=%d\n",
+        ddlh.length, ddlh.version, ddlh.header_length,
+        ddlh.min_instruction_length, ddlh.max_ops_per_inst,
+        ddlh.default_is_stmt, ddlh.line_base, ddlh.line_range, ddlh.opcode_base,
+        ddlh.std_opcode_lengths[0], ddlh.std_opcode_lengths[1],
+        ddlh.std_opcode_lengths[2], ddlh.std_opcode_lengths[3],
+        ddlh.std_opcode_lengths[4], ddlh.std_opcode_lengths[5],
+        ddlh.std_opcode_lengths[6], ddlh.std_opcode_lengths[7],
+        ddlh.std_opcode_lengths[8], ddlh.std_opcode_lengths[9],
+        ddlh.std_opcode_lengths[10], ddlh.std_opcode_lengths[11]);
+    assert(ddlh.version == 4);
 }
