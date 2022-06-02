@@ -1,3 +1,4 @@
+#include <_types/_uint8_t.h>
 #define GB_IMPLEMENTATION
 #include <assert.h>
 #include <mach-o/loader.h>
@@ -22,7 +23,7 @@ typedef struct __attribute__((packed)) {
     uint8_t std_opcode_lengths[12];
 } dwarf_debug_line_header;
 
-typedef enum {
+typedef enum : uint8_t {
     DW_LNS_extended_op = 0,
     DW_LNS_copy,
     DW_LNS_advance_pc,
@@ -212,14 +213,19 @@ int main(int argc, const char* argv[]) {
                         puts("Files:");
                         while (offset < sec->offset + sec->size) {
                             char* s = &contents.data[offset];
+                            if (*s == 0) {
+                                offset += 1;
+                                break;
+                            }
                             char* end = memchr(&contents.data[offset], 0,
                                                contents.size - offset);
                             assert(end != NULL);
-                            printf("- %s\n", s);
-                            offset += end - s;
-                            if (*(end + 1) == 0) {
-                                break;
-                            }
+                            offset += end - s + 1;
+                            u8* dir_index = &contents.data[offset++];
+                            u8* modtime = &contents.data[offset++];
+                            u8* length = &contents.data[offset++];
+                            printf("- %s dir_index=%d modtime=%d length=%d\n",
+                                   s, *dir_index, *modtime, *length);
                         }
                         puts("");
 
