@@ -109,6 +109,64 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset) {
     while (*offset - start_offset < size) *offset += 1;  // Skip rest
 }
 
+void read_dwarf_debug_line_section(void* data, u64 size, u64* offset) {
+    const u64 start_offset = *offset;
+
+    while (*offset < start_offset + size) {
+        DW_LNS* opcode = &data[*offset];
+        *offset += 1;
+        printf("DW_OP=%d\n", *opcode);
+        switch (*opcode) {
+            case DW_LNS_extended_op: {
+                const u64 size =
+                    read_leb128_encoded_unsigned(data, size, offset);
+                printf("DW_LNS_extended_op size=%#llx\n", size);
+
+                read_dwarf_ext_op(data, size, offset);
+                break;
+            }
+            case DW_LNS_copy:
+                puts("DW_LNS_copy");
+                break;
+            case DW_LNS_advance_pc: {
+                const u64 decoded =
+                    read_leb128_encoded_unsigned(data, size, offset);
+                printf("DW_LNS_advance_pc leb128=%#llx\n", decoded);
+                break;
+            }
+            case DW_LNS_advance_line: {
+                const u64 line = read_leb128_encoded_signed(data, size, offset);
+                printf("DW_LNS_advance_line line=%lld\n", line);
+                break;
+            }
+            case DW_LNS_set_file:
+                break;
+            case DW_LNS_set_column: {
+                const u64 column =
+                    read_leb128_encoded_unsigned(data, size, offset);
+                printf("DW_LNS_set_column column=%llu\n", column);
+                break;
+            }
+            case DW_LNS_negate_stmt:
+                break;
+            case DW_LNS_set_basic_block:
+                break;
+            case DW_LNS_const_add_pc:
+                break;
+            case DW_LNS_fixed_advance_pc:
+                break;
+            case DW_LNS_set_prologue_end:
+                break;
+            case DW_LNS_set_epilogue_begin:
+                break;
+            case DW_LNS_set_isa:
+                break;
+            default:
+                assert(0 && "UNIMPLEMENTED");
+        }
+    }
+}
+
 int main(int argc, const char* argv[]) {
     assert(argc == 2);
     const char* path = argv[1];
@@ -299,70 +357,8 @@ int main(int argc, const char* argv[]) {
                         }
                         puts("");
 
-                        while (offset < sec->offset + sec->size) {
-                            DW_LNS* opcode = &contents.data[offset++];
-                            printf("DW_OP=%d\n", *opcode);
-                            switch (*opcode) {
-                                case DW_LNS_extended_op: {
-                                    const u64 size =
-                                        read_leb128_encoded_unsigned(
-                                            contents.data, contents.size,
-                                            &offset);
-                                    printf("DW_LNS_extended_op size=%#llx\n",
-                                           size);
-
-                                    read_dwarf_ext_op(contents.data, size,
+                        read_dwarf_debug_line_section(contents.data, sec->size,
                                                       &offset);
-                                    break;
-                                }
-                                case DW_LNS_copy:
-                                    puts("DW_LNS_copy");
-                                    break;
-                                case DW_LNS_advance_pc: {
-                                    const u64 decoded =
-                                        read_leb128_encoded_unsigned(
-                                            contents.data, contents.size,
-                                            &offset);
-                                    printf("DW_LNS_advance_pc leb128=%#llx\n",
-                                           decoded);
-                                    break;
-                                }
-                                case DW_LNS_advance_line: {
-                                    const u64 line = read_leb128_encoded_signed(
-                                        contents.data, contents.size, &offset);
-                                    printf("DW_LNS_advance_line line=%lld\n",
-                                           line);
-                                    break;
-                                }
-                                case DW_LNS_set_file:
-                                    break;
-                                case DW_LNS_set_column: {
-                                    const u64 column =
-                                        read_leb128_encoded_unsigned(
-                                            contents.data, contents.size,
-                                            &offset);
-                                    printf("DW_LNS_set_column column=%llu\n",
-                                           column);
-                                    break;
-                                }
-                                case DW_LNS_negate_stmt:
-                                    break;
-                                case DW_LNS_set_basic_block:
-                                    break;
-                                case DW_LNS_const_add_pc:
-                                    break;
-                                case DW_LNS_fixed_advance_pc:
-                                    break;
-                                case DW_LNS_set_prologue_end:
-                                    break;
-                                case DW_LNS_set_epilogue_begin:
-                                    break;
-                                case DW_LNS_set_isa:
-                                    break;
-                                default:
-                                    assert(0 && "UNIMPLEMENTED");
-                            }
-                        }
 
                         offset = saved_offset;
                     }
