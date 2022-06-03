@@ -117,14 +117,17 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
 void read_dwarf_debug_line_section(void* data, u64 size, u64* offset,
                                    dwarf_debug_line_header* ddlh) {
     const u64 start_offset = *offset;
+    // FSM
     u64 address = 0;
     u64 line = 0;
     int /* FIXME */ file = 0;
+    bool is_stmt = false;
+    u64 pc = 0;
 
     while (*offset < start_offset + size) {
         DW_LNS* opcode = &data[*offset];
         *offset += 1;
-        printf("DW_OP=%d\n", *opcode);
+        printf("DW_OP=%#x\n", *opcode);
         switch (*opcode) {
             case DW_LNS_extended_op: {
                 const u64 size =
@@ -158,11 +161,20 @@ void read_dwarf_debug_line_section(void* data, u64 size, u64* offset,
                 break;
             }
             case DW_LNS_negate_stmt:
+                puts("DW_LNS_negate_stmt");
+                is_stmt = !is_stmt;
                 break;
             case DW_LNS_set_basic_block:
                 break;
-            case DW_LNS_const_add_pc:
+            case DW_LNS_const_add_pc: {
+                const u8 op = 255 - 13;
+                address += op / ddlh->line_range * ddlh->min_instruction_length;
+                // TODO: op_index
+                printf("address+=%d -> address=%#llx\n",
+                       op / ddlh->line_range * ddlh->min_instruction_length,
+                       address);
                 break;
+            }
             case DW_LNS_fixed_advance_pc:
                 break;
             case DW_LNS_set_prologue_end:
@@ -366,11 +378,18 @@ int main(int argc, const char* argv[]) {
                                                contents.size - offset);
                             assert(end != NULL);
                             offset += end - s + 1;
-                            u8* dir_index = &contents.data[offset++];
-                            u8* modtime = &contents.data[offset++];
-                            u8* length = &contents.data[offset++];
-                            printf("- %s dir_index=%d modtime=%d length=%d\n",
-                                   s, *dir_index, *modtime, *length);
+                            u64 dir_index = read_leb128_encoded_unsigned(
+                                contents.data, contents.size, &offset);
+                            u64 modtime = read_leb128_encoded_unsigned(
+                                contents.data, contents.size, &offset);
+
+                            u64 length = read_leb128_encoded_unsigned(
+                                contents.data, contents.size, &offset);
+
+                            printf(
+                                "- %s dir_index=%llu modtime=%llu "
+                                "length=%llu\n",
+                                s, dir_index, modtime, length);
                         }
                         puts("");
 
