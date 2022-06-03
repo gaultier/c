@@ -94,12 +94,14 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
 
     switch (*extended_opcode) {
         case DW_LNE_end_sequence: {
+            puts("DW_LNE_end_sequence");
             break;
         }
         case DW_LNE_set_address: {
-            const u64 a = read_leb128_encoded_signed(data, size, offset);
-            printf("DW_LNE_set_address addr=%#llx\n", a);
-            *address = a;
+            const u64* a = &data[*offset];
+            *offset += sizeof(u64);
+            printf("DW_LNE_set_address addr=%#llx\n", *a);
+            *address = *a;
             break;
         }
         case DW_LNE_define_file: {
@@ -114,9 +116,8 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
     while (*offset - start_offset < size) *offset += 1;  // Skip rest
 }
 
-void read_dwarf_debug_line_section(void* data, u64 size, u64* offset,
+void read_dwarf_debug_line_section(void* data, u64 end_offset, u64* offset,
                                    dwarf_debug_line_header* ddlh) {
-    const u64 start_offset = *offset;
     // FSM
     u64 address = 0;
     u64 line = 0;
@@ -124,10 +125,10 @@ void read_dwarf_debug_line_section(void* data, u64 size, u64* offset,
     bool is_stmt = false;
     u64 pc = 0;
 
-    while (*offset < start_offset + size) {
+    while (*offset < end_offset) {
         DW_LNS* opcode = &data[*offset];
         *offset += 1;
-        printf("DW_OP=%#x\n", *opcode);
+        printf("DW_OP=%#x offset=%#llx\n", *opcode, *offset);
         switch (*opcode) {
             case DW_LNS_extended_op: {
                 const u64 size =
@@ -142,12 +143,14 @@ void read_dwarf_debug_line_section(void* data, u64 size, u64* offset,
                 break;
             case DW_LNS_advance_pc: {
                 const u64 decoded =
-                    read_leb128_encoded_unsigned(data, size, offset);
+                    read_leb128_encoded_unsigned(data, end_offset, offset);
                 printf("DW_LNS_advance_pc leb128=%#llx\n", decoded);
+                pc += decoded;
                 break;
             }
             case DW_LNS_advance_line: {
-                const u64 l = read_leb128_encoded_signed(data, size, offset);
+                const u64 l =
+                    read_leb128_encoded_signed(data, end_offset, offset);
                 printf("DW_LNS_advance_line line=%lld\n", l);
                 line += l;
                 break;
@@ -156,7 +159,7 @@ void read_dwarf_debug_line_section(void* data, u64 size, u64* offset,
                 break;
             case DW_LNS_set_column: {
                 const u64 column =
-                    read_leb128_encoded_unsigned(data, size, offset);
+                    read_leb128_encoded_unsigned(data, end_offset, offset);
                 printf("DW_LNS_set_column column=%llu\n", column);
                 break;
             }
@@ -167,10 +170,10 @@ void read_dwarf_debug_line_section(void* data, u64 size, u64* offset,
             case DW_LNS_set_basic_block:
                 break;
             case DW_LNS_const_add_pc: {
-                const u8 op = 255 - 13;
+                const u8 op = 255 - ddlh->opcode_base;
                 address += op / ddlh->line_range * ddlh->min_instruction_length;
                 // TODO: op_index
-                printf("address+=%d -> address=%#llx\n",
+                printf("address+=%#x -> address=%#llx\n",
                        op / ddlh->line_range * ddlh->min_instruction_length,
                        address);
                 break;
@@ -185,7 +188,7 @@ void read_dwarf_debug_line_section(void* data, u64 size, u64* offset,
             case DW_LNS_set_isa:
                 break;
             default: {
-                const u8 op = *opcode - 13;
+                const u8 op = *opcode - ddlh->opcode_base;
                 address += op / ddlh->line_range * ddlh->min_instruction_length;
                 line += ddlh->line_base + op % ddlh->line_range;
                 printf("address+=%d line+=%d\n",
@@ -393,7 +396,8 @@ int main(int argc, const char* argv[]) {
                         }
                         puts("");
 
-                        read_dwarf_debug_line_section(contents.data, sec->size,
+                        read_dwarf_debug_line_section(contents.data,
+                                                      sec->offset + sec->size,
                                                       &offset, ddlh);
 
                         offset = saved_offset;
