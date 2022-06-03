@@ -121,18 +121,19 @@ void read_dwarf_debug_line_section(void* data, u64 end_offset, u64* offset,
     // FSM
     u64 address = 0;
     u64 line = 0;
+    // TODO: track column?
     int /* FIXME */ file = 0;
     bool is_stmt = false;
-    u64 pc = 0;
 
     while (*offset < end_offset) {
         DW_LNS* opcode = &data[*offset];
         *offset += 1;
-        printf("DW_OP=%#x offset=%#llx\n", *opcode, *offset);
+        printf("DW_OP=%#x offset=%#llx address=%#llx line=%lld\n", *opcode,
+               *offset, address, line + 1);
         switch (*opcode) {
             case DW_LNS_extended_op: {
                 const u64 size =
-                    read_leb128_encoded_unsigned(data, size, offset);
+                    read_leb128_encoded_unsigned(data, end_offset, offset);
                 printf("DW_LNS_extended_op size=%#llx\n", size);
 
                 read_dwarf_ext_op(data, size, offset, &address, &file);
@@ -145,14 +146,14 @@ void read_dwarf_debug_line_section(void* data, u64 end_offset, u64* offset,
                 const u64 decoded =
                     read_leb128_encoded_unsigned(data, end_offset, offset);
                 printf("DW_LNS_advance_pc leb128=%#llx\n", decoded);
-                pc += decoded;
+                address += decoded;
                 break;
             }
             case DW_LNS_advance_line: {
                 const u64 l =
                     read_leb128_encoded_signed(data, end_offset, offset);
                 printf("DW_LNS_advance_line line=%lld\n", l);
-                line += l;
+                line = l;
                 break;
             }
             case DW_LNS_set_file:
