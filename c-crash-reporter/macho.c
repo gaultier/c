@@ -10,7 +10,7 @@
 
 #include "../vendor/gb.h"
 
-u64 read_leb128_encoded_unsigned(void* data, isize size, u64* offset) {
+u64 read_leb128_u64(void* data, isize size, u64* offset) {
     u64 result = 0;
     u64 shift = 0;
     while (true) {
@@ -24,7 +24,7 @@ u64 read_leb128_encoded_unsigned(void* data, isize size, u64* offset) {
     return result;
 }
 
-i64 read_leb128_encoded_signed(void* data, isize size, u64* offset) {
+i64 read_leb128_s64(void* data, isize size, u64* offset) {
     i64 result = 0;
     u64 shift = 0;
     u8 val = 0;
@@ -116,7 +116,7 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
     while (*offset - start_offset < size) *offset += 1;  // Skip rest
 }
 
-void read_dwarf_debug_line_section(void* data, u64 end_offset, u64* offset,
+void read_dwarf_section_debug_line(void* data, u64 end_offset, u64* offset,
                                    dwarf_debug_line_header* ddlh) {
     // FSM
     u64 address = 0;
@@ -132,8 +132,7 @@ void read_dwarf_debug_line_section(void* data, u64 end_offset, u64* offset,
                *offset, address, line + 1);
         switch (*opcode) {
             case DW_LNS_extended_op: {
-                const u64 size =
-                    read_leb128_encoded_unsigned(data, end_offset, offset);
+                const u64 size = read_leb128_u64(data, end_offset, offset);
                 printf("DW_LNS_extended_op size=%#llx\n", size);
 
                 read_dwarf_ext_op(data, size, offset, &address, &file);
@@ -143,15 +142,13 @@ void read_dwarf_debug_line_section(void* data, u64 end_offset, u64* offset,
                 puts("DW_LNS_copy");
                 break;
             case DW_LNS_advance_pc: {
-                const u64 decoded =
-                    read_leb128_encoded_unsigned(data, end_offset, offset);
+                const u64 decoded = read_leb128_u64(data, end_offset, offset);
                 printf("DW_LNS_advance_pc leb128=%#llx\n", decoded);
                 address += decoded;
                 break;
             }
             case DW_LNS_advance_line: {
-                const u64 l =
-                    read_leb128_encoded_signed(data, end_offset, offset);
+                const u64 l = read_leb128_s64(data, end_offset, offset);
                 printf("DW_LNS_advance_line line=%lld\n", l);
                 line = l;
                 break;
@@ -159,8 +156,7 @@ void read_dwarf_debug_line_section(void* data, u64 end_offset, u64* offset,
             case DW_LNS_set_file:
                 break;
             case DW_LNS_set_column: {
-                const u64 column =
-                    read_leb128_encoded_unsigned(data, end_offset, offset);
+                const u64 column = read_leb128_u64(data, end_offset, offset);
                 printf("DW_LNS_set_column column=%llu\n", column);
                 break;
             }
@@ -382,12 +378,12 @@ int main(int argc, const char* argv[]) {
                                                contents.size - offset);
                             assert(end != NULL);
                             offset += end - s + 1;
-                            u64 dir_index = read_leb128_encoded_unsigned(
+                            u64 dir_index = read_leb128_u64(
                                 contents.data, contents.size, &offset);
-                            u64 modtime = read_leb128_encoded_unsigned(
+                            u64 modtime = read_leb128_u64(
                                 contents.data, contents.size, &offset);
 
-                            u64 length = read_leb128_encoded_unsigned(
+                            u64 length = read_leb128_u64(
                                 contents.data, contents.size, &offset);
 
                             printf(
@@ -397,7 +393,7 @@ int main(int argc, const char* argv[]) {
                         }
                         puts("");
 
-                        read_dwarf_debug_line_section(contents.data,
+                        read_dwarf_section_debug_line(contents.data,
                                                       sec->offset + sec->size,
                                                       &offset, ddlh);
 
