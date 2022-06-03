@@ -2,9 +2,6 @@
 #define GB_IMPLEMENTATION
 #include <assert.h>
 #include <mach-o/loader.h>
-#include <mach-o/nlist.h>
-#include <mach-o/stab.h>
-#include <stab.h>
 #include <stdio.h>
 #include <stdlib.h>
 
