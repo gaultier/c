@@ -275,7 +275,7 @@ typedef struct {
 static void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
                               int* file) {
     const u64 start_offset = *offset;
-    DW_LNE* extended_opcode = &data[*offset];
+    const DW_LNE* extended_opcode = &data[*offset];
     *offset += 1;
     printf("DW_EXT_OP=%d\n", *extended_opcode);
 
@@ -352,13 +352,13 @@ void read_dwarf_section_debug_str(void* data, const struct section_64* sec) {
     u64 offset = sec->offset;
     u64 i = 0;
     while (offset < sec->offset + sec->size) {
-        char* s = &data[offset];
+        const char* s = &data[offset];
         if (*s == 0) {
             offset++;
             continue;
         }
 
-        char* end = memchr(&data[offset], 0, sec->offset + sec->size);
+        const char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
         printf("- [%llu] %s\n", i, s);
         offset += end - s;
@@ -369,7 +369,7 @@ void read_dwarf_section_debug_str(void* data, const struct section_64* sec) {
 static void read_dwarf_section_debug_line(void* data,
                                           const struct section_64* sec) {
     u64 offset = sec->offset;
-    dwarf_debug_line_header* ddlh = &data[offset];
+    const dwarf_debug_line_header* ddlh = &data[offset];
     offset += sizeof(dwarf_debug_line_header);
     printf(
         "DWARF length=%#x version=%#x header_length=%#x "
@@ -403,8 +403,8 @@ static void read_dwarf_section_debug_line(void* data,
     assert(ddlh->version == 4);
     puts("Directories:");
     while (offset < sec->offset + sec->size) {
-        char* s = &data[offset];
-        char* end = memchr(&data[offset], 0, sec->offset + sec->size);
+        const char* s = &data[offset];
+        const char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
         printf("- %s\n", s);
         offset += end - s;
@@ -423,10 +423,10 @@ static void read_dwarf_section_debug_line(void* data,
         char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
         offset += end - s + 1;
-        u64 dir_index = read_leb128_u64(data, &offset);
-        u64 modtime = read_leb128_u64(data, &offset);
+        const u64 dir_index = read_leb128_u64(data, &offset);
+        const u64 modtime = read_leb128_u64(data, &offset);
 
-        u64 length = read_leb128_u64(data, &offset);
+        const u64 length = read_leb128_u64(data, &offset);
 
         printf(
             "- %s dir_index=%llu modtime=%llu "
