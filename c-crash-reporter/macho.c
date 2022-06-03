@@ -10,35 +10,6 @@
 
 #include "../vendor/gb.h"
 
-typedef struct __attribute__((packed)) {
-    uint32_t length;
-    uint16_t version;
-    uint32_t header_length;
-    uint8_t min_instruction_length;
-    uint8_t max_ops_per_inst;
-    uint8_t default_is_stmt;
-    int8_t line_base;
-    uint8_t line_range;
-    uint8_t opcode_base;
-    uint8_t std_opcode_lengths[12];
-} dwarf_debug_line_header;
-
-typedef enum : uint8_t {
-    DW_LNS_extended_op = 0,
-    DW_LNS_copy,
-    DW_LNS_advance_pc,
-    DW_LNS_advance_line,
-    DW_LNS_set_file,
-    DW_LNS_set_column,
-    DW_LNS_negate_stmt,
-    DW_LNS_set_basic_block,
-    DW_LNS_const_add_pc,
-    DW_LNS_fixed_advance_pc,
-    DW_LNS_set_prologue_end,
-    DW_LNS_set_epilogue_begin,
-    DW_LNS_set_isa,
-} DW_OP;
-
 u64 read_leb128_encoded_unsigned(void* data, isize size, u64* offset) {
     u64 result = 0;
     u64 shift = 0;
@@ -73,6 +44,119 @@ i64 read_leb128_encoded_signed(void* data, isize size, u64* offset) {
     }
 
     return result;
+}
+
+typedef struct __attribute__((packed)) {
+    uint32_t length;
+    uint16_t version;
+    uint32_t header_length;
+    uint8_t min_instruction_length;
+    uint8_t max_ops_per_inst;
+    uint8_t default_is_stmt;
+    int8_t line_base;
+    uint8_t line_range;
+    uint8_t opcode_base;
+    uint8_t std_opcode_lengths[12];
+} dwarf_debug_line_header;
+
+typedef enum : uint8_t {
+    DW_LNS_extended_op = 0,
+    DW_LNS_copy,
+    DW_LNS_advance_pc,
+    DW_LNS_advance_line,
+    DW_LNS_set_file,
+    DW_LNS_set_column,
+    DW_LNS_negate_stmt,
+    DW_LNS_set_basic_block,
+    DW_LNS_const_add_pc,
+    DW_LNS_fixed_advance_pc,
+    DW_LNS_set_prologue_end,
+    DW_LNS_set_epilogue_begin,
+    DW_LNS_set_isa,
+} DW_OP;
+
+typedef enum : uint8_t {
+    DW_EXT_OP_end_sequence = 1,
+    DW_EXT_OP_set_address,
+    DW_EXT_OP_define_file,
+    DW_EXT_OP_set_discriminator,
+    DW_EXT_OP_extended_op,
+    DW_EXT_OP_copy,
+    DW_EXT_OP_advance_pc,
+    DW_EXT_OP_advance_line,
+    DW_EXT_OP_set_file,
+    DW_EXT_OP_set_column,
+    DW_EXT_OP_negate_stmt,
+    DW_EXT_OP_set_basic_block,
+    DW_EXT_OP_const_add_pc,
+    DW_EXT_OP_fixed_advance_pc,
+    DW_EXT_OP_set_prologue_end,
+    DW_EXT_OP_set_epilogue_begin,
+    DW_EXT_OP_set_isa,
+} DW_EXT_OP;
+
+void read_dwarf_ext_op(void* data, isize size, u64* offset) {
+    DW_EXT_OP* extended_opcode = &data[*offset];
+    *offset += 1;
+    printf("DW_EXT_OP=%d\n", *extended_opcode);
+
+    switch (*extended_opcode) {
+        case DW_EXT_OP_end_sequence: {
+            break;
+        }
+        case DW_EXT_OP_set_address: {
+            const u64 addr = read_leb128_encoded_signed(data, size, offset);
+            printf("DW_EXT_OP_set_address addr=%#llx\n", addr);
+            break;
+        }
+        case DW_EXT_OP_define_file: {
+            break;
+        }
+        case DW_EXT_OP_set_discriminator: {
+            break;
+        }
+        case DW_EXT_OP_extended_op: {
+            break;
+        }
+        case DW_EXT_OP_copy: {
+            break;
+        }
+        case DW_EXT_OP_advance_pc: {
+            break;
+        }
+        case DW_EXT_OP_advance_line: {
+            break;
+        }
+        case DW_EXT_OP_set_file: {
+            break;
+        }
+        case DW_EXT_OP_set_column: {
+            break;
+        }
+        case DW_EXT_OP_negate_stmt: {
+            break;
+        }
+        case DW_EXT_OP_set_basic_block: {
+            break;
+        }
+        case DW_EXT_OP_const_add_pc: {
+            break;
+        }
+        case DW_EXT_OP_fixed_advance_pc: {
+            break;
+        }
+        case DW_EXT_OP_set_prologue_end: {
+            break;
+        }
+        case DW_EXT_OP_set_epilogue_begin: {
+            break;
+        }
+        case DW_EXT_OP_set_isa: {
+            break;
+        }
+        default:
+            assert(0 && "UNREACHABLE");
+    }
 }
 
 int main(int argc, const char* argv[]) {
@@ -270,12 +354,15 @@ int main(int argc, const char* argv[]) {
                             printf("DW_OP=%d\n", *opcode);
                             switch (*opcode) {
                                 case DW_LNS_extended_op: {
-                                    const u64 decoded =
+                                    const u64 size =
                                         read_leb128_encoded_unsigned(
                                             contents.data, contents.size,
                                             &offset);
-                                    printf("DW_LNS_extended_op leb128=%#llx\n",
-                                           decoded);
+                                    printf("DW_LNS_extended_op size=%#llx\n",
+                                           size);
+
+                                    read_dwarf_ext_op(contents.data, size,
+                                                      &offset);
                                     break;
                                 }
                                 case DW_LNS_copy:
