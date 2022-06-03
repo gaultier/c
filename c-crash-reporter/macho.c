@@ -304,7 +304,7 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
 }
 
 static void read_dwarf_section_debug_abbrev(void* data,
-                                            struct section_64* sec) {
+                                            const struct section_64* sec) {
     u64 offset = sec->offset;
     while (offset < sec->offset + sec->size) {
         u8* type_num = &data[offset++];
@@ -324,7 +324,8 @@ static void read_dwarf_section_debug_abbrev(void* data,
     }
 }
 
-static void read_dwarf_section_debug_info(void* data, struct section_64* sec) {
+static void read_dwarf_section_debug_info(void* data,
+                                          const struct section_64* sec) {
     u64 offset = sec->offset;
 
     u32* size = &data[offset];
@@ -347,7 +348,7 @@ static void read_dwarf_section_debug_info(void* data, struct section_64* sec) {
     // TODO
 }
 
-void read_dwarf_section_debug_str(void* data, struct section_64* sec) {
+void read_dwarf_section_debug_str(void* data, const struct section_64* sec) {
     u64 offset = sec->offset;
     u64 i = 0;
     while (offset < sec->offset + sec->size) {
@@ -365,7 +366,8 @@ void read_dwarf_section_debug_str(void* data, struct section_64* sec) {
     }
 }
 
-static void read_dwarf_section_debug_line(void* data, struct section_64* sec) {
+static void read_dwarf_section_debug_line(void* data,
+                                          const struct section_64* sec) {
     u64 offset = sec->offset;
     dwarf_debug_line_header* ddlh = &data[offset];
     offset += sizeof(dwarf_debug_line_header);
@@ -513,7 +515,7 @@ static void read_dwarf_section_debug_line(void* data, struct section_64* sec) {
 
 static void read_macho_dsym(void* data, isize size) {
     u64 offset = 0;
-    struct mach_header_64* h = &data[offset];
+    const struct mach_header_64* h = &data[offset];
     offset += sizeof(struct mach_header_64);
     assert(h->cputype == CPU_TYPE_X86_64);
     assert(h->filetype == MH_DSYM);
@@ -525,13 +527,13 @@ static void read_macho_dsym(void* data, isize size) {
         h->sizeofcmds, h->flags);
 
     for (int cmd_count = 0; cmd_count < h->ncmds; cmd_count++) {
-        struct load_command* c = &data[offset];
+        const struct load_command* c = &data[offset];
         offset += sizeof(struct load_command);
         printf("command: cmd=%d cmdsize=%d\n", c->cmd, c->cmdsize);
 
         switch (c->cmd) {
             case LC_UUID: {
-                struct uuid_command* uc =
+                const struct uuid_command* uc =
                     &data[offset - sizeof(struct load_command)];
                 offset +=
                     sizeof(struct uuid_command) - sizeof(struct load_command);
@@ -548,7 +550,7 @@ static void read_macho_dsym(void* data, isize size) {
                 break;
             }
             case LC_BUILD_VERSION: {
-                struct build_version_command* vc =
+                const struct build_version_command* vc =
                     &data[offset - sizeof(struct load_command)];
                 offset += sizeof(struct build_version_command) -
                           sizeof(struct load_command);
@@ -561,7 +563,7 @@ static void read_macho_dsym(void* data, isize size) {
                 break;
             }
             case LC_SYMTAB: {
-                struct symtab_command* sc =
+                const struct symtab_command* sc =
                     &data[offset - sizeof(struct load_command)];
                 offset +=
                     sizeof(struct symtab_command) - sizeof(struct load_command);
@@ -572,7 +574,7 @@ static void read_macho_dsym(void* data, isize size) {
                 break;
             }
             case LC_SEGMENT_64: {
-                struct segment_command_64* sc =
+                const struct segment_command_64* sc =
                     &data[offset - sizeof(struct load_command)];
                 offset += sizeof(struct segment_command_64) -
                           sizeof(struct load_command);
@@ -586,7 +588,7 @@ static void read_macho_dsym(void* data, isize size) {
                     sc->flags);
 
                 for (int sec_count = 0; sec_count < sc->nsects; sec_count++) {
-                    struct section_64* sec = &data[offset];
+                    const struct section_64* sec = &data[offset];
                     offset += sizeof(struct section_64);
                     printf(
                         "SECTION sectname=%s segname=%s addr=%#llx size=%#llx "
