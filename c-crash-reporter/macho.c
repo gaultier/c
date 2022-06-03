@@ -82,7 +82,11 @@ typedef enum : uint8_t {
     DW_LNE_set_discriminator,
 } DW_LNE;
 
-void read_dwarf_ext_op(void* data, isize size, u64* offset) {
+typedef struct {
+} dwarf_info;
+
+void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
+                       int* file) {
     const u64 start_offset = *offset;
     DW_LNE* extended_opcode = &data[*offset];
     *offset += 1;
@@ -93,8 +97,9 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset) {
             break;
         }
         case DW_LNE_set_address: {
-            const u64 addr = read_leb128_encoded_signed(data, size, offset);
-            printf("DW_LNE_set_address addr=%#llx\n", addr);
+            const u64 a = read_leb128_encoded_signed(data, size, offset);
+            printf("DW_LNE_set_address addr=%#llx\n", a);
+            *address = a;
             break;
         }
         case DW_LNE_define_file: {
@@ -109,8 +114,12 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset) {
     while (*offset - start_offset < size) *offset += 1;  // Skip rest
 }
 
-void read_dwarf_debug_line_section(void* data, u64 size, u64* offset) {
+void read_dwarf_debug_line_section(void* data, u64 size, u64* offset,
+                                   dwarf_debug_line_header* ddlh) {
     const u64 start_offset = *offset;
+    u64 address = 0;
+    u64 line = 0;
+    int /* FIXME */ file = 0;
 
     while (*offset < start_offset + size) {
         DW_LNS* opcode = &data[*offset];
@@ -122,7 +131,7 @@ void read_dwarf_debug_line_section(void* data, u64 size, u64* offset) {
                     read_leb128_encoded_unsigned(data, size, offset);
                 printf("DW_LNS_extended_op size=%#llx\n", size);
 
-                read_dwarf_ext_op(data, size, offset);
+                read_dwarf_ext_op(data, size, offset, &address, &file);
                 break;
             }
             case DW_LNS_copy:
@@ -135,8 +144,9 @@ void read_dwarf_debug_line_section(void* data, u64 size, u64* offset) {
                 break;
             }
             case DW_LNS_advance_line: {
-                const u64 line = read_leb128_encoded_signed(data, size, offset);
-                printf("DW_LNS_advance_line line=%lld\n", line);
+                const u64 l = read_leb128_encoded_signed(data, size, offset);
+                printf("DW_LNS_advance_line line=%lld\n", l);
+                line += l;
                 break;
             }
             case DW_LNS_set_file:
@@ -156,13 +166,20 @@ void read_dwarf_debug_line_section(void* data, u64 size, u64* offset) {
             case DW_LNS_fixed_advance_pc:
                 break;
             case DW_LNS_set_prologue_end:
+                puts("DW_LNS_set_prologue_end");
                 break;
             case DW_LNS_set_epilogue_begin:
                 break;
             case DW_LNS_set_isa:
                 break;
-            default:
-                assert(0 && "UNIMPLEMENTED");
+            default: {
+                const u8 op = *opcode - 13;
+                address += op / ddlh->line_range * ddlh->min_instruction_length;
+                line += ddlh->line_base + op % ddlh->line_range;
+                printf("address+=%d line+=%d\n",
+                       op / ddlh->line_range * ddlh->min_instruction_length,
+                       ddlh->line_base + op % ddlh->line_range);
+            }
         }
     }
 }
@@ -358,7 +375,7 @@ int main(int argc, const char* argv[]) {
                         puts("");
 
                         read_dwarf_debug_line_section(contents.data, sec->size,
-                                                      &offset);
+                                                      &offset, ddlh);
 
                         offset = saved_offset;
                     }
