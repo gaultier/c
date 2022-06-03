@@ -116,6 +116,29 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
     while (*offset - start_offset < size) *offset += 1;  // Skip rest
 }
 
+void read_dwarf_section_debug_info(void* data, struct section_64* sec) {
+    u64 offset = sec->offset;
+
+    u32* size = &data[offset];
+    offset += sizeof(u32);
+    printf(".debug_info size=%#x\n", *size);
+
+    u16* version = &data[offset];
+    offset += sizeof(u16);
+    printf(".debug_info version=%u\n", *version);
+    assert(*version == 4);
+
+    u32* abbr_offset = &data[offset];
+    offset += sizeof(u32);
+    printf(".debug_info abbr_offset=%#x\n", *abbr_offset);
+
+    u8* addr_size = &data[offset];
+    offset += sizeof(u8);
+    printf(".debug_info abbr_size=%#x\n", *addr_size);
+
+    // TODO
+}
+
 void read_dwarf_section_debug_str(void* data, struct section_64* sec) {
     u64 offset = sec->offset;
     u64 i = 0;
@@ -401,6 +424,8 @@ int main(int argc, const char* argv[]) {
                         read_dwarf_section_debug_line(contents.data, sec);
                     } else if (strcmp(sec->sectname, "__debug_str") == 0) {
                         read_dwarf_section_debug_str(contents.data, sec);
+                    } else if (strcmp(sec->sectname, "__debug_info") == 0) {
+                        read_dwarf_section_debug_info(contents.data, sec);
                     }
                 }
 
