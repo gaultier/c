@@ -252,14 +252,21 @@ int main(int argc, const char* argv[]) {
                                         read_leb128_encoded_unsigned(
                                             contents.data, contents.size,
                                             &offset);
-                                    printf("leb128_encoded_bytes_num=%#llx\n",
+                                    printf("DW_LNS_extended_op leb128=%#llx\n",
                                            decoded);
                                     break;
                                 }
                                 case DW_LNS_copy:
                                     break;
-                                case DW_LNS_advance_pc:
+                                case DW_LNS_advance_pc: {
+                                    const u64 decoded =
+                                        read_leb128_encoded_unsigned(
+                                            contents.data, contents.size,
+                                            &offset);
+                                    printf("DW_LNS_advance_pc leb128=%#llx\n",
+                                           decoded);
                                     break;
+                                }
                                 case DW_LNS_advance_line:
                                     break;
                                 case DW_LNS_set_file:
