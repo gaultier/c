@@ -511,15 +511,9 @@ static void read_dwarf_section_debug_line(void* data, struct section_64* sec) {
     }
 }
 
-int main(int argc, const char* argv[]) {
-    assert(argc == 2);
-    const char* path = argv[1];
-
-    gbAllocator allocator = gb_heap_allocator();
-    gbFileContents contents = gb_file_read_contents(allocator, true, path);
-
+static void read_macho_dsym(void* data, isize size) {
     u64 offset = 0;
-    struct mach_header_64* h = &contents.data[offset];
+    struct mach_header_64* h = &data[offset];
     offset += sizeof(struct mach_header_64);
     assert(h->cputype == CPU_TYPE_X86_64);
     assert(h->filetype == MH_DSYM);
@@ -531,14 +525,14 @@ int main(int argc, const char* argv[]) {
         h->sizeofcmds, h->flags);
 
     for (int cmd_count = 0; cmd_count < h->ncmds; cmd_count++) {
-        struct load_command* c = &contents.data[offset];
+        struct load_command* c = &data[offset];
         offset += sizeof(struct load_command);
         printf("command: cmd=%d cmdsize=%d\n", c->cmd, c->cmdsize);
 
         switch (c->cmd) {
             case LC_UUID: {
                 struct uuid_command* uc =
-                    &contents.data[offset - sizeof(struct load_command)];
+                    &data[offset - sizeof(struct load_command)];
                 offset +=
                     sizeof(struct uuid_command) - sizeof(struct load_command);
                 printf(
@@ -555,7 +549,7 @@ int main(int argc, const char* argv[]) {
             }
             case LC_BUILD_VERSION: {
                 struct build_version_command* vc =
-                    &contents.data[offset - sizeof(struct load_command)];
+                    &data[offset - sizeof(struct load_command)];
                 offset += sizeof(struct build_version_command) -
                           sizeof(struct load_command);
                 printf(
@@ -568,7 +562,7 @@ int main(int argc, const char* argv[]) {
             }
             case LC_SYMTAB: {
                 struct symtab_command* sc =
-                    &contents.data[offset - sizeof(struct load_command)];
+                    &data[offset - sizeof(struct load_command)];
                 offset +=
                     sizeof(struct symtab_command) - sizeof(struct load_command);
 
@@ -579,7 +573,7 @@ int main(int argc, const char* argv[]) {
             }
             case LC_SEGMENT_64: {
                 struct segment_command_64* sc =
-                    &contents.data[offset - sizeof(struct load_command)];
+                    &data[offset - sizeof(struct load_command)];
                 offset += sizeof(struct segment_command_64) -
                           sizeof(struct load_command);
 
@@ -592,7 +586,7 @@ int main(int argc, const char* argv[]) {
                     sc->flags);
 
                 for (int sec_count = 0; sec_count < sc->nsects; sec_count++) {
-                    struct section_64* sec = &contents.data[offset];
+                    struct section_64* sec = &data[offset];
                     offset += sizeof(struct section_64);
                     printf(
                         "SECTION sectname=%s segname=%s addr=%#llx size=%#llx "
@@ -602,13 +596,13 @@ int main(int argc, const char* argv[]) {
                         sec->flags);
 
                     if (strcmp(sec->sectname, "__debug_line") == 0) {
-                        read_dwarf_section_debug_line(contents.data, sec);
+                        read_dwarf_section_debug_line(data, sec);
                     } else if (strcmp(sec->sectname, "__debug_str") == 0) {
-                        read_dwarf_section_debug_str(contents.data, sec);
+                        read_dwarf_section_debug_str(data, sec);
                     } else if (strcmp(sec->sectname, "__debug_info") == 0) {
-                        read_dwarf_section_debug_info(contents.data, sec);
+                        read_dwarf_section_debug_info(data, sec);
                     } else if (strcmp(sec->sectname, "__debug_abbrev") == 0) {
-                        read_dwarf_section_debug_abbrev(contents.data, sec);
+                        read_dwarf_section_debug_abbrev(data, sec);
                     }
                 }
 
@@ -618,4 +612,14 @@ int main(int argc, const char* argv[]) {
                 assert(0 && "UNIMPLEMENTED - catch all");
         }
     }
+}
+
+int main(int argc, const char* argv[]) {
+    assert(argc == 2);
+    const char* path = argv[1];
+
+    gbAllocator allocator = gb_heap_allocator();
+    gbFileContents contents = gb_file_read_contents(allocator, true, path);
+
+    read_macho_dsym(contents.data, contents.size);
 }
