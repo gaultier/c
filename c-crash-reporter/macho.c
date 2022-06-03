@@ -116,7 +116,23 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
     while (*offset - start_offset < size) *offset += 1;  // Skip rest
 }
 
-void read_dwarf_section_debug_str(void* data, u64 end_offset, u64* offset) {}
+void read_dwarf_section_debug_str(void* data, struct section_64* sec) {
+    u64 offset = sec->offset;
+    u64 i = 0;
+    while (offset < sec->offset + sec->size) {
+        char* s = &data[offset];
+        if (*s == 0) {
+            offset++;
+            continue;
+        }
+
+        char* end = memchr(&data[offset], 0, sec->offset + sec->size);
+        assert(end != NULL);
+        printf("- [%llu] %s\n", i, s);
+        offset += end - s;
+        i++;
+    }
+}
 
 void read_dwarf_section_debug_line(void* data, struct section_64* sec) {
     u64 offset = sec->offset;
@@ -383,6 +399,8 @@ int main(int argc, const char* argv[]) {
 
                     if (strcmp(sec->sectname, "__debug_line") == 0) {
                         read_dwarf_section_debug_line(contents.data, sec);
+                    } else if (strcmp(sec->sectname, "__debug_str") == 0) {
+                        read_dwarf_section_debug_str(contents.data, sec);
                     }
                 }
 
