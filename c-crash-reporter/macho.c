@@ -10,7 +10,7 @@
 
 #include "../vendor/gb.h"
 
-u64 read_leb128_u64(void* data, u64* offset) {
+static u64 read_leb128_u64(void* data, u64* offset) {
     u64 result = 0;
     u64 shift = 0;
     while (true) {
@@ -24,7 +24,7 @@ u64 read_leb128_u64(void* data, u64* offset) {
     return result;
 }
 
-i64 read_leb128_s64(void* data, u64* offset) {
+static i64 read_leb128_s64(void* data, u64* offset) {
     i64 result = 0;
     u64 shift = 0;
     u8 val = 0;
@@ -272,8 +272,8 @@ typedef enum : uint8_t {
 typedef struct {
 } dwarf_info;
 
-void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
-                       int* file) {
+static void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
+                              int* file) {
     const u64 start_offset = *offset;
     DW_LNE* extended_opcode = &data[*offset];
     *offset += 1;
@@ -303,7 +303,8 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
     while (*offset - start_offset < size) *offset += 1;  // Skip rest
 }
 
-void read_dwarf_section_debug_abbrev(void* data, struct section_64* sec) {
+static void read_dwarf_section_debug_abbrev(void* data,
+                                            struct section_64* sec) {
     u64 offset = sec->offset;
     while (offset < sec->offset + sec->size) {
         u8* type_num = &data[offset++];
@@ -323,7 +324,7 @@ void read_dwarf_section_debug_abbrev(void* data, struct section_64* sec) {
     }
 }
 
-void read_dwarf_section_debug_info(void* data, struct section_64* sec) {
+static void read_dwarf_section_debug_info(void* data, struct section_64* sec) {
     u64 offset = sec->offset;
 
     u32* size = &data[offset];
@@ -364,7 +365,7 @@ void read_dwarf_section_debug_str(void* data, struct section_64* sec) {
     }
 }
 
-void read_dwarf_section_debug_line(void* data, struct section_64* sec) {
+static void read_dwarf_section_debug_line(void* data, struct section_64* sec) {
     u64 offset = sec->offset;
     dwarf_debug_line_header* ddlh = &data[offset];
     offset += sizeof(dwarf_debug_line_header);
@@ -574,33 +575,6 @@ int main(int argc, const char* argv[]) {
                 printf("LC_SYMTAB symoff=%#x nsyms=%d stroff=%#x strsize=%d\n",
                        sc->symoff, sc->nsyms, sc->stroff, sc->strsize);
 
-                // symbol table
-                /* { */
-                /*     const int pos = ftell(f); */
-                /*     assert(fseek(f, sc.symoff, SEEK_SET) == 0); */
-                /*     for (int sym_count = 0; sym_count < sc.nsyms;
-                 * sym_count++) { */
-                /*         struct nlist_64 nl = {0}; */
-                /*         assert(fread(&nl, sizeof(nl), 1, f) >= 0); */
-                /*         printf( */
-                /*             "nlist_64 n_strx=%d n_type=%d n_sect=%d n_desc=%d
-                 * " */
-                /*             "n_value=%#llx\n", */
-                /*             nl.n_un.n_strx, nl.n_type, nl.n_sect, nl.n_desc,
-                 */
-                /*             nl.n_value); */
-                /*     } */
-                /*     assert(fseek(f, pos, SEEK_SET) == 0); */
-                /* } */
-                // string table
-                /* { */
-                /*     const int pos = ftell(f); */
-                /*     assert(fseek(f, sc.stroff, SEEK_SET) == 0); */
-                /*     char* s = malloc(sc.strsize + 1); */
-                /*     assert(fread(s, sc.strsize, 1, f) >= 0); */
-                /*     printf("strings=%.*s\n", sc.strsize, s); */
-                /*     assert(fseek(f, pos, SEEK_SET) == 0); */
-                /* } */
                 break;
             }
             case LC_SEGMENT_64: {
