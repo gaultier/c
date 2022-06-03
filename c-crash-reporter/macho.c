@@ -83,6 +83,7 @@ typedef enum : uint8_t {
 } DW_LNE;
 
 void read_dwarf_ext_op(void* data, isize size, u64* offset) {
+    const u64 start_offset = *offset;
     DW_LNE* extended_opcode = &data[*offset];
     *offset += 1;
     printf("DW_EXT_OP=%d\n", *extended_opcode);
@@ -105,6 +106,7 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset) {
         default:
             assert(0 && "UNREACHABLE");
     }
+    while (*offset - start_offset < size) *offset += 1;  // Skip rest
 }
 
 int main(int argc, const char* argv[]) {
@@ -314,6 +316,7 @@ int main(int argc, const char* argv[]) {
                                     break;
                                 }
                                 case DW_LNS_copy:
+                                    puts("DW_LNS_copy");
                                     break;
                                 case DW_LNS_advance_pc: {
                                     const u64 decoded =
@@ -325,18 +328,23 @@ int main(int argc, const char* argv[]) {
                                     break;
                                 }
                                 case DW_LNS_advance_line: {
-                                    const u64 decoded =
-                                        read_leb128_encoded_signed(
-                                            contents.data, contents.size,
-                                            &offset);
-                                    printf("DW_LNS_advance_line leb128=%#llx\n",
-                                           decoded);
+                                    const u64 line = read_leb128_encoded_signed(
+                                        contents.data, contents.size, &offset);
+                                    printf("DW_LNS_advance_line line=%lld\n",
+                                           line);
                                     break;
                                 }
                                 case DW_LNS_set_file:
                                     break;
-                                case DW_LNS_set_column:
+                                case DW_LNS_set_column: {
+                                    const u64 column =
+                                        read_leb128_encoded_unsigned(
+                                            contents.data, contents.size,
+                                            &offset);
+                                    printf("DW_LNS_set_column column=%llu\n",
+                                           column);
                                     break;
+                                }
                                 case DW_LNS_negate_stmt:
                                     break;
                                 case DW_LNS_set_basic_block:
