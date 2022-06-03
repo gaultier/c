@@ -342,7 +342,8 @@ static void read_dwarf_section_debug_info(void* data,
     offset += sizeof(u8);
     printf(".debug_info abbr_size=%#x\n", *addr_size);
 
-    // TODO
+    // TODO: look at DW_TAG_subprogram, low_pc/high_pc, get function name from
+    // .debug_str, and collect that into an array (by pc order)
 }
 
 void read_dwarf_section_debug_str(void* data, const struct section_64* sec) {
