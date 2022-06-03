@@ -10,7 +10,7 @@
 
 #include "../vendor/gb.h"
 
-u64 read_leb128_u64(void* data, isize size, u64* offset) {
+u64 read_leb128_u64(void* data, u64* offset) {
     u64 result = 0;
     u64 shift = 0;
     while (true) {
@@ -24,7 +24,7 @@ u64 read_leb128_u64(void* data, isize size, u64* offset) {
     return result;
 }
 
-i64 read_leb128_s64(void* data, isize size, u64* offset) {
+i64 read_leb128_s64(void* data, u64* offset) {
     i64 result = 0;
     u64 shift = 0;
     u8 val = 0;
@@ -116,8 +116,76 @@ void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
     while (*offset - start_offset < size) *offset += 1;  // Skip rest
 }
 
-void read_dwarf_section_debug_line(void* data, u64 end_offset, u64* offset,
-                                   dwarf_debug_line_header* ddlh) {
+void read_dwarf_section_debug_str(void* data, u64 end_offset, u64* offset) {}
+
+void read_dwarf_section_debug_line(void* data, struct section_64* sec) {
+    u64 offset = sec->offset;
+    dwarf_debug_line_header* ddlh = &data[offset];
+    offset += sizeof(dwarf_debug_line_header);
+    printf(
+        "DWARF length=%#x version=%#x header_length=%#x "
+        "min_instruction_length=%#x max_ops_per_inst=%d "
+        "default_is_stmt=%#x "
+        "line_base=%d "
+        "line_range=%d opcode_base=%d\n"
+        "DWARF std_opcode_lengths[0]=%d\n"
+        "DWARF std_opcode_lengths[1]=%d\n"
+        "DWARF std_opcode_lengths[2]=%d\n"
+        "DWARF std_opcode_lengths[3]=%d\n"
+        "DWARF std_opcode_lengths[4]=%d\n"
+        "DWARF std_opcode_lengths[5]=%d\n"
+        "DWARF std_opcode_lengths[6]=%d\n"
+        "DWARF std_opcode_lengths[7]=%d\n"
+        "DWARF std_opcode_lengths[8]=%d\n"
+        "DWARF std_opcode_lengths[9]=%d\n"
+        "DWARF std_opcode_lengths[10]=%d\n"
+        "DWARF std_opcode_lengths[11]=%d\n",
+        ddlh->length, ddlh->version, ddlh->header_length,
+        ddlh->min_instruction_length, ddlh->max_ops_per_inst,
+        ddlh->default_is_stmt, ddlh->line_base, ddlh->line_range,
+        ddlh->opcode_base, ddlh->std_opcode_lengths[0],
+        ddlh->std_opcode_lengths[1], ddlh->std_opcode_lengths[2],
+        ddlh->std_opcode_lengths[3], ddlh->std_opcode_lengths[4],
+        ddlh->std_opcode_lengths[5], ddlh->std_opcode_lengths[6],
+        ddlh->std_opcode_lengths[7], ddlh->std_opcode_lengths[8],
+        ddlh->std_opcode_lengths[9], ddlh->std_opcode_lengths[10],
+        ddlh->std_opcode_lengths[11]);
+
+    assert(ddlh->version == 4);
+    puts("Directories:");
+    while (offset < sec->offset + sec->size) {
+        char* s = &data[offset];
+        char* end = memchr(&data[offset], 0, sec->offset + sec->size);
+        assert(end != NULL);
+        printf("- %s\n", s);
+        offset += end - s;
+        if (*(end + 1) == 0) {
+            offset += 2;
+            break;
+        }
+    }
+    puts("Files:");
+    while (offset < sec->offset + sec->size) {
+        char* s = &data[offset];
+        if (*s == 0) {
+            offset += 1;
+            break;
+        }
+        char* end = memchr(&data[offset], 0, sec->offset + sec->size);
+        assert(end != NULL);
+        offset += end - s + 1;
+        u64 dir_index = read_leb128_u64(data, &offset);
+        u64 modtime = read_leb128_u64(data, &offset);
+
+        u64 length = read_leb128_u64(data, &offset);
+
+        printf(
+            "- %s dir_index=%llu modtime=%llu "
+            "length=%llu\n",
+            s, dir_index, modtime, length);
+    }
+    puts("");
+
     // FSM
     u64 address = 0;
     u64 line = 0;
@@ -125,30 +193,30 @@ void read_dwarf_section_debug_line(void* data, u64 end_offset, u64* offset,
     int /* FIXME */ file = 0;
     bool is_stmt = false;
 
-    while (*offset < end_offset) {
-        DW_LNS* opcode = &data[*offset];
-        *offset += 1;
+    while (offset < sec->offset + sec->size) {
+        DW_LNS* opcode = &data[offset];
+        offset += 1;
         printf("DW_OP=%#x offset=%#llx address=%#llx line=%lld\n", *opcode,
-               *offset, address, line + 1);
+               offset, address, line + 1);
         switch (*opcode) {
             case DW_LNS_extended_op: {
-                const u64 size = read_leb128_u64(data, end_offset, offset);
+                const u64 size = read_leb128_u64(data, &offset);
                 printf("DW_LNS_extended_op size=%#llx\n", size);
 
-                read_dwarf_ext_op(data, size, offset, &address, &file);
+                read_dwarf_ext_op(data, size, &offset, &address, &file);
                 break;
             }
             case DW_LNS_copy:
                 puts("DW_LNS_copy");
                 break;
             case DW_LNS_advance_pc: {
-                const u64 decoded = read_leb128_u64(data, end_offset, offset);
+                const u64 decoded = read_leb128_u64(data, &offset);
                 printf("DW_LNS_advance_pc leb128=%#llx\n", decoded);
                 address += decoded;
                 break;
             }
             case DW_LNS_advance_line: {
-                const u64 l = read_leb128_s64(data, end_offset, offset);
+                const u64 l = read_leb128_s64(data, &offset);
                 printf("DW_LNS_advance_line line=%lld\n", l);
                 line = l;
                 break;
@@ -156,7 +224,7 @@ void read_dwarf_section_debug_line(void* data, u64 end_offset, u64* offset,
             case DW_LNS_set_file:
                 break;
             case DW_LNS_set_column: {
-                const u64 column = read_leb128_u64(data, end_offset, offset);
+                const u64 column = read_leb128_u64(data, &offset);
                 printf("DW_LNS_set_column column=%llu\n", column);
                 break;
             }
@@ -314,90 +382,7 @@ int main(int argc, const char* argv[]) {
                         sec->flags);
 
                     if (strcmp(sec->sectname, "__debug_line") == 0) {
-                        u64 saved_offset = offset;
-                        offset = sec->offset;
-                        dwarf_debug_line_header* ddlh = &contents.data[offset];
-                        offset += sizeof(dwarf_debug_line_header);
-                        printf(
-                            "DWARF length=%#x version=%#x header_length=%#x "
-                            "min_instruction_length=%#x max_ops_per_inst=%d "
-                            "default_is_stmt=%#x "
-                            "line_base=%d "
-                            "line_range=%d opcode_base=%d\n"
-                            "DWARF std_opcode_lengths[0]=%d\n"
-                            "DWARF std_opcode_lengths[1]=%d\n"
-                            "DWARF std_opcode_lengths[2]=%d\n"
-                            "DWARF std_opcode_lengths[3]=%d\n"
-                            "DWARF std_opcode_lengths[4]=%d\n"
-                            "DWARF std_opcode_lengths[5]=%d\n"
-                            "DWARF std_opcode_lengths[6]=%d\n"
-                            "DWARF std_opcode_lengths[7]=%d\n"
-                            "DWARF std_opcode_lengths[8]=%d\n"
-                            "DWARF std_opcode_lengths[9]=%d\n"
-                            "DWARF std_opcode_lengths[10]=%d\n"
-                            "DWARF std_opcode_lengths[11]=%d\n",
-                            ddlh->length, ddlh->version, ddlh->header_length,
-                            ddlh->min_instruction_length,
-                            ddlh->max_ops_per_inst, ddlh->default_is_stmt,
-                            ddlh->line_base, ddlh->line_range,
-                            ddlh->opcode_base, ddlh->std_opcode_lengths[0],
-                            ddlh->std_opcode_lengths[1],
-                            ddlh->std_opcode_lengths[2],
-                            ddlh->std_opcode_lengths[3],
-                            ddlh->std_opcode_lengths[4],
-                            ddlh->std_opcode_lengths[5],
-                            ddlh->std_opcode_lengths[6],
-                            ddlh->std_opcode_lengths[7],
-                            ddlh->std_opcode_lengths[8],
-                            ddlh->std_opcode_lengths[9],
-                            ddlh->std_opcode_lengths[10],
-                            ddlh->std_opcode_lengths[11]);
-
-                        assert(ddlh->version == 4);
-                        puts("Directories:");
-                        while (offset < sec->offset + sec->size) {
-                            char* s = &contents.data[offset];
-                            char* end = memchr(&contents.data[offset], 0,
-                                               contents.size - offset);
-                            assert(end != NULL);
-                            printf("- %s\n", s);
-                            offset += end - s;
-                            if (*(end + 1) == 0) {
-                                offset += 2;
-                                break;
-                            }
-                        }
-                        puts("Files:");
-                        while (offset < sec->offset + sec->size) {
-                            char* s = &contents.data[offset];
-                            if (*s == 0) {
-                                offset += 1;
-                                break;
-                            }
-                            char* end = memchr(&contents.data[offset], 0,
-                                               contents.size - offset);
-                            assert(end != NULL);
-                            offset += end - s + 1;
-                            u64 dir_index = read_leb128_u64(
-                                contents.data, contents.size, &offset);
-                            u64 modtime = read_leb128_u64(
-                                contents.data, contents.size, &offset);
-
-                            u64 length = read_leb128_u64(
-                                contents.data, contents.size, &offset);
-
-                            printf(
-                                "- %s dir_index=%llu modtime=%llu "
-                                "length=%llu\n",
-                                s, dir_index, modtime, length);
-                        }
-                        puts("");
-
-                        read_dwarf_section_debug_line(contents.data,
-                                                      sec->offset + sec->size,
-                                                      &offset, ddlh);
-
-                        offset = saved_offset;
+                        read_dwarf_section_debug_line(contents.data, sec);
                     }
                 }
 
