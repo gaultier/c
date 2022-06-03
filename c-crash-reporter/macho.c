@@ -73,85 +73,33 @@ typedef enum : uint8_t {
     DW_LNS_set_prologue_end,
     DW_LNS_set_epilogue_begin,
     DW_LNS_set_isa,
-} DW_OP;
+} DW_LNS;
 
 typedef enum : uint8_t {
-    DW_EXT_OP_end_sequence = 1,
-    DW_EXT_OP_set_address,
-    DW_EXT_OP_define_file,
-    DW_EXT_OP_set_discriminator,
-    DW_EXT_OP_extended_op,
-    DW_EXT_OP_copy,
-    DW_EXT_OP_advance_pc,
-    DW_EXT_OP_advance_line,
-    DW_EXT_OP_set_file,
-    DW_EXT_OP_set_column,
-    DW_EXT_OP_negate_stmt,
-    DW_EXT_OP_set_basic_block,
-    DW_EXT_OP_const_add_pc,
-    DW_EXT_OP_fixed_advance_pc,
-    DW_EXT_OP_set_prologue_end,
-    DW_EXT_OP_set_epilogue_begin,
-    DW_EXT_OP_set_isa,
-} DW_EXT_OP;
+    DW_LNE_end_sequence = 1,
+    DW_LNE_set_address,
+    DW_LNE_define_file,
+    DW_LNE_set_discriminator,
+} DW_LNE;
 
 void read_dwarf_ext_op(void* data, isize size, u64* offset) {
-    DW_EXT_OP* extended_opcode = &data[*offset];
+    DW_LNE* extended_opcode = &data[*offset];
     *offset += 1;
     printf("DW_EXT_OP=%d\n", *extended_opcode);
 
     switch (*extended_opcode) {
-        case DW_EXT_OP_end_sequence: {
+        case DW_LNE_end_sequence: {
             break;
         }
-        case DW_EXT_OP_set_address: {
+        case DW_LNE_set_address: {
             const u64 addr = read_leb128_encoded_signed(data, size, offset);
-            printf("DW_EXT_OP_set_address addr=%#llx\n", addr);
+            printf("DW_LNE_set_address addr=%#llx\n", addr);
             break;
         }
-        case DW_EXT_OP_define_file: {
+        case DW_LNE_define_file: {
             break;
         }
-        case DW_EXT_OP_set_discriminator: {
-            break;
-        }
-        case DW_EXT_OP_extended_op: {
-            break;
-        }
-        case DW_EXT_OP_copy: {
-            break;
-        }
-        case DW_EXT_OP_advance_pc: {
-            break;
-        }
-        case DW_EXT_OP_advance_line: {
-            break;
-        }
-        case DW_EXT_OP_set_file: {
-            break;
-        }
-        case DW_EXT_OP_set_column: {
-            break;
-        }
-        case DW_EXT_OP_negate_stmt: {
-            break;
-        }
-        case DW_EXT_OP_set_basic_block: {
-            break;
-        }
-        case DW_EXT_OP_const_add_pc: {
-            break;
-        }
-        case DW_EXT_OP_fixed_advance_pc: {
-            break;
-        }
-        case DW_EXT_OP_set_prologue_end: {
-            break;
-        }
-        case DW_EXT_OP_set_epilogue_begin: {
-            break;
-        }
-        case DW_EXT_OP_set_isa: {
+        case DW_LNE_set_discriminator: {
             break;
         }
         default:
@@ -350,7 +298,7 @@ int main(int argc, const char* argv[]) {
                         puts("");
 
                         while (offset < sec->offset + sec->size) {
-                            DW_OP* opcode = &contents.data[offset++];
+                            DW_LNS* opcode = &contents.data[offset++];
                             printf("DW_OP=%d\n", *opcode);
                             switch (*opcode) {
                                 case DW_LNS_extended_op: {
