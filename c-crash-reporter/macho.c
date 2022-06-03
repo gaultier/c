@@ -43,11 +43,11 @@ u64 read_leb128_encoded_unsigned(void* data, isize size, u64* offset) {
     u64 result = 0;
     u64 shift = 0;
     while (true) {
-        u8* byte = &data[offset];
+        u8* byte = &data[*offset];
         *offset += 1;
         u8 val = *byte;
-        result |= (low - order 7 bits of byte) << shift;
-        if (high - order bit of byte == 0) break;
+        result |= (val & 0x7f) << shift;
+        if ((val & 0x80) == 0) break;
         shift += 7;
     }
     return result;
@@ -248,11 +248,12 @@ int main(int argc, const char* argv[]) {
                             printf("DW_OP=%d\n", *opcode);
                             switch (*opcode) {
                                 case DW_LNS_extended_op: {
-                                    // FIXME
-                                    uint8_t* leb128_encoded_bytes_num =
-                                        &contents.data[offset++];
-                                    printf("leb128_encoded_bytes_num=%#x\n",
-                                           *leb128_encoded_bytes_num);
+                                    const u64 decoded =
+                                        read_leb128_encoded_unsigned(
+                                            contents.data, contents.size,
+                                            &offset);
+                                    printf("leb128_encoded_bytes_num=%#llx\n",
+                                           decoded);
                                     break;
                                 }
                                 case DW_LNS_copy:
