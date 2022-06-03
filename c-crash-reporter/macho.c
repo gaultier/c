@@ -53,6 +53,28 @@ u64 read_leb128_encoded_unsigned(void* data, isize size, u64* offset) {
     return result;
 }
 
+i64 read_leb128_encoded_signed(void* data, isize size, u64* offset) {
+    i64 result = 0;
+    u64 shift = 0;
+    u8 val = 0;
+    const u64 bit_count = sizeof(i64) * 8;
+    do {
+        u8* byte = &data[*offset];
+        *offset += 1;
+        val = *byte;
+        result |= (val & 0x7f) << shift;
+        shift += 7;
+    } while (((val & 0x80) != 0));
+
+    /* sign bit of byte is second high-order bit (0x40) */
+    if (shift < bit_count && ((val & 0x40) != 0)) {
+        /* sign extend */
+        result |= (~0 << shift);
+    }
+
+    return result;
+}
+
 int main(int argc, const char* argv[]) {
     assert(argc == 2);
     const char* path = argv[1];
@@ -267,8 +289,15 @@ int main(int argc, const char* argv[]) {
                                            decoded);
                                     break;
                                 }
-                                case DW_LNS_advance_line:
+                                case DW_LNS_advance_line: {
+                                    const u64 decoded =
+                                        read_leb128_encoded_signed(
+                                            contents.data, contents.size,
+                                            &offset);
+                                    printf("DW_LNS_advance_line leb128=%#llx\n",
+                                           decoded);
                                     break;
+                                }
                                 case DW_LNS_set_file:
                                     break;
                                 case DW_LNS_set_column:
