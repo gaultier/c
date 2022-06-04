@@ -72,7 +72,7 @@ typedef enum : uint8_t {
     DW_LNS_set_isa,
 } DW_LNS;
 
-typedef enum : uint8_t {
+typedef enum : uint16_t {
     DW_TAG_null = 0x0000,
     DW_TAG_array_type = 0x0001,
     DW_TAG_class_type = 0x0002,
@@ -357,9 +357,11 @@ static void read_dwarf_section_debug_info(void* data,
     assert(data != NULL);
     assert(sec != NULL);
     assert(abbrev != NULL);
-
+    // TODO: look at DW_TAG_subprogram, low_pc/high_pc, get function name from
+    // .debug_str, and collect that into an array (by pc order)
     u64 offset = sec->offset;
 
+    // TODO: multiple compile units (CU)
     u32* size = &data[offset];
     offset += sizeof(u32);
     printf(".debug_info size=%#x\n", *size);
@@ -377,12 +379,26 @@ static void read_dwarf_section_debug_info(void* data,
     offset += sizeof(u8);
     printf(".debug_info abbr_size=%#x\n", *addr_size);
 
-    // TODO: look at DW_TAG_subprogram, low_pc/high_pc, get function name from
-    // .debug_str, and collect that into an array (by pc order)
     while (offset < sec->offset + sec->size) {
         u8 type = *(u8*)&data[offset++];
-        printf(".debug_info type=%d\n", type);
         assert(type <= gb_array_count(abbrev->entries));
+        const dw_abbrev_entry* entry = NULL;
+        // TODO: pre-sort the entries to avoid the linear look-up each time?
+        for (int i = 0; i < gb_array_count(abbrev->entries); i++) {
+            if (abbrev->entries[i].type == type) {
+                entry = &abbrev->entries[i];
+                break;
+            }
+        }
+        assert(entry != NULL);
+        assert(entry->type == type);
+        printf(".debug_info type=%#x tag=%#x\n", type, entry->tag);
+
+        if (entry->tag != DW_TAG_subprogram) {  // Skip
+            printf("tag != DW_TAG_subprogram, skipping\n");
+            offset = sec->offset + *size;
+            continue;
+        }
     }
 }
 
