@@ -352,9 +352,12 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
 }
 
 static void read_dwarf_section_debug_info(void* data,
-                                          const struct section_64* sec) {
+                                          const struct section_64* sec,
+                                          const dw_abbrev* abbrev) {
     assert(data != NULL);
     assert(sec != NULL);
+    assert(abbrev != NULL);
+
     u64 offset = sec->offset;
 
     u32* size = &data[offset];
@@ -377,9 +380,9 @@ static void read_dwarf_section_debug_info(void* data,
     // TODO: look at DW_TAG_subprogram, low_pc/high_pc, get function name from
     // .debug_str, and collect that into an array (by pc order)
     while (offset < sec->offset + sec->size) {
-        u8* type = &data[offset++];
-        printf(".debug_info type=%d\n", *type);
-        break;
+        u8 type = *(u8*)&data[offset++];
+        printf(".debug_info type=%d\n", type);
+        assert(type <= gb_array_count(abbrev->entries));
     }
 }
 
@@ -659,7 +662,7 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
     assert(sec_info != NULL);
     dw_abbrev abbrev = {0};
     read_dwarf_section_debug_abbrev(allocator, data, sec_abbrev, &abbrev);
-    read_dwarf_section_debug_info(data, sec_info);
+    read_dwarf_section_debug_info(data, sec_info, &abbrev);
 }
 
 int main(int argc, const char* argv[]) {
