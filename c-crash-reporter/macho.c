@@ -1086,6 +1086,18 @@ static void read_dwarf_section_debug_info(void* data,
             dw_attribute_to_str(af.attr, attr_str, sizeof(attr_str));
             printf(".debug_info: attr=%#x %s form=%#x %s\n", af.attr, attr_str,
                    af.form, dw_form_str[af.form]);
+
+            switch (af.form) {
+                case DW_FORM_strp: {
+                    u32 str_offset = *(u32*)&data[offset];
+                    offset += 4;
+                    printf("DW_FORM_strp: %#x\n", str_offset);
+                    /* assert(str_index< */
+                    break;
+                }
+                default:
+                    assert(0 && "UNIMPLEMENTED");
+            }
         }
         break;
     }
