@@ -1010,6 +1010,11 @@ typedef struct {
     gbArray(dw_abbrev_entry) entries;
 } dw_abbrev;
 
+typedef struct {
+    const char* s;
+    u32 offset;
+} dw_string;
+
 static void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
                               int* file) {
     const u64 start_offset = *offset;
@@ -1081,10 +1086,12 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
 
 static void read_dwarf_section_debug_info(void* data,
                                           const struct section_64* sec,
-                                          const dw_abbrev* abbrev) {
+                                          const dw_abbrev* abbrev,
+                                          gbArray(const dw_string) strings) {
     assert(data != NULL);
     assert(sec != NULL);
     assert(abbrev != NULL);
+    assert(strings != NULL);
     // TODO: look at DW_TAG_subprogram, low_pc/high_pc, get function name
     // from .debug_str, and collect that into an array (by pc order)
     u64 offset = sec->offset;
@@ -1133,8 +1140,17 @@ static void read_dwarf_section_debug_info(void* data,
                 case DW_FORM_strp: {
                     u32 str_offset = *(u32*)&data[offset];
                     offset += 4;
-                    printf("DW_FORM_strp: %#x\n", str_offset);
-                    /* assert(str_index< */
+                    printf("DW_FORM_strp: %#x ", str_offset);
+
+                    const char* s = NULL;
+                    for (int i = 0; i < gb_array_count(strings); i++) {
+                        if (strings[i].offset == str_offset) {
+                            s = strings[i].s;
+                            break;
+                        }
+                    }
+                    assert(s != NULL);
+                    puts(s);
                     break;
                 }
                 case DW_FORM_data2: {
@@ -1151,9 +1167,18 @@ static void read_dwarf_section_debug_info(void* data,
     }
 }
 
-void read_dwarf_section_debug_str(void* data, const struct section_64* sec) {
+void read_dwarf_section_debug_str(gbAllocator allocator, void* data,
+                                  const struct section_64* sec,
+                                  gbArray(dw_string) * strings) {
+    assert(data != NULL);
+    assert(sec != NULL);
+    assert(strings != NULL);
+
     u64 offset = sec->offset;
     u64 i = 0;
+
+    gb_array_init(*strings, allocator);
+    gb_array_reserve(*strings, 100);
     while (offset < sec->offset + sec->size) {
         const char* s = &data[offset];
         if (*s == 0) {
@@ -1164,6 +1189,8 @@ void read_dwarf_section_debug_str(void* data, const struct section_64* sec) {
         const char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
         printf("- [%llu] %s\n", i, s);
+        dw_string str = {.s = s, .offset = offset - sec->offset};
+        gb_array_append(*strings, str);
         offset += end - s;
         i++;
     }
@@ -1330,10 +1357,11 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
         h->sizeofcmds, h->flags);
 
     // Remember where those sections were since they might be
-    // out-of-order and we need to first read the abbrev section and
-    // then the info section.
+    // out-of-order and we need to first read the abbrev section & str section,
+    // and then the info section.
     const struct section_64* sec_abbrev = NULL;
     const struct section_64* sec_info = NULL;
+    const struct section_64* sec_str = NULL;
 
     for (int cmd_count = 0; cmd_count < h->ncmds; cmd_count++) {
         const struct load_command* c = &data[offset];
@@ -1412,7 +1440,7 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
                     if (strcmp(sec->sectname, "__debug_line") == 0) {
                         read_dwarf_section_debug_line(data, sec);
                     } else if (strcmp(sec->sectname, "__debug_str") == 0) {
-                        read_dwarf_section_debug_str(data, sec);
+                        sec_str = sec;
                     } else if (strcmp(sec->sectname, "__debug_info") == 0) {
                         sec_info = sec;
                     } else if (strcmp(sec->sectname, "__debug_abbrev") == 0) {
@@ -1428,9 +1456,13 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
     }
     assert(sec_abbrev != NULL);
     assert(sec_info != NULL);
+    assert(sec_str != NULL);
+
+    gbArray(dw_string) strings = NULL;
+    read_dwarf_section_debug_str(allocator, data, sec_str, &strings);
     dw_abbrev abbrev = {0};
     read_dwarf_section_debug_abbrev(allocator, data, sec_abbrev, &abbrev);
-    read_dwarf_section_debug_info(data, sec_info, &abbrev);
+    read_dwarf_section_debug_info(data, sec_info, &abbrev, strings);
 }
 
 int main(int argc, const char* argv[]) {
