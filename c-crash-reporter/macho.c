@@ -1218,6 +1218,13 @@ static void read_dwarf_section_debug_info(void* data,
                     puts("DW_FORM_flag_present (true)");
                     break;
                 }
+                case DW_FORM_exprloc: {
+                    const u64 length = read_leb128_u64(data, &offset);
+                    offset += length;
+                    printf("DW_FORM_exprloc: length=%lld\n", length);
+
+                    break;
+                }
                 default:
                     assert(0 && "UNIMPLEMENTED");
             }
