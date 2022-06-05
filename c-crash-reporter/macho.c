@@ -1153,11 +1153,53 @@ static void read_dwarf_section_debug_info(void* data,
                     puts(s);
                     break;
                 }
+                case DW_FORM_data1: {
+                    u8 val = *(u8*)&data[offset];
+                    offset += 1;
+                    printf("DW_FORM_data1: %#x\n", val);
+                    break;
+                }
                 case DW_FORM_data2: {
                     u16 lang = *(u16*)&data[offset];
                     offset += 2;
                     printf("DW_FORM_data2: %#x\n", lang);
                     assert(lang == DW_LANG_C99);
+                    break;
+                }
+                case DW_FORM_data4: {
+                    u32 val = *(u32*)&data[offset];
+                    offset += 4;
+                    printf("DW_FORM_data4: %#x\n", val);
+                    break;
+                }
+                case DW_FORM_data8: {
+                    u64 val = *(u64*)&data[offset];
+                    offset += 8;
+                    printf("DW_FORM_data8: %#llx\n", val);
+                    break;
+                }
+                case DW_FORM_ref1: {
+                    u8 val = *(u8*)&data[offset];
+                    offset += 1;
+                    printf("DW_FORM_ref1: %#x\n", val);
+                    break;
+                }
+                case DW_FORM_ref2: {
+                    u16 val = *(u16*)&data[offset];
+                    offset += 2;
+                    printf("DW_FORM_ref2: %#x\n", val);
+                    break;
+                }
+                case DW_FORM_ref4: {
+                    u32 val = *(u32*)&data[offset];
+                    offset += 4;
+                    printf("DW_FORM_ref4: %#x\n", val);
+                    break;
+                }
+                case DW_FORM_ref8: {
+                    u64 val = *(u64*)&data[offset];
+                    offset += 8;
+                    printf("DW_FORM_ref8: %#llx\n", val);
                     break;
                 }
                 case DW_FORM_sec_offset: {
@@ -1172,10 +1214,8 @@ static void read_dwarf_section_debug_info(void* data,
                     printf("DW_FORM_addr: %#llx\n", addr);
                     break;
                 }
-                case DW_FORM_data4: {
-                    u32 val = *(u32*)&data[offset];
-                    offset += 4;
-                    printf("DW_FORM_data4: %#x\n", val);
+                case DW_FORM_flag_present: {
+                    puts("DW_FORM_flag_present (true)");
                     break;
                 }
                 default:
