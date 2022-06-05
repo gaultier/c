@@ -1160,6 +1160,12 @@ static void read_dwarf_section_debug_info(void* data,
                     assert(lang == DW_LANG_C99);
                     break;
                 }
+                case DW_FORM_sec_offset: {
+                    u32 val = *(u32*)&data[offset];
+                    offset += 4;
+                    printf("DW_FORM_sec_offset: %#x\n", val);
+                    break;
+                }
                 default:
                     assert(0 && "UNIMPLEMENTED");
             }
