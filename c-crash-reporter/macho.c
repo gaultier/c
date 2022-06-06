@@ -1083,7 +1083,7 @@ typedef struct {
     u64 low_pc, high_pc;
     char *file, *directory, *fn_name;
     u16 line;
-} dw_stracktrace_entry;
+} dw_fn_decl;
 
 static void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
                               int* file) {
@@ -1158,8 +1158,7 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                                           const struct section_64* sec,
                                           const dw_abbrev* abbrev,
                                           gbArray(dw_string) strings,
-                                          gbArray(dw_stracktrace_entry) *
-                                              stracktrace_entries) {
+                                          gbArray(dw_fn_decl) * fn_decls) {
     assert(data != NULL);
     assert(sec != NULL);
     assert(abbrev != NULL);
@@ -1167,8 +1166,8 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
 
     u64 offset = sec->offset;
 
-    gb_array_init(*stracktrace_entries, allocator);
-    gb_array_reserve(*stracktrace_entries, 100);
+    gb_array_init(*fn_decls, allocator);
+    gb_array_reserve(*fn_decls, 100);
 
     // TODO: multiple compile units (CU)
     u32* size = &data[offset];
@@ -1208,11 +1207,11 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
         printf(".debug_info type=%#x tag=%#x %s\n", type, entry->tag,
                dw_tag_str[entry->tag]);
 
-        dw_stracktrace_entry* se = NULL;
+        dw_fn_decl* se = NULL;
         if (entry->tag == DW_TAG_subprogram) {
-            gb_array_append(*stracktrace_entries, ((dw_stracktrace_entry){0}));
-            const isize se_count = gb_array_count(*stracktrace_entries);
-            se = &(*stracktrace_entries)[se_count - 1];
+            gb_array_append(*fn_decls, ((dw_fn_decl){0}));
+            const isize se_count = gb_array_count(*fn_decls);
+            se = &(*fn_decls)[se_count - 1];
         }
 
         for (int i = 0; i < gb_array_count(entry->attr_forms); i++) {
@@ -1629,14 +1628,14 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
     dw_abbrev abbrev = {0};
     read_dwarf_section_debug_abbrev(allocator, data, sec_abbrev, &abbrev);
 
-    gbArray(dw_stracktrace_entry) stracktrace_entries = NULL;
+    gbArray(dw_fn_decl) fn_decls = NULL;
     read_dwarf_section_debug_info(allocator, data, sec_info, &abbrev, strings,
-                                  &stracktrace_entries);
+                                  &fn_decls);
 
-    for (int i = 0; i < gb_array_count(stracktrace_entries); i++) {
-        dw_stracktrace_entry* se = &stracktrace_entries[i];
+    for (int i = 0; i < gb_array_count(fn_decls); i++) {
+        dw_fn_decl* se = &fn_decls[i];
         printf(
-            "dw_stracktrace_entry: low_pc=%#llx high_pc=%#llx fn_name=%s "
+            "dw_fn_decl: low_pc=%#llx high_pc=%#llx fn_name=%s "
             "file=%s\n",
             se->low_pc, se->high_pc, se->fn_name, se->file);
     }
