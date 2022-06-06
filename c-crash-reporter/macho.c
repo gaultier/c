@@ -1080,9 +1080,11 @@ typedef struct {
 } dw_string;
 
 typedef struct {
-    u64 low_pc, high_pc;
-    char *file, *directory, *fn_name;
+    u64 low_pc;
+    char* fn_name;
+    u16 high_pc;
     u16 line;
+    i8 file;
 } dw_fn_decl;
 
 static void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
@@ -1209,7 +1211,7 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
 
         dw_fn_decl* se = NULL;
         if (entry->tag == DW_TAG_subprogram) {
-            gb_array_append(*fn_decls, ((dw_fn_decl){0}));
+            gb_array_append(*fn_decls, ((dw_fn_decl){.file = -1}));
             const isize se_count = gb_array_count(*fn_decls);
             se = &(*fn_decls)[se_count - 1];
         }
@@ -1246,9 +1248,9 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                     offset += 1;
                     printf("DW_FORM_data1: %#x\n", val);
                     if (af.attr == DW_AT_decl_file && se != NULL &&
-                        se->file == NULL) {
+                        se->file == -1) {
                         assert(val < gb_array_count(strings));
-                        se->file = strings[val].s;
+                        se->file = val;
                     }
                     break;
                 }
@@ -1635,8 +1637,8 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
     for (int i = 0; i < gb_array_count(fn_decls); i++) {
         dw_fn_decl* se = &fn_decls[i];
         printf(
-            "dw_fn_decl: low_pc=%#llx high_pc=%#llx fn_name=%s "
-            "file=%s\n",
+            "dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
+            "file=%d\n",
             se->low_pc, se->high_pc, se->fn_name, se->file);
     }
 }
