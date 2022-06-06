@@ -1075,9 +1075,15 @@ typedef struct {
 } dw_abbrev;
 
 typedef struct {
-    const char* s;
+    char* s;
     u32 offset;
 } dw_string;
+
+typedef struct {
+    u64 low_pc, high_pc;
+    char *file, *directory, *fn_name;
+    u16 line;
+} dw_stracktrace_entry;
 
 static void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
                               int* file) {
@@ -1148,17 +1154,21 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
     }
 }
 
-static void read_dwarf_section_debug_info(void* data,
+static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                                           const struct section_64* sec,
                                           const dw_abbrev* abbrev,
-                                          gbArray(const dw_string) strings) {
+                                          gbArray(dw_string) strings,
+                                          gbArray(dw_stracktrace_entry) *
+                                              stracktrace_entries) {
     assert(data != NULL);
     assert(sec != NULL);
     assert(abbrev != NULL);
     assert(strings != NULL);
-    // TODO: look at DW_TAG_subprogram, low_pc/high_pc, get function name
-    // from .debug_str, and collect that into an array (by pc order)
+
     u64 offset = sec->offset;
+
+    gb_array_init(*stracktrace_entries, allocator);
+    gb_array_reserve(*stracktrace_entries, 100);
 
     // TODO: multiple compile units (CU)
     u32* size = &data[offset];
@@ -1181,7 +1191,9 @@ static void read_dwarf_section_debug_info(void* data,
     while (offset < sec->offset + sec->size) {
         u8 type = *(u8*)&data[offset++];
         assert(type <= gb_array_count(abbrev->entries));
-        if (type == 0) continue;  // skip
+        if (type == 0) {
+            continue;  // skip
+        }
 
         const dw_abbrev_entry* entry = NULL;
         // TODO: pre-sort the entries to avoid the linear look-up each time?
@@ -1196,6 +1208,13 @@ static void read_dwarf_section_debug_info(void* data,
         printf(".debug_info type=%#x tag=%#x %s\n", type, entry->tag,
                dw_tag_str[entry->tag]);
 
+        dw_stracktrace_entry* se = NULL;
+        if (entry->tag == DW_TAG_subprogram) {
+            gb_array_append(*stracktrace_entries, ((dw_stracktrace_entry){0}));
+            const isize se_count = gb_array_count(*stracktrace_entries);
+            se = &(*stracktrace_entries)[se_count - 1];
+        }
+
         for (int i = 0; i < gb_array_count(entry->attr_forms); i++) {
             const dw_attr_form af = entry->attr_forms[i];
             char attr_str[50] = "";
@@ -1209,7 +1228,7 @@ static void read_dwarf_section_debug_info(void* data,
                     offset += 4;
                     printf("DW_FORM_strp: %#x ", str_offset);
 
-                    const char* s = NULL;
+                    char* s = NULL;
                     for (int i = 0; i < gb_array_count(strings); i++) {
                         if (strings[i].offset == str_offset) {
                             s = strings[i].s;
@@ -1218,12 +1237,20 @@ static void read_dwarf_section_debug_info(void* data,
                     }
                     assert(s != NULL);
                     puts(s);
+                    if (af.attr == DW_AT_name && se != NULL) {
+                        se->fn_name = s;
+                    }
                     break;
                 }
                 case DW_FORM_data1: {
                     u8 val = *(u8*)&data[offset];
                     offset += 1;
                     printf("DW_FORM_data1: %#x\n", val);
+                    if (af.attr == DW_AT_decl_file && se != NULL &&
+                        se->file == NULL) {
+                        assert(val < gb_array_count(strings));
+                        se->file = strings[val].s;
+                    }
                     break;
                 }
                 case DW_FORM_data2: {
@@ -1237,6 +1264,9 @@ static void read_dwarf_section_debug_info(void* data,
                     u32 val = *(u32*)&data[offset];
                     offset += 4;
                     printf("DW_FORM_data4: %#x\n", val);
+                    if (af.attr == DW_AT_high_pc && se != NULL) {
+                        se->high_pc = val;
+                    }
                     break;
                 }
                 case DW_FORM_data8: {
@@ -1279,6 +1309,10 @@ static void read_dwarf_section_debug_info(void* data,
                     u64 addr = *(u64*)&data[offset];
                     offset += 8;
                     printf("DW_FORM_addr: %#llx\n", addr);
+
+                    if (af.attr == DW_AT_low_pc && se != NULL) {
+                        se->low_pc = addr;
+                    }
                     break;
                 }
                 case DW_FORM_flag_present: {
@@ -1312,13 +1346,13 @@ void read_dwarf_section_debug_str(gbAllocator allocator, void* data,
     gb_array_init(*strings, allocator);
     gb_array_reserve(*strings, 100);
     while (offset < sec->offset + sec->size) {
-        const char* s = &data[offset];
+        char* s = &data[offset];
         if (*s == 0) {
             offset++;
             continue;
         }
 
-        const char* end = memchr(&data[offset], 0, sec->offset + sec->size);
+        char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
         printf("- [%llu] %s\n", i, s);
         dw_string str = {.s = s, .offset = offset - sec->offset};
@@ -1594,7 +1628,18 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
     read_dwarf_section_debug_str(allocator, data, sec_str, &strings);
     dw_abbrev abbrev = {0};
     read_dwarf_section_debug_abbrev(allocator, data, sec_abbrev, &abbrev);
-    read_dwarf_section_debug_info(data, sec_info, &abbrev, strings);
+
+    gbArray(dw_stracktrace_entry) stracktrace_entries = NULL;
+    read_dwarf_section_debug_info(allocator, data, sec_info, &abbrev, strings,
+                                  &stracktrace_entries);
+
+    for (int i = 0; i < gb_array_count(stracktrace_entries); i++) {
+        dw_stracktrace_entry* se = &stracktrace_entries[i];
+        printf(
+            "dw_stracktrace_entry: low_pc=%#llx high_pc=%#llx fn_name=%s "
+            "file=%s\n",
+            se->low_pc, se->high_pc, se->fn_name, se->file);
+    }
 }
 
 int main(int argc, const char* argv[]) {
