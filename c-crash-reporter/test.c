@@ -1,5 +1,5 @@
-#include <mach-o/loader.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define READ_RBP(rbp) __asm__ volatile("movq %%rbp, %0" : "=r"(rbp))
 
@@ -17,17 +17,44 @@ const int CALL_INSTR_SIZE = 5;
         }                                                  \
     } while (0)
 
-void baz() { print_backtrace(); }
-
-void bar() {
-    int n = 1;
-    int a = 10;
-    baz();
+int baz(int n) {
+    print_backtrace();
+    return n;
 }
 
-void foo() {
+int bar(int n) {
+    int a = 1;
+    int b = 10;
+    baz(n);
+    return n;
+}
+
+int foo(int n) {
     // foo
-    bar();
+    bar(n);
+    return n;
 }
 
-int main() { foo(); }
+int main(int argc, char* argv[]) {
+    const int n = atoi(argv[1]);
+    switch (n) {
+        case 0:
+            foo(bar(baz(n)));
+            break;
+        case 1:
+            foo(baz(bar(n)));
+            break;
+        case 2:
+            bar(foo(baz(n)));
+            break;
+        case 3:
+            bar(baz(foo(n)));
+            break;
+        case 4:
+            baz(foo(bar(n)));
+            break;
+        case 5:
+            baz(bar(foo(n)));
+            break;
+    }
+}

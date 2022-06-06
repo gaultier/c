@@ -1089,8 +1089,7 @@ typedef struct {
 } dw_fn_decl;
 
 typedef struct {
-    u64 low_pc;
-    u16 high_pc;
+    u64 pc;
     u16 line;
 } dw_line_entry;
 
@@ -1118,6 +1117,8 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset,
     switch (*extended_opcode) {
         case DW_LNE_end_sequence: {
             puts("DW_LNE_end_sequence");
+
+            *fsm = (dw_line_section_fsm){0};
             break;
         }
         case DW_LNE_set_address: {
@@ -1126,8 +1127,6 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset,
             printf("DW_LNE_set_address addr=%#llx\n", *a);
             fsm->address = *a;
 
-            dw_line_entry e = {.low_pc = fsm->address};
-            gb_array_append(*line_entries, e);
             break;
         }
         case DW_LNE_define_file: {
@@ -1496,6 +1495,8 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                 const u64 l = read_leb128_s64(data, &offset);
                 printf("DW_LNS_advance_line line=%lld\n", l);
                 fsm.line = l;
+                dw_line_entry e = {.pc = fsm.address, .line = fsm.line};
+                gb_array_append(*line_entries, e);
                 break;
             }
             case DW_LNS_set_file:
@@ -1534,7 +1535,13 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                 const u8 op = *opcode - ddlh->opcode_base;
                 fsm.address +=
                     op / ddlh->line_range * ddlh->min_instruction_length;
+
+                const u16 old_line = fsm.line;
                 fsm.line += ddlh->line_base + op % ddlh->line_range;
+                if (fsm.line != old_line) {
+                    dw_line_entry e = {.pc = fsm.address, .line = fsm.line};
+                    gb_array_append(*line_entries, e);
+                }
                 printf("address+=%d line+=%d\n",
                        op / ddlh->line_range * ddlh->min_instruction_length,
                        ddlh->line_base + op % ddlh->line_range);
@@ -1678,6 +1685,11 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
             "dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
             "file=%s/%s\n",
             se->low_pc, se->high_pc, se->fn_name, se->directory, se->file);
+    }
+
+    for (int i = 0; i < gb_array_count(line_entries); i++) {
+        dw_line_entry* le = &line_entries[i];
+        printf("dw_line_entry: line=%d pc=%#llx\n", 1 + le->line, le->pc);
     }
 }
 
