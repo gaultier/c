@@ -1101,6 +1101,13 @@ typedef struct {
     bool is_stmt;
 } dw_line_section_fsm;
 
+typedef struct {
+    char* directory;
+    char* file;
+    char* fn_name;
+    u16 line;
+} stacktrace_entry;
+
 static void read_dwarf_ext_op(void* data, isize size, u64* offset,
                               dw_line_section_fsm* fsm,
                               gbArray(dw_line_entry) * line_entries) {
@@ -1550,6 +1557,32 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     }
 }
 
+void find_stacktrace_entry(const gbArray(dw_fn_decl) fn_decls,
+                           const gbArray(dw_line_entry) line_entries, u64 pc,
+                           stacktrace_entry* se) {
+    for (int i = 0; i < gb_array_count(fn_decls); i++) {
+        const dw_fn_decl* fd = &fn_decls[i];
+        if (fd->low_pc <= pc && pc <= fd->low_pc + fd->high_pc) {
+            se->directory = fd->directory;
+            se->file = fd->file;
+            se->fn_name = fd->fn_name;
+            break;
+        }
+    }
+    if (se->directory == NULL) return;
+    assert(se->file != NULL);
+    assert(se->fn_name != NULL);
+
+    const dw_line_entry* le = NULL;
+    for (int i = 0; i < gb_array_count(line_entries); i++) {
+        if (le != NULL && le->pc > pc) {
+            se->line = le->line;
+            break;
+        }
+        le = &line_entries[i];
+    }
+}
+
 static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
     u64 offset = 0;
     const struct mach_header_64* h = &data[offset];
@@ -1680,16 +1713,29 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
     read_dwarf_section_debug_line(allocator, data, sec_line, &line_entries);
 
     for (int i = 0; i < gb_array_count(fn_decls); i++) {
-        dw_fn_decl* se = &fn_decls[i];
+        dw_fn_decl* fd = &fn_decls[i];
         printf(
             "dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
             "file=%s/%s\n",
-            se->low_pc, se->high_pc, se->fn_name, se->directory, se->file);
+            fd->low_pc, fd->high_pc, fd->fn_name, fd->directory, fd->file);
     }
 
     for (int i = 0; i < gb_array_count(line_entries); i++) {
         dw_line_entry* le = &line_entries[i];
         printf("dw_line_entry: line=%d pc=%#llx\n", 1 + le->line, le->pc);
+    }
+
+    // TODO: move out
+    const u64 pcs[] = {0x100003ebe, 0x1069ef519, 0x100003e3c,
+                       0x100003ec5, 0x1069ef519, 0x100003e3c,
+                       0x100003e5e, 0x100003ecc, 0x1069ef519};
+    for (int i = 0; i < sizeof(pcs) / sizeof(pcs[0]); i++) {
+        stacktrace_entry se = {0};
+        find_stacktrace_entry(fn_decls, line_entries, pcs[i], &se);
+        if (se.directory != NULL) {
+            printf("stacktrace_entry: %s/%s:%s:%d\n", se.directory, se.file,
+                   se.fn_name, se.line);
+        }
     }
 }
 
