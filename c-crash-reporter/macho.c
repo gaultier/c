@@ -1270,7 +1270,7 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                     assert(s != NULL);
                     puts(s);
                     if (af.attr == DW_AT_name && se != NULL) {
-                        se->fn_name = s;
+                        se->fn_name = s;  // FIXME!!! wrong array
                     }
                     if (af.attr == DW_AT_comp_dir) {
                         directory = s;
@@ -1557,7 +1557,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     }
 }
 
-void find_stacktrace_entry(const gbArray(dw_fn_decl) fn_decls,
+void stacktrace_find_entry(const gbArray(dw_fn_decl) fn_decls,
                            const gbArray(dw_line_entry) line_entries, u64 pc,
                            stacktrace_entry* se) {
     for (int i = 0; i < gb_array_count(fn_decls); i++) {
@@ -1583,7 +1583,9 @@ void find_stacktrace_entry(const gbArray(dw_fn_decl) fn_decls,
     }
 }
 
-static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
+static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
+                            gbArray(dw_fn_decl) * fn_decls,
+                            gbArray(dw_line_entry) * line_entries) {
     u64 offset = 0;
     const struct mach_header_64* h = &data[offset];
     offset += sizeof(struct mach_header_64);
@@ -1705,33 +1707,31 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
     dw_abbrev abbrev = {0};
     read_dwarf_section_debug_abbrev(allocator, data, sec_abbrev, &abbrev);
 
-    gbArray(dw_fn_decl) fn_decls = NULL;
     read_dwarf_section_debug_info(allocator, data, sec_info, &abbrev, strings,
-                                  &fn_decls);
+                                  fn_decls);
 
-    gbArray(dw_line_entry) line_entries = NULL;
-    read_dwarf_section_debug_line(allocator, data, sec_line, &line_entries);
+    read_dwarf_section_debug_line(allocator, data, sec_line, line_entries);
 
-    for (int i = 0; i < gb_array_count(fn_decls); i++) {
-        dw_fn_decl* fd = &fn_decls[i];
+    for (int i = 0; i < gb_array_count(*fn_decls); i++) {
+        dw_fn_decl* fd = &(*fn_decls)[i];
         printf(
             "dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
             "file=%s/%s\n",
             fd->low_pc, fd->high_pc, fd->fn_name, fd->directory, fd->file);
     }
 
-    for (int i = 0; i < gb_array_count(line_entries); i++) {
-        dw_line_entry* le = &line_entries[i];
+    for (int i = 0; i < gb_array_count(*line_entries); i++) {
+        dw_line_entry* le = &(*line_entries)[i];
         printf("dw_line_entry: line=%d pc=%#llx\n", 1 + le->line, le->pc);
     }
+}
 
-    // TODO: move out
-    const u64 pcs[] = {0x100003ebe, 0x1069ef519, 0x100003e3c,
-                       0x100003ec5, 0x1069ef519, 0x100003e3c,
-                       0x100003e5e, 0x100003ecc, 0x1069ef519};
-    for (int i = 0; i < sizeof(pcs) / sizeof(pcs[0]); i++) {
+void stacktrace_print(const u64* pcs, usize pcs_size,
+                      const gbArray(dw_fn_decl) fn_decls,
+                      const gbArray(dw_line_entry) line_entries) {
+    for (int i = 0; i < pcs_size; i++) {
         stacktrace_entry se = {0};
-        find_stacktrace_entry(fn_decls, line_entries, pcs[i], &se);
+        stacktrace_find_entry(fn_decls, line_entries, pcs[i], &se);
         if (se.directory != NULL) {
             printf("stacktrace_entry: %s/%s:%s:%d\n", se.directory, se.file,
                    se.fn_name, se.line);
@@ -1739,6 +1739,7 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
     }
 }
 
+#ifndef NOIMPL
 int main(int argc, const char* argv[]) {
     assert(argc == 2);
     const char* path = argv[1];
@@ -1746,5 +1747,14 @@ int main(int argc, const char* argv[]) {
     gbAllocator allocator = gb_heap_allocator();
     gbFileContents contents = gb_file_read_contents(allocator, true, path);
 
-    read_macho_dsym(allocator, contents.data, contents.size);
+    gbArray(dw_fn_decl) fn_decls = NULL;
+    gbArray(dw_line_entry) line_entries = NULL;
+    read_macho_dsym(allocator, contents.data, contents.size, &fn_decls,
+                    &line_entries);
+
+    const u64 pcs[] = {0x100003ec3, 0x10797051e, 0x100003e41,
+                       0x100003eca, 0x10797051e, 0x100003e41,
+                       0x100003e63, 0x100003ed1, 0x10797051e};
+    stacktrace_print(pcs, sizeof(pcs) / sizeof(pcs[0]), fn_decls, line_entries);
 }
+#endif
