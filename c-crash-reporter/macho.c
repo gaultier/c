@@ -135,6 +135,70 @@ typedef enum : uint16_t {
     DW_TAG_template_alias = 0x0043,
 } dw_tag;
 
+const char dw_tag_str[][40] = {
+    [DW_TAG_null] = "DW_TAG_null",
+    [DW_TAG_array_type] = "DW_TAG_array_type",
+    [DW_TAG_class_type] = "DW_TAG_class_type",
+    [DW_TAG_entry_point] = "DW_TAG_entry_point",
+    [DW_TAG_enumeration_type] = "DW_TAG_enumeration_type",
+    [DW_TAG_formal_parameter] = "DW_TAG_formal_parameter",
+    [DW_TAG_imported_declaration] = "DW_TAG_imported_declaration",
+    [DW_TAG_label] = "DW_TAG_label",
+    [DW_TAG_lexical_block] = "DW_TAG_lexical_block",
+    [DW_TAG_member] = "DW_TAG_member",
+    [DW_TAG_pointer_type] = "DW_TAG_pointer_type",
+    [DW_TAG_reference_type] = "DW_TAG_reference_type",
+    [DW_TAG_compile_unit] = "DW_TAG_compile_unit",
+    [DW_TAG_string_type] = "DW_TAG_string_type",
+    [DW_TAG_structure_type] = "DW_TAG_structure_type",
+    [DW_TAG_subroutine_type] = "DW_TAG_subroutine_type",
+    [DW_TAG_typedef] = "DW_TAG_typedef",
+    [DW_TAG_union_type] = "DW_TAG_union_type",
+    [DW_TAG_unspecified_parameters] = "DW_TAG_unspecified_parameters",
+    [DW_TAG_variant] = "DW_TAG_variant",
+    [DW_TAG_common_block] = "DW_TAG_common_block",
+    [DW_TAG_common_inclusion] = "DW_TAG_common_inclusion",
+    [DW_TAG_inheritance] = "DW_TAG_inheritance",
+    [DW_TAG_inlined_subroutine] = "DW_TAG_inlined_subroutine",
+    [DW_TAG_module] = "DW_TAG_module",
+    [DW_TAG_ptr_to_member_type] = "DW_TAG_ptr_to_member_type",
+    [DW_TAG_set_type] = "DW_TAG_set_type",
+    [DW_TAG_subrange_type] = "DW_TAG_subrange_type",
+    [DW_TAG_with_stmt] = "DW_TAG_with_stmt",
+    [DW_TAG_access_declaration] = "DW_TAG_access_declaration",
+    [DW_TAG_base_type] = "DW_TAG_base_type",
+    [DW_TAG_catch_block] = "DW_TAG_catch_block",
+    [DW_TAG_const_type] = "DW_TAG_const_type",
+    [DW_TAG_constant] = "DW_TAG_constant",
+    [DW_TAG_enumerator] = "DW_TAG_enumerator",
+    [DW_TAG_file_type] = "DW_TAG_file_type",
+    [DW_TAG_friend] = "DW_TAG_friend",
+    [DW_TAG_namelist] = "DW_TAG_namelist",
+    [DW_TAG_namelist_item] = "DW_TAG_namelist_item",
+    [DW_TAG_packed_type] = "DW_TAG_packed_type",
+    [DW_TAG_subprogram] = "DW_TAG_subprogram",
+    [DW_TAG_template_type_parameter] = "DW_TAG_template_type_parameter",
+    [DW_TAG_template_value_parameter] = "DW_TAG_template_value_parameter",
+    [DW_TAG_thrown_type] = "DW_TAG_thrown_type",
+    [DW_TAG_try_block] = "DW_TAG_try_block",
+    [DW_TAG_variant_part] = "DW_TAG_variant_part",
+    [DW_TAG_variable] = "DW_TAG_variable",
+    [DW_TAG_volatile_type] = "DW_TAG_volatile_type",
+    [DW_TAG_dwarf_procedure] = "DW_TAG_dwarf_procedure",
+    [DW_TAG_restrict_type] = "DW_TAG_restrict_type",
+    [DW_TAG_interface_type] = "DW_TAG_interface_type",
+    [DW_TAG_namespace] = "DW_TAG_namespace",
+    [DW_TAG_imported_module] = "DW_TAG_imported_module",
+    [DW_TAG_unspecified_type] = "DW_TAG_unspecified_type",
+    [DW_TAG_partial_unit] = "DW_TAG_partial_unit",
+    [DW_TAG_imported_unit] = "DW_TAG_imported_unit",
+    [DW_TAG_condition] = "DW_TAG_condition",
+    [DW_TAG_shared_type] = "DW_TAG_shared_type",
+    [DW_TAG_type_unit] = "DW_TAG_type_unit",
+    [DW_TAG_rvalue_reference_type] = "DW_TAG_rvalue_reference_type",
+    [DW_TAG_template_alias] = "DW_TAG_template_alias",
+};
+
 typedef enum : uint16_t {
     DW_AT_sibling = 0x01,
     DW_AT_location = 0x02,
@@ -1063,8 +1127,8 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
 
         entry.tag = *(u8*)&data[offset++];
         bool* has_children = &data[offset++];
-        printf(".debug_abbrev: type_num=%d tag=%#x has_children=%d\n",
-               entry.type, entry.tag, *has_children);
+        printf(".debug_abbrev: type_num=%d tag=%#x %s has_children=%d\n",
+               entry.type, entry.tag, dw_tag_str[entry.tag], *has_children);
 
         gb_array_init(entry.attr_forms, allocator);
         while (offset < sec->offset + sec->size) {
@@ -1117,6 +1181,8 @@ static void read_dwarf_section_debug_info(void* data,
     while (offset < sec->offset + sec->size) {
         u8 type = *(u8*)&data[offset++];
         assert(type <= gb_array_count(abbrev->entries));
+        if (type == 0) continue;  // skip
+
         const dw_abbrev_entry* entry = NULL;
         // TODO: pre-sort the entries to avoid the linear look-up each time?
         for (int i = 0; i < gb_array_count(abbrev->entries); i++) {
@@ -1127,7 +1193,8 @@ static void read_dwarf_section_debug_info(void* data,
         }
         assert(entry != NULL);
         assert(entry->type == type);
-        printf(".debug_info type=%#x tag=%#x\n", type, entry->tag);
+        printf(".debug_info type=%#x tag=%#x %s\n", type, entry->tag,
+               dw_tag_str[entry->tag]);
 
         for (int i = 0; i < gb_array_count(entry->attr_forms); i++) {
             const dw_attr_form af = entry->attr_forms[i];
