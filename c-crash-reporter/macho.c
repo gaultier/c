@@ -1088,8 +1088,28 @@ typedef struct {
     u16 line;
 } dw_fn_decl;
 
-static void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
-                              int* file) {
+typedef struct {
+    u64 low_pc;
+    u16 high_pc;
+    u16 line;
+} dw_line_entry;
+
+typedef struct {
+    u64 address;
+    u16 line;
+    // TODO: track column?
+    int file;
+    bool is_stmt;
+} dw_line_section_fsm;
+
+static void read_dwarf_ext_op(void* data, isize size, u64* offset,
+                              dw_line_section_fsm* fsm,
+                              gbArray(dw_line_entry) * line_entries) {
+    assert(data != NULL);
+    assert(offset != NULL);
+    assert(fsm != NULL);
+    assert(line_entries != NULL);
+
     const u64 start_offset = *offset;
     const DW_LNE* extended_opcode = &data[*offset];
     *offset += 1;
@@ -1104,7 +1124,10 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset, u64* address,
             const u64* a = &data[*offset];
             *offset += sizeof(u64);
             printf("DW_LNE_set_address addr=%#llx\n", *a);
-            *address = *a;
+            fsm->address = *a;
+
+            dw_line_entry e = {.low_pc = fsm->address};
+            gb_array_append(*line_entries, e);
             break;
         }
         case DW_LNE_define_file: {
@@ -1369,12 +1392,12 @@ void read_dwarf_section_debug_str(gbAllocator allocator, void* data,
 
 static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                                           const struct section_64* sec,
-                                          gbArray(char*) * directories,
-                                          gbArray(char*) * files) {
+                                          gbArray(dw_line_entry) *
+                                              line_entries) {
     assert(data != NULL);
     assert(sec != NULL);
-    assert(directories != NULL);
-    assert(files != NULL);
+    assert(line_entries != NULL);
+    gb_array_init_reserve(*line_entries, allocator, 300);
 
     u64 offset = sec->offset;
     const dwarf_debug_line_header* ddlh = &data[offset];
@@ -1410,14 +1433,11 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
 
     assert(ddlh->version == 4);
     puts("Directories:");
-    gb_array_init_reserve(*directories, allocator, 100);
     while (offset < sec->offset + sec->size) {
         char* s = &data[offset];
         char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
         printf("- %s\n", s);
-
-        gb_array_append(*directories, s);
 
         offset += end - s;
         if (*(end + 1) == 0) {
@@ -1426,7 +1446,6 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
         }
     }
     puts("Files:");
-    gb_array_init_reserve(*files, allocator, 100);
     while (offset < sec->offset + sec->size) {
         char* s = &data[offset];
         if (*s == 0) {
@@ -1435,8 +1454,6 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
         }
         char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
-
-        gb_array_append(*files, s);
 
         offset += end - s + 1;
         const u64 dir_index = read_leb128_u64(data, &offset);
@@ -1451,24 +1468,19 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     }
     puts("");
 
-    // FSM
-    u64 address = 0;
-    u64 line = 0;
-    // TODO: track column?
-    int /* FIXME */ file = 0;
-    bool is_stmt = false;
+    dw_line_section_fsm fsm = {0};
 
     while (offset < sec->offset + sec->size) {
         DW_LNS* opcode = &data[offset];
         offset += 1;
-        printf("DW_OP=%#x offset=%#llx address=%#llx line=%lld\n", *opcode,
-               offset, address, line + 1);
+        printf("DW_OP=%#x offset=%#llx address=%#llx line=%d\n", *opcode,
+               offset, fsm.address, fsm.line + 1);
         switch (*opcode) {
             case DW_LNS_extended_op: {
                 const u64 size = read_leb128_u64(data, &offset);
                 printf("DW_LNS_extended_op size=%#llx\n", size);
 
-                read_dwarf_ext_op(data, size, &offset, &address, &file);
+                read_dwarf_ext_op(data, size, &offset, &fsm, line_entries);
                 break;
             }
             case DW_LNS_copy:
@@ -1477,13 +1489,13 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
             case DW_LNS_advance_pc: {
                 const u64 decoded = read_leb128_u64(data, &offset);
                 printf("DW_LNS_advance_pc leb128=%#llx\n", decoded);
-                address += decoded;
+                fsm.address += decoded;
                 break;
             }
             case DW_LNS_advance_line: {
                 const u64 l = read_leb128_s64(data, &offset);
                 printf("DW_LNS_advance_line line=%lld\n", l);
-                line = l;
+                fsm.line = l;
                 break;
             }
             case DW_LNS_set_file:
@@ -1495,17 +1507,18 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
             }
             case DW_LNS_negate_stmt:
                 puts("DW_LNS_negate_stmt");
-                is_stmt = !is_stmt;
+                fsm.is_stmt = !fsm.is_stmt;
                 break;
             case DW_LNS_set_basic_block:
                 break;
             case DW_LNS_const_add_pc: {
                 const u8 op = 255 - ddlh->opcode_base;
-                address += op / ddlh->line_range * ddlh->min_instruction_length;
+                fsm.address +=
+                    op / ddlh->line_range * ddlh->min_instruction_length;
                 // TODO: op_index
                 printf("address+=%#x -> address=%#llx\n",
                        op / ddlh->line_range * ddlh->min_instruction_length,
-                       address);
+                       fsm.address);
                 break;
             }
             case DW_LNS_fixed_advance_pc:
@@ -1519,8 +1532,9 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                 break;
             default: {
                 const u8 op = *opcode - ddlh->opcode_base;
-                address += op / ddlh->line_range * ddlh->min_instruction_length;
-                line += ddlh->line_base + op % ddlh->line_range;
+                fsm.address +=
+                    op / ddlh->line_range * ddlh->min_instruction_length;
+                fsm.line += ddlh->line_base + op % ddlh->line_range;
                 printf("address+=%d line+=%d\n",
                        op / ddlh->line_range * ddlh->min_instruction_length,
                        ddlh->line_base + op % ddlh->line_range);
@@ -1655,10 +1669,8 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size) {
     read_dwarf_section_debug_info(allocator, data, sec_info, &abbrev, strings,
                                   &fn_decls);
 
-    gbArray(char*) directories = NULL;
-    gbArray(char*) files = NULL;
-    read_dwarf_section_debug_line(allocator, data, sec_line, &directories,
-                                  &files);
+    gbArray(dw_line_entry) line_entries = NULL;
+    read_dwarf_section_debug_line(allocator, data, sec_line, &line_entries);
 
     for (int i = 0; i < gb_array_count(fn_decls); i++) {
         dw_fn_decl* se = &fn_decls[i];
