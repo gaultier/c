@@ -135,70 +135,6 @@ typedef enum : uint16_t {
     DW_TAG_template_alias = 0x0043,
 } dw_tag;
 
-const char dw_tag_str[][40] = {
-    [DW_TAG_null] = "DW_TAG_null",
-    [DW_TAG_array_type] = "DW_TAG_array_type",
-    [DW_TAG_class_type] = "DW_TAG_class_type",
-    [DW_TAG_entry_point] = "DW_TAG_entry_point",
-    [DW_TAG_enumeration_type] = "DW_TAG_enumeration_type",
-    [DW_TAG_formal_parameter] = "DW_TAG_formal_parameter",
-    [DW_TAG_imported_declaration] = "DW_TAG_imported_declaration",
-    [DW_TAG_label] = "DW_TAG_label",
-    [DW_TAG_lexical_block] = "DW_TAG_lexical_block",
-    [DW_TAG_member] = "DW_TAG_member",
-    [DW_TAG_pointer_type] = "DW_TAG_pointer_type",
-    [DW_TAG_reference_type] = "DW_TAG_reference_type",
-    [DW_TAG_compile_unit] = "DW_TAG_compile_unit",
-    [DW_TAG_string_type] = "DW_TAG_string_type",
-    [DW_TAG_structure_type] = "DW_TAG_structure_type",
-    [DW_TAG_subroutine_type] = "DW_TAG_subroutine_type",
-    [DW_TAG_typedef] = "DW_TAG_typedef",
-    [DW_TAG_union_type] = "DW_TAG_union_type",
-    [DW_TAG_unspecified_parameters] = "DW_TAG_unspecified_parameters",
-    [DW_TAG_variant] = "DW_TAG_variant",
-    [DW_TAG_common_block] = "DW_TAG_common_block",
-    [DW_TAG_common_inclusion] = "DW_TAG_common_inclusion",
-    [DW_TAG_inheritance] = "DW_TAG_inheritance",
-    [DW_TAG_inlined_subroutine] = "DW_TAG_inlined_subroutine",
-    [DW_TAG_module] = "DW_TAG_module",
-    [DW_TAG_ptr_to_member_type] = "DW_TAG_ptr_to_member_type",
-    [DW_TAG_set_type] = "DW_TAG_set_type",
-    [DW_TAG_subrange_type] = "DW_TAG_subrange_type",
-    [DW_TAG_with_stmt] = "DW_TAG_with_stmt",
-    [DW_TAG_access_declaration] = "DW_TAG_access_declaration",
-    [DW_TAG_base_type] = "DW_TAG_base_type",
-    [DW_TAG_catch_block] = "DW_TAG_catch_block",
-    [DW_TAG_const_type] = "DW_TAG_const_type",
-    [DW_TAG_constant] = "DW_TAG_constant",
-    [DW_TAG_enumerator] = "DW_TAG_enumerator",
-    [DW_TAG_file_type] = "DW_TAG_file_type",
-    [DW_TAG_friend] = "DW_TAG_friend",
-    [DW_TAG_namelist] = "DW_TAG_namelist",
-    [DW_TAG_namelist_item] = "DW_TAG_namelist_item",
-    [DW_TAG_packed_type] = "DW_TAG_packed_type",
-    [DW_TAG_subprogram] = "DW_TAG_subprogram",
-    [DW_TAG_template_type_parameter] = "DW_TAG_template_type_parameter",
-    [DW_TAG_template_value_parameter] = "DW_TAG_template_value_parameter",
-    [DW_TAG_thrown_type] = "DW_TAG_thrown_type",
-    [DW_TAG_try_block] = "DW_TAG_try_block",
-    [DW_TAG_variant_part] = "DW_TAG_variant_part",
-    [DW_TAG_variable] = "DW_TAG_variable",
-    [DW_TAG_volatile_type] = "DW_TAG_volatile_type",
-    [DW_TAG_dwarf_procedure] = "DW_TAG_dwarf_procedure",
-    [DW_TAG_restrict_type] = "DW_TAG_restrict_type",
-    [DW_TAG_interface_type] = "DW_TAG_interface_type",
-    [DW_TAG_namespace] = "DW_TAG_namespace",
-    [DW_TAG_imported_module] = "DW_TAG_imported_module",
-    [DW_TAG_unspecified_type] = "DW_TAG_unspecified_type",
-    [DW_TAG_partial_unit] = "DW_TAG_partial_unit",
-    [DW_TAG_imported_unit] = "DW_TAG_imported_unit",
-    [DW_TAG_condition] = "DW_TAG_condition",
-    [DW_TAG_shared_type] = "DW_TAG_shared_type",
-    [DW_TAG_type_unit] = "DW_TAG_type_unit",
-    [DW_TAG_rvalue_reference_type] = "DW_TAG_rvalue_reference_type",
-    [DW_TAG_template_alias] = "DW_TAG_template_alias",
-};
-
 typedef enum : uint16_t {
     DW_AT_sibling = 0x01,
     DW_AT_location = 0x02,
@@ -402,9 +338,216 @@ typedef enum : uint16_t {
     DW_AT_APPLE_sdk = 0x3fef,
 } dw_attribute;
 
-void dw_attribute_to_str(dw_attribute attr, char* s, usize size) {
+typedef enum : uint8_t {
+    DW_FORM_addr = 0x01,
+    DW_FORM_block2 = 0x03,
+    DW_FORM_block4 = 0x04,
+    DW_FORM_data2 = 0x05,
+    DW_FORM_data4 = 0x06,
+    DW_FORM_data8 = 0x07,
+    DW_FORM_string = 0x08,
+    DW_FORM_block = 0x09,
+    DW_FORM_block1 = 0x0a,
+    DW_FORM_data1 = 0x0b,
+    DW_FORM_flag = 0x0c,
+    DW_FORM_sdata = 0x0d,
+    DW_FORM_strp = 0x0e,
+    DW_FORM_udata = 0x0f,
+    DW_FORM_ref_addr = 0x10,
+    DW_FORM_ref1 = 0x11,
+    DW_FORM_ref2 = 0x12,
+    DW_FORM_ref4 = 0x13,
+    DW_FORM_ref8 = 0x14,
+    DW_FORM_ref_udata = 0x15,
+    DW_FORM_indirect = 0x16,
+    DW_FORM_sec_offset = 0x17,
+    DW_FORM_exprloc = 0x18,
+    DW_FORM_flag_present = 0x19,
+    DW_FORM_ref_sig8 = 0x20,
+} dw_form;
+
+typedef enum : uint8_t {
+    DW_LNE_end_sequence = 1,
+    DW_LNE_set_address,
+    DW_LNE_define_file,
+    DW_LNE_set_discriminator,
+} DW_LNE;
+
+typedef enum : uint16_t {
+    DW_LANG_C89 = 0x0001,
+    DW_LANG_C = 0x0002,
+    DW_LANG_Ada83 = 0x0003,
+    DW_LANG_C_plus_plus = 0x0004,
+    DW_LANG_Cobol74 = 0x0005,
+    DW_LANG_Cobol85 = 0x0006,
+    DW_LANG_Fortran77 = 0x0007,
+    DW_LANG_Fortran90 = 0x0008,
+    DW_LANG_Pascal83 = 0x0009,
+    DW_LANG_Modula2 = 0x000a,
+    DW_LANG_Java = 0x000b,
+    DW_LANG_C99 = 0x000c,
+    DW_LANG_Ada95 = 0x000d,
+    DW_LANG_Fortran95 = 0x000e,
+    DW_LANG_PLI = 0x000f,
+    DW_LANG_ObjC = 0x0010,
+    DW_LANG_ObjC_plus_plus = 0x0011,
+    DW_LANG_UPC = 0x0012,
+    DW_LANG_D = 0x0013,
+    DW_LANG_Python = 0x0014,
+    DW_LANG_OpenCL = 0x0015,
+    DW_LANG_Go = 0x0016,
+    DW_LANG_Modula3 = 0x0017,
+    DW_LANG_Haskell = 0x0018,
+    DW_LANG_C_plus_plus_03 = 0x0019,
+    DW_LANG_C_plus_plus_11 = 0x001a,
+    DW_LANG_OCaml = 0x001b,
+    DW_LANG_Rust = 0x001c,
+    DW_LANG_C11 = 0x001d,
+    DW_LANG_Swift = 0x001e,
+    DW_LANG_Julia = 0x001f,
+    DW_LANG_Dylan = 0x0020,
+    DW_LANG_C_plus_plus_14 = 0x0021,
+    DW_LANG_Fortran03 = 0x0022,
+    DW_LANG_Fortran08 = 0x0023,
+    DW_LANG_RenderScript = 0x0024,
+    DW_LANG_BLISS = 0x0025,
+    DW_LANG_Mips_Assembler = 0x8001,
+    DW_LANG_GOOGLE_RenderScript = 0x8e57,
+    DW_LANG_BORLAND_Delphi = 0xb000,
+} dw_lang;
+
+typedef struct {
+} dwarf_info;
+
+typedef struct {
+    dw_attribute attr;
+    dw_form form;
+} dw_attr_form;
+
+typedef struct {
+    u8 type;
+    u8 tag;
+    // bool has_children; ?
+    gbArray(dw_attr_form) attr_forms;
+} dw_abbrev_entry;
+
+typedef struct {
+    gbArray(dw_abbrev_entry) entries;
+} dw_abbrev;
+
+typedef struct {
+    char* s;
+    u32 offset;
+} dw_string;
+
+typedef struct {
+    u64 low_pc;
+    char* fn_name;
+    char* directory;
+    char* file;
+    u16 high_pc;
+    u16 line;
+} dw_fn_decl;
+
+typedef struct {
+    u64 pc;
+    u16 line;
+    u16 file;
+} dw_line_entry;
+
+typedef struct {
+    u64 address;
+    u16 line;
+    // TODO: track column?
+    int file;
+    bool is_stmt;
+} dw_line_section_fsm;
+
+typedef struct {
+    char* directory;
+    char* file;
+    char* fn_name;
+    u16 line;
+} stacktrace_entry;
+
+typedef struct {
+    gbArray(dw_fn_decl) fn_decls;
+    gbArray(dw_line_entry) line_entries;
+    gbArray(dw_string) debug_str_strings;
+    gbArray(char*) debug_line_files;
+} debug_data;
+
+#ifdef PG_WITH_LOG
+static const char dw_tag_str[][40] = {
+    [DW_TAG_null] = "DW_TAG_null",
+    [DW_TAG_array_type] = "DW_TAG_array_type",
+    [DW_TAG_class_type] = "DW_TAG_class_type",
+    [DW_TAG_entry_point] = "DW_TAG_entry_point",
+    [DW_TAG_enumeration_type] = "DW_TAG_enumeration_type",
+    [DW_TAG_formal_parameter] = "DW_TAG_formal_parameter",
+    [DW_TAG_imported_declaration] = "DW_TAG_imported_declaration",
+    [DW_TAG_label] = "DW_TAG_label",
+    [DW_TAG_lexical_block] = "DW_TAG_lexical_block",
+    [DW_TAG_member] = "DW_TAG_member",
+    [DW_TAG_pointer_type] = "DW_TAG_pointer_type",
+    [DW_TAG_reference_type] = "DW_TAG_reference_type",
+    [DW_TAG_compile_unit] = "DW_TAG_compile_unit",
+    [DW_TAG_string_type] = "DW_TAG_string_type",
+    [DW_TAG_structure_type] = "DW_TAG_structure_type",
+    [DW_TAG_subroutine_type] = "DW_TAG_subroutine_type",
+    [DW_TAG_typedef] = "DW_TAG_typedef",
+    [DW_TAG_union_type] = "DW_TAG_union_type",
+    [DW_TAG_unspecified_parameters] = "DW_TAG_unspecified_parameters",
+    [DW_TAG_variant] = "DW_TAG_variant",
+    [DW_TAG_common_block] = "DW_TAG_common_block",
+    [DW_TAG_common_inclusion] = "DW_TAG_common_inclusion",
+    [DW_TAG_inheritance] = "DW_TAG_inheritance",
+    [DW_TAG_inlined_subroutine] = "DW_TAG_inlined_subroutine",
+    [DW_TAG_module] = "DW_TAG_module",
+    [DW_TAG_ptr_to_member_type] = "DW_TAG_ptr_to_member_type",
+    [DW_TAG_set_type] = "DW_TAG_set_type",
+    [DW_TAG_subrange_type] = "DW_TAG_subrange_type",
+    [DW_TAG_with_stmt] = "DW_TAG_with_stmt",
+    [DW_TAG_access_declaration] = "DW_TAG_access_declaration",
+    [DW_TAG_base_type] = "DW_TAG_base_type",
+    [DW_TAG_catch_block] = "DW_TAG_catch_block",
+    [DW_TAG_const_type] = "DW_TAG_const_type",
+    [DW_TAG_constant] = "DW_TAG_constant",
+    [DW_TAG_enumerator] = "DW_TAG_enumerator",
+    [DW_TAG_file_type] = "DW_TAG_file_type",
+    [DW_TAG_friend] = "DW_TAG_friend",
+    [DW_TAG_namelist] = "DW_TAG_namelist",
+    [DW_TAG_namelist_item] = "DW_TAG_namelist_item",
+    [DW_TAG_packed_type] = "DW_TAG_packed_type",
+    [DW_TAG_subprogram] = "DW_TAG_subprogram",
+    [DW_TAG_template_type_parameter] = "DW_TAG_template_type_parameter",
+    [DW_TAG_template_value_parameter] = "DW_TAG_template_value_parameter",
+    [DW_TAG_thrown_type] = "DW_TAG_thrown_type",
+    [DW_TAG_try_block] = "DW_TAG_try_block",
+    [DW_TAG_variant_part] = "DW_TAG_variant_part",
+    [DW_TAG_variable] = "DW_TAG_variable",
+    [DW_TAG_volatile_type] = "DW_TAG_volatile_type",
+    [DW_TAG_dwarf_procedure] = "DW_TAG_dwarf_procedure",
+    [DW_TAG_restrict_type] = "DW_TAG_restrict_type",
+    [DW_TAG_interface_type] = "DW_TAG_interface_type",
+    [DW_TAG_namespace] = "DW_TAG_namespace",
+    [DW_TAG_imported_module] = "DW_TAG_imported_module",
+    [DW_TAG_unspecified_type] = "DW_TAG_unspecified_type",
+    [DW_TAG_partial_unit] = "DW_TAG_partial_unit",
+    [DW_TAG_imported_unit] = "DW_TAG_imported_unit",
+    [DW_TAG_condition] = "DW_TAG_condition",
+    [DW_TAG_shared_type] = "DW_TAG_shared_type",
+    [DW_TAG_type_unit] = "DW_TAG_type_unit",
+    [DW_TAG_rvalue_reference_type] = "DW_TAG_rvalue_reference_type",
+    [DW_TAG_template_alias] = "DW_TAG_template_alias",
+};
+
+static char* dw_attribute_to_str(dw_attribute attr) {
     assert(s != NULL);
     assert(size >= 50);
+
+    static const s[50] = "";
+    bzero(s, 50);
 
     switch (attr) {
         case DW_AT_sibling:
@@ -1072,40 +1215,12 @@ void dw_attribute_to_str(dw_attribute attr, char* s, usize size) {
             memcpy(s, "DW_AT_APPLE_sdk", sizeof("DW_AT_APPLE_sdk"));
             break;
         default:
-            printf("attr=%#x\n", attr);
+            LOG("attr=%#x\n", attr);
             assert(0 && "UNREACHABLE");
     }
 }
 
-typedef enum : uint8_t {
-    DW_FORM_addr = 0x01,
-    DW_FORM_block2 = 0x03,
-    DW_FORM_block4 = 0x04,
-    DW_FORM_data2 = 0x05,
-    DW_FORM_data4 = 0x06,
-    DW_FORM_data8 = 0x07,
-    DW_FORM_string = 0x08,
-    DW_FORM_block = 0x09,
-    DW_FORM_block1 = 0x0a,
-    DW_FORM_data1 = 0x0b,
-    DW_FORM_flag = 0x0c,
-    DW_FORM_sdata = 0x0d,
-    DW_FORM_strp = 0x0e,
-    DW_FORM_udata = 0x0f,
-    DW_FORM_ref_addr = 0x10,
-    DW_FORM_ref1 = 0x11,
-    DW_FORM_ref2 = 0x12,
-    DW_FORM_ref4 = 0x13,
-    DW_FORM_ref8 = 0x14,
-    DW_FORM_ref_udata = 0x15,
-    DW_FORM_indirect = 0x16,
-    DW_FORM_sec_offset = 0x17,
-    DW_FORM_exprloc = 0x18,
-    DW_FORM_flag_present = 0x19,
-    DW_FORM_ref_sig8 = 0x20,
-} dw_form;
-
-const char dw_form_str[][30] = {
+static const char dw_form_str[][30] = {
     [DW_FORM_addr] = "DW_FORM_addr",
     [DW_FORM_block2] = "DW_FORM_block2",
     [DW_FORM_block4] = "DW_FORM_block4",
@@ -1133,116 +1248,17 @@ const char dw_form_str[][30] = {
     [DW_FORM_ref_sig8] = "DW_FORM_ref_sig8",
 };
 
-typedef enum : uint8_t {
-    DW_LNE_end_sequence = 1,
-    DW_LNE_set_address,
-    DW_LNE_define_file,
-    DW_LNE_set_discriminator,
-} DW_LNE;
+#define LOG(fmt, ...)                        \
+    do {                                     \
+        fprintf(stderr, fmt, ##__VA_ARGS__); \
+    } while (0)
 
-typedef enum : uint16_t {
-    DW_LANG_C89 = 0x0001,
-    DW_LANG_C = 0x0002,
-    DW_LANG_Ada83 = 0x0003,
-    DW_LANG_C_plus_plus = 0x0004,
-    DW_LANG_Cobol74 = 0x0005,
-    DW_LANG_Cobol85 = 0x0006,
-    DW_LANG_Fortran77 = 0x0007,
-    DW_LANG_Fortran90 = 0x0008,
-    DW_LANG_Pascal83 = 0x0009,
-    DW_LANG_Modula2 = 0x000a,
-    DW_LANG_Java = 0x000b,
-    DW_LANG_C99 = 0x000c,
-    DW_LANG_Ada95 = 0x000d,
-    DW_LANG_Fortran95 = 0x000e,
-    DW_LANG_PLI = 0x000f,
-    DW_LANG_ObjC = 0x0010,
-    DW_LANG_ObjC_plus_plus = 0x0011,
-    DW_LANG_UPC = 0x0012,
-    DW_LANG_D = 0x0013,
-    DW_LANG_Python = 0x0014,
-    DW_LANG_OpenCL = 0x0015,
-    DW_LANG_Go = 0x0016,
-    DW_LANG_Modula3 = 0x0017,
-    DW_LANG_Haskell = 0x0018,
-    DW_LANG_C_plus_plus_03 = 0x0019,
-    DW_LANG_C_plus_plus_11 = 0x001a,
-    DW_LANG_OCaml = 0x001b,
-    DW_LANG_Rust = 0x001c,
-    DW_LANG_C11 = 0x001d,
-    DW_LANG_Swift = 0x001e,
-    DW_LANG_Julia = 0x001f,
-    DW_LANG_Dylan = 0x0020,
-    DW_LANG_C_plus_plus_14 = 0x0021,
-    DW_LANG_Fortran03 = 0x0022,
-    DW_LANG_Fortran08 = 0x0023,
-    DW_LANG_RenderScript = 0x0024,
-    DW_LANG_BLISS = 0x0025,
-    DW_LANG_Mips_Assembler = 0x8001,
-    DW_LANG_GOOGLE_RenderScript = 0x8e57,
-    DW_LANG_BORLAND_Delphi = 0xb000,
-} dw_lang;
+#else
+#define LOG(fmt, ...) \
+    do {              \
+    } while (0)
 
-typedef struct {
-} dwarf_info;
-
-typedef struct {
-    dw_attribute attr;
-    dw_form form;
-} dw_attr_form;
-
-typedef struct {
-    u8 type;
-    u8 tag;
-    // bool has_children; ?
-    gbArray(dw_attr_form) attr_forms;
-} dw_abbrev_entry;
-
-typedef struct {
-    gbArray(dw_abbrev_entry) entries;
-} dw_abbrev;
-
-typedef struct {
-    char* s;
-    u32 offset;
-} dw_string;
-
-typedef struct {
-    u64 low_pc;
-    char* fn_name;
-    char* directory;
-    char* file;
-    u16 high_pc;
-    u16 line;
-} dw_fn_decl;
-
-typedef struct {
-    u64 pc;
-    u16 line;
-    u16 file;
-} dw_line_entry;
-
-typedef struct {
-    u64 address;
-    u16 line;
-    // TODO: track column?
-    int file;
-    bool is_stmt;
-} dw_line_section_fsm;
-
-typedef struct {
-    char* directory;
-    char* file;
-    char* fn_name;
-    u16 line;
-} stacktrace_entry;
-
-typedef struct {
-    gbArray(dw_fn_decl) fn_decls;
-    gbArray(dw_line_entry) line_entries;
-    gbArray(dw_string) debug_str_strings;
-    gbArray(char*) debug_line_files;
-} debug_data;
+#endif
 
 static void read_dwarf_ext_op(void* data, isize size, u64* offset,
                               dw_line_section_fsm* fsm,
@@ -1255,11 +1271,11 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset,
     const u64 start_offset = *offset;
     const DW_LNE* extended_opcode = &data[*offset];
     *offset += 1;
-    printf("DW_EXT_OP=%d\n", *extended_opcode);
+    LOG("DW_EXT_OP=%d\n", *extended_opcode);
 
     switch (*extended_opcode) {
         case DW_LNE_end_sequence: {
-            puts("DW_LNE_end_sequence");
+            LOG("DW_LNE_end_sequence");
 
             *fsm = (dw_line_section_fsm){.line = 1};
             break;
@@ -1267,7 +1283,7 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset,
         case DW_LNE_set_address: {
             const u64* a = &data[*offset];
             *offset += sizeof(u64);
-            printf("DW_LNE_set_address addr=%#llx\n", *a);
+            LOG("DW_LNE_set_address addr=%#llx\n", *a);
             fsm->address = *a;
 
             break;
@@ -1302,9 +1318,9 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
         entry.tag = *(u8*)&data[offset++];
         bool* has_children = &data[offset++];
         tag_count += 1;
-        printf("[%d] .debug_abbrev: type_num=%d tag=%#x %s has_children=%d\n",
-               tag_count, entry.type, entry.tag, dw_tag_str[entry.tag],
-               *has_children);
+        LOG("[%d] .debug_abbrev: type_num=%d tag=%#x %s has_children=%d\n",
+            tag_count, entry.type, entry.tag, dw_tag_str[entry.tag],
+            *has_children);
 
         gb_array_init_reserve(entry.attr_forms, allocator, 20);
         while (offset < sec->offset + sec->size) {
@@ -1313,10 +1329,9 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
             attr_form.form = read_leb128_u64(data, &offset);
             if (attr_form.attr == 0 && attr_form.form == 0) break;
 
-            char attr_str[50] = "";
-            dw_attribute_to_str(attr_form.attr, attr_str, sizeof(attr_str));
-            printf(".debug_abbrev: attr=%#x %s form=%#x %s\n", attr_form.attr,
-                   attr_str, attr_form.form, dw_form_str[attr_form.form]);
+            LOG(".debug_abbrev: attr=%#x %s form=%#x %s\n", attr_form.attr,
+                dw_attribute_to_str(attr_form.attr), attr_form.form,
+                dw_form_str[attr_form.form]);
 
             gb_array_append(entry.attr_forms, attr_form);
         }
@@ -1340,20 +1355,20 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
     // TODO: multiple compile units (CU)
     u32* size = &data[offset];
     offset += sizeof(u32);
-    printf(".debug_info size=%#x\n", *size);
+    LOG(".debug_info size=%#x\n", *size);
 
     u16* version = &data[offset];
     offset += sizeof(u16);
-    printf(".debug_info version=%u\n", *version);
+    LOG(".debug_info version=%u\n", *version);
     assert(*version == 4);
 
     u32* abbr_offset = &data[offset];
     offset += sizeof(u32);
-    printf(".debug_info abbr_offset=%#x\n", *abbr_offset);
+    LOG(".debug_info abbr_offset=%#x\n", *abbr_offset);
 
     u8* addr_size = &data[offset];
     offset += sizeof(u8);
-    printf(".debug_info abbr_size=%#x\n", *addr_size);
+    LOG(".debug_info abbr_size=%#x\n", *addr_size);
 
     char* directory = NULL;
     while (offset < sec->offset + sec->size) {
@@ -1373,8 +1388,8 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
         }
         assert(entry != NULL);
         assert(entry->type == type);
-        printf(".debug_info type=%#x tag=%#x %s\n", type, entry->tag,
-               dw_tag_str[entry->tag]);
+        LOG(".debug_info type=%#x tag=%#x %s\n", type, entry->tag,
+            dw_tag_str[entry->tag]);
 
         dw_fn_decl* se = NULL;
         if (entry->tag == DW_TAG_subprogram) {
@@ -1388,16 +1403,14 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
 
         for (int i = 0; i < gb_array_count(entry->attr_forms); i++) {
             const dw_attr_form af = entry->attr_forms[i];
-            char attr_str[50] = "";
-            dw_attribute_to_str(af.attr, attr_str, sizeof(attr_str));
-            printf(".debug_info: attr=%#x %s form=%#x %s\n", af.attr, attr_str,
-                   af.form, dw_form_str[af.form]);
+            LOG(".debug_info: attr=%#x %s form=%#x %s\n", af.attr,
+                dw_attribute_to_str(af.attr), af.form, dw_form_str[af.form]);
 
             switch (af.form) {
                 case DW_FORM_strp: {
                     u32 str_offset = *(u32*)&data[offset];
                     offset += 4;
-                    printf("DW_FORM_strp: %#x ", str_offset);
+                    LOG("DW_FORM_strp: %#x ", str_offset);
 
                     char* s = NULL;
                     for (int i = 0; i < gb_array_count(dd->debug_str_strings);
@@ -1408,7 +1421,7 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                         }
                     }
                     assert(s != NULL);
-                    puts(s);
+                    LOG(s);
                     if (af.attr == DW_AT_name && se != NULL) {
                         se->fn_name = s;
                     }
@@ -1420,7 +1433,7 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                 case DW_FORM_data1: {
                     u8 val = *(u8*)&data[offset];
                     offset += 1;
-                    printf("DW_FORM_data1: %#x\n", val);
+                    LOG("DW_FORM_data1: %#x\n", val);
                     if (af.attr == DW_AT_decl_file && se != NULL &&
                         se->file == NULL) {
                         assert(dd->debug_line_files != NULL);
@@ -1432,13 +1445,13 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                 case DW_FORM_data2: {
                     u16 lang = *(u16*)&data[offset];
                     offset += 2;
-                    printf("DW_FORM_data2: %#x\n", lang);
+                    LOG("DW_FORM_data2: %#x\n", lang);
                     break;
                 }
                 case DW_FORM_data4: {
                     u32 val = *(u32*)&data[offset];
                     offset += 4;
-                    printf("DW_FORM_data4: %#x\n", val);
+                    LOG("DW_FORM_data4: %#x\n", val);
                     if (af.attr == DW_AT_high_pc && se != NULL) {
                         se->high_pc = val;
                     }
@@ -1447,43 +1460,43 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                 case DW_FORM_data8: {
                     u64 val = *(u64*)&data[offset];
                     offset += 8;
-                    printf("DW_FORM_data8: %#llx\n", val);
+                    LOG("DW_FORM_data8: %#llx\n", val);
                     break;
                 }
                 case DW_FORM_ref1: {
                     u8 val = *(u8*)&data[offset];
                     offset += 1;
-                    printf("DW_FORM_ref1: %#x\n", val);
+                    LOG("DW_FORM_ref1: %#x\n", val);
                     break;
                 }
                 case DW_FORM_ref2: {
                     u16 val = *(u16*)&data[offset];
                     offset += 2;
-                    printf("DW_FORM_ref2: %#x\n", val);
+                    LOG("DW_FORM_ref2: %#x\n", val);
                     break;
                 }
                 case DW_FORM_ref4: {
                     u32 val = *(u32*)&data[offset];
                     offset += 4;
-                    printf("DW_FORM_ref4: %#x\n", val);
+                    LOG("DW_FORM_ref4: %#x\n", val);
                     break;
                 }
                 case DW_FORM_ref8: {
                     u64 val = *(u64*)&data[offset];
                     offset += 8;
-                    printf("DW_FORM_ref8: %#llx\n", val);
+                    LOG("DW_FORM_ref8: %#llx\n", val);
                     break;
                 }
                 case DW_FORM_sec_offset: {
                     u32 val = *(u32*)&data[offset];
                     offset += 4;
-                    printf("DW_FORM_sec_offset: %#x\n", val);
+                    LOG("DW_FORM_sec_offset: %#x\n", val);
                     break;
                 }
                 case DW_FORM_addr: {
                     u64 addr = *(u64*)&data[offset];
                     offset += 8;
-                    printf("DW_FORM_addr: %#llx\n", addr);
+                    LOG("DW_FORM_addr: %#llx\n", addr);
 
                     if (af.attr == DW_AT_low_pc && se != NULL) {
                         se->low_pc = addr;
@@ -1491,25 +1504,25 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                     break;
                 }
                 case DW_FORM_flag_present: {
-                    puts("DW_FORM_flag_present (true)");
+                    LOG("DW_FORM_flag_present (true)");
                     break;
                 }
                 case DW_FORM_exprloc: {
                     const u64 length = read_leb128_u64(data, &offset);
                     offset += length;
-                    printf("DW_FORM_exprloc: length=%lld\n", length);
+                    LOG("DW_FORM_exprloc: length=%lld\n", length);
 
                     break;
                 }
                 case DW_FORM_udata: {
                     const u64 val = read_leb128_u64(data, &offset);
-                    printf("DW_FORM_udata: length=%lld\n", val);
+                    LOG("DW_FORM_udata: length=%lld\n", val);
 
                     break;
                 }
                 case DW_FORM_sdata: {
                     const i64 val = read_leb128_i64(data, &offset);
-                    printf("DW_FORM_sdata: length=%lld\n", val);
+                    LOG("DW_FORM_sdata: length=%lld\n", val);
 
                     break;
                 }
@@ -1541,7 +1554,7 @@ void read_dwarf_section_debug_str(gbAllocator allocator, void* data,
 
         char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
-        printf("- [%llu] %s\n", i, s);
+        LOG("- [%llu] %s\n", i, s);
         dw_string str = {.s = s, .offset = offset - sec->offset};
         gb_array_append(dd->debug_str_strings, str);
         offset += end - s;
@@ -1577,8 +1590,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     u64 offset = sec->offset;
     const dwarf_debug_line_header* ddlh = &data[offset];
     offset += sizeof(dwarf_debug_line_header);
-    printf(
-        "DWARF length=%#x version=%#x header_length=%#x "
+    LOG("DWARF length=%#x version=%#x header_length=%#x "
         "min_instruction_length=%#x max_ops_per_inst=%d "
         "default_is_stmt=%#x "
         "line_base=%d "
@@ -1607,7 +1619,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
         ddlh->std_opcode_lengths[11]);
 
     assert(ddlh->version == 4);
-    puts("Directories:");
+    LOG("Directories:");
     while (offset < sec->offset + sec->size) {
         char* s = &data[offset];
         char* end = memchr(&data[offset], 0, sec->offset + sec->size);
@@ -1616,7 +1628,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
             offset += 1;
             continue;
         }
-        printf("- %s (%ld)\n", s, end - s);
+        LOG("- %s (%ld)\n", s, end - s);
 
         offset += end - s;
         if (*(end + 1) == 0) {
@@ -1624,7 +1636,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
             break;
         }
     }
-    puts("Files:");
+    LOG("Files:");
     gb_array_init_reserve(dd->debug_line_files, allocator, 10);
     while (offset < sec->offset + sec->size) {
         char* s = &data[offset];
@@ -1642,20 +1654,18 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
         const u64 length = read_leb128_u64(data, &offset);
 
         gb_array_append(dd->debug_line_files, s);
-        printf(
-            "- %s dir_index=%llu modtime=%llu "
+        LOG("- %s dir_index=%llu modtime=%llu "
             "length=%llu\n",
             s, dir_index, modtime, length);
     }
-    puts("");
+    LOG("");
 
     dw_line_section_fsm fsm = {.line = 1};
 
     while (offset < sec->offset + sec->size) {
         DW_LNS* opcode = &data[offset];
         offset += 1;
-        printf(
-            "DW_OP=%#x offset=%#llx rel_offset=%#llx fsm.address=%#llx "
+        LOG("DW_OP=%#x offset=%#llx rel_offset=%#llx fsm.address=%#llx "
             "fsm.line=%d "
             "fsm.file=%d\n",
             *opcode, offset, offset - sec->offset - 1, fsm.address, fsm.line,
@@ -1663,46 +1673,45 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
         switch (*opcode) {
             case DW_LNS_extended_op: {
                 const u64 size = read_leb128_u64(data, &offset);
-                printf("DW_LNS_extended_op size=%#llx\n", size);
+                LOG("DW_LNS_extended_op size=%#llx\n", size);
 
                 read_dwarf_ext_op(data, size, &offset, &fsm, &dd->line_entries);
                 break;
             }
             case DW_LNS_copy:
-                puts("DW_LNS_copy");
+                LOG("DW_LNS_copy");
                 break;
             case DW_LNS_advance_pc: {
                 const u64 decoded = read_leb128_u64(data, &offset);
-                printf("DW_LNS_advance_pc leb128=%#llx\n", decoded);
+                LOG("DW_LNS_advance_pc leb128=%#llx\n", decoded);
                 fsm.address += decoded;
                 break;
             }
             case DW_LNS_advance_line: {
                 const i64 l = read_leb128_i64(data, &offset);
                 fsm.line += l;
-                printf("DW_LNS_advance_line line=%lld fsm.line=%hu\n", l,
-                       fsm.line);
+                LOG("DW_LNS_advance_line line=%lld fsm.line=%hu\n", l,
+                    fsm.line);
                 if (dw_line_entry_should_add_new_entry(&fsm, dd)) {
                     dw_line_entry e = {
                         .pc = fsm.address, .line = fsm.line, .file = fsm.file};
-                    printf("new dw_line_entry: pc=%#llx line=%d file=%d %s\n",
-                           e.pc, e.line, e.file,
-                           dd->debug_line_files[e.file - 1]);
+                    LOG("new dw_line_entry: pc=%#llx line=%d file=%d %s\n",
+                        e.pc, e.line, e.file, dd->debug_line_files[e.file - 1]);
                     gb_array_append(dd->line_entries, e);
                 }
                 break;
             }
             case DW_LNS_set_file:
                 fsm.file = read_leb128_u64(data, &offset);
-                printf("DW_LNS_set_file file=%d\n", fsm.file);
+                LOG("DW_LNS_set_file file=%d\n", fsm.file);
                 break;
             case DW_LNS_set_column: {
                 const u64 column = read_leb128_u64(data, &offset);
-                printf("DW_LNS_set_column column=%llu\n", column);
+                LOG("DW_LNS_set_column column=%llu\n", column);
                 break;
             }
             case DW_LNS_negate_stmt:
-                puts("DW_LNS_negate_stmt");
+                LOG("DW_LNS_negate_stmt");
                 fsm.is_stmt = !fsm.is_stmt;
                 break;
             case DW_LNS_set_basic_block:
@@ -1712,15 +1721,15 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                 fsm.address +=
                     op / ddlh->line_range * ddlh->min_instruction_length;
                 // TODO: op_index
-                printf("address+=%#x -> address=%#llx\n",
-                       op / ddlh->line_range * ddlh->min_instruction_length,
-                       fsm.address);
+                LOG("address+=%#x -> address=%#llx\n",
+                    op / ddlh->line_range * ddlh->min_instruction_length,
+                    fsm.address);
                 break;
             }
             case DW_LNS_fixed_advance_pc:
                 break;
             case DW_LNS_set_prologue_end:
-                puts("DW_LNS_set_prologue_end");
+                LOG("DW_LNS_set_prologue_end");
                 break;
             case DW_LNS_set_epilogue_begin:
                 break;
@@ -1735,14 +1744,13 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                 if (dw_line_entry_should_add_new_entry(&fsm, dd)) {
                     dw_line_entry e = {
                         .pc = fsm.address, .line = fsm.line, .file = fsm.file};
-                    printf("new dw_line_entry: pc=%#llx line=%d file=%d %s\n",
-                           e.pc, e.line, e.file,
-                           dd->debug_line_files[e.file - 1]);
+                    LOG("new dw_line_entry: pc=%#llx line=%d file=%d %s\n",
+                        e.pc, e.line, e.file, dd->debug_line_files[e.file - 1]);
                     gb_array_append(dd->line_entries, e);
                 }
-                printf("address+=%d line+=%d\n",
-                       op / ddlh->line_range * ddlh->min_instruction_length,
-                       ddlh->line_base + op % ddlh->line_range);
+                LOG("address+=%d line+=%d\n",
+                    op / ddlh->line_range * ddlh->min_instruction_length,
+                    ddlh->line_base + op % ddlh->line_range);
             }
         }
     }
@@ -1769,7 +1777,7 @@ void stacktrace_find_entry(const debug_data* dd, u64 pc, stacktrace_entry* se) {
         cur_le = &dd->line_entries[i + 1];
         if (prev_le->file == cur_le->file) {
             if (!(prev_le->pc < cur_le->pc)) {
-                printf("[D009] i=%d\n", i);
+                LOG("[D009] i=%d\n", i);
             }
             assert(prev_le->pc < cur_le->pc);  // Shoud be sorted
         }
@@ -1788,8 +1796,7 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
     assert(h->cputype == CPU_TYPE_X86_64);
     assert(h->filetype == MH_DSYM);
 
-    printf(
-        "magic=%d\ncputype=%d\ncpusubtype=%d\nfiletype=%d\nncmds=%"
+    LOG("magic=%d\ncputype=%d\ncpusubtype=%d\nfiletype=%d\nncmds=%"
         "d\nsizeofcmds=%d\nflags=%d\n",
         h->magic, h->cputype, h->cpusubtype, h->filetype, h->ncmds,
         h->sizeofcmds, h->flags);
@@ -1805,7 +1812,7 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
     for (int cmd_count = 0; cmd_count < h->ncmds; cmd_count++) {
         const struct load_command* c = &data[offset];
         offset += sizeof(struct load_command);
-        printf("command: cmd=%d cmdsize=%d\n", c->cmd, c->cmdsize);
+        LOG("command: cmd=%d cmdsize=%d\n", c->cmd, c->cmdsize);
 
         switch (c->cmd) {
             case LC_UUID: {
@@ -1813,8 +1820,7 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
                     &data[offset - sizeof(struct load_command)];
                 offset +=
                     sizeof(struct uuid_command) - sizeof(struct load_command);
-                printf(
-                    "LC_UUID uuid=%#x %#x %#x %#x %#x %#x %#x %#x %#x %#x "
+                LOG("LC_UUID uuid=%#x %#x %#x %#x %#x %#x %#x %#x %#x %#x "
                     "%#x "
                     "%#x %#x "
                     "%#x "
@@ -1831,8 +1837,7 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
                     &data[offset - sizeof(struct load_command)];
                 offset += sizeof(struct build_version_command) -
                           sizeof(struct load_command);
-                printf(
-                    "LC_BUILD_VERSION platform=%#x minos=%#x sdk=%#x "
+                LOG("LC_BUILD_VERSION platform=%#x minos=%#x sdk=%#x "
                     "ntools=%d\n",
                     vc->platform, vc->minos, vc->sdk, vc->ntools);
 
@@ -1845,8 +1850,8 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
                 offset +=
                     sizeof(struct symtab_command) - sizeof(struct load_command);
 
-                printf("LC_SYMTAB symoff=%#x nsyms=%d stroff=%#x strsize=%d\n",
-                       sc->symoff, sc->nsyms, sc->stroff, sc->strsize);
+                LOG("LC_SYMTAB symoff=%#x nsyms=%d stroff=%#x strsize=%d\n",
+                    sc->symoff, sc->nsyms, sc->stroff, sc->strsize);
 
                 break;
             }
@@ -1856,8 +1861,7 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
                 offset += sizeof(struct segment_command_64) -
                           sizeof(struct load_command);
 
-                printf(
-                    "LC_SEGMENT_64 segname=%s vmaddr=%#llx vmsize=%#llx "
+                LOG("LC_SEGMENT_64 segname=%s vmaddr=%#llx vmsize=%#llx "
                     "fileoff=%#llx filesize=%#llx maxprot=%#x initprot=%#x "
                     "nsects=%d flags=%d\n",
                     sc->segname, sc->vmaddr, sc->vmsize, sc->fileoff,
@@ -1867,8 +1871,7 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
                 for (int sec_count = 0; sec_count < sc->nsects; sec_count++) {
                     const struct section_64* sec = &data[offset];
                     offset += sizeof(struct section_64);
-                    printf(
-                        "SECTION sectname=%s segname=%s addr=%#llx "
+                    LOG("SECTION sectname=%s segname=%s addr=%#llx "
                         "size=%#llx "
                         "offset=%#x align=%#x reloff=%#x nreloc=%d "
                         "flags=%#x\n",
@@ -1907,16 +1910,15 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
 
     for (int i = 0; i < gb_array_count(dd->fn_decls); i++) {
         dw_fn_decl* fd = &(dd->fn_decls)[i];
-        printf(
-            "dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
+        LOG("dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
             "file=%s/%s\n",
             fd->low_pc, fd->high_pc, fd->fn_name, fd->directory, fd->file);
     }
 
     for (int i = 0; i < gb_array_count(dd->line_entries); i++) {
         dw_line_entry* le = &(dd->line_entries)[i];
-        printf("dw_line_entry[%d]: line=%d pc=%#llx file=%d %s\n", i, le->line,
-               le->pc, le->file, dd->debug_line_files[le->file - 1]);
+        LOG("dw_line_entry[%d]: line=%d pc=%#llx file=%d %s\n", i, le->line,
+            le->pc, le->file, dd->debug_line_files[le->file - 1]);
     }
 }
 
@@ -1933,15 +1935,14 @@ void stacktrace_print() {
     uintptr_t* rbp = __builtin_frame_address(0);
     while (rbp != 0 && *rbp != 0) {
         uintptr_t rip = *(rbp + 1);
-        uintptr_t rsp = *(rbp + 2);
-        printf("rbp=%p rip=%#lx rsp=%#lx\n", rbp, rip, rsp);
+        LOG("rbp=%p rip=%#lx rsp=%#lx\n", rbp, rip, *(rbp + 2));
         rbp = (uintptr_t*)*rbp;
 
         stacktrace_entry se = {0};
         stacktrace_find_entry(&dd, rip - 5, &se);
         if (se.directory != NULL) {
-            printf("stacktrace_entry: %#lx %s/%s:%s:%d\n", rip, se.directory,
-                   se.file, se.fn_name, se.line);
+            printf("%#lx %s/%s:%s:%d\n", rip, se.directory, se.file, se.fn_name,
+                   se.line);
         }
     }
 }
