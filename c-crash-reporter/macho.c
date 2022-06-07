@@ -1272,15 +1272,16 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
     int tag_count = 0;
     while (offset < sec->offset + sec->size) {
         dw_abbrev_entry entry = {0};
-        entry.type = *(u8*)&data[offset++];
+        read_data(data, size, &offset, &entry.type, sizeof(entry.type));
         if (entry.type == 0) break;
 
-        entry.tag = *(u8*)&data[offset++];
-        bool* has_children = &data[offset++];
+        read_data(data, size, &offset, &entry.tag, sizeof(entry.tag));
+        bool has_children = false;
+        read_data(data, size, &offset, &has_children, sizeof(has_children));
         tag_count += 1;
         LOG("[%d] .debug_abbrev: type_num=%d tag=%#x %s has_children=%d\n",
             tag_count, entry.type, entry.tag, dw_tag_str[entry.tag],
-            *has_children);
+            has_children);
 
         gb_array_init_reserve(entry.attr_forms, allocator, 20);
         while (offset < sec->offset + sec->size) {
