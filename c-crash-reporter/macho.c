@@ -1228,11 +1228,11 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset,
     assert(line_entries != NULL);
 
     const u64 start_offset = *offset;
-    const DW_LNE* extended_opcode = &data[*offset];
-    *offset += 1;
-    LOG("DW_EXT_OP=%d\n", *extended_opcode);
+    DW_LNE extended_opcode = 0;
+    read_data(data, size, offset, &extended_opcode, sizeof(extended_opcode));
+    LOG("DW_EXT_OP=%d\n", extended_opcode);
 
-    switch (*extended_opcode) {
+    switch (extended_opcode) {
         case DW_LNE_end_sequence: {
             LOG("DW_LNE_end_sequence");
 
@@ -1240,10 +1240,10 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset,
             break;
         }
         case DW_LNE_set_address: {
-            const u64* a = &data[*offset];
-            *offset += sizeof(u64);
-            LOG("DW_LNE_set_address addr=%#llx\n", *a);
-            fsm->address = *a;
+            u64 a = 0;
+            read_data(data, size, offset, &a, sizeof(a));
+            LOG("DW_LNE_set_address addr=%#llx\n", a);
+            fsm->address = a;
 
             break;
         }
@@ -1630,14 +1630,14 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     dw_line_section_fsm fsm = {.line = 1, .file = 1};
 
     while (offset < sec->offset + sec->size) {
-        DW_LNS* opcode = &data[offset];
-        offset += 1;
+        DW_LNS opcode = 0;
+        read_data(data, size, &offset, &opcode, sizeof(opcode));
         LOG("DW_OP=%#x offset=%#llx rel_offset=%#llx fsm.address=%#llx "
             "fsm.line=%d "
             "fsm.file=%d\n",
-            *opcode, offset, offset - sec->offset - 1, fsm.address, fsm.line,
+            opcode, offset, offset - sec->offset - 1, fsm.address, fsm.line,
             fsm.file);
-        switch (*opcode) {
+        switch (opcode) {
             case DW_LNS_extended_op: {
                 const u64 ext_op_size = read_leb128_u64(data, size, &offset);
                 LOG("DW_LNS_extended_op size=%#llx\n", ext_op_size);
@@ -1704,7 +1704,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
             case DW_LNS_set_isa:
                 break;
             default: {
-                const u8 op = *opcode - ddlh.opcode_base;
+                const u8 op = opcode - ddlh.opcode_base;
                 fsm.address +=
                     op / ddlh.line_range * ddlh.min_instruction_length;
 
