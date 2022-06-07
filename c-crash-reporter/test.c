@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
     const int n = atoi(argv[1]);
     switch (n) {
         case 0:
-            foo(bar(baz(n)));
+            bar(n);
             break;
         case 1:
             foo(baz(bar(n)));

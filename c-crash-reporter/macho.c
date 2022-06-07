@@ -1938,7 +1938,7 @@ void stacktrace_print() {
         rbp = (uintptr_t*)*rbp;
 
         stacktrace_entry se = {0};
-        stacktrace_find_entry(&dd, rip, &se);
+        stacktrace_find_entry(&dd, rip - 5, &se);
         if (se.directory != NULL) {
             printf("stacktrace_entry: %#lx %s/%s:%s:%d\n", rip, se.directory,
                    se.file, se.fn_name, se.line);
