@@ -1515,10 +1515,8 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
             }
             case DW_LNS_advance_line: {
                 const i64 l = read_leb128_i64(data, &offset);
-                printf("[D001] DW_LNS_advance_line line=%lld fsm.line=%hu\n", l,
-                       fsm.line);
                 fsm.line += l;
-                printf("[D002] DW_LNS_advance_line line=%lld fsm.line=%hu\n", l,
+                printf("DW_LNS_advance_line line=%lld fsm.line=%hu\n", l,
                        fsm.line);
                 dw_line_entry e = {.pc = fsm.address, .line = fsm.line};
                 gb_array_append(dd->line_entries, e);
