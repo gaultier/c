@@ -1083,7 +1083,7 @@ typedef struct {
     u64 low_pc;
     char* fn_name;
     char* directory;
-    u8 file_index_in_debug_lines_files;
+    char* file;
     u16 high_pc;
     u16 line;
 } dw_fn_decl;
@@ -1278,7 +1278,7 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                     assert(s != NULL);
                     puts(s);
                     if (af.attr == DW_AT_name && se != NULL) {
-                        se->fn_name = s;  // FIXME!!! wrong array
+                        se->fn_name = s;
                     }
                     if (af.attr == DW_AT_comp_dir) {
                         directory = s;
@@ -1290,9 +1290,10 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                     offset += 1;
                     printf("DW_FORM_data1: %#x\n", val);
                     if (af.attr == DW_AT_decl_file && se != NULL &&
-                        se->file_index_in_debug_lines_files == 0) {
-                        /* assert(val < gb_array_count(strings)); */
-                        se->file_index_in_debug_lines_files = val;
+                        se->file == NULL) {
+                        assert(dd->debug_line_files != NULL);
+                        assert(val <= gb_array_count(dd->debug_line_files));
+                        se->file = dd->debug_line_files[val - 1];
                     }
                     break;
                 }
@@ -1459,6 +1460,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
         }
     }
     puts("Files:");
+    gb_array_init_reserve(dd->debug_line_files, allocator, 10);
     while (offset < sec->offset + sec->size) {
         char* s = &data[offset];
         if (*s == 0) {
@@ -1474,6 +1476,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
 
         const u64 length = read_leb128_u64(data, &offset);
 
+        gb_array_append(dd->debug_line_files, s);
         printf(
             "- %s dir_index=%llu modtime=%llu "
             "length=%llu\n",
@@ -1569,7 +1572,7 @@ void stacktrace_find_entry(const debug_data* dd, u64 pc, stacktrace_entry* se) {
         const dw_fn_decl* fd = &dd->fn_decls[i];
         if (fd->low_pc <= pc && pc <= fd->low_pc + fd->high_pc) {
             se->directory = fd->directory;
-            /* se->file = fd->file_index_in_debug_lines_files; */
+            se->file = fd->file;
             se->fn_name = fd->fn_name;
             break;
         }
@@ -1715,11 +1718,10 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
 
     for (int i = 0; i < gb_array_count(dd->fn_decls); i++) {
         dw_fn_decl* fd = &(dd->fn_decls)[i];
-        /* printf( */
-        /*     "dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s " */
-        /*     "file=%s/%s\n", */
-        /*     fd->low_pc, fd->high_pc, fd->fn_name, fd->directory, */
-        /*     fd->file_index_in_debug_lines_files); */
+        printf(
+            "dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
+            "file=%s/%s\n",
+            fd->low_pc, fd->high_pc, fd->fn_name, fd->directory, fd->file);
     }
 
     for (int i = 0; i < gb_array_count(dd->line_entries); i++) {
