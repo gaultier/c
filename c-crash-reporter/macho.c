@@ -1572,7 +1572,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     assert(data != NULL);
     assert(sec != NULL);
     assert(dd != NULL);
-    gb_array_init_reserve(dd->line_entries, allocator, 300);
+    gb_array_init_reserve(dd->line_entries, allocator, 15000);
 
     u64 offset = sec->offset;
     const dwarf_debug_line_header* ddlh = &data[offset];
@@ -1934,8 +1934,7 @@ void stacktrace_print() {
     while (rbp != 0 && *rbp != 0) {
         uintptr_t rip = *(rbp + 1);
         uintptr_t rsp = *(rbp + 2);
-        printf("rbp=%p rip=%#lx rsp=%#lx __builtin_frame_address=%p\n", rbp,
-               rip, rsp, __builtin_frame_address(0));
+        printf("rbp=%p rip=%#lx rsp=%#lx\n", rbp, rip, rsp);
         rbp = (uintptr_t*)*rbp;
 
         stacktrace_entry se = {0};
