@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#pragma once
 #include "macho.c"
 
 char* exe_name = NULL;
@@ -13,7 +12,9 @@ int baz(int n) {
 
 int bar(int n) {
     int a = 1;
+    (void)a;
     int b = 10;
+    (void)b;
     baz(n);
     return n;
 }
