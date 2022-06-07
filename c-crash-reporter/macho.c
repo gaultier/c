@@ -373,52 +373,6 @@ typedef enum : uint8_t {
     DW_LNE_set_discriminator,
 } DW_LNE;
 
-typedef enum : uint16_t {
-    DW_LANG_C89 = 0x0001,
-    DW_LANG_C = 0x0002,
-    DW_LANG_Ada83 = 0x0003,
-    DW_LANG_C_plus_plus = 0x0004,
-    DW_LANG_Cobol74 = 0x0005,
-    DW_LANG_Cobol85 = 0x0006,
-    DW_LANG_Fortran77 = 0x0007,
-    DW_LANG_Fortran90 = 0x0008,
-    DW_LANG_Pascal83 = 0x0009,
-    DW_LANG_Modula2 = 0x000a,
-    DW_LANG_Java = 0x000b,
-    DW_LANG_C99 = 0x000c,
-    DW_LANG_Ada95 = 0x000d,
-    DW_LANG_Fortran95 = 0x000e,
-    DW_LANG_PLI = 0x000f,
-    DW_LANG_ObjC = 0x0010,
-    DW_LANG_ObjC_plus_plus = 0x0011,
-    DW_LANG_UPC = 0x0012,
-    DW_LANG_D = 0x0013,
-    DW_LANG_Python = 0x0014,
-    DW_LANG_OpenCL = 0x0015,
-    DW_LANG_Go = 0x0016,
-    DW_LANG_Modula3 = 0x0017,
-    DW_LANG_Haskell = 0x0018,
-    DW_LANG_C_plus_plus_03 = 0x0019,
-    DW_LANG_C_plus_plus_11 = 0x001a,
-    DW_LANG_OCaml = 0x001b,
-    DW_LANG_Rust = 0x001c,
-    DW_LANG_C11 = 0x001d,
-    DW_LANG_Swift = 0x001e,
-    DW_LANG_Julia = 0x001f,
-    DW_LANG_Dylan = 0x0020,
-    DW_LANG_C_plus_plus_14 = 0x0021,
-    DW_LANG_Fortran03 = 0x0022,
-    DW_LANG_Fortran08 = 0x0023,
-    DW_LANG_RenderScript = 0x0024,
-    DW_LANG_BLISS = 0x0025,
-    DW_LANG_Mips_Assembler = 0x8001,
-    DW_LANG_GOOGLE_RenderScript = 0x8e57,
-    DW_LANG_BORLAND_Delphi = 0xb000,
-} dw_lang;
-
-typedef struct {
-} dwarf_info;
-
 typedef struct {
     dw_attribute attr;
     dw_form form;
@@ -427,7 +381,6 @@ typedef struct {
 typedef struct {
     u8 type;
     u8 tag;
-    // bool has_children; ?
     gbArray(dw_attr_form) attr_forms;
 } dw_abbrev_entry;
 
@@ -478,6 +431,11 @@ typedef struct {
 } debug_data;
 
 #ifdef PG_WITH_LOG
+#define LOG(fmt, ...)                        \
+    do {                                     \
+        fprintf(stderr, fmt, ##__VA_ARGS__); \
+    } while (0)
+
 static const char dw_tag_str[][40] = {
     [DW_TAG_null] = "DW_TAG_null",
     [DW_TAG_array_type] = "DW_TAG_array_type",
@@ -543,10 +501,7 @@ static const char dw_tag_str[][40] = {
 };
 
 static char* dw_attribute_to_str(dw_attribute attr) {
-    assert(s != NULL);
-    assert(size >= 50);
-
-    static const s[50] = "";
+    static char s[50] = "";
     bzero(s, 50);
 
     switch (attr) {
@@ -1218,6 +1173,7 @@ static char* dw_attribute_to_str(dw_attribute attr) {
             LOG("attr=%#x\n", attr);
             assert(0 && "UNREACHABLE");
     }
+    return s;
 }
 
 static const char dw_form_str[][30] = {
@@ -1248,11 +1204,6 @@ static const char dw_form_str[][30] = {
     [DW_FORM_ref_sig8] = "DW_FORM_ref_sig8",
 };
 
-#define LOG(fmt, ...)                        \
-    do {                                     \
-        fprintf(stderr, fmt, ##__VA_ARGS__); \
-    } while (0)
-
 #else
 #define LOG(fmt, ...) \
     do {              \
@@ -1277,7 +1228,7 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset,
         case DW_LNE_end_sequence: {
             LOG("DW_LNE_end_sequence");
 
-            *fsm = (dw_line_section_fsm){.line = 1};
+            *fsm = (dw_line_section_fsm){.line = 1, .file = 1};
             break;
         }
         case DW_LNE_set_address: {
@@ -1421,7 +1372,7 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                         }
                     }
                     assert(s != NULL);
-                    LOG(s);
+                    LOG("%s\n", s);
                     if (af.attr == DW_AT_name && se != NULL) {
                         se->fn_name = s;
                     }
@@ -1534,9 +1485,9 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
     }
 }
 
-void read_dwarf_section_debug_str(gbAllocator allocator, void* data,
-                                  const struct section_64* sec,
-                                  debug_data* dd) {
+static void read_dwarf_section_debug_str(gbAllocator allocator, void* data,
+                                         const struct section_64* sec,
+                                         debug_data* dd) {
     assert(data != NULL);
     assert(sec != NULL);
     assert(dd != NULL);
@@ -1590,23 +1541,23 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     u64 offset = sec->offset;
     const dwarf_debug_line_header* ddlh = &data[offset];
     offset += sizeof(dwarf_debug_line_header);
-    LOG("DWARF length=%#x version=%#x header_length=%#x "
+    LOG(".debug_line: length=%#x version=%#x header_length=%#x "
         "min_instruction_length=%#x max_ops_per_inst=%d "
         "default_is_stmt=%#x "
         "line_base=%d "
         "line_range=%d opcode_base=%d\n"
-        "DWARF std_opcode_lengths[0]=%d\n"
-        "DWARF std_opcode_lengths[1]=%d\n"
-        "DWARF std_opcode_lengths[2]=%d\n"
-        "DWARF std_opcode_lengths[3]=%d\n"
-        "DWARF std_opcode_lengths[4]=%d\n"
-        "DWARF std_opcode_lengths[5]=%d\n"
-        "DWARF std_opcode_lengths[6]=%d\n"
-        "DWARF std_opcode_lengths[7]=%d\n"
-        "DWARF std_opcode_lengths[8]=%d\n"
-        "DWARF std_opcode_lengths[9]=%d\n"
-        "DWARF std_opcode_lengths[10]=%d\n"
-        "DWARF std_opcode_lengths[11]=%d\n",
+        ".debug_line: std_opcode_lengths[0]=%d\n"
+        ".debug_line: std_opcode_lengths[1]=%d\n"
+        ".debug_line: std_opcode_lengths[2]=%d\n"
+        ".debug_line: std_opcode_lengths[3]=%d\n"
+        ".debug_line: std_opcode_lengths[4]=%d\n"
+        ".debug_line: std_opcode_lengths[5]=%d\n"
+        ".debug_line: std_opcode_lengths[6]=%d\n"
+        ".debug_line: std_opcode_lengths[7]=%d\n"
+        ".debug_line: std_opcode_lengths[8]=%d\n"
+        ".debug_line: std_opcode_lengths[9]=%d\n"
+        ".debug_line: std_opcode_lengths[10]=%d\n"
+        ".debug_line: std_opcode_lengths[11]=%d\n",
         ddlh->length, ddlh->version, ddlh->header_length,
         ddlh->min_instruction_length, ddlh->max_ops_per_inst,
         ddlh->default_is_stmt, ddlh->line_base, ddlh->line_range,
@@ -1617,6 +1568,8 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
         ddlh->std_opcode_lengths[7], ddlh->std_opcode_lengths[8],
         ddlh->std_opcode_lengths[9], ddlh->std_opcode_lengths[10],
         ddlh->std_opcode_lengths[11]);
+
+    assert(ddlh->line_range * ddlh->min_instruction_length != 0);
 
     assert(ddlh->version == 4);
     LOG("Directories:");
@@ -1660,7 +1613,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     }
     LOG("");
 
-    dw_line_section_fsm fsm = {.line = 1};
+    dw_line_section_fsm fsm = {.line = 1, .file = 1};
 
     while (offset < sec->offset + sec->size) {
         DW_LNS* opcode = &data[offset];
@@ -1756,7 +1709,8 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     }
 }
 
-void stacktrace_find_entry(const debug_data* dd, u64 pc, stacktrace_entry* se) {
+static void stacktrace_find_entry(const debug_data* dd, u64 pc,
+                                  stacktrace_entry* se) {
     for (int i = 0; i < gb_array_count(dd->fn_decls); i++) {
         const dw_fn_decl* fd = &dd->fn_decls[i];
         if (fd->low_pc <= pc && pc <= fd->low_pc + fd->high_pc) {
@@ -1922,10 +1876,9 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
     }
 }
 
-debug_data dd = {0};
-
 void stacktrace_print() {
-    if (dd.debug_str_strings == NULL) {
+    static debug_data dd = {0};
+    if (dd.debug_str_strings == NULL) {  // Not yet parse the debug information?
         gbAllocator allocator = gb_heap_allocator();
         const char path[100] = "./test.dSYM/Contents/Resources/DWARF/test";
         gbFileContents contents = gb_file_read_contents(allocator, true, path);
