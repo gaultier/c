@@ -6,6 +6,16 @@
 
 #include "../vendor/gb.h"
 
+static void read_data(u8* data, isize data_size, u64* offset, void* res,
+                      isize res_size) {
+    assert(data != NULL);
+    assert(offset != NULL);
+    assert(res != NULL);
+    assert(*offset + res_size < data_size);
+    memcpy(res, &data[*offset], res_size);
+    *offset += res_size;
+}
+
 static u64 read_leb128_u64(void* data, u64* offset) {
     u64 result = 0;
     u64 shift = 0;
@@ -1745,101 +1755,92 @@ static void stacktrace_find_entry(const debug_data* dd, u64 pc,
 static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
                             debug_data* dd) {
     u64 offset = 0;
-    const struct mach_header_64* h = &data[offset];
-    offset += sizeof(struct mach_header_64);
-    assert(h->cputype == CPU_TYPE_X86_64);
-    assert(h->filetype == MH_DSYM);
+    struct mach_header_64 h = {0};
+    read_data(data, size, &offset, &h, sizeof(h));
+    assert(h.filetype == MH_DSYM);
 
     LOG("magic=%d\ncputype=%d\ncpusubtype=%d\nfiletype=%d\nncmds=%"
         "d\nsizeofcmds=%d\nflags=%d\n",
-        h->magic, h->cputype, h->cpusubtype, h->filetype, h->ncmds,
-        h->sizeofcmds, h->flags);
+        h.magic, h.cputype, h.cpusubtype, h.filetype, h.ncmds, h.sizeofcmds,
+        h.flags);
 
     // Remember where those sections were since they might be
     // out-of-order and we need to first read the abbrev section & str section,
     // and then the info section.
-    const struct section_64* sec_abbrev = NULL;
-    const struct section_64* sec_info = NULL;
-    const struct section_64* sec_str = NULL;
-    const struct section_64* sec_line = NULL;
+    struct section_64 sec_abbrev = {0};
+    struct section_64 sec_info = {0};
+    struct section_64 sec_str = {0};
+    struct section_64 sec_line = {0};
 
-    for (int cmd_count = 0; cmd_count < h->ncmds; cmd_count++) {
-        const struct load_command* c = &data[offset];
-        offset += sizeof(struct load_command);
-        LOG("command: cmd=%d cmdsize=%d\n", c->cmd, c->cmdsize);
+    for (int cmd_count = 0; cmd_count < h.ncmds; cmd_count++) {
+        struct load_command c = {0};
+        read_data(data, size, &offset, &c, sizeof(c));
+        LOG("command: cmd=%d cmdsize=%d\n", c.cmd, c.cmdsize);
+        offset -= sizeof(c);
 
-        switch (c->cmd) {
+        switch (c.cmd) {
             case LC_UUID: {
-                const struct uuid_command* uc =
-                    &data[offset - sizeof(struct load_command)];
-                offset +=
-                    sizeof(struct uuid_command) - sizeof(struct load_command);
+                struct uuid_command uc = {0};
+                read_data(data, size, &offset, &uc, sizeof(uc));
                 LOG("LC_UUID uuid=%#x %#x %#x %#x %#x %#x %#x %#x %#x %#x "
                     "%#x "
                     "%#x %#x "
                     "%#x "
                     "%#x %#x\n",
-                    uc->uuid[0], uc->uuid[1], uc->uuid[2], uc->uuid[3],
-                    uc->uuid[4], uc->uuid[5], uc->uuid[6], uc->uuid[7],
-                    uc->uuid[8], uc->uuid[9], uc->uuid[10], uc->uuid[11],
-                    uc->uuid[12], uc->uuid[13], uc->uuid[14], uc->uuid[15]);
+                    uc.uuid[0], uc.uuid[1], uc.uuid[2], uc.uuid[3], uc.uuid[4],
+                    uc.uuid[5], uc.uuid[6], uc.uuid[7], uc.uuid[8], uc.uuid[9],
+                    uc.uuid[10], uc.uuid[11], uc.uuid[12], uc.uuid[13],
+                    uc.uuid[14], uc.uuid[15]);
 
                 break;
             }
             case LC_BUILD_VERSION: {
-                const struct build_version_command* vc =
-                    &data[offset - sizeof(struct load_command)];
-                offset += sizeof(struct build_version_command) -
-                          sizeof(struct load_command);
+                struct build_version_command vc = {0};
+                read_data(data, size, &offset, &vc, sizeof(vc));
                 LOG("LC_BUILD_VERSION platform=%#x minos=%#x sdk=%#x "
                     "ntools=%d\n",
-                    vc->platform, vc->minos, vc->sdk, vc->ntools);
+                    vc.platform, vc.minos, vc.sdk, vc.ntools);
 
-                assert(vc->ntools == 0 && "UNIMPLEMENTED");
+                assert(vc.ntools == 0 && "UNIMPLEMENTED");
                 break;
             }
             case LC_SYMTAB: {
-                const struct symtab_command* sc =
-                    &data[offset - sizeof(struct load_command)];
-                offset +=
-                    sizeof(struct symtab_command) - sizeof(struct load_command);
+                struct symtab_command sc = {0};
+                read_data(data, size, &offset, &sc, sizeof(sc));
 
                 LOG("LC_SYMTAB symoff=%#x nsyms=%d stroff=%#x strsize=%d\n",
-                    sc->symoff, sc->nsyms, sc->stroff, sc->strsize);
+                    sc.symoff, sc.nsyms, sc.stroff, sc.strsize);
 
                 break;
             }
             case LC_SEGMENT_64: {
-                const struct segment_command_64* sc =
-                    &data[offset - sizeof(struct load_command)];
-                offset += sizeof(struct segment_command_64) -
-                          sizeof(struct load_command);
+                struct segment_command_64 sc = {0};
+                read_data(data, size, &offset, &sc, sizeof(sc));
 
                 LOG("LC_SEGMENT_64 segname=%s vmaddr=%#llx vmsize=%#llx "
                     "fileoff=%#llx filesize=%#llx maxprot=%#x initprot=%#x "
                     "nsects=%d flags=%d\n",
-                    sc->segname, sc->vmaddr, sc->vmsize, sc->fileoff,
-                    sc->filesize, sc->maxprot, sc->initprot, sc->nsects,
-                    sc->flags);
+                    sc.segname, sc.vmaddr, sc.vmsize, sc.fileoff, sc.filesize,
+                    sc.maxprot, sc.initprot, sc.nsects, sc.flags);
 
-                for (int sec_count = 0; sec_count < sc->nsects; sec_count++) {
-                    const struct section_64* sec = &data[offset];
-                    offset += sizeof(struct section_64);
+                for (int sec_count = 0; sec_count < sc.nsects; sec_count++) {
+                    struct section_64 sec = {0};
+                    read_data(data, size, &offset, &sec, sizeof(sec));
                     LOG("SECTION sectname=%s segname=%s addr=%#llx "
                         "size=%#llx "
                         "offset=%#x align=%#x reloff=%#x nreloc=%d "
                         "flags=%#x\n",
-                        sec->sectname, sec->segname, sec->addr, sec->size,
-                        sec->offset, sec->align, sec->reloff, sec->nreloc,
-                        sec->flags);
+                        sec.sectname, sec.segname, sec.addr, sec.size,
+                        sec.offset, sec.align, sec.reloff, sec.nreloc,
+                        sec.flags);
 
-                    if (strcmp(sec->sectname, "__debug_line") == 0) {
+                    if (strcmp(sec.sectname, "__debug_line") == 0) {
                         sec_line = sec;
-                    } else if (strcmp(sec->sectname, "__debug_str") == 0) {
+                    } else if (strcmp(sec.sectname, "__debug_str") == 0) {
                         sec_str = sec;
-                    } else if (strcmp(sec->sectname, "__debug_info") == 0) {
+                    } else if (strcmp(sec.sectname, "__debug_info") == 0) {
                         sec_info = sec;
-                    } else if (strcmp(sec->sectname, "__debug_abbrev") == 0) {
+                    } else if (strcmp(sec.sectname, "__debug_abbrev") == 0) {
                         sec_abbrev = sec;
                     }
                 }
@@ -1850,17 +1851,17 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
                 assert(0 && "UNIMPLEMENTED - catch all");
         }
     }
-    assert(sec_abbrev != NULL);
-    assert(sec_info != NULL);
-    assert(sec_str != NULL);
-    assert(sec_line != NULL);
+    assert(sec_abbrev.sectname[0] != 0);
+    assert(sec_info.sectname[0] != 0);
+    assert(sec_str.sectname[0] != 0);
+    assert(sec_line.sectname[0] != 0);
 
-    read_dwarf_section_debug_str(allocator, data, sec_str, dd);
+    read_dwarf_section_debug_str(allocator, data, &sec_str, dd);
     dw_abbrev abbrev = {0};
-    read_dwarf_section_debug_line(allocator, data, sec_line, dd);
-    read_dwarf_section_debug_abbrev(allocator, data, sec_abbrev, &abbrev);
+    read_dwarf_section_debug_line(allocator, data, &sec_line, dd);
+    read_dwarf_section_debug_abbrev(allocator, data, &sec_abbrev, &abbrev);
 
-    read_dwarf_section_debug_info(allocator, data, sec_info, &abbrev, dd);
+    read_dwarf_section_debug_info(allocator, data, &sec_info, &abbrev, dd);
 
     for (int i = 0; i < gb_array_count(dd->fn_decls); i++) {
         dw_fn_decl* fd = &(dd->fn_decls)[i];
