@@ -25,6 +25,7 @@ int foo(int n) {
 }
 
 int main(int argc, char* argv[]) {
+    assert(argc == 2);
     exe_name = argv[0];
     const int n = atoi(argv[1]);
     switch (n) {
