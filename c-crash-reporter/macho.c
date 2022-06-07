@@ -292,6 +292,36 @@ typedef enum : uint16_t {
     DW_AT_const_expr = 0x6c,
     DW_AT_enum_class = 0x6d,
     DW_AT_linkage_name = 0x6e,
+    DW_AT_string_length_bit_size = 0x6f,
+    DW_AT_string_length_byte_size = 0x70,
+    DW_AT_rank = 0x71,
+    DW_AT_str_offsets_base = 0x72,
+    DW_AT_addr_base = 0x73,
+    DW_AT_rnglists_base = 0x74,
+    DW_AT_dwo_id = 0x75,
+    DW_AT_dwo_name = 0x76,
+    DW_AT_reference = 0x77,
+    DW_AT_rvalue_reference = 0x78,
+    DW_AT_macros = 0x79,
+    DW_AT_call_all_calls = 0x7a,
+    DW_AT_call_all_source_calls = 0x7b,
+    DW_AT_call_all_tail_calls = 0x7c,
+    DW_AT_call_return_pc = 0x7d,
+    DW_AT_call_value = 0x7e,
+    DW_AT_call_origin = 0x7f,
+    DW_AT_call_parameter = 0x80,
+    DW_AT_call_pc = 0x81,
+    DW_AT_call_tail_call = 0x82,
+    DW_AT_call_target = 0x83,
+    DW_AT_call_target_clobbered = 0x84,
+    DW_AT_call_data_location = 0x85,
+    DW_AT_call_data_value = 0x86,
+    DW_AT_noreturn = 0x87,
+    DW_AT_alignment = 0x88,
+    DW_AT_export_symbols = 0x89,
+    DW_AT_deleted = 0x8a,
+    DW_AT_defaulted = 0x8b,
+    DW_AT_loclists_base = 0x8c,
     DW_AT_MIPS_loop_begin = 0x2002,
     DW_AT_MIPS_tail_loop_begin = 0x2003,
     DW_AT_MIPS_epilog_begin = 0x2004,
@@ -657,6 +687,104 @@ void dw_attribute_to_str(dw_attribute attr, char* s, usize size) {
             break;
         case DW_AT_linkage_name:
             memcpy(s, "DW_AT_linkage_name", sizeof("DW_AT_linkage_name"));
+            break;
+        case DW_AT_string_length_bit_size:
+            memcpy(s, "DW_AT_string_length_bit_size",
+                   sizeof("DW_AT_string_length_bit_size"));
+            break;
+        case DW_AT_string_length_byte_size:
+            memcpy(s, "DW_AT_string_length_byte_size",
+                   sizeof("DW_AT_string_length_byte_size"));
+            break;
+        case DW_AT_rank:
+            memcpy(s, "DW_AT_rank", sizeof("DW_AT_rank"));
+            break;
+        case DW_AT_str_offsets_base:
+            memcpy(s, "DW_AT_str_offsets_base",
+                   sizeof("DW_AT_str_offsets_base"));
+            break;
+        case DW_AT_addr_base:
+            memcpy(s, "DW_AT_addr_base", sizeof("DW_AT_addr_base"));
+            break;
+        case DW_AT_rnglists_base:
+            memcpy(s, "DW_AT_rnglists_base", sizeof("DW_AT_rnglists_base"));
+            break;
+        case DW_AT_dwo_id:
+            memcpy(s, "DW_AT_dwo_id", sizeof("DW_AT_dwo_id"));
+            break;
+        case DW_AT_dwo_name:
+            memcpy(s, "DW_AT_dwo_name", sizeof("DW_AT_dwo_name"));
+            break;
+        case DW_AT_reference:
+            memcpy(s, "DW_AT_reference", sizeof("DW_AT_reference"));
+            break;
+        case DW_AT_rvalue_reference:
+            memcpy(s, "DW_AT_rvalue_reference",
+                   sizeof("DW_AT_rvalue_reference"));
+            break;
+        case DW_AT_macros:
+            memcpy(s, "DW_AT_macros", sizeof("DW_AT_macros"));
+            break;
+        case DW_AT_call_all_calls:
+            memcpy(s, "DW_AT_call_all_calls", sizeof("DW_AT_call_all_calls"));
+            break;
+        case DW_AT_call_all_source_calls:
+            memcpy(s, "DW_AT_call_all_source_calls",
+                   sizeof("DW_AT_call_all_source_calls"));
+            break;
+        case DW_AT_call_all_tail_calls:
+            memcpy(s, "DW_AT_call_all_tail_calls",
+                   sizeof("DW_AT_call_all_tail_calls"));
+            break;
+        case DW_AT_call_return_pc:
+            memcpy(s, "DW_AT_call_return_pc", sizeof("DW_AT_call_return_pc"));
+            break;
+        case DW_AT_call_value:
+            memcpy(s, "DW_AT_call_value", sizeof("DW_AT_call_value"));
+            break;
+        case DW_AT_call_origin:
+            memcpy(s, "DW_AT_call_origin", sizeof("DW_AT_call_origin"));
+            break;
+        case DW_AT_call_parameter:
+            memcpy(s, "DW_AT_call_parameter", sizeof("DW_AT_call_parameter"));
+            break;
+        case DW_AT_call_pc:
+            memcpy(s, "DW_AT_call_pc", sizeof("DW_AT_call_pc"));
+            break;
+        case DW_AT_call_tail_call:
+            memcpy(s, "DW_AT_call_tail_call", sizeof("DW_AT_call_tail_call"));
+            break;
+        case DW_AT_call_target:
+            memcpy(s, "DW_AT_call_target", sizeof("DW_AT_call_target"));
+            break;
+        case DW_AT_call_target_clobbered:
+            memcpy(s, "DW_AT_call_target_clobbered",
+                   sizeof("DW_AT_call_target_clobbered"));
+            break;
+        case DW_AT_call_data_location:
+            memcpy(s, "DW_AT_call_data_location",
+                   sizeof("DW_AT_call_data_location"));
+            break;
+        case DW_AT_call_data_value:
+            memcpy(s, "DW_AT_call_data_value", sizeof("DW_AT_call_data_value"));
+            break;
+        case DW_AT_noreturn:
+            memcpy(s, "DW_AT_noreturn", sizeof("DW_AT_noreturn"));
+            break;
+        case DW_AT_alignment:
+            memcpy(s, "DW_AT_alignment", sizeof("DW_AT_alignment"));
+            break;
+        case DW_AT_export_symbols:
+            memcpy(s, "DW_AT_export_symbols", sizeof("DW_AT_export_symbols"));
+            break;
+        case DW_AT_deleted:
+            memcpy(s, "DW_AT_deleted", sizeof("DW_AT_deleted"));
+            break;
+        case DW_AT_defaulted:
+            memcpy(s, "DW_AT_defaulted", sizeof("DW_AT_defaulted"));
+            break;
+        case DW_AT_loclists_base:
+            memcpy(s, "DW_AT_loclists_base", sizeof("DW_AT_loclists_base"));
             break;
         case DW_AT_MIPS_loop_begin:
             memcpy(s, "DW_AT_MIPS_loop_begin", sizeof("DW_AT_MIPS_loop_begin"));
@@ -1164,6 +1292,7 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
     u64 offset = sec->offset;
     gb_array_init_reserve(abbrev->entries, allocator, 100);
 
+    int tag_count = 0;
     while (offset < sec->offset + sec->size) {
         dw_abbrev_entry entry = {0};
         entry.type = *(u8*)&data[offset++];
@@ -1171,8 +1300,10 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
 
         entry.tag = *(u8*)&data[offset++];
         bool* has_children = &data[offset++];
-        printf(".debug_abbrev: type_num=%d tag=%#x %s has_children=%d\n",
-               entry.type, entry.tag, dw_tag_str[entry.tag], *has_children);
+        tag_count += 1;
+        printf("[%d] .debug_abbrev: type_num=%d tag=%#x %s has_children=%d\n",
+               tag_count, entry.type, entry.tag, dw_tag_str[entry.tag],
+               *has_children);
 
         gb_array_init_reserve(entry.attr_forms, allocator, 20);
         while (offset < sec->offset + sec->size) {
@@ -1301,7 +1432,6 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                     u16 lang = *(u16*)&data[offset];
                     offset += 2;
                     printf("DW_FORM_data2: %#x\n", lang);
-                    assert(lang == DW_LANG_C99);
                     break;
                 }
                 case DW_FORM_data4: {
@@ -1370,6 +1500,19 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
 
                     break;
                 }
+                case DW_FORM_udata: {
+                    const u64 val = read_leb128_u64(data, &offset);
+                    printf("DW_FORM_udata: length=%lld\n", val);
+
+                    break;
+                }
+                case DW_FORM_sdata: {
+                    const i64 val = read_leb128_i64(data, &offset);
+                    printf("DW_FORM_sdata: length=%lld\n", val);
+
+                    break;
+                }
+
                 default:
                     assert(0 && "UNIMPLEMENTED");
             }
