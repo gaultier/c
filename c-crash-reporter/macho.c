@@ -1554,8 +1554,8 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     gb_array_init_reserve(dd->line_entries, allocator, 15000);
 
     u64 offset = sec->offset;
-    const dwarf_debug_line_header* ddlh = &data[offset];
-    offset += sizeof(dwarf_debug_line_header);
+    dwarf_debug_line_header ddlh = {0};
+    read_data(data, size, &offset, &ddlh, sizeof(ddlh));
     LOG(".debug_line: length=%#x version=%#x header_length=%#x "
         "min_instruction_length=%#x max_ops_per_inst=%d "
         "default_is_stmt=%#x "
@@ -1573,20 +1573,19 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
         ".debug_line: std_opcode_lengths[9]=%d\n"
         ".debug_line: std_opcode_lengths[10]=%d\n"
         ".debug_line: std_opcode_lengths[11]=%d\n",
-        ddlh->length, ddlh->version, ddlh->header_length,
-        ddlh->min_instruction_length, ddlh->max_ops_per_inst,
-        ddlh->default_is_stmt, ddlh->line_base, ddlh->line_range,
-        ddlh->opcode_base, ddlh->std_opcode_lengths[0],
-        ddlh->std_opcode_lengths[1], ddlh->std_opcode_lengths[2],
-        ddlh->std_opcode_lengths[3], ddlh->std_opcode_lengths[4],
-        ddlh->std_opcode_lengths[5], ddlh->std_opcode_lengths[6],
-        ddlh->std_opcode_lengths[7], ddlh->std_opcode_lengths[8],
-        ddlh->std_opcode_lengths[9], ddlh->std_opcode_lengths[10],
-        ddlh->std_opcode_lengths[11]);
+        ddlh.length, ddlh.version, ddlh.header_length,
+        ddlh.min_instruction_length, ddlh.max_ops_per_inst,
+        ddlh.default_is_stmt, ddlh.line_base, ddlh.line_range, ddlh.opcode_base,
+        ddlh.std_opcode_lengths[0], ddlh.std_opcode_lengths[1],
+        ddlh.std_opcode_lengths[2], ddlh.std_opcode_lengths[3],
+        ddlh.std_opcode_lengths[4], ddlh.std_opcode_lengths[5],
+        ddlh.std_opcode_lengths[6], ddlh.std_opcode_lengths[7],
+        ddlh.std_opcode_lengths[8], ddlh.std_opcode_lengths[9],
+        ddlh.std_opcode_lengths[10], ddlh.std_opcode_lengths[11]);
 
-    assert(ddlh->line_range * ddlh->min_instruction_length != 0);
+    assert(ddlh.line_range * ddlh.min_instruction_length != 0);
 
-    assert(ddlh->version == 4);
+    assert(ddlh.version == 4);
     LOG("Directories:");
     while (offset < sec->offset + sec->size) {
         char* s = &data[offset];
@@ -1686,12 +1685,12 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
             case DW_LNS_set_basic_block:
                 break;
             case DW_LNS_const_add_pc: {
-                const u8 op = 255 - ddlh->opcode_base;
+                const u8 op = 255 - ddlh.opcode_base;
                 fsm.address +=
-                    op / ddlh->line_range * ddlh->min_instruction_length;
+                    op / ddlh.line_range * ddlh.min_instruction_length;
                 // TODO: op_index
                 LOG("address+=%#x -> address=%#llx\n",
-                    op / ddlh->line_range * ddlh->min_instruction_length,
+                    op / ddlh.line_range * ddlh.min_instruction_length,
                     fsm.address);
                 break;
             }
@@ -1705,11 +1704,11 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
             case DW_LNS_set_isa:
                 break;
             default: {
-                const u8 op = *opcode - ddlh->opcode_base;
+                const u8 op = *opcode - ddlh.opcode_base;
                 fsm.address +=
-                    op / ddlh->line_range * ddlh->min_instruction_length;
+                    op / ddlh.line_range * ddlh.min_instruction_length;
 
-                fsm.line += ddlh->line_base + op % ddlh->line_range;
+                fsm.line += ddlh.line_base + op % ddlh.line_range;
                 if (dw_line_entry_should_add_new_entry(&fsm, dd)) {
                     dw_line_entry e = {
                         .pc = fsm.address, .line = fsm.line, .file = fsm.file};
@@ -1718,8 +1717,8 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                     gb_array_append(dd->line_entries, e);
                 }
                 LOG("address+=%d line+=%d\n",
-                    op / ddlh->line_range * ddlh->min_instruction_length,
-                    ddlh->line_base + op % ddlh->line_range);
+                    op / ddlh.line_range * ddlh.min_instruction_length,
+                    ddlh.line_base + op % ddlh.line_range);
             }
         }
     }
