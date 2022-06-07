@@ -3,7 +3,20 @@
 
 #include "macho.c"
 
+#define STR(s) #s
+
+#define my_assert(condition)                                        \
+    do {                                                            \
+        if (!(condition)) {                                         \
+            fprintf(stderr, "Assert failed: %s\n", STR(condition)); \
+            stacktrace_print();                                     \
+            abort();                                                \
+        }                                                           \
+    } while (0)
+
 int __attribute__((noinline)) baz(int n) {
+    my_assert(n > 0);
+
     stacktrace_print();
     return n;
 }
@@ -27,6 +40,9 @@ int main(int argc, char* argv[]) {
     assert(argc == 2);
     const int n = atoi(argv[1]);
     switch (n) {
+        case 0:
+            foo(n);
+            break;
         case 1:
             foo(bar(baz(n)));
             break;
