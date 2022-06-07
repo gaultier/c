@@ -1881,8 +1881,13 @@ void stacktrace_print() {
     if (dd.debug_str_strings == NULL) {  // Not yet parse the debug information?
         gbAllocator allocator = gb_heap_allocator();
         const char path[100] = "./test.dSYM/Contents/Resources/DWARF/test";
+        f64 start = gb_time_now();
         gbFileContents contents = gb_file_read_contents(allocator, true, path);
+        f64 end_file_read = gb_time_now();
         read_macho_dsym(allocator, contents.data, contents.size, &dd);
+        f64 end_macho_read = gb_time_now();
+        printf("[D101] .dSYM_read=%fs macho_read=%fs\n", end_file_read - start,
+               end_macho_read - end_file_read);
     }
 
     uintptr_t* rbp = __builtin_frame_address(0);
