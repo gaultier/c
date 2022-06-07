@@ -20,7 +20,7 @@ static u64 read_leb128_u64(void* data, u64* offset) {
     return result;
 }
 
-static i64 read_leb128_s64(void* data, u64* offset) {
+static i64 read_leb128_i64(void* data, u64* offset) {
     i64 result = 0;
     u64 shift = 0;
     u8 val = 0;
@@ -1132,7 +1132,7 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset,
         case DW_LNE_end_sequence: {
             puts("DW_LNE_end_sequence");
 
-            *fsm = (dw_line_section_fsm){0};
+            *fsm = (dw_line_section_fsm){.line = 1};
             break;
         }
         case DW_LNE_set_address: {
@@ -1488,13 +1488,14 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     }
     puts("");
 
-    dw_line_section_fsm fsm = {0};
+    dw_line_section_fsm fsm = {.line = 1};
 
     while (offset < sec->offset + sec->size) {
         DW_LNS* opcode = &data[offset];
         offset += 1;
-        printf("DW_OP=%#x offset=%#llx address=%#llx line=%d\n", *opcode,
-               offset, fsm.address, fsm.line + 1);
+        printf(
+            "DW_OP=%#x offset=%#llx rel_offset=%#llx address=%#llx line=%d\n",
+            *opcode, offset, offset - sec->offset - 1, fsm.address, fsm.line);
         switch (*opcode) {
             case DW_LNS_extended_op: {
                 const u64 size = read_leb128_u64(data, &offset);
@@ -1513,14 +1514,19 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                 break;
             }
             case DW_LNS_advance_line: {
-                const u64 l = read_leb128_s64(data, &offset);
-                printf("DW_LNS_advance_line line=%lld\n", l);
-                fsm.line = l;
+                const i64 l = read_leb128_i64(data, &offset);
+                printf("[D001] DW_LNS_advance_line line=%lld fsm.line=%hu\n", l,
+                       fsm.line);
+                fsm.line += l;
+                printf("[D002] DW_LNS_advance_line line=%lld fsm.line=%hu\n", l,
+                       fsm.line);
                 dw_line_entry e = {.pc = fsm.address, .line = fsm.line};
                 gb_array_append(dd->line_entries, e);
                 break;
             }
             case DW_LNS_set_file:
+                fsm.file = read_leb128_u64(data, &offset);
+                printf("DW_LNS_set_file file=%d\n", fsm.file);
                 break;
             case DW_LNS_set_column: {
                 const u64 column = read_leb128_u64(data, &offset);
