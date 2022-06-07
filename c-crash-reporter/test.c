@@ -5,12 +5,12 @@
 
 char* exe_name = NULL;
 
-int baz(int n) {
+int __attribute__((noinline)) baz(int n) {
     stacktrace_print(exe_name);
     return n;
 }
 
-int bar(int n) {
+int __attribute__((noinline)) bar(int n) {
     int a = 1;
     (void)a;
     int b = 10;
@@ -19,7 +19,7 @@ int bar(int n) {
     return n;
 }
 
-int foo(int n) {
+int __attribute__((noinline)) foo(int n) {
     // foo
     bar(n);
     return n;
@@ -30,23 +30,32 @@ int main(int argc, char* argv[]) {
     exe_name = argv[0];
     const int n = atoi(argv[1]);
     switch (n) {
-        case 0:
-            bar(n);
-            break;
         case 1:
-            foo(baz(bar(n)));
+            foo(bar(baz(n)));
             break;
         case 2:
-            bar(foo(baz(n)));
+            foo(baz(bar(n)));
             break;
         case 3:
-            bar(baz(foo(n)));
+            bar(foo(baz(n)));
             break;
         case 4:
-            baz(foo(bar(n)));
+            bar(baz(foo(n)));
             break;
         case 5:
+            baz(foo(bar(n)));
+            break;
+        case 6:
             baz(bar(foo(n)));
+            break;
+        case 7:
+            foo(n);
+            break;
+        case 8:
+            bar(n);
+            break;
+        case 9:
+            baz(n);
             break;
     }
 }
