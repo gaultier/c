@@ -1,5 +1,6 @@
 #define GB_IMPLEMENTATION
 #include <assert.h>
+#include <libproc.h>
 #include <mach-o/loader.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1890,11 +1891,28 @@ static void read_macho_dsym(gbAllocator allocator, u8* data, isize size,
     }
 }
 
-void stacktrace_print(char* exe_name) {
+static char* get_exe_path_for_process() {
+    static char pathbuf[PROC_PIDPATHINFO_MAXSIZE] = "";
+    if (pathbuf[0] != 0) return pathbuf;
+
+    int res = proc_pidpath(getpid(), pathbuf, sizeof(pathbuf));
+    if (res <= 0) {
+        fprintf(stderr,
+                "Failed to get the path of the executable for the current "
+                "process: %s\n",
+                strerror(errno));
+        exit(errno);
+    }
+    return pathbuf;
+}
+
+void stacktrace_print() {
     static debug_data dd = {0};
     if (dd.debug_str_strings == NULL) {  // Not yet parse the debug information?
         gbAllocator allocator = gb_heap_allocator();
         char path[MAXPATHLEN + 1] = "";
+        const char* exe_path = get_exe_path_for_process();
+        const char* exe_name = gb_path_base_name(exe_path);
         snprintf(path, sizeof(path), "%s.dSYM/Contents/Resources/DWARF/%s",
                  exe_name, exe_name);
         gbFileContents contents = gb_file_read_contents(allocator, true, path);

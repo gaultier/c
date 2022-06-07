@@ -3,10 +3,8 @@
 
 #include "macho.c"
 
-char* exe_name = NULL;
-
 int __attribute__((noinline)) baz(int n) {
-    stacktrace_print(exe_name);
+    stacktrace_print();
     return n;
 }
 
@@ -27,7 +25,6 @@ int __attribute__((noinline)) foo(int n) {
 
 int main(int argc, char* argv[]) {
     assert(argc == 2);
-    exe_name = argv[0];
     const int n = atoi(argv[1]);
     switch (n) {
         case 1:
