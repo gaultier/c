@@ -1876,11 +1876,13 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
     }
 }
 
-void stacktrace_print() {
+void stacktrace_print(char* exe_name) {
     static debug_data dd = {0};
     if (dd.debug_str_strings == NULL) {  // Not yet parse the debug information?
         gbAllocator allocator = gb_heap_allocator();
-        const char path[100] = "./test.dSYM/Contents/Resources/DWARF/test";
+        char path[MAXPATHLEN + 1] = "";
+        snprintf(path, sizeof(path), "%s.dSYM/Contents/Resources/DWARF/%s",
+                 exe_name, exe_name);
         gbFileContents contents = gb_file_read_contents(allocator, true, path);
         read_macho_dsym(allocator, contents.data, contents.size, &dd);
     }

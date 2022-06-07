@@ -4,8 +4,10 @@
 #pragma once
 #include "macho.c"
 
+char* exe_name = NULL;
+
 int baz(int n) {
-    stacktrace_print();
+    stacktrace_print(exe_name);
     return n;
 }
 
@@ -23,6 +25,7 @@ int foo(int n) {
 }
 
 int main(int argc, char* argv[]) {
+    exe_name = argv[0];
     const int n = atoi(argv[1]);
     switch (n) {
         case 0:
