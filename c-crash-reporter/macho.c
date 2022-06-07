@@ -1315,26 +1315,27 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
     gb_array_init_reserve(dd->fn_decls, allocator, 100);
 
     // TODO: multiple compile units (CU)
-    u32* di_size = &data[offset];
-    offset += sizeof(u32);
-    LOG(".debug_info size=%#x\n", *di_size);
+    u32 di_size = 0;
+    read_data(data, size, &offset, &di_size, sizeof(di_size));
+    LOG(".debug_info size=%#x\n", di_size);
 
-    u16* version = &data[offset];
-    offset += sizeof(u16);
-    LOG(".debug_info version=%u\n", *version);
-    assert(*version == 4);
+    u16 version = 0;
+    read_data(data, size, &offset, &version, sizeof(version));
+    LOG(".debug_info version=%u\n", version);
+    assert(version == 4);
 
-    u32* abbr_offset = &data[offset];
-    offset += sizeof(u32);
-    LOG(".debug_info abbr_offset=%#x\n", *abbr_offset);
+    u32 abbr_offset = 0;
+    read_data(data, size, &offset, &abbr_offset, sizeof(abbr_offset));
+    LOG(".debug_info abbr_offset=%#x\n", abbr_offset);
 
-    u8* addr_size = &data[offset];
-    offset += sizeof(u8);
-    LOG(".debug_info abbr_size=%#x\n", *addr_size);
+    u8 addr_size = 0;
+    read_data(data, size, &offset, &addr_size, sizeof(addr_size));
+    LOG(".debug_info abbr_size=%#x\n", addr_size);
 
     char* directory = NULL;
     while (offset < sec->offset + sec->size) {
-        u8 type = *(u8*)&data[offset++];
+        u8 type = 0;
+        read_data(data, size, &offset, &type, sizeof(type));
         assert(type <= gb_array_count(abbrev->entries));
         if (type == 0) {
             continue;  // skip
