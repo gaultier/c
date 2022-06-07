@@ -16,7 +16,7 @@ static void read_data(u8* data, isize data_size, u64* offset, void* res,
     *offset += res_size;
 }
 
-static u64 read_leb128_u64(void* data, isize size, u64* offset) {
+static u64 read_leb128_u64(u8* data, isize size, u64* offset) {
     u64 result = 0;
     u64 shift = 0;
     while (true) {
@@ -29,7 +29,7 @@ static u64 read_leb128_u64(void* data, isize size, u64* offset) {
     return result;
 }
 
-static i64 read_leb128_i64(void* data, isize size, u64* offset) {
+static i64 read_leb128_i64(u8* data, isize size, u64* offset) {
     i64 result = 0;
     u64 shift = 0;
     const u64 bit_count = sizeof(i64) * 8;
@@ -1218,7 +1218,7 @@ static const char dw_form_str[][30] = {
 
 #endif
 
-static void read_dwarf_ext_op(void* data, isize size, u64* offset,
+static void read_dwarf_ext_op(u8* data, isize size, u64* offset,
                               dw_line_section_fsm* fsm,
                               gbArray(dw_line_entry) * line_entries,
                               u64 ext_op_size) {
@@ -1259,7 +1259,7 @@ static void read_dwarf_ext_op(void* data, isize size, u64* offset,
     while (*offset - start_offset < ext_op_size) *offset += 1;  // Skip rest
 }
 
-static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
+static void read_dwarf_section_debug_abbrev(gbAllocator allocator, u8* data,
                                             isize size,
                                             const struct section_64* sec,
                                             dw_abbrev* abbrev) {
@@ -1300,7 +1300,7 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, void* data,
     }
 }
 
-static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
+static void read_dwarf_section_debug_info(gbAllocator allocator, u8* data,
                                           isize size,
                                           const struct section_64* sec,
                                           const dw_abbrev* abbrev,
@@ -1498,7 +1498,7 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
     }
 }
 
-static void read_dwarf_section_debug_str(gbAllocator allocator, void* data,
+static void read_dwarf_section_debug_str(gbAllocator allocator, u8* data,
                                          isize size,
                                          const struct section_64* sec,
                                          debug_data* dd) {
@@ -1511,12 +1511,14 @@ static void read_dwarf_section_debug_str(gbAllocator allocator, void* data,
 
     gb_array_init_reserve(dd->debug_str_strings, allocator, 100);
     while (offset < sec->offset + sec->size) {
-        char* s = &data[offset];
+        assert(offset < size);
+        char* s = (char*)&data[offset];
         if (*s == 0) {
             offset++;
             continue;
         }
 
+        assert(offset < size);
         char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
         LOG("- [%llu] %s\n", i, s);
@@ -1544,7 +1546,7 @@ static bool dw_line_entry_should_add_new_entry(const dw_line_section_fsm* fsm,
     return false;
 }
 
-static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
+static void read_dwarf_section_debug_line(gbAllocator allocator, u8* data,
                                           isize size,
                                           const struct section_64* sec,
                                           debug_data* dd) {
@@ -1588,7 +1590,9 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     assert(ddlh.version == 4);
     LOG("Directories:");
     while (offset < sec->offset + sec->size) {
-        char* s = &data[offset];
+        assert(offset < size);
+        char* s = (char*)&data[offset];
+        assert(sec->offset + sec->size < size);
         char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
         if (end - s == 0) {
@@ -1606,11 +1610,13 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
     LOG("Files:");
     gb_array_init_reserve(dd->debug_line_files, allocator, 10);
     while (offset < sec->offset + sec->size) {
-        char* s = &data[offset];
+        assert(offset < size);
+        char* s = (char*)&data[offset];
         if (*s == 0) {
             offset += 1;
             break;
         }
+        assert(sec->offset + sec->size < size);
         char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
 
@@ -1757,7 +1763,7 @@ static void stacktrace_find_entry(const debug_data* dd, u64 pc,
     }
 }
 
-static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
+static void read_macho_dsym(gbAllocator allocator, u8* data, isize size,
                             debug_data* dd) {
     u64 offset = 0;
     struct mach_header_64 h = {0};
