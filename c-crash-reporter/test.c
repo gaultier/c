@@ -1,25 +1,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* #pragma once */
-/* #include "macho.c" */
-
-#define READ_RBP(rbp) __asm__ volatile("movq %%rbp, %0" : "=r"(rbp))
-
-#define print_backtrace()                     \
-    do {                                      \
-        uintptr_t* rbp = 0;                   \
-        READ_RBP(rbp);                        \
-        while (1) {                           \
-            if (rbp == 0 || *rbp == 0) break; \
-            uintptr_t* prev_rip = (rbp + 1);  \
-            printf("%#lx\n", *prev_rip);      \
-            rbp = (uintptr_t*)*rbp;           \
-        }                                     \
-    } while (0)
+#pragma once
+#include "macho.c"
 
 int baz(int n) {
-    print_backtrace();
+    stacktrace_print();
     return n;
 }
 

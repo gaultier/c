@@ -1451,7 +1451,11 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
         char* s = &data[offset];
         char* end = memchr(&data[offset], 0, sec->offset + sec->size);
         assert(end != NULL);
-        printf("- %s\n", s);
+        if (end - s == 0) {
+            offset += 1;
+            continue;
+        }
+        printf("- %s (%ld)\n", s, end - s);
 
         offset += end - s;
         if (*(end + 1) == 0) {
@@ -1730,31 +1734,29 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
     }
 }
 
-void stacktrace_print(const u64* pcs, usize pcs_size, const debug_data* dd) {
-    for (int i = 0; i < pcs_size; i++) {
+debug_data dd = {0};
+
+void stacktrace_print() {
+    if (dd.debug_str_strings == NULL) {
+        gbAllocator allocator = gb_heap_allocator();
+        const char path[100] = "./test.dSYM/Contents/Resources/DWARF/test";
+        gbFileContents contents = gb_file_read_contents(allocator, true, path);
+        read_macho_dsym(allocator, contents.data, contents.size, &dd);
+    }
+
+    uintptr_t* rbp = __builtin_frame_address(0);
+    while (rbp != 0 && *rbp != 0) {
+        uintptr_t rip = *(rbp + 1);
+        uintptr_t rsp = *(rbp + 2);
+        printf("rbp=%p rip=%#lx rsp=%#lx __builtin_frame_address=%p\n", rbp,
+               rip, rsp, __builtin_frame_address(0));
+        rbp = (uintptr_t*)*rbp;
+
         stacktrace_entry se = {0};
-        stacktrace_find_entry(dd, pcs[i], &se);
+        stacktrace_find_entry(&dd, rip, &se);
         if (se.directory != NULL) {
             printf("stacktrace_entry: %s/%s:%s:%d\n", se.directory, se.file,
                    se.fn_name, se.line);
         }
     }
 }
-
-#ifndef NOIMPL
-int main(int argc, const char* argv[]) {
-    assert(argc == 2);
-    const char* path = argv[1];
-
-    gbAllocator allocator = gb_heap_allocator();
-    gbFileContents contents = gb_file_read_contents(allocator, true, path);
-
-    debug_data dd = {0};
-    read_macho_dsym(allocator, contents.data, contents.size, &dd);
-
-    const u64 pcs[] = {0x100003ec3, 0x10797051e, 0x100003e41,
-                       0x100003eca, 0x10797051e, 0x100003e41,
-                       0x100003e63, 0x100003ed1, 0x10797051e};
-    stacktrace_print(pcs, sizeof(pcs) / sizeof(pcs[0]), &dd);
-}
-#endif
