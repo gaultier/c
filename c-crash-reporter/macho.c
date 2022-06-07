@@ -1371,8 +1371,9 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
 
             switch (af.form) {
                 case DW_FORM_strp: {
-                    u32 str_offset = *(u32*)&data[offset];
-                    offset += 4;
+                    u32 str_offset = 0;
+                    read_data(data, size, &offset, &str_offset,
+                              sizeof(str_offset));
                     LOG("DW_FORM_strp: %#x ", str_offset);
 
                     char* s = NULL;
@@ -1394,8 +1395,8 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                     break;
                 }
                 case DW_FORM_data1: {
-                    u8 val = *(u8*)&data[offset];
-                    offset += 1;
+                    u8 val = 0;
+                    read_data(data, size, &offset, &val, sizeof(val));
                     LOG("DW_FORM_data1: %#x\n", val);
                     if (af.attr == DW_AT_decl_file && se != NULL &&
                         se->file == NULL) {
@@ -1406,14 +1407,14 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                     break;
                 }
                 case DW_FORM_data2: {
-                    u16 lang = *(u16*)&data[offset];
-                    offset += 2;
+                    u16 lang = 0;
+                    read_data(data, size, &offset, &lang, sizeof(lang));
                     LOG("DW_FORM_data2: %#x\n", lang);
                     break;
                 }
                 case DW_FORM_data4: {
-                    u32 val = *(u32*)&data[offset];
-                    offset += 4;
+                    u32 val = 0;
+                    read_data(data, size, &offset, &val, sizeof(val));
                     LOG("DW_FORM_data4: %#x\n", val);
                     if (af.attr == DW_AT_high_pc && se != NULL) {
                         se->high_pc = val;
@@ -1421,44 +1422,44 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, void* data,
                     break;
                 }
                 case DW_FORM_data8: {
-                    u64 val = *(u64*)&data[offset];
-                    offset += 8;
+                    u64 val = 0;
+                    read_data(data, size, &offset, &val, sizeof(val));
                     LOG("DW_FORM_data8: %#llx\n", val);
                     break;
                 }
                 case DW_FORM_ref1: {
-                    u8 val = *(u8*)&data[offset];
-                    offset += 1;
+                    u8 val = 0;
+                    read_data(data, size, &offset, &val, sizeof(val));
                     LOG("DW_FORM_ref1: %#x\n", val);
                     break;
                 }
                 case DW_FORM_ref2: {
-                    u16 val = *(u16*)&data[offset];
-                    offset += 2;
+                    u16 val = 0;
+                    read_data(data, size, &offset, &val, sizeof(val));
                     LOG("DW_FORM_ref2: %#x\n", val);
                     break;
                 }
                 case DW_FORM_ref4: {
-                    u32 val = *(u32*)&data[offset];
-                    offset += 4;
+                    u32 val = 0;
+                    read_data(data, size, &offset, &val, sizeof(val));
                     LOG("DW_FORM_ref4: %#x\n", val);
                     break;
                 }
                 case DW_FORM_ref8: {
-                    u64 val = *(u64*)&data[offset];
-                    offset += 8;
+                    u64 val = 0;
+                    read_data(data, size, &offset, &val, sizeof(val));
                     LOG("DW_FORM_ref8: %#llx\n", val);
                     break;
                 }
                 case DW_FORM_sec_offset: {
-                    u32 val = *(u32*)&data[offset];
-                    offset += 4;
+                    u32 val = 0;
+                    read_data(data, size, &offset, &val, sizeof(val));
                     LOG("DW_FORM_sec_offset: %#x\n", val);
                     break;
                 }
                 case DW_FORM_addr: {
-                    u64 addr = *(u64*)&data[offset];
-                    offset += 8;
+                    u64 addr = 0;
+                    read_data(data, size, &offset, &addr, sizeof(addr));
                     LOG("DW_FORM_addr: %#llx\n", addr);
 
                     if (af.attr == DW_AT_low_pc && se != NULL) {
