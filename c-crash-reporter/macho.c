@@ -1219,6 +1219,7 @@ typedef struct {
 typedef struct {
     u64 pc;
     u16 line;
+    u16 file;
 } dw_line_entry;
 
 typedef struct {
@@ -1548,6 +1549,23 @@ void read_dwarf_section_debug_str(gbAllocator allocator, void* data,
     }
 }
 
+static bool dw_line_entry_should_add_new_entry(const dw_line_section_fsm* fsm,
+                                               const debug_data* dd) {
+    assert(fsm != NULL);
+    assert(dd != NULL);
+
+    if (fsm->line == 0) return false;
+    const isize count = gb_array_count(dd->line_entries);
+    if (count == 0) return true;
+
+    const dw_line_entry* last = &dd->line_entries[count - 1];
+    if (last->pc == fsm->address) return false;
+
+    if (last->line != fsm->line || last->file != fsm->file) return true;
+
+    return false;
+}
+
 static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                                           const struct section_64* sec,
                                           debug_data* dd) {
@@ -1637,8 +1655,11 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
         DW_LNS* opcode = &data[offset];
         offset += 1;
         printf(
-            "DW_OP=%#x offset=%#llx rel_offset=%#llx address=%#llx line=%d\n",
-            *opcode, offset, offset - sec->offset - 1, fsm.address, fsm.line);
+            "DW_OP=%#x offset=%#llx rel_offset=%#llx fsm.address=%#llx "
+            "fsm.line=%d "
+            "fsm.file=%d\n",
+            *opcode, offset, offset - sec->offset - 1, fsm.address, fsm.line,
+            fsm.file);
         switch (*opcode) {
             case DW_LNS_extended_op: {
                 const u64 size = read_leb128_u64(data, &offset);
@@ -1661,8 +1682,14 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                 fsm.line += l;
                 printf("DW_LNS_advance_line line=%lld fsm.line=%hu\n", l,
                        fsm.line);
-                dw_line_entry e = {.pc = fsm.address, .line = fsm.line};
-                gb_array_append(dd->line_entries, e);
+                if (dw_line_entry_should_add_new_entry(&fsm, dd)) {
+                    dw_line_entry e = {
+                        .pc = fsm.address, .line = fsm.line, .file = fsm.file};
+                    printf("new dw_line_entry: pc=%#llx line=%d file=%d %s\n",
+                           e.pc, e.line, e.file,
+                           dd->debug_line_files[e.file - 1]);
+                    gb_array_append(dd->line_entries, e);
+                }
                 break;
             }
             case DW_LNS_set_file:
@@ -1704,10 +1731,13 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, void* data,
                 fsm.address +=
                     op / ddlh->line_range * ddlh->min_instruction_length;
 
-                const u16 old_line = fsm.line;
                 fsm.line += ddlh->line_base + op % ddlh->line_range;
-                if (fsm.line != old_line) {
-                    dw_line_entry e = {.pc = fsm.address, .line = fsm.line};
+                if (dw_line_entry_should_add_new_entry(&fsm, dd)) {
+                    dw_line_entry e = {
+                        .pc = fsm.address, .line = fsm.line, .file = fsm.file};
+                    printf("new dw_line_entry: pc=%#llx line=%d file=%d %s\n",
+                           e.pc, e.line, e.file,
+                           dd->debug_line_files[e.file - 1]);
                     gb_array_append(dd->line_entries, e);
                 }
                 printf("address+=%d line+=%d\n",
@@ -1732,13 +1762,21 @@ void stacktrace_find_entry(const debug_data* dd, u64 pc, stacktrace_entry* se) {
     assert(se->file != NULL);
     assert(se->fn_name != NULL);
 
-    const dw_line_entry* le = NULL;
-    for (int i = 0; i < gb_array_count(dd->line_entries); i++) {
-        if (le != NULL && le->pc > pc) {
-            se->line = le->line;
+    const dw_line_entry* cur_le = NULL;
+    const dw_line_entry* prev_le = NULL;
+    for (int i = 0; i < gb_array_count(dd->line_entries) - 1; i++) {
+        prev_le = &dd->line_entries[i];
+        cur_le = &dd->line_entries[i + 1];
+        if (prev_le->file == cur_le->file) {
+            if (!(prev_le->pc < cur_le->pc)) {
+                printf("[D009] i=%d\n", i);
+            }
+            assert(prev_le->pc < cur_le->pc);  // Shoud be sorted
+        }
+        if (cur_le->pc > pc) {
+            se->line = prev_le->line;
             break;
         }
-        le = &dd->line_entries[i];
     }
 }
 
@@ -1877,7 +1915,8 @@ static void read_macho_dsym(gbAllocator allocator, void* data, isize size,
 
     for (int i = 0; i < gb_array_count(dd->line_entries); i++) {
         dw_line_entry* le = &(dd->line_entries)[i];
-        printf("dw_line_entry: line=%d pc=%#llx\n", 1 + le->line, le->pc);
+        printf("dw_line_entry[%d]: line=%d pc=%#llx file=%d %s\n", i, le->line,
+               le->pc, le->file, dd->debug_line_files[le->file - 1]);
     }
 }
 
@@ -1902,8 +1941,8 @@ void stacktrace_print() {
         stacktrace_entry se = {0};
         stacktrace_find_entry(&dd, rip, &se);
         if (se.directory != NULL) {
-            printf("stacktrace_entry: %s/%s:%s:%d\n", se.directory, se.file,
-                   se.fn_name, se.line);
+            printf("stacktrace_entry: %#lx %s/%s:%s:%d\n", rip, se.directory,
+                   se.file, se.fn_name, se.line);
         }
     }
 }
