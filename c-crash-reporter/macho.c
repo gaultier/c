@@ -1941,7 +1941,9 @@ void stacktrace_print() {
         rbp = (uintptr_t*)*rbp;
 
         stacktrace_entry se = {0};
-        stacktrace_find_entry(&dd, rip - 5 - dd.pie_displacement, &se);
+        stacktrace_find_entry(
+            &dd, rip - /* `call` instruction size */ 5 - dd.pie_displacement,
+            &se);
         if (se.directory != NULL) {
             printf("%#lx %s/%s:%s:%d\n", rip, se.directory, se.file, se.fn_name,
                    se.line);
