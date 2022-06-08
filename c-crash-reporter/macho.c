@@ -434,6 +434,7 @@ typedef struct {
 } stacktrace_entry;
 
 typedef struct {
+    u64 pie_displacement;
     gbArray(dw_fn_decl) fn_decls;
     gbArray(dw_line_entry) line_entries;
     gbArray(dw_string) debug_str_strings;
@@ -1779,7 +1780,6 @@ static void read_macho_dsym(gbAllocator allocator, u8* data, isize size,
     struct mach_header_64 h = {0};
     read_data(data, size, &offset, &h, sizeof(h));
     assert(h.filetype == MH_DSYM);
-    fprintf(stderr, "[D001] %#llx\n", get_main_address());
 
     LOG("magic=%d\ncputype=%d\ncpusubtype=%d\nfiletype=%d\nncmds=%"
         "d\nsizeofcmds=%d\nflags=%d\n",
@@ -1892,6 +1892,11 @@ static void read_macho_dsym(gbAllocator allocator, u8* data, isize size,
         LOG("dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
             "file=%s/%s\n",
             fd->low_pc, fd->high_pc, fd->fn_name, fd->directory, fd->file);
+
+        if (fd->fn_name != NULL && strcmp(fd->fn_name, "main") == 0) {
+            dd->pie_displacement = get_main_address() - fd->low_pc;
+            LOG("pie_displacement=%#llx\n", dd->pie_displacement);
+        }
     }
 
     for (int i = 0; i < gb_array_count(dd->line_entries); i++) {
@@ -1936,7 +1941,7 @@ void stacktrace_print() {
         rbp = (uintptr_t*)*rbp;
 
         stacktrace_entry se = {0};
-        stacktrace_find_entry(&dd, rip - 5, &se);
+        stacktrace_find_entry(&dd, rip - 5 - dd.pie_displacement, &se);
         if (se.directory != NULL) {
             printf("%#lx %s/%s:%s:%d\n", rip, se.directory, se.file, se.fn_name,
                    se.line);
