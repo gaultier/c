@@ -1,3 +1,4 @@
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
@@ -1765,12 +1766,20 @@ static void stacktrace_find_entry(const debug_data* dd, u64 pc,
     }
 }
 
+extern uint64_t get_main_address(void);
+__asm__(
+    ".globl _get_main_address\n\t"
+    "_get_main_address:\n\t"
+    "lea _main(%rip), %rax\n\t"
+    "ret\n\t");
+
 static void read_macho_dsym(gbAllocator allocator, u8* data, isize size,
                             debug_data* dd) {
     u64 offset = 0;
     struct mach_header_64 h = {0};
     read_data(data, size, &offset, &h, sizeof(h));
     assert(h.filetype == MH_DSYM);
+    fprintf(stderr, "[D001] %#llx\n", get_main_address());
 
     LOG("magic=%d\ncputype=%d\ncpusubtype=%d\nfiletype=%d\nncmds=%"
         "d\nsizeofcmds=%d\nflags=%d\n",
