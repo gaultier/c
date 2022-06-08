@@ -14,7 +14,7 @@
         }                                                           \
     } while (0)
 
-int __attribute__((noinline)) baz(int n) {
+static int __attribute__((noinline)) baz(int n) {
     my_assert(n > 0);
 
     stacktrace_print();
@@ -30,7 +30,7 @@ int __attribute__((noinline)) bar(int n) {
     return n;
 }
 
-int __attribute__((noinline)) foo(int n) {
+static int __attribute__((noinline)) foo(int n) {
     // foo
     bar(n);
     return n;

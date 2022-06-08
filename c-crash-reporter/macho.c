@@ -1,10 +1,11 @@
-#define GB_IMPLEMENTATION
 #include <assert.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
 #include <stdio.h>
 #include <stdlib.h>
 
+#define GB_IMPLEMENTATION
+#define GB_STATIC
 #include "../vendor/gb.h"
 
 static void read_data(u8* data, isize data_size, u64* offset, void* res,
