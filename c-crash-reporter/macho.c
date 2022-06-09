@@ -1,9 +1,9 @@
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 #define GB_IMPLEMENTATION
 #define GB_STATIC
@@ -434,11 +434,19 @@ typedef struct {
 } stacktrace_entry;
 
 typedef struct {
+    gbFileContents contents;
+    char* directory;
+    char* file;
+    gbArray(u16) newline_offsets;
+} source_file;
+
+typedef struct {
     u64 pie_displacement;
     gbArray(dw_fn_decl) fn_decls;
     gbArray(dw_line_entry) line_entries;
     gbArray(dw_string) debug_str_strings;
     gbArray(char*) debug_line_files;
+    gbArray(source_file) sources;
 } debug_data;
 
 #ifdef PG_WITH_LOG
@@ -1767,6 +1775,33 @@ static void stacktrace_find_entry(const debug_data* dd, u64 pc,
     }
 }
 
+static void read_source_code(gbAllocator allocator, debug_data* dd) {
+    assert(dd != NULL);
+    static char path[MAXPATHLEN + 1] = "";
+
+    gb_array_init_reserve(dd->sources, allocator, 100);
+    for (int i = 0; i < gb_array_count(dd->fn_decls); i++) {
+        dw_fn_decl* fd = &(dd->fn_decls)[i];
+        if (fd->directory == NULL || fd->file == NULL) continue;
+
+        snprintf(path, sizeof(path), "%s/%s", fd->directory, fd->file);
+        gbFileContents contents = gb_file_read_contents(allocator, true, path);
+
+        source_file source = {
+            .contents = contents, .directory = fd->directory, .file = fd->file};
+        gb_array_init_reserve(source.newline_offsets, allocator, 500);
+
+        gb_array_append(source.newline_offsets, 0);
+        for (int j = 0; j < contents.size; j++) {
+            char* c = &contents.data[j];
+            if (*c == '\n') gb_array_append(source.newline_offsets, j);
+        }
+        gb_array_append(source.newline_offsets, source.contents.size);
+
+        gb_array_append(dd->sources, source);
+    }
+}
+
 extern uint64_t get_main_address(void);
 __asm__(
     ".globl _get_main_address\n\t"
@@ -1887,6 +1922,8 @@ static void read_macho_dsym(gbAllocator allocator, u8* data, isize size,
     read_dwarf_section_debug_info(allocator, data, size, &sec_info, &abbrev,
                                   dd);
 
+    read_source_code(allocator, dd);
+
     for (int i = 0; i < gb_array_count(dd->fn_decls); i++) {
         dw_fn_decl* fd = &(dd->fn_decls)[i];
         LOG("dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
@@ -1921,10 +1958,28 @@ static char* get_exe_path_for_process() {
     return pathbuf;
 }
 
+typedef enum {
+    COL_RESET,
+    COL_GRAY,
+    COL_RED,
+    COL_GREEN,
+    COL_COUNT,
+} pg_color;
+
+static const char pg_colors[2][COL_COUNT][14] = {
+    // is_tty == true
+    [true] = {[COL_RESET] = "\x1b[0m",
+              [COL_GRAY] = "\x1b[38;5;243m",
+              [COL_RED] = "\x1b[31m",
+              [COL_GREEN] = "\x1b[32m"}};
+
 void stacktrace_print() {
+    static bool is_tty = false;
+    is_tty = isatty(2);
+
     static debug_data dd = {0};
+    gbAllocator allocator = gb_heap_allocator();
     if (dd.debug_str_strings == NULL) {  // Not yet parse the debug information?
-        gbAllocator allocator = gb_heap_allocator();
         char path[MAXPATHLEN + 1] = "";
         const char* exe_path = get_exe_path_for_process();
         const char* exe_name = gb_path_base_name(exe_path);
@@ -1933,6 +1988,8 @@ void stacktrace_print() {
         gbFileContents contents = gb_file_read_contents(allocator, true, path);
         read_macho_dsym(allocator, contents.data, contents.size, &dd);
     }
+
+    read_source_code(allocator, &dd);
 
     uintptr_t* rbp = __builtin_frame_address(0);
     while (rbp != 0 && *rbp != 0) {
@@ -1945,8 +2002,41 @@ void stacktrace_print() {
             &dd, rip - /* `call` instruction size */ 5 - dd.pie_displacement,
             &se);
         if (se.directory != NULL) {
-            printf("%#lx %s/%s:%s:%d\n", rip, se.directory, se.file, se.fn_name,
-                   se.line);
+            printf("%s%#lx %s/%s:%s:%d%s", pg_colors[is_tty][COL_GRAY], rip,
+                   se.directory, se.file, se.fn_name, se.line,
+                   pg_colors[is_tty][COL_RESET]);
+
+            source_file* f = NULL;
+            for (int i = 0; i < gb_array_count(dd.sources); i++) {
+                source_file* sf = &dd.sources[i];
+                if (strcmp(sf->directory, se.directory) == 0 &&
+                    strcmp(sf->file, se.file) == 0) {
+                    f = sf;
+                    break;
+                }
+            }
+
+            assert(se.line >= 1);
+            assert(se.line - 1 < gb_array_count(f->newline_offsets));
+            u32 offset_start = f->newline_offsets[se.line - 1] + 1;
+
+            assert(se.line < gb_array_count(f->newline_offsets));
+            u32 offset_end = f->newline_offsets[se.line];
+
+            assert(offset_start < f->contents.size);
+            assert(offset_end < f->contents.size);
+            char* source_line = &f->contents.data[offset_start];
+            u32 source_line_len = offset_end - offset_start;
+
+            LOG("se.line=%d offset_start=%d offset_end=%d len=%d\n", se.line,
+                offset_start, offset_end, source_line_len);
+
+            // Trim left
+            while (*source_line != 0 && gb_char_is_space(*source_line)) {
+                source_line++;
+                source_line_len--;
+            }
+            printf(":\t\t%.*s\n", source_line_len, source_line);
         }
     }
 }
