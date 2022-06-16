@@ -8,19 +8,12 @@
 #include "SDL2/SDL_rect.h"
 #include "SDL2/SDL_render.h"
 #include "SDL2/SDL_surface.h"
+#include "SDL2/SDL_video.h"
 
 typedef struct {
     int x, y, w, h;
-    SDL_Texture* texture;
     // TODO: color?
 } button;
-
-void make_button_texture(SDL_Renderer* renderer, button* b) {
-    SDL_Surface* surface = SDL_CreateRGBSurface(0, b->w, b->h, 32, 0, 0, 0, 0);
-    SDL_FillRect(surface, NULL, SDL_MapRGB(surface->format, 255, 255, 0));
-    b->texture = SDL_CreateTextureFromSurface(renderer, surface);
-    SDL_FreeSurface(surface);
-}
 
 int main(int argc, const char* argv[]) {
     if (SDL_Init(SDL_INIT_VIDEO) < 0) {
@@ -39,25 +32,25 @@ int main(int argc, const char* argv[]) {
         return 1;
     }
 
-    SDL_Renderer* renderer =
-        SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
+    SDL_Surface* window_surface = SDL_GetWindowSurface(window);
+    SDL_Renderer* renderer = SDL_CreateSoftwareRenderer(window_surface);
     if (!renderer) {
         fprintf(stderr, "Failed to SDL_CreateRenderer: %s\n", SDL_GetError());
         return 1;
     }
     SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xff);
-
-    button b = {
-        .x = (SCREEN_WIDTH - 100) / 2,
-        .y = (SCREEN_HEIGHT - 20) / 2,
-        .w = 100,
-        .h = 20,
-    };
-    make_button_texture(renderer, &b);
+    SDL_RenderClear(renderer);
 
     bool running = true;
     while (running) {
         SDL_Event e;
+        button b = {
+            .x = (SCREEN_WIDTH - 100) / 2,
+            .y = (SCREEN_HEIGHT - 20) / 2,
+            .w = 100,
+            .h = 20,
+        };
+
         SDL_WaitEvent(&e);
         if (e.type == SDL_QUIT)
             running = false;
@@ -76,9 +69,13 @@ int main(int argc, const char* argv[]) {
                 printf("Clicked\n");
             }
         }
+
+        SDL_SetRenderDrawColor(renderer, 0xff, 0xff, 0xff, 0xff);
         SDL_RenderClear(renderer);
         SDL_Rect pos = {.x = b.x, .y = b.y, .w = b.w, .h = b.h};
-        SDL_RenderCopy(renderer, b.texture, NULL, &pos);
-        SDL_RenderPresent(renderer);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 0xFF);
+        SDL_RenderFillRect(renderer, &pos);
+        /* SDL_UpdateWindowSurfaceRects(window, &pos, 1); */
+        SDL_UpdateWindowSurface(window);
     }
 }
