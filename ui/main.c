@@ -2,6 +2,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "SDL2/SDL_events.h"
+#include "SDL2/SDL_mouse.h"
 #include "SDL2/SDL_pixels.h"
 #include "SDL2/SDL_rect.h"
 #include "SDL2/SDL_render.h"
@@ -65,10 +67,18 @@ int main(int argc, const char* argv[]) {
                     running = false;
                     break;
             }
+        } else if (e.type == SDL_MOUSEBUTTONDOWN) {
+            int x, y;
+            SDL_GetMouseState(&x, &y);
+            printf("x=%d y=%d\n", x, y);
+            __builtin_dump_struct(&b, &printf);
+            if (b.x <= x && x < b.x + b.w && b.y <= y && y < b.y + b.h) {
+                printf("Clicked\n");
+            }
         }
         SDL_RenderClear(renderer);
-        SDL_Rect* pos = (SDL_Rect*)&b;
-        SDL_RenderCopy(renderer, b.texture, NULL, pos);
+        SDL_Rect pos = {.x = b.x, .y = b.y, .w = b.w, .h = b.h};
+        SDL_RenderCopy(renderer, b.texture, NULL, &pos);
         SDL_RenderPresent(renderer);
     }
 }
