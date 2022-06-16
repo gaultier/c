@@ -1,0 +1,5 @@
+-std=c99
+-g
+-fsanitize=address
+-Wall
+-I/usr/local/include/
