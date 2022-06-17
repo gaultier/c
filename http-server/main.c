@@ -60,6 +60,7 @@ int main() {
                     client_addr.sin_port, strerror(errno));
             return errno;
         }
+        sleep(10);
 
         close(conn_fd);
     }
