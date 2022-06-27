@@ -1,9 +1,11 @@
 #include <errno.h>
 #include <netinet/in.h>
+#include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -46,7 +48,7 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     parser.data = url;
     int err = 0;
 
-    while (1) {
+    while (1) {  // TODO: limit on received bytes total
         ssize_t received = recv(conn_fd, conn_buf, CONN_BUF_LEN, 0);
         if (received == -1) {
             fprintf(stderr, "Failed to recv(2): addr=%s:%hu err=%s\n", ip_addr,
@@ -78,22 +80,21 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
         /*     parser.content_length, parser.method, parser.type, */
         /*     parser.http_major, parser.http_minor, nparsed, url, */
         /*     GB_STRING_HEADER(url)->length); */
-
-        bzero(conn_buf, CONN_BUF_LEN);
-        snprintf(conn_buf, CONN_BUF_LEN,
-                 "HTTP/1.1 200 OK\r\n"
-                 "Content-Type: text/plain; charset=utf8\r\n"
-                 "Content-Length: %td\r\n"
-                 "\r\n"
-                 "%s",
-                 GB_STRING_HEADER(url)->length, url);
-        int sent = send(conn_fd, conn_buf, strlen(conn_buf), 0);
-        if (sent == -1) {
-            fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
-                    client_addr.sin_port, strerror(errno));
-            err = errno;
-            goto end;
-        }
+    }
+    bzero(conn_buf, CONN_BUF_LEN);
+    snprintf(conn_buf, CONN_BUF_LEN,
+             "HTTP/1.1 200 OK\r\n"
+             "Content-Type: text/plain; charset=utf8\r\n"
+             "Content-Length: %td\r\n"
+             "\r\n"
+             "%s",
+             GB_STRING_HEADER(url)->length, url);
+    int sent = send(conn_fd, conn_buf, strlen(conn_buf), 0);
+    if (sent == -1) {
+        fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
+                client_addr.sin_port, strerror(errno));
+        err = errno;
+        goto end;
     }
 
 end:
@@ -120,6 +121,12 @@ int main(int argc, char* argv[]) {
     }
 
     int err = 0;
+    struct sigaction sa = {.sa_flags = SA_NOCLDWAIT};
+    if ((err = sigaction(SIGCHLD, &sa, NULL)) == -1) {
+        fprintf(stderr, "Failed to sigaction(2): err=%s\n", strerror(errno));
+        exit(errno);
+    }
+
     int sock_fd = socket(PF_INET, SOCK_STREAM, 0);
     if (sock_fd == -1) {
         fprintf(stderr, "Failed to socket(2): %s\n", strerror(errno));
