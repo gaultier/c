@@ -28,7 +28,7 @@ static void print_usage(int argc, char* argv[]) {
 }
 
 static int on_url(http_parser* parser, const char* at, size_t length) {
-    gb_string_append_length(parser->data, at, length);
+    parser->data = gb_string_append_length(parser->data, at, length);
     return 0;
 }
 
@@ -45,6 +45,7 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
 
     gbAllocator allocator = gb_heap_allocator();
     gbString url = gb_string_make_reserve(allocator, 100);
+    gbString req = gb_string_make_reserve(allocator, 4096);
     parser.data = url;
     int err = 0;
 
@@ -59,28 +60,35 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
         if (received == 0) {  // Client closed connection
             goto end;
         }
+        req = gb_string_append_length(req, conn_buf, received);
 
-        int nparsed =
-            http_parser_execute(&parser, &settings, conn_buf, received);
-
-        if (parser.upgrade) {
-            /* handle new protocol */
-            GB_ASSERT_MSG(0, "Unimplemented");
-        } else if (nparsed != received) {
-            /* Handle error. Usually just close the connection. */
-            fprintf(stderr,
-                    "Failed to parse http request: addr=%s:%hu nparsed=%d "
-                    "received=%zd\n",
-                    ip_addr, client_addr.sin_port, nparsed, received);
-            goto end;
+        const isize len = gb_string_length(req);
+        if (len >= 4 && req[len - 4] == '\r' && req[len - 3] == '\n' &&
+            req[len - 2] == '\r' && req[len - 1] == '\n') {
+            // End of request
+            break;
         }
-        /* printf( */
-        /*     "content_length=%llu method=%d type=%d http=%d.%d nparsed=%d " */
-        /*     "url=`%s` length=%td\n", */
-        /*     parser.content_length, parser.method, parser.type, */
-        /*     parser.http_major, parser.http_minor, nparsed, url, */
-        /*     GB_STRING_HEADER(url)->length); */
     }
+
+    int nparsed =
+        http_parser_execute(&parser, &settings, req, gb_string_length(req));
+
+    if (parser.upgrade) {
+        /* handle new protocol */
+        GB_ASSERT_MSG(0, "Unimplemented");
+    } else if (nparsed != gb_string_length(req)) {
+        fprintf(stderr,
+                "Failed to parse http request: addr=%s:%hu nparsed=%d "
+                "received=%zd\n",
+                ip_addr, client_addr.sin_port, nparsed, gb_string_length(req));
+        goto end;
+    }
+    /* printf( */
+    /*     "content_length=%llu method=%d type=%d http=%d.%d nparsed=%d " */
+    /*     "url=`%s` length=%td\n", */
+    /*     parser.content_length, parser.method, parser.type, parser.http_major,
+     */
+    /*     parser.http_minor, nparsed, url, GB_STRING_HEADER(url)->length); */
     bzero(conn_buf, CONN_BUF_LEN);
     snprintf(conn_buf, CONN_BUF_LEN,
              "HTTP/1.1 200 OK\r\n"
