@@ -136,18 +136,18 @@ int main(int argc, char* argv[]) {
         exit(errno);
     }
 
-    int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+    int sock_fd = socket(PF_INET, SOCK_STREAM, 0);
     if (sock_fd == -1) {
         fprintf(stderr, "Failed to socket(2): %s\n", strerror(errno));
         return errno;
     }
 
-    /* int val = 1; */
-    /* if ((err = setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &val, */
-    /*                       sizeof(val))) == -1) { */
-    /*     fprintf(stderr, "Failed to setsockopt(2): %s\n", strerror(errno)); */
-    /*     return errno; */
-    /* } */
+    int val = 1;
+    if ((err = setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &val,
+                          sizeof(val))) == -1) {
+        fprintf(stderr, "Failed to setsockopt(2): %s\n", strerror(errno));
+        return errno;
+    }
 
     const struct sockaddr_in addr = {
         .sin_family = AF_INET,
