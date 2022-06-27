@@ -13,7 +13,7 @@
 #include <sys/types.h>
 
 #include "./util.h"
-#include "vendor/gb.h"
+#include "vendor/gb/gb.h"
 
 static mode_t path_get_mode(char* path) {
   struct stat path_stat;

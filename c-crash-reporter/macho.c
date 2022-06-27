@@ -7,7 +7,7 @@
 
 #define GB_IMPLEMENTATION
 #define GB_STATIC
-#include "../vendor/gb.h"
+#include "../vendor/gb/gb.h"
 
 static void read_data(u8* data, isize data_size, u64* offset, void* res,
                       isize res_size) {
