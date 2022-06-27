@@ -49,7 +49,7 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     parser.data = url;
     int err = 0;
 
-    while (1) {  // TODO: limit on received bytes total
+    while (1) {
         ssize_t received = recv(conn_fd, conn_buf, CONN_BUF_LEN, 0);
         if (received == -1) {
             fprintf(stderr, "Failed to recv(2): addr=%s:%hu err=%s\n", ip_addr,
@@ -63,9 +63,10 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
         req = gb_string_append_length(req, conn_buf, received);
 
         const isize len = gb_string_length(req);
+        // End of request ?
+        // TODO: limit on received bytes total
         if (len >= 4 && req[len - 4] == '\r' && req[len - 3] == '\n' &&
             req[len - 2] == '\r' && req[len - 1] == '\n') {
-            // End of request
             break;
         }
     }
