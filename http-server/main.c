@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #define GB_IMPLEMENTATION
@@ -105,7 +104,7 @@ end:
         err = errno;
     }
 
-    return err;
+    return 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -170,12 +169,6 @@ int main(int argc, char* argv[]) {
             // Fds are duplicated by fork(2) and need to be
             // closed by both parent & child
             close(conn_fd);
-            int stat_loc = 0;
-            struct rusage usage = {0};
-            if ((err = wait4(pid, &stat_loc, WNOHANG, &usage)) == -1) {
-                fprintf(stderr, "Failed to wait(4): pid=%d err=%s\n", pid,
-                        strerror(errno));
-            }
         }
     }
 }
