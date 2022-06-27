@@ -75,7 +75,6 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
         http_parser_execute(&parser, &settings, req, gb_string_length(req));
 
     if (parser.upgrade) {
-        /* handle new protocol */
         GB_ASSERT_MSG(0, "Unimplemented");
     } else if (nparsed != gb_string_length(req)) {
         fprintf(stderr,
@@ -84,12 +83,8 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
                 ip_addr, client_addr.sin_port, nparsed, gb_string_length(req));
         goto end;
     }
-    /* printf( */
-    /*     "content_length=%llu method=%d type=%d http=%d.%d nparsed=%d " */
-    /*     "url=`%s` length=%td\n", */
-    /*     parser.content_length, parser.method, parser.type, parser.http_major,
-     */
-    /*     parser.http_minor, nparsed, url, GB_STRING_HEADER(url)->length); */
+
+    // Response
     bzero(conn_buf, CONN_BUF_LEN);
     snprintf(conn_buf, CONN_BUF_LEN,
              "HTTP/1.1 200 OK\r\n"
@@ -98,6 +93,8 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
              "\r\n"
              "%s",
              GB_STRING_HEADER(url)->length, url);
+
+    // TODO: send in loop
     int sent = send(conn_fd, conn_buf, strlen(conn_buf), 0);
     if (sent == -1) {
         fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
