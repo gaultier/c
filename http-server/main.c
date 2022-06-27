@@ -164,9 +164,7 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
             /* exit(errno); */
         } else if (pid == 0) {  // Child
-            fprintf(stderr, "Child %d started\n", getpid());
             err = handle_connection(client_addr, conn_fd);
-            fprintf(stderr, "Child %d finished\n", getpid());
             exit(err);
         } else {  // Parent
             // Fds are duplicated by fork(2) and need to be
