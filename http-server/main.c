@@ -43,7 +43,10 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     http_parser parser = {0};
     http_parser_init(&parser, HTTP_REQUEST);
 
-    gbAllocator allocator = gb_heap_allocator();
+    static u8 mem[10 * 1024 /* 10KiB */] = {};
+    gbArena arena = {0};
+    gb_arena_init_from_memory(&arena, mem, sizeof(mem));
+    gbAllocator allocator = gb_arena_allocator(&arena);
     gbString url = gb_string_make_reserve(allocator, 100);
     gbString req = gb_string_make_reserve(allocator, 4096);
     parser.data = url;
@@ -133,18 +136,18 @@ int main(int argc, char* argv[]) {
         exit(errno);
     }
 
-    int sock_fd = socket(PF_INET, SOCK_STREAM, 0);
+    int sock_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (sock_fd == -1) {
         fprintf(stderr, "Failed to socket(2): %s\n", strerror(errno));
         return errno;
     }
 
-    int val = 1;
-    if ((err = setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &val,
-                          sizeof(val))) == -1) {
-        fprintf(stderr, "Failed to setsockopt(2): %s\n", strerror(errno));
-        return errno;
-    }
+    /* int val = 1; */
+    /* if ((err = setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &val, */
+    /*                       sizeof(val))) == -1) { */
+    /*     fprintf(stderr, "Failed to setsockopt(2): %s\n", strerror(errno)); */
+    /*     return errno; */
+    /* } */
 
     const struct sockaddr_in addr = {
         .sin_family = AF_INET,
@@ -157,7 +160,7 @@ int main(int argc, char* argv[]) {
         return errno;
     }
 
-    if ((err = listen(sock_fd, 1024)) == -1) {
+    if ((err = listen(sock_fd, 16 * 1024)) == -1) {
         fprintf(stderr, "Failed to listen(2): %s\n", strerror(errno));
         return errno;
     }
