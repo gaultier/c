@@ -12,6 +12,7 @@
 #include "../vendor/gb.h"
 
 #define IP_ADDR_STR_LEN 17
+#define CONN_BUF_LEN 4096
 
 static void ip(uint32_t val, char* res) {
     uint8_t a = val >> 24, b = val >> 16, c = val >> 8, d = val & 0xff;
@@ -28,22 +29,33 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     ip(client_addr.sin_addr.s_addr, ip_addr);
     printf("New connection: %s:%hu\n", ip_addr, client_addr.sin_port);
 
-    int sent = send(conn_fd, "hello!", 6, 0);
-    if (sent == -1) {
-        fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
-                client_addr.sin_port, strerror(errno));
-        return errno;
+    char conn_buf[CONN_BUF_LEN] = "";
+    while (1) {
+        ssize_t received = recv(conn_fd, conn_buf, CONN_BUF_LEN, 0);
+        if (received == -1) {
+            fprintf(stderr, "Failed to recv(2): addr=%s:%hu err=%s\n", ip_addr,
+                    client_addr.sin_port, strerror(errno));
+            return errno;
+        }
+        if (received == 0) {  // Client closed connection
+            break;
+        }
+
+        int sent = send(conn_fd, conn_buf, received, 0);
+        if (sent == -1) {
+            fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
+                    client_addr.sin_port, strerror(errno));
+            return errno;
+        }
     }
-    sleep(5);
 
     int err = 0;
     if ((err = close(conn_fd)) != 0) {
         fprintf(stderr, "Failed to close socket for: err=%s\n",
                 strerror(errno));
-        return err;
+        return errno;
     }
 
-    puts("finished");
     return 0;
 }
 
