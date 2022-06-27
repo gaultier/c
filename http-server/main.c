@@ -52,10 +52,10 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
             fprintf(stderr, "Failed to recv(2): addr=%s:%hu err=%s\n", ip_addr,
                     client_addr.sin_port, strerror(errno));
             err = errno;
-            goto on_err;
+            goto end;
         }
         if (received == 0) {  // Client closed connection
-            break;
+            goto end;
         }
 
         int nparsed =
@@ -70,7 +70,7 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
                     "Failed to parse http request: addr=%s:%hu nparsed=%d "
                     "received=%zd\n",
                     ip_addr, client_addr.sin_port, nparsed, received);
-            break;
+            goto end;
         }
         /* printf( */
         /*     "content_length=%llu method=%d type=%d http=%d.%d nparsed=%d " */
@@ -92,12 +92,11 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
             fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
                     client_addr.sin_port, strerror(errno));
             err = errno;
-            goto on_err;
+            goto end;
         }
-        break;  // FIXME
     }
 
-on_err:
+end:
     gb_string_free(url);
     if ((err = close(conn_fd)) != 0) {
         fprintf(stderr, "Failed to close socket for: err=%s\n",
