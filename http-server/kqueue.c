@@ -202,6 +202,9 @@ int main(int argc, char* argv[]) {
         }
 
         socket_add_to_watch_list(&watch_list, conn_fd);
+        // TODO: recv/send(?) in this loop instead of in handle_connection
+        // Alloc struct conn_handle_t with req/res buffers
+        // Call handle_connection multiple times
 
         handle_connection(client_addr, conn_fd);
         // Remove watch
