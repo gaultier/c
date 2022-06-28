@@ -11,6 +11,8 @@
 
 #define IP_ADDR_STR_LEN 17
 #define CONN_BUF_LEN 4096
+#define LISTEN_BACKLOG 16384
+
 static void ip(uint32_t val, char* res) {
     uint8_t a = val >> 24, b = val >> 16, c = val >> 8, d = val & 0xff;
     snprintf(res, 16, "%hhu.%hhu.%hhu.%hhu", d, c, b, a);
@@ -29,7 +31,7 @@ static int on_url(http_parser* parser, const char* at, size_t length) {
 static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     char ip_addr[IP_ADDR_STR_LEN] = "";
     ip(client_addr.sin_addr.s_addr, ip_addr);
-    /* printf("New connection: %s:%hu\n", ip_addr, client_addr.sin_port); */
+    printf("New connection: %s:%hu\n", ip_addr, client_addr.sin_port);
 
     char conn_buf[CONN_BUF_LEN] = "";
 
@@ -111,6 +113,13 @@ end:
     return 0;
 }
 
+static void socket_add_to_watch_list(gbArray(struct kevent) * watch_list,
+                                     int sock) {
+    gb_array_append(*watch_list, ((struct kevent){0}));
+    EV_SET(&(*watch_list)[gb_array_count(*watch_list) - 1], sock, EVFILT_READ,
+           EV_ADD | EV_CLEAR, 0, 0, 0);
+}
+
 int main(int argc, char* argv[]) {
     if (argc != 2) {
         print_usage(argc, argv);
@@ -161,18 +170,28 @@ int main(int argc, char* argv[]) {
         return errno;
     }
 
-    struct kevent change_list = {0};
-    EV_SET(&change_list, sock_fd, EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, 0);
+    static u8 mem[LISTEN_BACKLOG * sizeof(struct kevent) * 4] = {};
+    gbArena arena = {0};
+    gb_arena_init_from_memory(&arena, mem, sizeof(mem));
+    gbAllocator allocator = gb_arena_allocator(&arena);
+
+    gbArray(struct kevent) watch_list = NULL;
+    gb_array_init_reserve(watch_list, allocator, LISTEN_BACKLOG);
+    socket_add_to_watch_list(&watch_list, sock_fd);
+
+    gbArray(struct kevent) event_list = NULL;
+    gb_array_init_reserve(event_list, allocator, gb_array_capacity(watch_list));
 
     while (1) {
-        struct kevent event_list = {0};
-        err = kevent(queue, &change_list, 1, &event_list, 1, NULL);
-        if (err == -1) {
+        const int event_count =
+            kevent(queue, watch_list, gb_array_count(watch_list), event_list,
+                   gb_array_capacity(event_list), NULL);
+        if (event_count == -1) {
             fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__,
                     __LINE__, strerror(errno));
             return errno;
         }
-        puts("New connection");
+        printf("[D006] Event count=%d\n", event_count);
 
         struct sockaddr_in client_addr = {0};
         socklen_t client_addr_len = sizeof(client_addr);
@@ -181,6 +200,17 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
             return errno;
         }
+
+        socket_add_to_watch_list(&watch_list, conn_fd);
+
         handle_connection(client_addr, conn_fd);
+        // Remove watch
+        for (int i = 0; i < gb_array_count(watch_list); i++) {
+            if (watch_list[i].ident == conn_fd) {
+                watch_list[i] = watch_list[gb_array_count(watch_list) - 1];
+                gb_array_pop(watch_list);
+                break;
+            }
+        }
     }
 }
