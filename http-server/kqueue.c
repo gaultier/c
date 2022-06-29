@@ -52,7 +52,8 @@ static int conn_handle_read_request(conn_handle* ch) {
     if (received == 0) {  // Client closed connection
         return 0;
     }
-    printf("[D009] Read: %zd %.*s\n", received, (int)received, ch->buf);
+    fprintf(stderr, "[D009] Read: %zd %.*s\n", received, (int)received,
+            ch->buf);
     gb_string_append_length(ch->req, ch->buf, received);
     return received;
 }
@@ -60,7 +61,7 @@ static int conn_handle_read_request(conn_handle* ch) {
 static int server_init(server* s, gbAllocator allocator) {
     s->allocator = allocator;
 
-    printf("[D001] sock_fd=%d\n", s->fd);
+    fprintf(stderr, "[D001] sock_fd=%d\n", s->fd);
 
     gb_array_init_reserve(s->event_list, s->allocator, LISTEN_BACKLOG);
 
@@ -116,14 +117,14 @@ static int server_accept_new_connection(server* s) {
         fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
         return errno;
     }
-    printf("[D002] New conn: %d\n", conn_fd);
+    fprintf(stderr, "[D002] New conn: %d\n", conn_fd);
 
     server_add_event(s, conn_fd);
 
     conn_handle ch = {.fd = conn_fd};
     conn_handle_init(&ch, s->allocator, client_addr);
     gb_array_append(s->conn_handles, ch);
-    return -1;
+    return 0;
 }
 
 static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
@@ -209,7 +210,7 @@ static int server_listen_and_bind(server* s, u16 port) {
         return errno;
     }
 
-    if ((err = listen(s->fd, 16 * 1024)) == -1) {
+    if ((err = listen(s->fd, LISTEN_BACKLOG)) == -1) {
         fprintf(stderr, "Failed to listen(2): %s\n", strerror(errno));
         return errno;
     }
@@ -218,46 +219,56 @@ static int server_listen_and_bind(server* s, u16 port) {
     return 0;
 }
 
+static int server_poll_events(server* s) {
+    const int event_count = kevent(s->queue, NULL, 0, s->event_list,
+                                   gb_array_capacity(s->event_list), NULL);
+    if (event_count == -1) {
+        fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
+                strerror(errno));
+        return errno;
+    }
+    gb_array_resize(s->event_list, event_count);
+    fprintf(stderr, "[D006] Event count=%d\n", event_count);
+    for (int i = 0; i < event_count; i++) {
+        fprintf(stderr, "[D007] ident=%lu \n", s->event_list[i].ident);
+    }
+
+    return 0;
+}
+
+static void server_handle_events(server* s) {
+    for (int i = 0; i < gb_array_count(s->event_list); i++) {
+        const struct kevent* const e = &s->event_list[i];
+        const int fd = e->ident;
+
+        if (fd == s->fd) {  // New connection to accept
+            server_accept_new_connection(s);
+            continue;
+        }
+
+        fprintf(stderr, "[D008] Data to be read on: %d\n", fd);
+        conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
+        assert(ch != NULL);
+        int err = 0;
+        if ((err = conn_handle_read_request(ch)) <= 0) {
+            server_remove_connection(s, ch);
+            continue;
+        }
+
+        conn_handle_make_response(ch);
+        conn_handle_send_response(ch);
+        server_remove_connection(s, ch);
+    }
+}
+
 static int server_run(server* s, u16 port) {
     int err = 0;
     err = server_listen_and_bind(s, port);
     if (err != 0) return err;
 
     while (1) {
-        printf("[D010] conn_handles=%td\n", gb_array_count(s->conn_handles));
-        const int event_count = kevent(s->queue, NULL, 0, s->event_list,
-                                       gb_array_capacity(s->event_list), NULL);
-        if (event_count == -1) {
-            fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__,
-                    __LINE__, strerror(errno));
-            return errno;
-        }
-        printf("[D006] Event count=%d\n", event_count);
-        for (int i = 0; i < event_count; i++) {
-            printf("[D007] ident=%lu \n", s->event_list[i].ident);
-        }
-
-        for (int i = 0; i < event_count; i++) {
-            const struct kevent* const e = &s->event_list[i];
-            const int fd = e->ident;
-
-            if (fd == s->fd) {  // New connection to accept
-                server_accept_new_connection(s);
-                continue;
-            }
-
-            printf("[D008] Data to be read on: %d\n", fd);
-            conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
-            assert(ch != NULL);
-            if ((err = conn_handle_read_request(ch)) <= 0) {
-                server_remove_connection(s, ch);
-                continue;
-            }
-
-            conn_handle_make_response(ch);
-            conn_handle_send_response(ch);
-            server_remove_connection(s, ch);
-        }
+        server_poll_events(s);
+        server_handle_events(s);
     }
     return 0;
 }
