@@ -24,6 +24,7 @@ typedef struct {
 
 typedef struct {
     int fd;
+    int queue;
     gbAllocator allocator;
     gbArray(conn_handle) conn_handles;
     gbArray(struct kevent) watch_list;
@@ -121,7 +122,7 @@ static void conn_handle_make_response(conn_handle* ch) {
              "Content-Length: %td\r\n"
              "\r\n"
              "%s",
-             sizeof(msg), msg);
+             sizeof(msg) - 1, msg);
 }
 
 static int conn_handle_send_response(conn_handle* ch) {
@@ -137,6 +138,12 @@ static int conn_handle_send_response(conn_handle* ch) {
 }
 
 static void server_remove_connection(server* s, conn_handle* ch) {
+    // Remove kevent
+    struct kevent event = {0};
+    EV_SET(&event, ch->fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+    kevent(s->queue, &event, 1, NULL, 0, NULL);
+
+    // Close
     close(ch->fd);
 
     // Remove watch
@@ -200,16 +207,17 @@ static int server_run(server* s, u16 port) {
     err = server_listen_and_bind(s, port);
     if (err != 0) return err;
 
-    const int queue = kqueue();
-    if (queue == -1) {
+    s->queue = kqueue();
+    if (s->queue == -1) {
         fprintf(stderr, "%s:%d:Failed to create queue with kqueue(): %s\n",
                 __FILE__, __LINE__, strerror(errno));
         return errno;
     }
 
     while (1) {
+        printf("[D010] conn_handles=%td\n", gb_array_count(s->conn_handles));
         const int event_count =
-            kevent(queue, s->watch_list, gb_array_count(s->watch_list),
+            kevent(s->queue, s->watch_list, gb_array_count(s->watch_list),
                    s->event_list, gb_array_capacity(s->event_list), NULL);
         if (event_count == -1) {
             fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__,
