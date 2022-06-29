@@ -164,10 +164,7 @@ static int conn_handle_send_response(conn_handle* ch) {
 }
 
 static void server_remove_connection(server* s, conn_handle* ch) {
-    // Remove kevent
-    struct kevent event = {0};
-    EV_SET(&event, ch->fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-    kevent(s->queue, &event, 1, NULL, 0, NULL);
+    server_remove_connection(s, ch);
 
     // Close
     close(ch->fd);
