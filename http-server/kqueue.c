@@ -54,7 +54,7 @@ static int conn_handle_read_request(conn_handle* ch) {
     }
     printf("[D009] Read: %zd %.*s\n", received, (int)received, ch->buf);
     gb_string_append_length(ch->req, ch->buf, received);
-    return -1;
+    return received;
 }
 
 static void server_add_socket_to_watch_list(server* s, int fd) {
@@ -89,7 +89,7 @@ static void print_usage(int argc, char* argv[]) {
 static int server_accept_new_connection(server* s) {
     struct sockaddr_in client_addr = {0};
     socklen_t client_addr_len = sizeof(client_addr);
-    int conn_fd = accept(s->fd, (void*)&client_addr, &client_addr_len);
+    const int conn_fd = accept(s->fd, (void*)&client_addr, &client_addr_len);
     if (conn_fd == -1) {
         fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
         return errno;
@@ -234,7 +234,11 @@ static int server_run(server* s, u16 port) {
             printf("[D008] Data to be read on: %d\n", fd);
             conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
             assert(ch != NULL);
-            conn_handle_read_request(ch);
+            if ((err = conn_handle_read_request(ch)) <= 0) {
+                server_remove_connection(s, ch);
+                continue;
+            }
+
             conn_handle_make_response(ch);
             conn_handle_send_response(ch);
             server_remove_connection(s, ch);
