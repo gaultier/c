@@ -147,15 +147,19 @@ static void conn_handle_make_response(conn_handle* ch) {
 }
 
 static int conn_handle_send_response(conn_handle* ch) {
-    const int nb = write(ch->fd, ch->buf, strlen(ch->buf));
-    if (nb == -1) {
-        fprintf(stderr, "Failed to write(2): ip=%s err=%s\n", ch->ip,
-                strerror(errno));
-        return errno;
+    int written = 0;
+    const int total = strlen(ch->buf);
+    while (written < total) {
+        const int nb = write(ch->fd, &ch->buf[written], total - written);
+        if (nb == -1) {
+            fprintf(stderr, "Failed to write(2): ip=%s err=%s\n", ch->ip,
+                    strerror(errno));
+            return errno;
+        }
+        written += nb;
     }
-    // TODO: check if all bytes were written
 
-    return nb;
+    return 0;
 }
 
 static void server_remove_connection(server* s, conn_handle* ch) {
