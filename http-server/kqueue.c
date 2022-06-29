@@ -109,21 +109,24 @@ static void print_usage(int argc, char* argv[]) {
 /*     return 0; */
 /* } */
 
-static int server_accept_new_connection(server* s) {
-    struct sockaddr_in client_addr = {0};
-    socklen_t client_addr_len = sizeof(client_addr);
-    const int conn_fd = accept(s->fd, (void*)&client_addr, &client_addr_len);
-    if (conn_fd == -1) {
-        fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
-        return errno;
+static int server_accept_new_connections(server* s) {
+    while (1) {
+        struct sockaddr_in client_addr = {0};
+        socklen_t client_addr_len = sizeof(client_addr);
+        const int conn_fd =
+            accept(s->fd, (void*)&client_addr, &client_addr_len);
+        if (conn_fd == -1) {
+            fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
+            return errno;
+        }
+        fprintf(stderr, "[D002] New conn: %d\n", conn_fd);
+
+        server_add_event(s, conn_fd);
+
+        conn_handle ch = {.fd = conn_fd};
+        conn_handle_init(&ch, s->allocator, client_addr);
+        gb_array_append(s->conn_handles, ch);
     }
-    fprintf(stderr, "[D002] New conn: %d\n", conn_fd);
-
-    server_add_event(s, conn_fd);
-
-    conn_handle ch = {.fd = conn_fd};
-    conn_handle_init(&ch, s->allocator, client_addr);
-    gb_array_append(s->conn_handles, ch);
     return 0;
 }
 
@@ -164,7 +167,7 @@ static int conn_handle_send_response(conn_handle* ch) {
 }
 
 static void server_remove_connection(server* s, conn_handle* ch) {
-    server_remove_connection(s, ch);
+    server_remove_event(s, ch->fd);
 
     // Close
     close(ch->fd);
@@ -211,12 +214,15 @@ static int server_listen_and_bind(server* s, u16 port) {
         fprintf(stderr, "Failed to listen(2): %s\n", strerror(errno));
         return errno;
     }
-    server_add_event(s, s->fd);
     printf("Listening: :%d\n", port);
+
+    server_accept_new_connections(s);
+
     return 0;
 }
 
 static int server_poll_events(server* s) {
+    puts("[D009] Polling");
     const int event_count = kevent(s->queue, NULL, 0, s->event_list,
                                    gb_array_capacity(s->event_list), NULL);
     if (event_count == -1) {
@@ -238,11 +244,6 @@ static void server_handle_events(server* s) {
         const struct kevent* const e = &s->event_list[i];
         const int fd = e->ident;
 
-        if (fd == s->fd) {  // New connection to accept
-            server_accept_new_connection(s);
-            continue;
-        }
-
         fprintf(stderr, "[D008] Data to be read on: %d\n", fd);
         conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
         assert(ch != NULL);
@@ -258,11 +259,8 @@ static void server_handle_events(server* s) {
     }
 }
 
-static int server_run(server* s, u16 port) {
-    int err = 0;
-    err = server_listen_and_bind(s, port);
-    if (err != 0) return err;
-
+static void* server_run(void* vs) {
+    server* s = vs;
     while (1) {
         server_poll_events(s);
         server_handle_events(s);
@@ -286,5 +284,9 @@ int main(int argc, char* argv[]) {
     gbAllocator allocator = gb_heap_allocator();
     server s = {0};
     if ((err = server_init(&s, allocator)) != 0) return err;
-    if ((err = server_run(&s, port)) != 0) return err;
+
+    pthread_t thread = {0};
+    pthread_create(&thread, NULL, server_run, &s);
+    err = server_listen_and_bind(&s, port);
+    if (err != 0) return err;
 }
