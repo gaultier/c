@@ -233,7 +233,6 @@ static int server_run(server* s, u16 port) {
             printf("[D007] ident=%lu \n", s->event_list[i].ident);
         }
 
-        if (event_count == 0) continue;
         for (int i = 0; i < event_count; i++) {
             const struct kevent* const e = &s->event_list[i];
             const int fd = e->ident;
@@ -256,7 +255,7 @@ static int server_run(server* s, u16 port) {
             server_remove_connection(s, ch);
         }
     }
-    return -1;
+    return 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -268,7 +267,7 @@ int main(int argc, char* argv[]) {
     const u64 port = gb_str_to_u64(argv[1], NULL, 10);
     if (port > UINT16_MAX) {
         fprintf(stderr, "Invalid port number: %llu\n", port);
-        return 1;
+        return EINVAL;
     }
 
     int err = 0;
