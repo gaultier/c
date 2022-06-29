@@ -81,10 +81,10 @@ static void print_usage(int argc, char* argv[]) {
     printf("%s <port>\n", argv[0]);
 }
 
-static int on_url(http_parser* parser, const char* at, size_t length) {
-    parser->data = gb_string_append_length(parser->data, at, length);
-    return 0;
-}
+/* static int on_url(http_parser* parser, const char* at, size_t length) { */
+/*     parser->data = gb_string_append_length(parser->data, at, length); */
+/*     return 0; */
+/* } */
 
 static int server_accept_new_connection(server* s) {
     struct sockaddr_in client_addr = {0};
@@ -168,7 +168,7 @@ static int server_listen_and_bind(server* s, u16 port) {
         return errno;
     }
 
-    int val = 1;
+    const int val = 1;
     if ((err = setsockopt(s->fd, SOL_SOCKET, SO_REUSEADDR, &val,
                           sizeof(val))) == -1) {
         fprintf(stderr, "Failed to setsockopt(2): %s\n", strerror(errno));
@@ -223,7 +223,7 @@ static int server_run(server* s, u16 port) {
 
         if (event_count == 0) continue;
         for (int i = 0; i < event_count; i++) {
-            const struct kevent* e = &s->event_list[i];
+            const struct kevent* const e = &s->event_list[i];
             const int fd = e->ident;
 
             if (fd == s->fd) {  // New connection to accept
@@ -232,13 +232,12 @@ static int server_run(server* s, u16 port) {
             }
 
             printf("[D008] Data to be read on: %d\n", fd);
-            conn_handle* ch = server_find_conn_handle_by_fd(s, fd);
+            conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
             assert(ch != NULL);
             conn_handle_read_request(ch);
             conn_handle_make_response(ch);
             conn_handle_send_response(ch);
             server_remove_connection(s, ch);
-            // TODO: cleanup, errors
         }
     }
     return -1;
