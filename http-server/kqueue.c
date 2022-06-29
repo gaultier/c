@@ -27,7 +27,6 @@ typedef struct {
     int queue;
     gbAllocator allocator;
     gbArray(conn_handle) conn_handles;
-    gbArray(struct kevent) watch_list;
     gbArray(struct kevent) event_list;
 } server;
 
@@ -58,25 +57,47 @@ static int conn_handle_read_request(conn_handle* ch) {
     return received;
 }
 
-static void server_add_socket_to_watch_list(server* s, int fd) {
-    gb_array_append(s->watch_list, ((struct kevent){0}));
-    EV_SET(&s->watch_list[gb_array_count(s->watch_list) - 1], fd, EVFILT_READ,
-           EV_ADD | EV_CLEAR, 0, 0, 0);
-}
-
-static void server_init(server* s, gbAllocator allocator) {
+static int server_init(server* s, gbAllocator allocator) {
     s->allocator = allocator;
 
-    gb_array_init_reserve(s->watch_list, s->allocator, LISTEN_BACKLOG);
     printf("[D001] sock_fd=%d\n", s->fd);
 
-    gb_array_init_reserve(s->watch_list, s->allocator, LISTEN_BACKLOG);
-    gb_array_init_reserve(s->event_list, s->allocator,
-                          gb_array_capacity(s->watch_list));
+    gb_array_init_reserve(s->event_list, s->allocator, LISTEN_BACKLOG);
 
     gb_array_init_reserve(s->conn_handles, s->allocator, LISTEN_BACKLOG);
+
+    s->queue = kqueue();
+    if (s->queue == -1) {
+        fprintf(stderr, "%s:%d:Failed to create queue with kqueue(): %s\n",
+                __FILE__, __LINE__, strerror(errno));
+        return errno;
+    }
+    return 0;
 }
 
+static int server_add_event(server* s, int fd) {
+    struct kevent event = {0};
+    EV_SET(&event, fd, EVFILT_READ, EV_ADD, 0, 0, 0);
+
+    if (kevent(s->queue, &event, 1, NULL, 0, NULL) == -1) {
+        fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
+                strerror(errno));
+        return errno;
+    }
+    return 0;
+}
+
+static int server_remove_event(server* s, int fd) {
+    struct kevent event = {0};
+    EV_SET(&event, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
+
+    if (kevent(s->queue, &event, 1, NULL, 0, NULL) == -1) {
+        fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
+                strerror(errno));
+        return errno;
+    }
+    return 0;
+}
 static void print_usage(int argc, char* argv[]) {
     GB_ASSERT(argc > 0);
     printf("%s <port>\n", argv[0]);
@@ -97,7 +118,7 @@ static int server_accept_new_connection(server* s) {
     }
     printf("[D002] New conn: %d\n", conn_fd);
 
-    server_add_socket_to_watch_list(s, conn_fd);
+    server_add_event(s, conn_fd);
 
     conn_handle ch = {.fd = conn_fd};
     conn_handle_init(&ch, s->allocator, client_addr);
@@ -146,15 +167,6 @@ static void server_remove_connection(server* s, conn_handle* ch) {
     // Close
     close(ch->fd);
 
-    // Remove watch
-    for (int i = 0; i < gb_array_count(s->watch_list); i++) {
-        if (s->watch_list[i].ident == ch->fd) {
-            s->watch_list[i] = s->watch_list[gb_array_count(s->watch_list) - 1];
-            gb_array_pop(s->watch_list);
-            break;
-        }
-    }
-
     // Remove handle
     for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
         if (&s->conn_handles[i] == ch) {
@@ -197,7 +209,7 @@ static int server_listen_and_bind(server* s, u16 port) {
         fprintf(stderr, "Failed to listen(2): %s\n", strerror(errno));
         return errno;
     }
-    server_add_socket_to_watch_list(s, s->fd);
+    server_add_event(s, s->fd);
     printf("Listening: :%d\n", port);
     return 0;
 }
@@ -207,18 +219,10 @@ static int server_run(server* s, u16 port) {
     err = server_listen_and_bind(s, port);
     if (err != 0) return err;
 
-    s->queue = kqueue();
-    if (s->queue == -1) {
-        fprintf(stderr, "%s:%d:Failed to create queue with kqueue(): %s\n",
-                __FILE__, __LINE__, strerror(errno));
-        return errno;
-    }
-
     while (1) {
         printf("[D010] conn_handles=%td\n", gb_array_count(s->conn_handles));
-        const int event_count =
-            kevent(s->queue, s->watch_list, gb_array_count(s->watch_list),
-                   s->event_list, gb_array_capacity(s->event_list), NULL);
+        const int event_count = kevent(s->queue, NULL, 0, s->event_list,
+                                       gb_array_capacity(s->event_list), NULL);
         if (event_count == -1) {
             fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__,
                     __LINE__, strerror(errno));
@@ -270,7 +274,6 @@ int main(int argc, char* argv[]) {
     int err = 0;
     gbAllocator allocator = gb_heap_allocator();
     server s = {0};
-    server_init(&s, allocator);
-    err = server_run(&s, port);
-    if (err != 0) return err;
+    if ((err = server_init(&s, allocator)) != 0) return err;
+    if ((err = server_run(&s, port)) != 0) return err;
 }
