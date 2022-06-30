@@ -260,9 +260,6 @@ static int server_poll_events(server* s) {
     }
     gb_array_resize(s->event_list, event_count);
     fprintf(stderr, "[D006] Event count=%d\n", event_count);
-    for (int i = 0; i < event_count; i++) {
-        fprintf(stderr, "[D007] ident=%lu \n", s->event_list[i].ident);
-    }
 
     return 0;
 }
@@ -280,6 +277,13 @@ static void server_handle_events(server* s) {
         fprintf(stderr, "[D008] Data to be read on: %d\n", fd);
         conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
         assert(ch != NULL);
+
+        // Connection gone
+        if (e->flags & EV_EOF) {
+            server_remove_connection(s, ch);
+            continue;
+        }
+
         int res = 0;
         if ((res = conn_handle_read_request(ch)) <= 0) {
             server_remove_connection(s, ch);
