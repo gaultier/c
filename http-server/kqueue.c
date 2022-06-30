@@ -32,6 +32,29 @@ typedef struct {
     gbArray(struct kevent) event_list;
 } server;
 
+static int fd_set_non_blocking(int fd) {
+    int res = 0;
+    do res = fcntl(fd, F_GETFL);
+    while (res == -1 && errno == EINTR);
+
+    if (res == -1) {
+        fprintf(stderr, "Failed to fcntl(2): %s\n", strerror(errno));
+        return errno;
+    }
+
+    /* Bail out now if already set/clear. */
+    if ((res & O_NONBLOCK) == 0) {
+        do res = fcntl(fd, F_SETFL, res | O_NONBLOCK);
+        while (res == -1 && errno == EINTR);
+
+        if (res == -1) {
+            fprintf(stderr, "Failed to  fcntl(2): %s\n", strerror(errno));
+            return errno;
+        }
+    }
+    return 0;
+}
+
 static void ip(uint32_t val, char* res) {
     uint8_t a = val >> 24, b = val >> 16, c = val >> 8, d = val & 0xff;
     snprintf(res, 16, "%hhu.%hhu.%hhu.%hhu", d, c, b, a);
@@ -121,6 +144,9 @@ static int server_accept_new_connection(server* s) {
     }
     fprintf(stderr, "[D002] New conn: %d\n", conn_fd);
 
+    int res = 0;
+    if ((res = fd_set_non_blocking(conn_fd)) != 0) return res;
+
     server_add_event(s, conn_fd);
 
     conn_handle ch = {.fd = conn_fd};
@@ -166,6 +192,8 @@ static int conn_handle_send_response(conn_handle* ch) {
 }
 
 static void server_remove_connection(server* s, conn_handle* ch) {
+    printf("Removing connection: fd=%d remaining=%td\n", ch->fd,
+           gb_array_count(s->conn_handles));
     server_remove_event(s, ch->fd);
 
     // Close
@@ -183,7 +211,7 @@ static void server_remove_connection(server* s, conn_handle* ch) {
 }
 
 static int server_listen_and_bind(server* s, u16 port) {
-    int err = 0;
+    int res = 0;
 
     s->fd = socket(PF_INET, SOCK_STREAM, 0);
     if (s->fd == -1) {
@@ -192,15 +220,14 @@ static int server_listen_and_bind(server* s, u16 port) {
     }
 
     const int val = 1;
-    if ((err = setsockopt(s->fd, SOL_SOCKET, SO_REUSEADDR, &val,
+    if ((res = setsockopt(s->fd, SOL_SOCKET, SO_REUSEADDR, &val,
                           sizeof(val))) == -1) {
         fprintf(stderr, "Failed to setsockopt(2): %s\n", strerror(errno));
         return errno;
     }
 
-    if ((err = fcntl(s->fd, F_SETFL, O_NONBLOCK)) == -1) {
-        fprintf(stderr, "Failed to  fcntl(2): %s\n", strerror(errno));
-        return errno;
+    if ((res = fd_set_non_blocking(s->fd)) != 0) {
+        return res;
     }
 
     const struct sockaddr_in addr = {
@@ -208,13 +235,13 @@ static int server_listen_and_bind(server* s, u16 port) {
         .sin_port = htons(port),
     };
 
-    if ((err = bind(s->fd, (const struct sockaddr*)&addr, sizeof(addr))) ==
+    if ((res = bind(s->fd, (const struct sockaddr*)&addr, sizeof(addr))) ==
         -1) {
         fprintf(stderr, "Failed to bind(2): %s\n", strerror(errno));
         return errno;
     }
 
-    if ((err = listen(s->fd, LISTEN_BACKLOG)) == -1) {
+    if ((res = listen(s->fd, LISTEN_BACKLOG)) == -1) {
         fprintf(stderr, "Failed to listen(2): %s\n", strerror(errno));
         return errno;
     }
