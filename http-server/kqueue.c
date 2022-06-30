@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <netinet/in.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/event.h>
@@ -19,6 +20,15 @@
 #define IP_ADDR_STR_LEN 17
 #define CONN_BUF_LEN 2048
 #define LISTEN_BACKLOG 512
+
+typedef struct {
+    u64 upper_bound_milliseconds_excl;
+    u64 count;
+} latency_histogram_bucket;
+
+typedef struct {
+    latency_histogram_bucket buckets[10];
+} latency_histogram;
 
 typedef struct {
     const char* method;
@@ -48,11 +58,10 @@ struct server {
     gbAllocator allocator;
     gbArray(conn_handle) conn_handles;
     struct kevent event_list[LISTEN_BACKLOG];
+    latency_histogram hist;
 };
 
 static bool verbose = false;
-static u64 req_count = 0;
-static u64 max_req_lifetime_usecs = {0};
 
 #define LOG(fmt, ...)                                   \
     do {                                                \
@@ -137,6 +146,16 @@ static int server_init(server* s, gbAllocator allocator) {
                 __FILE__, __LINE__, strerror(errno));
         return errno;
     }
+
+    s->hist =
+        (latency_histogram){.buckets = {
+                                {.upper_bound_milliseconds_excl = 5},
+                                {.upper_bound_milliseconds_excl = 20},
+                                {.upper_bound_milliseconds_excl = 100},
+                                {.upper_bound_milliseconds_excl = 500},
+                                {.upper_bound_milliseconds_excl = 1000},
+                                {.upper_bound_milliseconds_excl = UINT64_MAX},
+                            }};
     return 0;
 }
 
@@ -192,7 +211,6 @@ static int server_accept_new_connection(server* s) {
     conn_handle_init(&ch, s->allocator, client_addr);
     gb_array_append(s->conn_handles, ch);
 
-    req_count++;
     return 0;
 }
 
@@ -235,21 +253,43 @@ static int conn_handle_write(conn_handle* ch) {
     return 0;
 }
 
+static void histogram_add_entry(latency_histogram* hist, float val) {
+    latency_histogram_bucket* bucket = NULL;
+    for (int i = 0; i < sizeof(hist->buckets) / sizeof(hist->buckets[0]); i++) {
+        bucket = &hist->buckets[i];
+        if (bucket->upper_bound_milliseconds_excl > val) {
+            break;
+        }
+    }
+    assert(bucket != NULL);
+    bucket->count++;
+
+    LOG("histogram_add_entry: %f\n", val);
+}
+
+static void histogram_print(latency_histogram* hist) {
+    puts("");
+    for (int i = 0; i < sizeof(hist->buckets) / sizeof(hist->buckets[0]); i++) {
+        latency_histogram_bucket* bucket = &hist->buckets[i];
+        printf("Latency < %llu: %llu\n", bucket->upper_bound_milliseconds_excl,
+               bucket->count);
+        if (bucket->upper_bound_milliseconds_excl == UINT64_MAX) break;
+    }
+}
+
 static void server_remove_connection(server* s, conn_handle* ch) {
     struct timeval end = {0};
     gettimeofday(&end, NULL);
     u64 secs = end.tv_sec - ch->start.tv_sec;
     u64 usecs = end.tv_usec - ch->start.tv_usec;
-    u64 total_usecs = usecs + 1000 * 1000 * secs;
-    if (total_usecs > max_req_lifetime_usecs)
-        max_req_lifetime_usecs = total_usecs;
+    float total_msecs = usecs / 1000.0 + 1000 * secs;
 
     LOG("Removing connection: fd=%d remaining=%td cap(conn_handles)=%td "
-        "lifetime=%llus %lluus "
-        "max=%lluus\n",
+        "lifetime=%fms\n",
         ch->fd, gb_array_count(s->conn_handles),
-        gb_array_capacity(s->conn_handles), secs, usecs,
-        max_req_lifetime_usecs);
+        gb_array_capacity(s->conn_handles), total_msecs);
+
+    histogram_add_entry(&s->hist, total_msecs);
     server_remove_event(s, ch->fd);
 
     close(ch->fd);
@@ -266,6 +306,9 @@ static void server_remove_connection(server* s, conn_handle* ch) {
             break;
         }
     }
+
+    // TODO: add a timer to print it every X seconds?
+    histogram_print(&s->hist);
 }
 
 static int conn_handle_respond_404(conn_handle* ch) {
@@ -306,6 +349,7 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
     if (stat(path, &st) == -1) {
         fprintf(stderr, "Failed to stat(2): path=`%s` err=%s\n", path,
                 strerror(errno));
+        close(fd);
         conn_handle_respond_404(ch);
         return 0;
     }
@@ -332,9 +376,11 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
     if (res == -1) {
         fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
                 strerror(errno));
+        close(fd);
         return -1;
     }
     LOG("sendfile(2): res=%d len=%lld\n", res, len);
+    close(fd);
     return 0;
 }
 
@@ -412,7 +458,6 @@ static int server_listen_and_bind(server* s, u16 port) {
 }
 
 static int server_poll_events(server* s, int* event_count) {
-    LOG("[D012] req_count=%llu\n", req_count);
     *event_count =
         kevent(s->queue, NULL, 0, s->event_list, LISTEN_BACKLOG, NULL);
     if (*event_count == -1) {
