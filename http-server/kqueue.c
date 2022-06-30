@@ -1,7 +1,9 @@
 #include <assert.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/event.h>
+#include <sys/fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -164,7 +166,7 @@ static int conn_handle_send_response(conn_handle* ch) {
 }
 
 static void server_remove_connection(server* s, conn_handle* ch) {
-    server_remove_connection(s, ch);
+    server_remove_event(s, ch->fd);
 
     // Close
     close(ch->fd);
@@ -193,6 +195,11 @@ static int server_listen_and_bind(server* s, u16 port) {
     if ((err = setsockopt(s->fd, SOL_SOCKET, SO_REUSEADDR, &val,
                           sizeof(val))) == -1) {
         fprintf(stderr, "Failed to setsockopt(2): %s\n", strerror(errno));
+        return errno;
+    }
+
+    if ((err = fcntl(s->fd, F_SETFL, O_NONBLOCK)) == -1) {
+        fprintf(stderr, "Failed to  fcntl(2): %s\n", strerror(errno));
         return errno;
     }
 
