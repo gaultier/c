@@ -84,8 +84,6 @@ static void ip(uint32_t val, char* res) {
 
 static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
                              struct sockaddr_in client_addr) {
-    /* ch->req = gb_string_make_reserve(allocator, 4096); */
-    /* ch->res = gb_string_make_reserve(allocator, 4096); */
     ip(client_addr.sin_addr.s_addr, ch->ip);
 
     gettimeofday(&ch->start, NULL);
@@ -201,7 +199,37 @@ static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
     return NULL;
 }
 
-static void conn_handle_make_response(conn_handle* ch) {
+bool http_request_is_get(const http_req* req) {
+    return req->method_len == 3 && req->method[0] == 'G' &&
+           req->method[1] == 'E' && req->method[2] == 'T';
+}
+
+static int conn_handle_respond_404(conn_handle* ch) {
+    snprintf(ch->res_buf, CONN_BUF_LEN,
+             "HTTP/1.1 404 Not Found\r\n"
+             "Content-Length: 0\r\n"
+             "\r\n");
+
+    int written = 0;
+    const int total = strlen(ch->res_buf);
+    while (written < total) {
+        const int nb = write(ch->fd, &ch->res_buf[written], total - written);
+        if (nb == -1) {
+            fprintf(stderr, "Failed to write(2): ip=%s err=%s\n", ch->ip,
+                    strerror(errno));
+            return errno;
+        }
+        written += nb;
+    }
+    return 0;
+}
+
+static int conn_handle_send_response(conn_handle* ch) {
+    if (!http_request_is_get(&ch->req)) {
+        conn_handle_respond_404(ch);
+        return 0;
+    }
+
     snprintf(ch->res_buf, CONN_BUF_LEN,
              "HTTP/1.1 200 OK\r\n"
              "Content-Type: text/plain; charset=utf8\r\n"
@@ -209,9 +237,7 @@ static void conn_handle_make_response(conn_handle* ch) {
              "\r\n"
              "%.*s",
              (int)ch->req.path_len, (int)ch->req.path_len, ch->req.path);
-}
 
-static int conn_handle_send_response(conn_handle* ch) {
     int written = 0;
     const int total = strlen(ch->res_buf);
     while (written < total) {
@@ -340,7 +366,6 @@ static void server_handle_events(server* s, int event_count) {
             continue;
         }
 
-        conn_handle_make_response(ch);
         conn_handle_send_response(ch);
         server_remove_connection(s, ch);
     }
