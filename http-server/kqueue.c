@@ -363,11 +363,7 @@ int main(int argc, char* argv[]) {
     verbose = getenv("VERBOSE") != NULL;
 
     int res = 0;
-    const u64 mem_size = 100 * 1024 * 1024;
-    u8* mem = malloc(mem_size);
-    gbArena arena = {0};
-    gb_arena_init_from_memory(&arena, mem, mem_size);
-    gbAllocator allocator = gb_arena_allocator(&arena);
+    gbAllocator allocator = gb_heap_allocator();
     server s = {0};
     if ((res = server_init(&s, allocator)) != 0) return res;
     if ((res = server_run(&s, port)) != 0) return res;
