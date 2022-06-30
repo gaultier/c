@@ -204,9 +204,19 @@ static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
     return NULL;
 }
 
-bool http_request_is_get(const http_req* req) {
+static bool http_request_is_get(const http_req* req) {
     return req->method_len == 3 && req->method[0] == 'G' &&
            req->method[1] == 'E' && req->method[2] == 'T';
+}
+
+static char* http_content_type_for_file(const char* ext, int ext_len) {
+    if (ext_len == 4 && memcmp(ext, "html", 4) == 0) return "text/html";
+    if (ext_len == 2 && memcmp(ext, "js", 2) == 0)
+        return "application/javascript";
+    if (ext_len == 3 && memcmp(ext, "css", 2) == 0)
+        return "text/css";
+    else
+        return "text/plain";
 }
 
 static int conn_handle_write(conn_handle* ch) {
@@ -270,13 +280,19 @@ static int conn_handle_respond_404(conn_handle* ch) {
 static int conn_handle_serve_static_file(conn_handle* ch) {
     // TODO: security
     char path[PATH_MAX] = "";
-    if (ch->req.path_len >= PATH_MAX || ch->req.path_len <= 1) {
+    if (ch->req.path_len >= PATH_MAX) {
         conn_handle_respond_404(ch);
         return 0;
     }
-    memcpy(path, ch->req.path + 1 /* Skip leading slash */,
-           ch->req.path_len - 1);
-    LOG("Serving static file `%s`\n", path);
+    if (ch->req.path_len <= 1) {
+        memcpy(path, "index.html", sizeof("index.html"));
+    } else {
+        memcpy(path, ch->req.path + 1 /* Skip leading slash */,
+               ch->req.path_len - 1);
+    }
+
+    const char* const ext = gb_path_extension(path);
+    LOG("Serving static file `%s` ext=`%s`\n", path, ext);
 
     const int fd = open(path, O_RDONLY);
     if (fd == -1) {
@@ -297,10 +313,10 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
 
     snprintf(ch->res_buf, CONN_BUF_LEN,
              "HTTP/1.1 200 OK\r\n"
-             "Content-Type: text/plain; charset=utf8\r\n"
+             "Content-Type: %s; charset=utf8\r\n"
              "Content-Length: %lld\r\n"
              "\r\n",
-             st.st_size);
+             http_content_type_for_file(ext, strlen(ext)), st.st_size);
     struct iovec header = {
         .iov_base = ch->res_buf,
         .iov_len = strlen(ch->res_buf),
@@ -336,7 +352,10 @@ static int conn_handle_send_response(conn_handle* ch) {
         return 0;
     }
 
-    if (str_ends_with(ch->req.path, ch->req.path_len, ".html", 5)) {
+    if (ch->req.path_len <= 1 ||
+        str_ends_with(ch->req.path, ch->req.path_len, ".html", 5) ||
+        str_ends_with(ch->req.path, ch->req.path_len, ".js", 3) ||
+        str_ends_with(ch->req.path, ch->req.path_len, ".css", 4)) {
         conn_handle_serve_static_file(ch);
         return 0;
     }
