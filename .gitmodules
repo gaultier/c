@@ -4,3 +4,6 @@
 [submodule "vendor/http-parser"]
 	path = vendor/http-parser
 	url = https://github.com/nodejs/http-parser
+[submodule "http-server/vendor/picohttpparser"]
+	path = http-server/vendor/picohttpparser
+	url = https://github.com/h2o/picohttpparser

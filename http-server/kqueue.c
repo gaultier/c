@@ -12,17 +12,27 @@
 #define GB_IMPLEMENTATION
 #define GB_STATIC
 #include "../vendor/gb/gb.h"
-#include "../vendor/http-parser/http_parser.h"
+#include "vendor/picohttpparser/picohttpparser.h"
 
 #define IP_ADDR_STR_LEN 17
-#define CONN_BUF_LEN 4096
+#define CONN_BUF_LEN 2048
 #define LISTEN_BACKLOG 512
 
 typedef struct {
-    /* gbString req; */
-    /* gbString res; */
+    const char* method;
+    const char* path;
+    usize method_len;
+    usize path_len;
+    usize num_headers;
+    int minor_version;
+    struct phr_header headers[100];
+} http_req;
+
+typedef struct {
+    http_req req;
     int fd;
-    char buf[CONN_BUF_LEN];
+    char req_buf[CONN_BUF_LEN];
+    char res_buf[CONN_BUF_LEN];
     char ip[IP_ADDR_STR_LEN];
     struct timeval start;
 } conn_handle;
@@ -79,17 +89,12 @@ static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
     ip(client_addr.sin_addr.s_addr, ch->ip);
 
     gettimeofday(&ch->start, NULL);
-}
 
-static void conn_handle_destroy(conn_handle* ch) {
-    /* gb_string_free(ch->req); */
-    /* gb_string_free(ch->res); */
+    ch->req.num_headers = sizeof(ch->req.headers) / sizeof(ch->req.headers[0]);
 }
 
 static int conn_handle_read_request(conn_handle* ch) {
-    int total_received = 0;
-    const ssize_t received =
-        read(ch->fd, &ch->buf[total_received], CONN_BUF_LEN);
+    const ssize_t received = read(ch->fd, ch->req_buf, CONN_BUF_LEN);
     if (received == -1) {
         fprintf(stderr, "Failed to read(2): ip=%shu err=%s\n", ch->ip,
                 strerror(errno));
@@ -98,11 +103,22 @@ static int conn_handle_read_request(conn_handle* ch) {
     if (received == 0) {  // Client closed connection
         return 0;
     }
-    total_received += received;
-    LOG("[D009] Read: received=%zd total_received=%d %.*s\n", received,
-        total_received, (int)received, ch->buf);
-    /* ch->req = gb_string_append_length(ch->req, ch->buf, received); */
-    return received;
+    LOG("[D009] Read: received=%zd `%.*s`\n", received, (int)received,
+        ch->req_buf);
+
+    int res = phr_parse_request(ch->req_buf, received, &ch->req.method,
+                                &ch->req.method_len, &ch->req.path,
+                                &ch->req.path_len, &ch->req.minor_version,
+                                ch->req.headers, &ch->req.num_headers, 0);
+
+    if (res == -1) {
+        LOG("Failed to phr_parse_request: fd=%d\n", ch->fd);
+        return res;
+    }
+    LOG("method=%.*s path=%.*s\n", (int)ch->req.method_len, ch->req.method,
+        (int)ch->req.path_len, ch->req.path);
+
+    return res;
 }
 
 static int server_init(server* s, gbAllocator allocator) {
@@ -186,22 +202,20 @@ static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
 }
 
 static void conn_handle_make_response(conn_handle* ch) {
-    const char msg[] = "hello";
-    bzero(ch->buf, CONN_BUF_LEN);
-    snprintf(ch->buf, CONN_BUF_LEN,
+    snprintf(ch->res_buf, CONN_BUF_LEN,
              "HTTP/1.1 200 OK\r\n"
              "Content-Type: text/plain; charset=utf8\r\n"
-             "Content-Length: %td\r\n"
+             "Content-Length: %d\r\n"
              "\r\n"
-             "%s",
-             sizeof(msg) - 1, msg);
+             "%.*s",
+             (int)ch->req.path_len, (int)ch->req.path_len, ch->req.path);
 }
 
 static int conn_handle_send_response(conn_handle* ch) {
     int written = 0;
-    const int total = strlen(ch->buf);
+    const int total = strlen(ch->res_buf);
     while (written < total) {
-        const int nb = write(ch->fd, &ch->buf[written], total - written);
+        const int nb = write(ch->fd, &ch->res_buf[written], total - written);
         if (nb == -1) {
             fprintf(stderr, "Failed to write(2): ip=%s err=%s\n", ch->ip,
                     strerror(errno));
@@ -230,10 +244,7 @@ static void server_remove_connection(server* s, conn_handle* ch) {
         max_req_lifetime_usecs);
     server_remove_event(s, ch->fd);
 
-    // Close
     close(ch->fd);
-
-    conn_handle_destroy(ch);
 
     // Remove handle
     for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
