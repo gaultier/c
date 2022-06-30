@@ -28,7 +28,6 @@ typedef struct {
     gbAllocator allocator;
     gbArray(conn_handle) conn_handles;
     gbArray(struct kevent) event_list;
-    pthread_mutex_t mutex;
 } server;
 
 static void ip(uint32_t val, char* res) {
@@ -61,7 +60,6 @@ static int conn_handle_read_request(conn_handle* ch) {
 
 static int server_init(server* s, gbAllocator allocator) {
     s->allocator = allocator;
-    pthread_mutex_init(&s->mutex, NULL);
 
     fprintf(stderr, "[D001] sock_fd=%d\n", s->fd);
 
@@ -123,27 +121,20 @@ static int server_accept_new_connections(server* s) {
         }
         fprintf(stderr, "[D002] New conn: %d\n", conn_fd);
 
+        server_add_event(s, conn_fd);
+
         conn_handle ch = {.fd = conn_fd};
         conn_handle_init(&ch, s->allocator, client_addr);
-
-        pthread_mutex_lock(&s->mutex);
         gb_array_append(s->conn_handles, ch);
-        pthread_mutex_unlock(&s->mutex);
-        server_add_event(s, conn_fd);
     }
     return 0;
 }
 
 static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
-    pthread_mutex_lock(&s->mutex);
     for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
         conn_handle* ch = &s->conn_handles[i];
-        if (ch->fd == fd) {
-            pthread_mutex_unlock(&s->mutex);
-            return ch;
-        }
+        if (ch->fd == fd) return ch;
     }
-    pthread_mutex_unlock(&s->mutex);
     return NULL;
 }
 
@@ -182,7 +173,6 @@ static void server_remove_connection(server* s, conn_handle* ch) {
     close(ch->fd);
 
     // Remove handle
-    pthread_mutex_lock(&s->mutex);
     for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
         if (&s->conn_handles[i] == ch) {
             s->conn_handles[i] =
@@ -191,7 +181,6 @@ static void server_remove_connection(server* s, conn_handle* ch) {
             break;
         }
     }
-    pthread_mutex_unlock(&s->mutex);
 }
 
 static int server_listen_and_bind(server* s, u16 port) {
