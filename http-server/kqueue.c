@@ -280,8 +280,8 @@ static void server_handle_events(server* s) {
         fprintf(stderr, "[D008] Data to be read on: %d\n", fd);
         conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
         assert(ch != NULL);
-        int err = 0;
-        if ((err = conn_handle_read_request(ch)) <= 0) {
+        int res = 0;
+        if ((res = conn_handle_read_request(ch)) <= 0) {
             server_remove_connection(s, ch);
             continue;
         }
@@ -293,9 +293,9 @@ static void server_handle_events(server* s) {
 }
 
 static int server_run(server* s, u16 port) {
-    int err = 0;
-    err = server_listen_and_bind(s, port);
-    if (err != 0) return err;
+    int res = 0;
+    res = server_listen_and_bind(s, port);
+    if (res != 0) return res;
 
     while (1) {
         server_poll_events(s);
@@ -316,9 +316,9 @@ int main(int argc, char* argv[]) {
         return EINVAL;
     }
 
-    int err = 0;
+    int res = 0;
     gbAllocator allocator = gb_heap_allocator();
     server s = {0};
-    if ((err = server_init(&s, allocator)) != 0) return err;
-    if ((err = server_run(&s, port)) != 0) return err;
+    if ((res = server_init(&s, allocator)) != 0) return res;
+    if ((res = server_run(&s, port)) != 0) return res;
 }
