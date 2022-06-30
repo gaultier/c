@@ -48,7 +48,7 @@ static int conn_handle_read_request(conn_handle* ch) {
     if (received == -1) {
         fprintf(stderr, "Failed to read(2): ip=%shu err=%s\n", ch->ip,
                 strerror(errno));
-        return -1;
+        return errno;
     }
     if (received == 0) {  // Client closed connection
         return 0;
@@ -233,6 +233,7 @@ static int server_listen_and_bind(server* s, u16 port) {
 }
 
 static int server_poll_events(server* s) {
+    puts("[D009] Polling");
     const int event_count = kevent(s->queue, NULL, 0, s->event_list,
                                    gb_array_capacity(s->event_list), NULL);
     if (event_count == -1) {
