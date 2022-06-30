@@ -6,6 +6,8 @@
 #include <sys/event.h>
 #include <sys/fcntl.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
+#include <sys/syslimits.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -28,7 +30,10 @@ typedef struct {
     struct phr_header headers[100];
 } http_req;
 
+typedef struct server server;
+
 typedef struct {
+    server* s;
     http_req req;
     int fd;
     char req_buf[CONN_BUF_LEN];
@@ -37,13 +42,13 @@ typedef struct {
     struct timeval start;
 } conn_handle;
 
-typedef struct {
+struct server {
     int fd;
     int queue;
     gbAllocator allocator;
     gbArray(conn_handle) conn_handles;
     struct kevent event_list[LISTEN_BACKLOG];
-} server;
+};
 
 static bool verbose = false;
 static u64 req_count = 0;
@@ -183,7 +188,7 @@ static int server_accept_new_connection(server* s) {
 
     server_add_event(s, conn_fd);
 
-    conn_handle ch = {.fd = conn_fd};
+    conn_handle ch = {.fd = conn_fd, .s = s};
     conn_handle_init(&ch, s->allocator, client_addr);
     gb_array_append(s->conn_handles, ch);
 
@@ -204,14 +209,10 @@ bool http_request_is_get(const http_req* req) {
            req->method[1] == 'E' && req->method[2] == 'T';
 }
 
-static int conn_handle_respond_404(conn_handle* ch) {
-    snprintf(ch->res_buf, CONN_BUF_LEN,
-             "HTTP/1.1 404 Not Found\r\n"
-             "Content-Length: 0\r\n"
-             "\r\n");
-
+static int conn_handle_write(conn_handle* ch) {
     int written = 0;
     const int total = strlen(ch->res_buf);
+
     while (written < total) {
         const int nb = write(ch->fd, &ch->res_buf[written], total - written);
         if (nb == -1) {
@@ -221,35 +222,6 @@ static int conn_handle_respond_404(conn_handle* ch) {
         }
         written += nb;
     }
-    return 0;
-}
-
-static int conn_handle_send_response(conn_handle* ch) {
-    if (!http_request_is_get(&ch->req)) {
-        conn_handle_respond_404(ch);
-        return 0;
-    }
-
-    snprintf(ch->res_buf, CONN_BUF_LEN,
-             "HTTP/1.1 200 OK\r\n"
-             "Content-Type: text/plain; charset=utf8\r\n"
-             "Content-Length: %d\r\n"
-             "\r\n"
-             "%.*s",
-             (int)ch->req.path_len, (int)ch->req.path_len, ch->req.path);
-
-    int written = 0;
-    const int total = strlen(ch->res_buf);
-    while (written < total) {
-        const int nb = write(ch->fd, &ch->res_buf[written], total - written);
-        if (nb == -1) {
-            fprintf(stderr, "Failed to write(2): ip=%s err=%s\n", ch->ip,
-                    strerror(errno));
-            return errno;
-        }
-        written += nb;
-    }
-
     return 0;
 }
 
@@ -284,6 +256,100 @@ static void server_remove_connection(server* s, conn_handle* ch) {
             break;
         }
     }
+}
+
+static int conn_handle_respond_404(conn_handle* ch) {
+    snprintf(ch->res_buf, CONN_BUF_LEN,
+             "HTTP/1.1 404 Not Found\r\n"
+             "Content-Length: 0\r\n"
+             "\r\n");
+
+    return conn_handle_write(ch);
+}
+
+static int conn_handle_serve_static_file(conn_handle* ch) {
+    // TODO: security
+    char path[PATH_MAX] = "";
+    if (ch->req.path_len >= PATH_MAX || ch->req.path_len <= 1) {
+        conn_handle_respond_404(ch);
+        return 0;
+    }
+    memcpy(path, ch->req.path + 1 /* Skip leading slash */,
+           ch->req.path_len - 1);
+    LOG("Serving static file `%s`\n", path);
+
+    const int fd = open(path, O_RDONLY);
+    if (fd == -1) {
+        fprintf(stderr, "Failed to open(2): path=`%s` err=%s\n", path,
+                strerror(errno));
+        conn_handle_respond_404(ch);
+        return 0;
+    }
+
+    struct stat st = {0};
+    if (stat(path, &st) == -1) {
+        fprintf(stderr, "Failed to stat(2): path=`%s` err=%s\n", path,
+                strerror(errno));
+        conn_handle_respond_404(ch);
+        return 0;
+    }
+    LOG("Serving static file `%s` size=%lld\n", path, st.st_size);
+
+    snprintf(ch->res_buf, CONN_BUF_LEN,
+             "HTTP/1.1 200 OK\r\n"
+             "Content-Type: text/plain; charset=utf8\r\n"
+             "Content-Length: %lld\r\n"
+             "\r\n",
+             st.st_size);
+    struct iovec header = {
+        .iov_base = ch->res_buf,
+        .iov_len = strlen(ch->res_buf),
+    };
+    struct sf_hdtr headers_trailers = {
+        .headers = &header,
+        .hdr_cnt = 1,
+    };
+
+    off_t len = 0;
+    // TODO: partial writes
+    int res = sendfile(fd, ch->fd, 0, &len, &headers_trailers, 0);
+    if (res == -1) {
+        fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
+                strerror(errno));
+        return -1;
+    }
+    LOG("sendfile(2): res=%d len=%lld\n", res, len);
+    return 0;
+}
+
+static bool str_ends_with(const char* haystack, int haystack_len,
+                          const char* needle, int needle_len) {
+    if (haystack_len < needle_len) return false;
+
+    return memcmp(haystack + haystack_len - needle_len, needle, needle_len) ==
+           0;
+}
+
+static int conn_handle_send_response(conn_handle* ch) {
+    if (!http_request_is_get(&ch->req)) {
+        conn_handle_respond_404(ch);
+        return 0;
+    }
+
+    if (str_ends_with(ch->req.path, ch->req.path_len, ".html", 5)) {
+        conn_handle_serve_static_file(ch);
+        return 0;
+    }
+
+    snprintf(ch->res_buf, CONN_BUF_LEN,
+             "HTTP/1.1 200 OK\r\n"
+             "Content-Type: text/plain; charset=utf8\r\n"
+             "Content-Length: %d\r\n"
+             "\r\n"
+             "%.*s",
+             (int)ch->req.path_len, (int)ch->req.path_len, ch->req.path);
+
+    return conn_handle_write(ch);
 }
 
 static int server_listen_and_bind(server* s, u16 port) {
