@@ -47,6 +47,7 @@ typedef struct {
     http_req req;
     int fd;
     char req_buf[CONN_BUF_LEN];
+    u16 req_buf_len;
     char res_buf[CONN_BUF_LEN];
     char ip[IP_ADDR_STR_LEN];
     struct timeval start;
@@ -106,7 +107,12 @@ static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
 }
 
 static int conn_handle_read_request(conn_handle* ch) {
-    const ssize_t received = read(ch->fd, ch->req_buf, CONN_BUF_LEN);
+    if (ch->req_buf_len >= sizeof(ch->req_buf)) {
+        return EINVAL;
+    }
+
+    const ssize_t received = read(ch->fd, &ch->req_buf[ch->req_buf_len],
+                                  CONN_BUF_LEN - ch->req_buf_len);
     if (received == -1) {
         fprintf(stderr, "Failed to read(2): ip=%shu err=%s\n", ch->ip,
                 strerror(errno));
@@ -115,16 +121,26 @@ static int conn_handle_read_request(conn_handle* ch) {
     if (received == 0) {  // Client closed connection
         return 0;
     }
-    LOG("[D009] Read: received=%zd `%.*s`\n", received, (int)received,
+    LOG("[D009] Read: received=%zd `%.*s`\n", received, ch->req_buf_len,
         ch->req_buf);
 
-    int res = phr_parse_request(ch->req_buf, received, &ch->req.method,
-                                &ch->req.method_len, &ch->req.path,
-                                &ch->req.path_len, &ch->req.minor_version,
-                                ch->req.headers, &ch->req.num_headers, 0);
+    const int prev_buf_len = ch->req_buf_len;
+    ch->req_buf_len += received;
+    if (ch->req_buf_len >= sizeof(ch->req_buf)) {
+        return EINVAL;
+    }
+    int res = phr_parse_request(
+        ch->req_buf, ch->req_buf_len, &ch->req.method, &ch->req.method_len,
+        &ch->req.path, &ch->req.path_len, &ch->req.minor_version,
+        ch->req.headers, &ch->req.num_headers, prev_buf_len);
 
+    LOG("phr_parse_request: fd=%d res=%d\n", ch->fd, res);
     if (res == -1) {
         LOG("Failed to phr_parse_request: fd=%d\n", ch->fd);
+        return res;
+    }
+    if (res == -2) {
+        LOG("Partial http parse, need more data: fd=%d\n", ch->fd);
         return res;
     }
     LOG("method=%.*s path=%.*s\n", (int)ch->req.method_len, ch->req.method,
@@ -487,6 +503,9 @@ static void server_handle_events(server* s, int event_count) {
 
         int res = 0;
         if ((res = conn_handle_read_request(ch)) <= 0) {
+            if (res == -2) {  // Need more data
+                continue;
+            }
             server_remove_connection(s, ch);
             continue;
         }
