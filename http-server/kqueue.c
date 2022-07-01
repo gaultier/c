@@ -64,9 +64,9 @@ struct server {
 
 static bool verbose = false;
 
-#define LOG(fmt, ...)                                   \
-    do {                                                \
-        if (verbose) fprintf(stderr, fmt, __VA_ARGS__); \
+#define LOG(fmt, ...)                                     \
+    do {                                                  \
+        if (verbose) fprintf(stderr, fmt, ##__VA_ARGS__); \
     } while (0)
 
 static int fd_set_non_blocking(int fd) {
@@ -211,7 +211,7 @@ static int server_accept_new_connection(server* s) {
         fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
         return errno;
     }
-    LOG("[D002] New conn: %d\n", conn_fd);
+    LOG("\n\n---------------- Request start\n\n[D002] New conn: %d\n", conn_fd);
 
     int res = 0;
     if ((res = fd_set_non_blocking(conn_fd)) != 0) return res;
@@ -320,6 +320,7 @@ static void server_remove_connection(server* s, conn_handle* ch) {
 
     // TODO: add a timer to print it every X seconds?
     histogram_print(&s->hist);
+    LOG("\n\n---------------- Request end\n\n");
 }
 
 static int conn_handle_respond_404(conn_handle* ch) {
