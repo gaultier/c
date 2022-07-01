@@ -30,13 +30,19 @@ typedef struct {
     latency_histogram_bucket buckets[10];
 } latency_histogram;
 
+typedef enum {
+    HM_GET,
+    HM_POST,
+    HM_PUT,
+    HM_PATCH,
+    HM_DELETE,
+} http_method;
+
 typedef struct {
-    const char* method;
+    http_method method;
     const char* path;
-    usize method_len;
-    usize path_len;
-    usize num_headers;
-    int minor_version;
+    u16 path_len;
+    u8 num_headers;
     struct phr_header headers[100];
 } http_req;
 
@@ -60,6 +66,7 @@ struct server {
     gbArray(conn_handle) conn_handles;
     struct kevent event_list[LISTEN_BACKLOG];
     latency_histogram hist;
+    u64 requests_in_flight;
 };
 
 static bool verbose = false;
@@ -68,6 +75,59 @@ static bool verbose = false;
     do {                                                  \
         if (verbose) fprintf(stderr, fmt, ##__VA_ARGS__); \
     } while (0)
+
+static int http_request_parse(http_req* req, char* buf, u64 buf_len,
+                              u64 prev_buf_len) {
+    const char* method = NULL;
+    const char* path = NULL;
+    usize method_len = 0;
+    usize path_len = 0;
+    int minor_version = 0;
+    struct phr_header headers[100] = {0};
+    usize num_headers = sizeof(headers) / sizeof(headers[0]);
+
+    int res =
+        phr_parse_request(buf, buf_len, &method, &method_len, &path, &path_len,
+                          &minor_version, headers, &num_headers, prev_buf_len);
+
+    LOG("phr_parse_request: res=%d\n", res);
+    if (res == -1) {
+        LOG("Failed to phr_parse_request:\n");
+        return res;
+    }
+    if (res == -2) {
+        LOG("Partial http parse, need more data\n");
+        return res;
+    }
+    if (method_len >= sizeof("DELETE") - 1) {  // Longest method
+        return EINVAL;
+    }
+    if (method_len == 3 && memcmp(method, "GET", 3) == 0)
+        req->method = HM_GET;
+    else if (method_len == 4 && memcmp(method, "POST", 4) == 0)
+        req->method = HM_POST;
+    else if (method_len == 3 && memcmp(method, "PUT", 3) == 0)
+        req->method = HM_PUT;
+    else if (method_len == 5 && memcmp(method, "PATCH", 5) == 0)
+        req->method = HM_PATCH;
+    else if (method_len == 6 && memcmp(method, "DELETE", 6) == 0)
+        req->method = HM_DELETE;
+    else
+        return EINVAL;
+
+    if (path_len >= 4096) {
+        return EINVAL;
+    }
+    req->path = path;
+    req->path_len = path_len;
+
+    if (num_headers >= UINT8_MAX) return EINVAL;
+    req->num_headers = num_headers;
+    memcpy(req->headers, headers, sizeof(headers));
+
+    LOG("method=%d path=%.*s\n", req->method, req->path_len, req->path);
+    return res;
+}
 
 static int fd_set_non_blocking(int fd) {
     int res = 0;
@@ -121,32 +181,17 @@ static int conn_handle_read_request(conn_handle* ch) {
     if (received == 0) {  // Client closed connection
         return 0;
     }
-    LOG("[D009] Read: received=%zd `%.*s`\n", received, ch->req_buf_len,
-        ch->req_buf);
 
     const int prev_buf_len = ch->req_buf_len;
     ch->req_buf_len += received;
     if (ch->req_buf_len >= sizeof(ch->req_buf)) {
         return EINVAL;
     }
-    int res = phr_parse_request(
-        ch->req_buf, ch->req_buf_len, &ch->req.method, &ch->req.method_len,
-        &ch->req.path, &ch->req.path_len, &ch->req.minor_version,
-        ch->req.headers, &ch->req.num_headers, prev_buf_len);
+    LOG("[D009] Read: received=%zd `%.*s`\n", received, ch->req_buf_len,
+        ch->req_buf);
 
-    LOG("phr_parse_request: fd=%d res=%d\n", ch->fd, res);
-    if (res == -1) {
-        LOG("Failed to phr_parse_request: fd=%d\n", ch->fd);
-        return res;
-    }
-    if (res == -2) {
-        LOG("Partial http parse, need more data: fd=%d\n", ch->fd);
-        return res;
-    }
-    LOG("method=%.*s path=%.*s\n", (int)ch->req.method_len, ch->req.method,
-        (int)ch->req.path_len, ch->req.path);
-
-    return res;
+    return http_request_parse(&ch->req, ch->req_buf, ch->req_buf_len,
+                              prev_buf_len);
 }
 
 static int server_init(server* s, gbAllocator allocator) {
@@ -211,7 +256,9 @@ static int server_accept_new_connection(server* s) {
         fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
         return errno;
     }
-    LOG("\n\n---------------- Request start\n\n[D002] New conn: %d\n", conn_fd);
+    LOG("\n\n---------------- Request start "
+        "(requests_in_flight=%llu)\n\n[D002] New conn: %d\n",
+        s->requests_in_flight, conn_fd);
 
     int res = 0;
     if ((res = fd_set_non_blocking(conn_fd)) != 0) return res;
@@ -222,6 +269,8 @@ static int server_accept_new_connection(server* s) {
     conn_handle_init(&ch, s->allocator, client_addr);
     gb_array_append(s->conn_handles, ch);
 
+    s->requests_in_flight++;
+
     return 0;
 }
 
@@ -231,11 +280,6 @@ static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
         if (ch->fd == fd) return ch;
     }
     return NULL;
-}
-
-static bool http_request_is_get(const http_req* req) {
-    return req->method_len == 3 && req->method[0] == 'G' &&
-           req->method[1] == 'E' && req->method[2] == 'T';
 }
 
 static char* http_content_type_for_file(const char* ext, int ext_len) {
@@ -317,10 +361,12 @@ static void server_remove_connection(server* s, conn_handle* ch) {
             break;
         }
     }
+    s->requests_in_flight--;
 
     // TODO: add a timer to print it every X seconds?
     histogram_print(&s->hist);
-    LOG("\n\n---------------- Request end\n\n");
+    LOG("\n\n---------------- Request end (requests_in_flight=%llu)\n\n",
+        s->requests_in_flight);
 }
 
 static int conn_handle_respond_404(conn_handle* ch) {
@@ -405,7 +451,7 @@ static bool str_ends_with(const char* haystack, int haystack_len,
 }
 
 static int conn_handle_send_response(conn_handle* ch) {
-    if (!http_request_is_get(&ch->req)) {
+    if (ch->req.method != HM_GET) {
         conn_handle_respond_404(ch);
         return 0;
     }
@@ -530,6 +576,8 @@ static int server_run(server* s, u16 port) {
 }
 
 int main(int argc, char* argv[]) {
+    printf("sizeof(http_req)=%lu sizeof(conn_handle)=%lu\n", sizeof(http_req),
+           sizeof(conn_handle));
     if (argc != 2) {
         print_usage(argc, argv);
         return 0;
