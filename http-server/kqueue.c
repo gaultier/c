@@ -39,24 +39,24 @@ typedef enum {
 } http_method;
 
 typedef struct {
-    http_method method;
     const char* path;
+    struct phr_header headers[50];
+    http_method method;
     u16 path_len;
     u8 num_headers;
-    struct phr_header headers[100];
 } http_req;
 
 typedef struct server server;
 
 typedef struct {
     server* s;
-    http_req req;
+    struct timeval start;
     int fd;
-    char req_buf[CONN_BUF_LEN];
     u16 req_buf_len;
+    char req_buf[CONN_BUF_LEN];
     char res_buf[CONN_BUF_LEN];
     char ip[IP_ADDR_STR_LEN];
-    struct timeval start;
+    http_req req;
 } conn_handle;
 
 struct server {
