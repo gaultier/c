@@ -187,11 +187,6 @@ static void print_usage(int argc, char* argv[]) {
     printf("%s <port>\n", argv[0]);
 }
 
-/* static int on_url(http_parser* parser, const char* at, size_t length) { */
-/*     parser->data = gb_string_append_length(parser->data, at, length); */
-/*     return 0; */
-/* } */
-
 static int server_accept_new_connection(server* s) {
     struct sockaddr_in client_addr = {0};
     socklen_t client_addr_len = sizeof(client_addr);
