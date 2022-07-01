@@ -19,6 +19,7 @@
 
 #define IP_ADDR_STR_LEN 17
 #define CONN_BUF_LEN 2048
+#define CONN_BUF_LEN_MAX 10 * 1024 * 1024
 #define LISTEN_BACKLOG 512
 
 typedef struct {
@@ -52,8 +53,7 @@ typedef struct {
     server* s;
     struct timeval start;
     int fd;
-    u16 req_buf_len;
-    char req_buf[CONN_BUF_LEN];
+    gbArray(char) req_buf;
     char res_buf[CONN_BUF_LEN];
     char ip[IP_ADDR_STR_LEN];
     http_req req;
@@ -76,8 +76,10 @@ static bool verbose = false;
         if (verbose) fprintf(stderr, fmt, ##__VA_ARGS__); \
     } while (0)
 
-static int http_request_parse(http_req* req, char* buf, u64 buf_len,
+static int http_request_parse(http_req* req, gbArray(char) buf,
                               u64 prev_buf_len) {
+    assert(req != NULL);
+
     const char* method = NULL;
     const char* path = NULL;
     usize method_len = 0;
@@ -86,9 +88,9 @@ static int http_request_parse(http_req* req, char* buf, u64 buf_len,
     struct phr_header headers[100] = {0};
     usize num_headers = sizeof(headers) / sizeof(headers[0]);
 
-    int res =
-        phr_parse_request(buf, buf_len, &method, &method_len, &path, &path_len,
-                          &minor_version, headers, &num_headers, prev_buf_len);
+    int res = phr_parse_request(buf, gb_array_count(buf), &method, &method_len,
+                                &path, &path_len, &minor_version, headers,
+                                &num_headers, prev_buf_len);
 
     LOG("phr_parse_request: res=%d\n", res);
     if (res == -1) {
@@ -130,6 +132,8 @@ static int http_request_parse(http_req* req, char* buf, u64 buf_len,
 }
 
 static int fd_set_non_blocking(int fd) {
+    assert(fd > 0);
+
     int res = 0;
     do res = fcntl(fd, F_GETFL);
     while (res == -1 && errno == EINTR);
@@ -153,6 +157,9 @@ static int fd_set_non_blocking(int fd) {
 }
 
 static void ip(uint32_t val, char* res) {
+    assert(val > 0);
+    assert(res != NULL);
+
     uint8_t a = val >> 24, b = val >> 16, c = val >> 8, d = val & 0xff;
     snprintf(res, 16, "%hhu.%hhu.%hhu.%hhu", d, c, b, a);
 }
@@ -163,16 +170,16 @@ static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
 
     gettimeofday(&ch->start, NULL);
 
+    gb_array_init_reserve(ch->req_buf, allocator, CONN_BUF_LEN);
     ch->req.num_headers = sizeof(ch->req.headers) / sizeof(ch->req.headers[0]);
 }
 
 static int conn_handle_read_request(conn_handle* ch) {
-    if (ch->req_buf_len >= sizeof(ch->req_buf)) {
-        return EINVAL;
-    }
+    assert(ch != NULL);
 
-    const ssize_t received = read(ch->fd, &ch->req_buf[ch->req_buf_len],
-                                  CONN_BUF_LEN - ch->req_buf_len);
+    gb_array_grow(ch->req_buf, gb_array_count(ch->req_buf) + CONN_BUF_LEN);
+    const ssize_t received =
+        read(ch->fd, &ch->req_buf[gb_array_count(ch->req_buf)], CONN_BUF_LEN);
     if (received == -1) {
         fprintf(stderr, "Failed to read(2): ip=%shu err=%s\n", ch->ip,
                 strerror(errno));
@@ -182,19 +189,21 @@ static int conn_handle_read_request(conn_handle* ch) {
         return 0;
     }
 
-    const int prev_buf_len = ch->req_buf_len;
-    ch->req_buf_len += received;
-    if (ch->req_buf_len >= sizeof(ch->req_buf)) {
+    const int prev_buf_len = gb_array_count(ch->req_buf);
+    const u64 new_size = gb_array_count(ch->req_buf) + received;
+    if (new_size >= CONN_BUF_LEN_MAX) {
         return EINVAL;
     }
-    LOG("[D009] Read: received=%zd `%.*s`\n", received, ch->req_buf_len,
-        ch->req_buf);
+    gb_array_resize(ch->req_buf, new_size);
+    LOG("[D009] Read: received=%zd `%.*s`\n", received,
+        (int)gb_array_count(ch->req_buf), ch->req_buf);
 
-    return http_request_parse(&ch->req, ch->req_buf, ch->req_buf_len,
-                              prev_buf_len);
+    return http_request_parse(&ch->req, ch->req_buf, prev_buf_len);
 }
 
 static int server_init(server* s, gbAllocator allocator) {
+    assert(s != NULL);
+
     s->allocator = allocator;
 
     LOG("[D001] sock_fd=%d\n", s->fd);
@@ -221,6 +230,9 @@ static int server_init(server* s, gbAllocator allocator) {
 }
 
 static int server_add_event(server* s, int fd) {
+    assert(s != NULL);
+    assert(fd > 0);
+
     struct kevent event = {0};
     EV_SET(&event, fd, EVFILT_READ, EV_ADD, 0, 0, 0);
 
@@ -233,6 +245,9 @@ static int server_add_event(server* s, int fd) {
 }
 
 static int server_remove_event(server* s, int fd) {
+    assert(s != NULL);
+    assert(fd > 0);
+
     struct kevent event = {0};
     EV_SET(&event, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
 
@@ -249,6 +264,8 @@ static void print_usage(int argc, char* argv[]) {
 }
 
 static int server_accept_new_connection(server* s) {
+    assert(s != NULL);
+
     struct sockaddr_in client_addr = {0};
     socklen_t client_addr_len = sizeof(client_addr);
     const int conn_fd = accept(s->fd, (void*)&client_addr, &client_addr_len);
@@ -267,6 +284,7 @@ static int server_accept_new_connection(server* s) {
 
     conn_handle ch = {.fd = conn_fd, .s = s};
     conn_handle_init(&ch, s->allocator, client_addr);
+    assert(ch.fd == conn_fd);
     gb_array_append(s->conn_handles, ch);
 
     s->requests_in_flight++;
@@ -275,14 +293,21 @@ static int server_accept_new_connection(server* s) {
 }
 
 static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
+    assert(s != NULL);
+    assert(fd > 0);
+
     for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
         conn_handle* ch = &s->conn_handles[i];
+        assert(ch->fd > 0);
+        LOG("Searching for: haystack[i]=%d needle=%d\n", ch->fd, fd);
         if (ch->fd == fd) return ch;
     }
     return NULL;
 }
 
 static char* http_content_type_for_file(const char* ext, int ext_len) {
+    assert(ext != NULL);
+
     if (ext_len == 4 && memcmp(ext, "html", 4) == 0) return "text/html";
     if (ext_len == 2 && memcmp(ext, "js", 2) == 0)
         return "application/javascript";
@@ -293,6 +318,8 @@ static char* http_content_type_for_file(const char* ext, int ext_len) {
 }
 
 static int conn_handle_write(conn_handle* ch) {
+    assert(ch != NULL);
+
     int written = 0;
     const int total = strlen(ch->res_buf);
 
@@ -309,6 +336,8 @@ static int conn_handle_write(conn_handle* ch) {
 }
 
 static void histogram_add_entry(latency_histogram* hist, float val) {
+    assert(hist != NULL);
+
     latency_histogram_bucket* bucket = NULL;
     for (int i = 0; i < sizeof(hist->buckets) / sizeof(hist->buckets[0]); i++) {
         bucket = &hist->buckets[i];
@@ -323,6 +352,8 @@ static void histogram_add_entry(latency_histogram* hist, float val) {
 }
 
 static void histogram_print(latency_histogram* hist) {
+    assert(hist != NULL);
+
     puts("");
     for (int i = 0; i < sizeof(hist->buckets) / sizeof(hist->buckets[0]); i++) {
         latency_histogram_bucket* bucket = &hist->buckets[i];
@@ -333,6 +364,10 @@ static void histogram_print(latency_histogram* hist) {
 }
 
 static void server_remove_connection(server* s, conn_handle* ch) {
+    assert(ch != NULL);
+    assert(s != NULL);
+    assert(ch->fd > 0);
+
     struct timeval end = {0};
     gettimeofday(&end, NULL);
     u64 secs = end.tv_sec - ch->start.tv_sec;
@@ -351,16 +386,29 @@ static void server_remove_connection(server* s, conn_handle* ch) {
 
     // Remove handle
     for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
-        if (&s->conn_handles[i] == ch) {
+        conn_handle* chi = &s->conn_handles[i];
+
+        if (chi->fd == ch->fd) {
+            gb_string_free(chi->req_buf);
+            assert(&s->conn_handles[gb_array_count(s->conn_handles) - 1].fd >
+                   0);
             memcpy(&s->conn_handles[i],
                    &s->conn_handles[gb_array_count(s->conn_handles) - 1],
                    sizeof(conn_handle));
+            assert(&s->conn_handles[i].fd > 0);
             s->conn_handles[gb_array_count(s->conn_handles) - 1] =
                 (conn_handle){0};
             gb_array_pop(s->conn_handles);
+            assert(&s->conn_handles[i].fd > 0);
             break;
         }
+        assert(chi->fd > 0);
     }
+
+    for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
+        LOG("conn_handles[i].fd=%d\n", s->conn_handles[i].fd);
+    }
+
     s->requests_in_flight--;
 
     // TODO: add a timer to print it every X seconds?
@@ -370,6 +418,8 @@ static void server_remove_connection(server* s, conn_handle* ch) {
 }
 
 static int conn_handle_respond_404(conn_handle* ch) {
+    assert(ch != NULL);
+
     snprintf(ch->res_buf, CONN_BUF_LEN,
              "HTTP/1.1 404 Not Found\r\n"
              "Content-Length: 0\r\n"
@@ -379,6 +429,8 @@ static int conn_handle_respond_404(conn_handle* ch) {
 }
 
 static int conn_handle_serve_static_file(conn_handle* ch) {
+    assert(ch != NULL);
+
     // TODO: security
     char path[PATH_MAX] = "";
     if (ch->req.path_len >= PATH_MAX) {
@@ -444,6 +496,9 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
 
 static bool str_ends_with(const char* haystack, int haystack_len,
                           const char* needle, int needle_len) {
+    assert(haystack != NULL);
+    assert(needle != NULL);
+
     if (haystack_len < needle_len) return false;
 
     return memcmp(haystack + haystack_len - needle_len, needle, needle_len) ==
@@ -451,6 +506,8 @@ static bool str_ends_with(const char* haystack, int haystack_len,
 }
 
 static int conn_handle_send_response(conn_handle* ch) {
+    assert(ch != NULL);
+
     if (ch->req.method != HM_GET) {
         conn_handle_respond_404(ch);
         return 0;
@@ -476,6 +533,9 @@ static int conn_handle_send_response(conn_handle* ch) {
 }
 
 static int server_listen_and_bind(server* s, u16 port) {
+    assert(s != NULL);
+    assert(port > 0);
+
     int res = 0;
 
     s->fd = socket(PF_INET, SOCK_STREAM, 0);
@@ -516,6 +576,9 @@ static int server_listen_and_bind(server* s, u16 port) {
 }
 
 static int server_poll_events(server* s, int* event_count) {
+    assert(s != NULL);
+    assert(event_count != NULL);
+
     *event_count =
         kevent(s->queue, NULL, 0, s->event_list, LISTEN_BACKLOG, NULL);
     if (*event_count == -1) {
@@ -529,6 +592,8 @@ static int server_poll_events(server* s, int* event_count) {
 }
 
 static void server_handle_events(server* s, int event_count) {
+    assert(s != NULL);
+
     for (int i = 0; i < event_count; i++) {
         const struct kevent* const e = &s->event_list[i];
         const int fd = e->ident;
@@ -563,6 +628,9 @@ static void server_handle_events(server* s, int event_count) {
 }
 
 static int server_run(server* s, u16 port) {
+    assert(s != NULL);
+    assert(port > 0);
+
     int res = 0;
     res = server_listen_and_bind(s, port);
     if (res != 0) return res;
@@ -584,7 +652,7 @@ int main(int argc, char* argv[]) {
     }
 
     const u64 port = gb_str_to_u64(argv[1], NULL, 10);
-    if (port > UINT16_MAX) {
+    if (port == 0 || port > UINT16_MAX) {
         fprintf(stderr, "Invalid port number: %llu\n", port);
         return EINVAL;
     }
