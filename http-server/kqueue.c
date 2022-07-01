@@ -123,17 +123,17 @@ static int http_request_parse(http_req* req, gbArray(char) buf,
     req->path = path;
     req->path_len = path_len;
 
-    if (num_headers >= UINT8_MAX) return EINVAL;
+    if (num_headers >= UINT8_MAX ||
+        num_headers >= sizeof(headers) / sizeof(headers[0]))
+        return EINVAL;
     req->num_headers = num_headers;
-    memcpy(req->headers, headers, sizeof(headers));
+    /* memcpy(req->headers, headers, num_headers * sizeof(headers[0])); */
 
     LOG("method=%d path=%.*s\n", req->method, req->path_len, req->path);
     return res;
 }
 
 static int fd_set_non_blocking(int fd) {
-    assert(fd > 0);
-
     int res = 0;
     do res = fcntl(fd, F_GETFL);
     while (res == -1 && errno == EINTR);
@@ -177,9 +177,10 @@ static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
 static int conn_handle_read_request(conn_handle* ch) {
     assert(ch != NULL);
 
-    gb_array_grow(ch->req_buf, gb_array_count(ch->req_buf) + CONN_BUF_LEN);
-    const ssize_t received =
-        read(ch->fd, &ch->req_buf[gb_array_count(ch->req_buf)], CONN_BUF_LEN);
+    static char buf[CONN_BUF_LEN] = "";
+    bzero(buf, CONN_BUF_LEN);
+
+    const ssize_t received = read(ch->fd, buf, CONN_BUF_LEN);
     if (received == -1) {
         fprintf(stderr, "Failed to read(2): ip=%shu err=%s\n", ch->ip,
                 strerror(errno));
@@ -194,11 +195,18 @@ static int conn_handle_read_request(conn_handle* ch) {
     if (new_size >= CONN_BUF_LEN_MAX) {
         return EINVAL;
     }
-    gb_array_resize(ch->req_buf, new_size);
+    gb_array_appendv(ch->req_buf, buf, received);
     LOG("[D009] Read: received=%zd `%.*s`\n", received,
         (int)gb_array_count(ch->req_buf), ch->req_buf);
 
-    return http_request_parse(&ch->req, ch->req_buf, prev_buf_len);
+    for (int i = 0; i < gb_array_count(ch->s->conn_handles); i++) {
+        LOG("[D096] conn_handles[%d].fd=%d\n", i, ch->s->conn_handles[i].fd);
+    }
+    int res = http_request_parse(&ch->req, ch->req_buf, prev_buf_len);
+    for (int i = 0; i < gb_array_count(ch->s->conn_handles); i++) {
+        LOG("[D097] conn_handles[%d].fd=%d\n", i, ch->s->conn_handles[i].fd);
+    }
+    return res;
 }
 
 static int server_init(server* s, gbAllocator allocator) {
@@ -231,7 +239,6 @@ static int server_init(server* s, gbAllocator allocator) {
 
 static int server_add_event(server* s, int fd) {
     assert(s != NULL);
-    assert(fd > 0);
 
     struct kevent event = {0};
     EV_SET(&event, fd, EVFILT_READ, EV_ADD, 0, 0, 0);
@@ -246,7 +253,6 @@ static int server_add_event(server* s, int fd) {
 
 static int server_remove_event(server* s, int fd) {
     assert(s != NULL);
-    assert(fd > 0);
 
     struct kevent event = {0};
     EV_SET(&event, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
@@ -294,14 +300,16 @@ static int server_accept_new_connection(server* s) {
 
 static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
     assert(s != NULL);
-    assert(fd > 0);
 
     for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
+        LOG("[D020] conn_handles[%d].fd=%d\n", i, s->conn_handles[i].fd);
+    }
+    for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
         conn_handle* ch = &s->conn_handles[i];
-        assert(ch->fd > 0);
-        LOG("Searching for: haystack[i]=%d needle=%d\n", ch->fd, fd);
+        LOG("Searching for: haystack[%d]=%d needle=%d\n", i, ch->fd, fd);
         if (ch->fd == fd) return ch;
     }
+    assert(0 && "Unreachable");
     return NULL;
 }
 
@@ -364,17 +372,20 @@ static void histogram_print(latency_histogram* hist) {
 }
 
 static void server_remove_connection(server* s, conn_handle* ch) {
-    assert(ch != NULL);
     assert(s != NULL);
-    assert(ch->fd > 0);
+    assert(ch != NULL);
 
+    for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
+        LOG("[D016] conn_handles[%d].fd=%d\n", i, s->conn_handles[i].fd);
+    }
     struct timeval end = {0};
     gettimeofday(&end, NULL);
-    u64 secs = end.tv_sec - ch->start.tv_sec;
-    u64 usecs = end.tv_usec - ch->start.tv_usec;
-    float total_msecs = usecs / 1000.0 + 1000 * secs;
+    const u64 secs = end.tv_sec - ch->start.tv_sec;
+    const u64 usecs = end.tv_usec - ch->start.tv_usec;
+    const float total_msecs = usecs / 1000.0 + 1000 * secs;
 
-    LOG("Removing connection: fd=%d remaining=%td cap(conn_handles)=%td "
+    LOG("Removing connection: fd=%d remaining=%td "
+        "cap(conn_handles)=%td "
         "lifetime=%fms\n",
         ch->fd, gb_array_count(s->conn_handles),
         gb_array_capacity(s->conn_handles), total_msecs);
@@ -385,28 +396,16 @@ static void server_remove_connection(server* s, conn_handle* ch) {
     close(ch->fd);
 
     // Remove handle
-    for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
-        conn_handle* chi = &s->conn_handles[i];
-
-        if (chi->fd == ch->fd) {
-            gb_string_free(chi->req_buf);
-            assert(&s->conn_handles[gb_array_count(s->conn_handles) - 1].fd >
-                   0);
-            memcpy(&s->conn_handles[i],
-                   &s->conn_handles[gb_array_count(s->conn_handles) - 1],
-                   sizeof(conn_handle));
-            assert(&s->conn_handles[i].fd > 0);
-            s->conn_handles[gb_array_count(s->conn_handles) - 1] =
-                (conn_handle){0};
-            gb_array_pop(s->conn_handles);
-            assert(&s->conn_handles[i].fd > 0);
-            break;
-        }
-        assert(chi->fd > 0);
-    }
+    gb_array_free(ch->req_buf);
+    assert(s->conn_handles <= ch &&
+           ch <= &s->conn_handles[gb_array_count(s->conn_handles) - 1]);
+    memcpy(ch, &s->conn_handles[gb_array_count(s->conn_handles) - 1],
+           sizeof(conn_handle));
+    s->conn_handles[gb_array_count(s->conn_handles) - 1] = (conn_handle){0};
+    gb_array_pop(s->conn_handles);
 
     for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
-        LOG("conn_handles[i].fd=%d\n", s->conn_handles[i].fd);
+        LOG("[D017] conn_handles[%d].fd=%d\n", i, s->conn_handles[i].fd);
     }
 
     s->requests_in_flight--;
@@ -489,7 +488,8 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
         close(fd);
         return -1;
     }
-    LOG("sendfile(2): res=%d len=%lld\n", res, len);
+    LOG("sendfile(2): res=%d len=%lld in_fd=%d out_fd=%d\n", res, len, fd,
+        ch->fd);
     close(fd);
     return 0;
 }
@@ -604,8 +604,8 @@ static void server_handle_events(server* s, int event_count) {
         }
 
         LOG("[D008] Data to be read on: %d\n", fd);
-        conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
-        assert(ch != NULL);
+        conn_handle* ch = server_find_conn_handle_by_fd(s, fd);
+        assert(ch->fd == fd);
 
         // Connection gone
         if (e->flags & EV_EOF) {
@@ -614,15 +614,37 @@ static void server_handle_events(server* s, int event_count) {
         }
 
         int res = 0;
+        for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
+            LOG("[D091] conn_handles[%d].fd=%d\n", i, s->conn_handles[i].fd);
+        }
         if ((res = conn_handle_read_request(ch)) <= 0) {
+            for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
+                LOG("[D094] conn_handles[%d].fd=%d\n", i,
+                    s->conn_handles[i].fd);
+            }
+            assert(ch->fd == fd);
             if (res == -2) {  // Need more data
+                assert(ch->fd == fd);
                 continue;
+            }
+            assert(ch->fd == fd);
+            for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
+                LOG("[D095] conn_handles[%d].fd=%d\n", i,
+                    s->conn_handles[i].fd);
             }
             server_remove_connection(s, ch);
             continue;
         }
 
+        assert(ch->fd == fd);
+        for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
+            LOG("[D092] conn_handles[%d].fd=%d\n", i, s->conn_handles[i].fd);
+        }
         conn_handle_send_response(ch);
+        for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
+            LOG("[D093] conn_handles[%d].fd=%d\n", i, s->conn_handles[i].fd);
+        }
+        assert(ch->fd == fd);
         server_remove_connection(s, ch);
     }
 }
