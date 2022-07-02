@@ -355,10 +355,20 @@ static void histogram_print(latency_histogram* hist) {
     puts("");
     for (int i = 0; i < sizeof(hist->buckets) / sizeof(hist->buckets[0]); i++) {
         latency_histogram_bucket* bucket = &hist->buckets[i];
-        printf("Latency < %llu: %llu\n", bucket->upper_bound_milliseconds_excl,
-               bucket->count);
+        printf("Latency < %llu ms: %llu\n",
+               bucket->upper_bound_milliseconds_excl, bucket->count);
         if (bucket->upper_bound_milliseconds_excl == UINT64_MAX) break;
     }
+}
+
+static void conn_handles_rm_swap(gbArray(conn_handle) conn_handles,
+                                 conn_handle* ch) {
+    assert(conn_handles <= ch &&
+           ch <= &conn_handles[gb_array_count(conn_handles) - 1]);
+    memcpy(ch, &conn_handles[gb_array_count(conn_handles) - 1],
+           sizeof(conn_handle));
+    conn_handles[gb_array_count(conn_handles) - 1] = (conn_handle){0};
+    gb_array_pop(conn_handles);
 }
 
 static void server_remove_connection(server* s, conn_handle* ch) {
@@ -393,12 +403,7 @@ static void server_remove_connection(server* s, conn_handle* ch) {
 
         // Remove handle from array
         gb_array_free(ch->req_buf);
-        assert(s->conn_handles <= ch &&
-               ch <= &s->conn_handles[gb_array_count(s->conn_handles) - 1]);
-        memcpy(ch, &s->conn_handles[gb_array_count(s->conn_handles) - 1],
-               sizeof(conn_handle));
-        s->conn_handles[gb_array_count(s->conn_handles) - 1] = (conn_handle){0};
-        gb_array_pop(s->conn_handles);
+        conn_handles_rm_swap(s->conn_handles, ch);
     }
 
     LOG("\n\n---------------- Request end (requests_in_flight=%llu)\n\n",
