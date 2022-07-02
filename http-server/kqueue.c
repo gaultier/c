@@ -51,11 +51,11 @@ typedef struct server server;
 
 typedef struct {
     struct timeval start;
-    int fd;
     gbArray(char) req_buf;
     char res_buf[CONN_BUF_LEN];
     char ip[IP_ADDR_STR_LEN];
     http_req req;
+    int fd;
 } conn_handle;
 
 struct server {
