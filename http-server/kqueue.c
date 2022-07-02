@@ -365,36 +365,42 @@ static void server_remove_connection(server* s, conn_handle* ch) {
     assert(s != NULL);
     assert(ch != NULL);
 
-    struct timeval end = {0};
-    gettimeofday(&end, NULL);
-    const u64 secs = end.tv_sec - ch->start.tv_sec;
-    const u64 usecs = end.tv_usec - ch->start.tv_usec;
-    const float total_msecs = usecs / 1000.0 + 1000 * secs;
+    // Stats
+    {
+        struct timeval end = {0};
+        gettimeofday(&end, NULL);
+        const u64 secs = end.tv_sec - ch->start.tv_sec;
+        const u64 usecs = end.tv_usec - ch->start.tv_usec;
+        const float total_msecs = usecs / 1000.0 + 1000 * secs;
 
-    LOG("Removing connection: fd=%d remaining=%td "
-        "cap(conn_handles)=%td "
-        "lifetime=%fms\n",
-        ch->fd, gb_array_count(s->conn_handles),
-        gb_array_capacity(s->conn_handles), total_msecs);
+        histogram_add_entry(&s->hist, total_msecs);
+        // TODO: add a timer to print it every X seconds?
+        histogram_print(&s->hist);
+        s->requests_in_flight--;
 
-    histogram_add_entry(&s->hist, total_msecs);
-    server_remove_event(s, ch->fd);
+        LOG("Removing connection: fd=%d remaining=%td "
+            "cap(conn_handles)=%td "
+            "lifetime=%fms\n",
+            ch->fd, gb_array_count(s->conn_handles),
+            gb_array_capacity(s->conn_handles), total_msecs);
+    }
 
-    close(ch->fd);
+    // Rm
+    {
+        server_remove_event(s, ch->fd);
 
-    // Remove handle
-    gb_array_free(ch->req_buf);
-    assert(s->conn_handles <= ch &&
-           ch <= &s->conn_handles[gb_array_count(s->conn_handles) - 1]);
-    memcpy(ch, &s->conn_handles[gb_array_count(s->conn_handles) - 1],
-           sizeof(conn_handle));
-    s->conn_handles[gb_array_count(s->conn_handles) - 1] = (conn_handle){0};
-    gb_array_pop(s->conn_handles);
+        close(ch->fd);
 
-    s->requests_in_flight--;
+        // Remove handle from array
+        gb_array_free(ch->req_buf);
+        assert(s->conn_handles <= ch &&
+               ch <= &s->conn_handles[gb_array_count(s->conn_handles) - 1]);
+        memcpy(ch, &s->conn_handles[gb_array_count(s->conn_handles) - 1],
+               sizeof(conn_handle));
+        s->conn_handles[gb_array_count(s->conn_handles) - 1] = (conn_handle){0};
+        gb_array_pop(s->conn_handles);
+    }
 
-    // TODO: add a timer to print it every X seconds?
-    histogram_print(&s->hist);
     LOG("\n\n---------------- Request end (requests_in_flight=%llu)\n\n",
         s->requests_in_flight);
 }
