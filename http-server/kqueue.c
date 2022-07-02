@@ -191,15 +191,14 @@ static int conn_handle_read_request(conn_handle* ch, u64 nbytes_to_read) {
     assert(ch != NULL);
 
     const u64 prev_len = gb_array_count(ch->req_buf);
-    u64 new_capacity = gb_array_count(ch->req_buf) + nbytes_to_read;
-    if (new_capacity >= CONN_BUF_LEN_MAX) {
+    u64 new_len = gb_array_count(ch->req_buf) + nbytes_to_read;
+    if (new_len >= CONN_BUF_LEN_MAX) {
         return EINVAL;
     }
-    gb_array_grow(ch->req_buf, new_capacity);
-    // The buffer may have grown more than required
-    new_capacity = gb_array_capacity(ch->req_buf);
+    gb_array_reserve(ch->req_buf, new_len);
 
-    const ssize_t received = read(ch->fd, &ch->req_buf[prev_len], new_capacity);
+    const ssize_t received =
+        read(ch->fd, &ch->req_buf[prev_len], nbytes_to_read);
     if (received == -1) {
         fprintf(stderr, "Failed to read(2): ip=%shu err=%s\n", ch->ip,
                 strerror(errno));
