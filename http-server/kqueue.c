@@ -19,7 +19,7 @@
 
 #define IP_ADDR_STR_LEN 17
 #define CONN_BUF_LEN 2048
-#define CONN_BUF_LEN_MAX 10 * 1024 * 1024
+#define CONN_BUF_LEN_MAX 10 * 1024 * 1024  // 10 MiB
 #define LISTEN_BACKLOG 512
 
 typedef struct {
@@ -41,16 +41,15 @@ typedef enum {
 
 typedef struct {
     const char* path;
-    struct phr_header headers[50];
     http_method method;
     u16 path_len;
     u8 num_headers;
+    struct phr_header headers[50];
 } http_req;
 
 typedef struct server server;
 
 typedef struct {
-    server* s;
     struct timeval start;
     int fd;
     gbArray(char) req_buf;
@@ -295,7 +294,7 @@ static int server_accept_new_connection(server* s) {
 
     server_add_event(s, conn_fd);
 
-    conn_handle ch = {.fd = conn_fd, .s = s};
+    conn_handle ch = {.fd = conn_fd};
     conn_handle_init(&ch, s->allocator, client_addr);
     assert(ch.fd == conn_fd);
     gb_array_append(s->conn_handles, ch);
