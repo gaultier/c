@@ -589,6 +589,7 @@ static void server_handle_events(server* s, int event_count) {
 
         LOG("[D008] Data to be read on: %d\n", fd);
         conn_handle* ch = server_find_conn_handle_by_fd(s, fd);
+        assert(ch != NULL);
         assert(ch->fd == fd);
 
         // Connection gone
