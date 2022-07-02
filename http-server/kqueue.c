@@ -177,10 +177,13 @@ static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
 static int conn_handle_read_request(conn_handle* ch) {
     assert(ch != NULL);
 
-    static char buf[CONN_BUF_LEN] = "";
-    bzero(buf, CONN_BUF_LEN);
-
-    const ssize_t received = read(ch->fd, buf, CONN_BUF_LEN);
+    const u64 prev_len = gb_array_count(ch->req_buf);
+    const u64 new_capacity = gb_array_count(ch->req_buf) + CONN_BUF_LEN;
+    if (new_capacity >= CONN_BUF_LEN_MAX) {
+        return EINVAL;
+    }
+    gb_array_grow(ch->req_buf, new_capacity);
+    const ssize_t received = read(ch->fd, &ch->req_buf[prev_len], CONN_BUF_LEN);
     if (received == -1) {
         fprintf(stderr, "Failed to read(2): ip=%shu err=%s\n", ch->ip,
                 strerror(errno));
@@ -190,16 +193,12 @@ static int conn_handle_read_request(conn_handle* ch) {
         return 0;
     }
 
-    const int prev_buf_len = gb_array_count(ch->req_buf);
-    const u64 new_size = gb_array_count(ch->req_buf) + received;
-    if (new_size >= CONN_BUF_LEN_MAX) {
-        return EINVAL;
-    }
-    gb_array_appendv(ch->req_buf, buf, received);
+    const u64 new_size = prev_len + received;
+    gb_array_resize(ch->req_buf, new_size);
     LOG("[D009] Read: received=%zd `%.*s`\n", received,
         (int)gb_array_count(ch->req_buf), ch->req_buf);
 
-    int res = http_request_parse(&ch->req, ch->req_buf, prev_buf_len);
+    int res = http_request_parse(&ch->req, ch->req_buf, prev_len);
     return res;
 }
 
