@@ -76,6 +76,20 @@ static bool verbose = false;
         if (verbose) fprintf(stderr, fmt, ##__VA_ARGS__); \
     } while (0)
 
+static int server_add_timer(server* s) {
+    assert(s != NULL);
+
+    struct kevent event = {0};
+    EV_SET(&event, -1, EVFILT_TIMER, EV_ADD, NOTE_SECONDS, 5, 0);
+
+    if (kevent(s->queue, &event, 1, NULL, 0, NULL)) {
+        fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
+                strerror(errno));
+        return errno;
+    }
+    return 0;
+}
+
 static int http_request_parse(http_req* req, gbArray(char) buf,
                               u64 prev_buf_len) {
     assert(req != NULL);
@@ -385,7 +399,6 @@ static void server_remove_connection(server* s, conn_handle* ch) {
 
         histogram_add_entry(&s->hist, total_msecs);
         // TODO: add a timer to print it every X seconds?
-        histogram_print(&s->hist);
         s->requests_in_flight--;
 
         LOG("Removing connection: fd=%d remaining=%td "
@@ -592,6 +605,13 @@ static void server_handle_events(server* s, int event_count) {
         const struct kevent* const e = &s->event_list[i];
         const int fd = e->ident;
 
+        if (e->filter == EVFILT_TIMER) {
+            LOG("Timer\n");
+            histogram_print(&s->hist);
+            continue;
+        }
+
+        assert((e->filter == EVFILT_READ));
         if (fd == s->fd) {  // New connection to accept
             server_accept_new_connection(s);
             continue;
@@ -635,6 +655,7 @@ static int server_run(server* s, u16 port) {
     res = server_listen_and_bind(s, port);
     if (res != 0) return res;
 
+    server_add_timer(s);
     while (1) {
         int event_count = 0;
         server_poll_events(s, &event_count);
