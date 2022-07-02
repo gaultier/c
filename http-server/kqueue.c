@@ -187,16 +187,19 @@ static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
     ch->req.num_headers = sizeof(ch->req.headers) / sizeof(ch->req.headers[0]);
 }
 
-static int conn_handle_read_request(conn_handle* ch) {
+static int conn_handle_read_request(conn_handle* ch, u64 nbytes_to_read) {
     assert(ch != NULL);
 
     const u64 prev_len = gb_array_count(ch->req_buf);
-    const u64 new_capacity = gb_array_count(ch->req_buf) + CONN_BUF_LEN;
+    u64 new_capacity = gb_array_count(ch->req_buf) + nbytes_to_read;
     if (new_capacity >= CONN_BUF_LEN_MAX) {
         return EINVAL;
     }
     gb_array_grow(ch->req_buf, new_capacity);
-    const ssize_t received = read(ch->fd, &ch->req_buf[prev_len], CONN_BUF_LEN);
+    // The buffer may have grown more than required
+    new_capacity = gb_array_capacity(ch->req_buf);
+
+    const ssize_t received = read(ch->fd, &ch->req_buf[prev_len], new_capacity);
     if (received == -1) {
         fprintf(stderr, "Failed to read(2): ip=%shu err=%s\n", ch->ip,
                 strerror(errno));
@@ -628,7 +631,7 @@ static void server_handle_events(server* s, int event_count) {
         }
 
         int res = 0;
-        if ((res = conn_handle_read_request(ch)) <= 0) {
+        if ((res = conn_handle_read_request(ch, e->data)) <= 0) {
             assert(ch->fd == fd);
             if (res == -2) {  // Need more data
                 assert(ch->fd == fd);
