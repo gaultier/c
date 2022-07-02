@@ -605,7 +605,7 @@ static void server_handle_events(server* s, int event_count) {
         const struct kevent* const e = &s->event_list[i];
         const int fd = e->ident;
 
-        if (e->filter == EVFILT_TIMER) {
+        if (e->filter == EVFILT_TIMER && e->ident == -1) {
             LOG("Timer\n");
             histogram_print(&s->hist);
             continue;
