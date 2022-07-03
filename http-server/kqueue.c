@@ -17,7 +17,6 @@
 #include "../vendor/gb/gb.h"
 #include "vendor/picohttpparser/picohttpparser.h"
 
-#define IP_ADDR_STR_LEN 17
 #define CONN_BUF_LEN 2048
 #define CONN_BUF_LEN_MAX 10 * 1024 * 1024  // 10 MiB
 #define LISTEN_BACKLOG 512
@@ -53,7 +52,6 @@ typedef struct {
     struct timeval start;
     gbArray(char) req_buf;
     char res_buf[CONN_BUF_LEN];
-    char ip[IP_ADDR_STR_LEN];
     http_req req;
     int fd;
 } conn_handle;
@@ -81,7 +79,7 @@ static int server_add_timer(server* s) {
     struct kevent event = {0};
     EV_SET(&event, -1, EVFILT_TIMER, EV_ADD, NOTE_SECONDS, 5, 0);
 
-    if (kevent(s->queue, &event, 1, NULL, 0, NULL)) {
+    if (kevent(s->queue, &event, 1, NULL, 0, NULL) == -1) {
         fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
                 strerror(errno));
         return errno;
@@ -169,18 +167,7 @@ static int fd_set_non_blocking(int fd) {
     return 0;
 }
 
-static void ip(uint32_t val, char* res) {
-    assert(val > 0);
-    assert(res != NULL);
-
-    uint8_t a = val >> 24, b = val >> 16, c = val >> 8, d = val & 0xff;
-    snprintf(res, 16, "%hhu.%hhu.%hhu.%hhu", d, c, b, a);
-}
-
-static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
-                             struct sockaddr_in client_addr) {
-    ip(client_addr.sin_addr.s_addr, ch->ip);
-
+static void conn_handle_init(conn_handle* ch, gbAllocator allocator) {
     gettimeofday(&ch->start, NULL);
 
     gb_array_init_reserve(ch->req_buf, allocator, CONN_BUF_LEN);
@@ -200,8 +187,7 @@ static int conn_handle_read_request(conn_handle* ch, u64 nbytes_to_read) {
     const ssize_t received =
         read(ch->fd, &ch->req_buf[prev_len], nbytes_to_read);
     if (received == -1) {
-        fprintf(stderr, "Failed to read(2): ip=%shu err=%s\n", ch->ip,
-                strerror(errno));
+        fprintf(stderr, "Failed to read(2): err=%s\n", strerror(errno));
         return errno;
     }
     if (received == 0) {  // Client closed connection
@@ -251,7 +237,7 @@ static int server_add_event(server* s, int fd) {
     struct kevent event = {0};
     EV_SET(&event, fd, EVFILT_READ, EV_ADD, 0, 0, 0);
 
-    if (kevent(s->queue, &event, 1, NULL, 0, NULL)) {
+    if (kevent(s->queue, &event, 1, NULL, 0, NULL) == -1) {
         fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
                 strerror(errno));
         return errno;
@@ -259,19 +245,6 @@ static int server_add_event(server* s, int fd) {
     return 0;
 }
 
-static int server_remove_event(server* s, int fd) {
-    assert(s != NULL);
-
-    struct kevent event = {0};
-    EV_SET(&event, fd, EVFILT_READ, EV_DELETE, 0, 0, NULL);
-
-    if (kevent(s->queue, &event, 1, NULL, 0, NULL)) {
-        fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
-                strerror(errno));
-        return errno;
-    }
-    return 0;
-}
 static void print_usage(int argc, char* argv[]) {
     GB_ASSERT(argc > 0);
     printf("%s <port>\n", argv[0]);
@@ -280,9 +253,7 @@ static void print_usage(int argc, char* argv[]) {
 static int server_accept_new_connection(server* s) {
     assert(s != NULL);
 
-    struct sockaddr_in client_addr = {0};
-    socklen_t client_addr_len = sizeof(client_addr);
-    const int conn_fd = accept(s->fd, (void*)&client_addr, &client_addr_len);
+    const int conn_fd = accept(s->fd, NULL, 0);
     if (conn_fd == -1) {
         fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
         return errno;
@@ -297,7 +268,7 @@ static int server_accept_new_connection(server* s) {
     server_add_event(s, conn_fd);
 
     conn_handle ch = {.fd = conn_fd};
-    conn_handle_init(&ch, s->allocator, client_addr);
+    conn_handle_init(&ch, s->allocator);
     assert(ch.fd == conn_fd);
     gb_array_append(s->conn_handles, ch);
 
@@ -338,8 +309,7 @@ static int conn_handle_write(conn_handle* ch) {
     while (written < total) {
         const int nb = write(ch->fd, &ch->res_buf[written], total - written);
         if (nb == -1) {
-            fprintf(stderr, "Failed to write(2): ip=%s err=%s\n", ch->ip,
-                    strerror(errno));
+            fprintf(stderr, "Failed to write(2): err=%s\n", strerror(errno));
             return errno;
         }
         written += nb;
@@ -401,8 +371,8 @@ static void conn_handles_rm_swap(gbArray(conn_handle) conn_handles,
                                  conn_handle* ch) {
     assert(conn_handles <= ch &&
            ch <= &conn_handles[gb_array_count(conn_handles) - 1]);
-    memcpy(ch, &conn_handles[gb_array_count(conn_handles) - 1],
-           sizeof(conn_handle));
+    memmove(ch, &conn_handles[gb_array_count(conn_handles) - 1],
+            sizeof(conn_handle));
     conn_handles[gb_array_count(conn_handles) - 1] = (conn_handle){0};
     gb_array_pop(conn_handles);
 }
@@ -432,8 +402,7 @@ static void server_remove_connection(server* s, conn_handle* ch) {
 
     // Rm
     {
-        server_remove_event(s, ch->fd);
-
+        // Closing the file descriptor also automatically removes the kevent
         close(ch->fd);
 
         // Remove handle from array
@@ -633,7 +602,7 @@ static void server_handle_events(server* s, int event_count) {
             continue;
         }
 
-        assert((e->filter == EVFILT_READ));
+        assert((e->filter & EVFILT_READ));
         if (fd == s->fd) {  // New connection to accept
             server_accept_new_connection(s);
             continue;
