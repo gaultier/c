@@ -429,7 +429,9 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
     assert(ch != NULL);
 
     // TODO: security
-    char path[PATH_MAX] = "";
+    static char path[PATH_MAX] = "";
+    bzero(path, PATH_MAX);
+
     if (ch->req.path_len >= PATH_MAX) {
         conn_handle_respond_404(ch);
         return 0;
