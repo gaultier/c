@@ -375,6 +375,28 @@ static void histogram_print(latency_histogram* hist) {
     }
 }
 
+static void server_print_stats(server* s) {
+    assert(s != NULL);
+    i64 sum_len_req_buf = 0;
+    i64 sum_cap_req_buf = 0;
+    for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
+        const conn_handle* const ch = &s->conn_handles[i];
+        sum_len_req_buf += gb_array_count(ch->req_buf);
+        sum_cap_req_buf += gb_array_capacity(ch->req_buf);
+    }
+    const u64 total_mem =
+        gb_array_capacity(s->conn_handles) * sizeof(conn_handle) +
+        sum_cap_req_buf;
+
+    printf(
+        "\n++++++++++\nStats:\nlen(conn_handles)=%td cap(conn_handles)=%td "
+        "sum(len(req_buf))=%lld sum(cap(req_buf))=%lld total_mem=%llu\n",
+        gb_array_count(s->conn_handles), gb_array_capacity(s->conn_handles),
+        sum_len_req_buf, sum_cap_req_buf, total_mem);
+    histogram_print(&s->hist);
+    puts("++++++++++\n\n");
+}
+
 static void conn_handles_rm_swap(gbArray(conn_handle) conn_handles,
                                  conn_handle* ch) {
     assert(conn_handles <= ch &&
@@ -607,7 +629,7 @@ static void server_handle_events(server* s, int event_count) {
 
         if (e->filter == EVFILT_TIMER && e->ident == -1) {
             LOG("Timer\n");
-            histogram_print(&s->hist);
+            server_print_stats(s);
             continue;
         }
 
