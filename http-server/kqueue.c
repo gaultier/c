@@ -311,7 +311,6 @@ static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
 
     for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
         conn_handle* ch = &s->conn_handles[i];
-        LOG("Searching for: haystack[%d]=%d needle=%d\n", i, ch->fd, fd);
         if (ch->fd == fd) return ch;
     }
     assert(0 && "Unreachable");
