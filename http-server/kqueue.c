@@ -623,7 +623,7 @@ static void server_handle_events(server* s, int event_count) {
         const int fd = e->ident;
 
         if (e->filter == EVFILT_TIMER) {
-            LOG("Timer for: fd=%d\n", fd);
+            LOG("Timer expired for: fd=%d\n", fd);
             server_remove_connection(s, server_find_conn_handle_by_fd(s, fd));
             continue;
         }
