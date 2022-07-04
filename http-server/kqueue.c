@@ -79,6 +79,14 @@ struct server {
         if (verbose) fprintf(stderr, fmt, ##__VA_ARGS__); \
     } while (0)
 
+static bool str_eq(const char* a, u64 a_len, const char* b, u64 b_len) {
+    return a_len == b_len && memcmp(a, b, a_len) == 0;
+}
+static bool str_eq0(const char* a, u64 a_len, const char* b0) {
+    const u64 b_len = strlen(b0);
+    return str_eq(a, a_len, b0, b_len);
+}
+
 static int http_request_parse(http_req* req, gbArray(char) buf,
                               u64 prev_buf_len) {
     assert(req != NULL);
@@ -107,15 +115,15 @@ static int http_request_parse(http_req* req, gbArray(char) buf,
     if (method_len >= sizeof("DELETE") - 1) {  // Longest method
         return EINVAL;
     }
-    if (method_len == 3 && memcmp(method, "GET", 3) == 0)
+    if (str_eq0(method, method_len, "GET"))
         req->method = HM_GET;
-    else if (method_len == 4 && memcmp(method, "POST", 4) == 0)
+    else if (str_eq0(method, method_len, "POST"))
         req->method = HM_POST;
-    else if (method_len == 3 && memcmp(method, "PUT", 3) == 0)
+    else if (str_eq0(method, method_len, "PUT"))
         req->method = HM_PUT;
-    else if (method_len == 5 && memcmp(method, "PATCH", 5) == 0)
+    else if (str_eq0(method, method_len, "PATCH"))
         req->method = HM_PATCH;
-    else if (method_len == 6 && memcmp(method, "DELETE", 6) == 0)
+    else if (str_eq0(method, method_len, "DELETE"))
         req->method = HM_DELETE;
     else
         return EINVAL;
@@ -288,10 +296,9 @@ static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
 static char* http_content_type_for_file(const char* ext, int ext_len) {
     assert(ext != NULL);
 
-    if (ext_len == 4 && memcmp(ext, "html", 4) == 0) return "text/html";
-    if (ext_len == 2 && memcmp(ext, "js", 2) == 0)
-        return "application/javascript";
-    if (ext_len == 3 && memcmp(ext, "css", 2) == 0)
+    if (str_eq0(ext, ext_len, "html")) return "text/html";
+    if (str_eq0(ext, ext_len, "js")) return "application/javascript";
+    if (str_eq0(ext, ext_len, "css"))
         return "text/css";
     else
         return "text/plain";
