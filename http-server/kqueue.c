@@ -248,6 +248,8 @@ static int server_accept_new_connection(server* s) {
 
     const int conn_fd = accept(s->fd, NULL, 0);
     if (conn_fd == -1) {
+        // If we get EAGAIN, it means another process has accepted the
+        // connection before us
         if (errno != EAGAIN)
             fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
 
