@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <getopt.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -20,6 +21,12 @@
 #define CONN_BUF_LEN 2048
 #define CONN_BUF_LEN_MAX 10 * 1024 * 1024  // 10 MiB
 #define LISTEN_BACKLOG 512
+
+typedef struct {
+    u8 nprocs;
+    u32 connection_max_duration_seconds;
+    u16 port;
+} options;
 
 typedef struct {
     u64 upper_bound_milliseconds_excl;
@@ -237,8 +244,10 @@ static int server_add_event(server* s, int fd) {
 }
 
 static void print_usage(int argc, char* argv[]) {
-    GB_ASSERT(argc > 0);
-    printf("%s <port>\n", argv[0]);
+    printf(
+        "%s (-p|--port) <port> [-j <number of processes>] "
+        "[--connection-max-duration-seconds <seconds>]\n",
+        argv[0]);
 }
 
 static int server_accept_new_connection(server* s) {
@@ -526,9 +535,9 @@ static int conn_handle_send_response(conn_handle* ch) {
     return conn_handle_write(ch);
 }
 
-static int server_listen_and_bind(server* s, u16 port) {
+static int server_listen_and_bind(server* s, const options* opts) {
     assert(s != NULL);
-    assert(port > 0);
+    assert(opts > 0);
 
     int res = 0;
 
@@ -551,7 +560,7 @@ static int server_listen_and_bind(server* s, u16 port) {
 
     const struct sockaddr_in addr = {
         .sin_family = AF_INET,
-        .sin_port = htons(port),
+        .sin_port = htons(opts->port),
     };
 
     if ((res = bind(s->fd, (const struct sockaddr*)&addr, sizeof(addr))) ==
@@ -560,16 +569,22 @@ static int server_listen_and_bind(server* s, u16 port) {
         return errno;
     }
 
-    gbAffinity affinity = {0};
-    gb_affinity_init(&affinity);
-    for (int i = 1; i < affinity.thread_count; i++) {
-        pid_t pid = fork();
-        if (pid == -1) {
-            fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
-            exit(errno);
+    if (opts->nprocs != 1) {
+        u8 nprocs = opts->nprocs;
+        if (nprocs == 0) {
+            gbAffinity affinity = {0};
+            gb_affinity_init(&affinity);
+            nprocs = affinity.thread_count;
         }
-        if (pid == 0) {  // Child
-            break;
+        for (int i = 1; i < nprocs; i++) {
+            pid_t pid = fork();
+            if (pid == -1) {
+                fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
+                exit(errno);
+            }
+            if (pid == 0) {  // Child
+                break;
+            }
         }
     }
 
@@ -587,7 +602,7 @@ static int server_listen_and_bind(server* s, u16 port) {
         return errno;
     }
     server_add_event(s, s->fd);
-    printf("Listening: :%d\n", port);
+    printf("Listening: :%d\n", opts->port);
     return 0;
 }
 
@@ -656,12 +671,12 @@ static void server_handle_events(server* s, int event_count) {
     }
 }
 
-static int server_run(server* s, u16 port) {
+static int server_run(server* s, const options* opts) {
     assert(s != NULL);
-    assert(port > 0);
+    assert(opts > 0);
 
     int res = 0;
-    res = server_listen_and_bind(s, port);
+    res = server_listen_and_bind(s, opts);
     if (res != 0) return res;
 
     server_add_timer(s);
@@ -674,25 +689,67 @@ static int server_run(server* s, u16 port) {
     return 0;
 }
 
-int main(int argc, char* argv[]) {
-    printf("sizeof(http_req)=%lu sizeof(conn_handle)=%lu\n", sizeof(http_req),
-           sizeof(conn_handle));
-    if (argc != 2) {
+static void options_parse_from_cli(int argc, char* argv[], options* opts) {
+    assert(argv != NULL);
+    assert(opts != NULL);
+
+    struct option longopts[] = {
+        {.name = "processes",
+         .has_arg = required_argument,
+         .flag = NULL,
+         .val = 'j'},
+        {.name = "port",
+         .has_arg = required_argument,
+         .flag = NULL,
+         .val = 'p'},
+        {.name = "connection-max-duration-seconds",
+         .has_arg = required_argument,
+         .flag = NULL,
+         .val = 'm'},
+    };
+
+    int ch = 0;
+    while ((ch = getopt_long(argc, argv, "j:m:p:", longopts, NULL)) != -1) {
+        switch (ch) {
+            case 'j': {
+                const u64 nprocs = gb_str_to_u64(optarg, NULL, 10);
+                if (nprocs > UINT8_MAX) {
+                    fprintf(stderr, "Invalid process count: %llu\n", nprocs);
+                    exit(EINVAL);
+                }
+                opts->nprocs = nprocs;
+                break;
+            }
+            case 'p': {
+                const u64 port = gb_str_to_u64(optarg, NULL, 10);
+                if (port == 0 || port > UINT16_MAX) {
+                    fprintf(stderr, "Invalid port number: %llu\n", port);
+                    exit(EINVAL);
+                }
+                opts->port = port;
+                break;
+            }
+            case 0:
+            default:
+                print_usage(argc, argv);
+                exit(0);
+        }
+    }
+
+    if (opts->port == 0) {
+        fprintf(stderr, "Port (-p, --port) is required\n");
         print_usage(argc, argv);
-        return 0;
+        exit(0);
     }
+}
 
-    const u64 port = gb_str_to_u64(argv[1], NULL, 10);
-    if (port == 0 || port > UINT16_MAX) {
-        fprintf(stderr, "Invalid port number: %llu\n", port);
-        return EINVAL;
-    }
-
-    verbose = getenv("VERBOSE") != NULL;
+int main(int argc, char* argv[]) {
+    options opts = {0};
+    options_parse_from_cli(argc, argv, &opts);
 
     int res = 0;
     gbAllocator allocator = gb_heap_allocator();
     server s = {0};
     if ((res = server_init(&s, allocator)) != 0) return res;
-    if ((res = server_run(&s, port)) != 0) return res;
+    if ((res = server_run(&s, &opts)) != 0) return res;
 }
