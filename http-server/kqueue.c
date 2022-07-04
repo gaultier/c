@@ -27,6 +27,7 @@ typedef struct {
     u32 connection_max_duration_seconds;
     u16 port;
 } options;
+static bool verbose = false;
 
 typedef struct {
     u64 upper_bound_milliseconds_excl;
@@ -71,28 +72,13 @@ struct server {
     struct kevent event_list[LISTEN_BACKLOG];
     latency_histogram hist;
     u64 requests_in_flight;
+    options opts;
 };
-
-static bool verbose = false;
 
 #define LOG(fmt, ...)                                     \
     do {                                                  \
         if (verbose) fprintf(stderr, fmt, ##__VA_ARGS__); \
     } while (0)
-
-static int server_add_timer(server* s) {
-    assert(s != NULL);
-
-    struct kevent event = {0};
-    EV_SET(&event, -1, EVFILT_TIMER, EV_ADD, NOTE_SECONDS, 5, 0);
-
-    if (kevent(s->queue, &event, 1, NULL, 0, NULL) == -1) {
-        fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
-                strerror(errno));
-        return errno;
-    }
-    return 0;
-}
 
 static int http_request_parse(http_req* req, gbArray(char) buf,
                               u64 prev_buf_len) {
@@ -229,13 +215,20 @@ static int server_init(server* s, gbAllocator allocator) {
     return 0;
 }
 
-static int server_add_event(server* s, int fd) {
+static int server_add_connection_events(server* s, int fd,
+                                        u64 connection_max_duration_seconds) {
     assert(s != NULL);
 
-    struct kevent event = {0};
-    EV_SET(&event, fd, EVFILT_READ, EV_ADD, 0, 0, 0);
+    struct kevent events[2] = {0};
+    EV_SET(&events[0], fd, EVFILT_READ, EV_ADD, 0, 0, 0);
+    u8 events_count = 1;
+    if (connection_max_duration_seconds > 0) {
+        EV_SET(&events[1], fd, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_SECONDS,
+               s->opts.connection_max_duration_seconds, 0);
+        events_count = 2;
+    }
 
-    if (kevent(s->queue, &event, 1, NULL, 0, NULL) == -1) {
+    if (kevent(s->queue, events, events_count, NULL, 0, NULL) == -1) {
         fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
                 strerror(errno));
         return errno;
@@ -267,7 +260,8 @@ static int server_accept_new_connection(server* s) {
     int res = 0;
     if ((res = fd_set_non_blocking(conn_fd)) != 0) return res;
 
-    server_add_event(s, conn_fd);
+    server_add_connection_events(s, conn_fd,
+                                 s->opts.connection_max_duration_seconds);
 
     conn_handle ch = {.fd = conn_fd};
     conn_handle_init(&ch, s->allocator);
@@ -535,9 +529,8 @@ static int conn_handle_send_response(conn_handle* ch) {
     return conn_handle_write(ch);
 }
 
-static int server_listen_and_bind(server* s, const options* opts) {
+static int server_listen_and_bind(server* s) {
     assert(s != NULL);
-    assert(opts > 0);
 
     int res = 0;
 
@@ -560,7 +553,7 @@ static int server_listen_and_bind(server* s, const options* opts) {
 
     const struct sockaddr_in addr = {
         .sin_family = AF_INET,
-        .sin_port = htons(opts->port),
+        .sin_port = htons(s->opts.port),
     };
 
     if ((res = bind(s->fd, (const struct sockaddr*)&addr, sizeof(addr))) ==
@@ -569,8 +562,8 @@ static int server_listen_and_bind(server* s, const options* opts) {
         return errno;
     }
 
-    if (opts->nprocs != 1) {
-        u8 nprocs = opts->nprocs;
+    if (s->opts.nprocs != 1) {
+        u8 nprocs = s->opts.nprocs;
         if (nprocs == 0) {
             gbAffinity affinity = {0};
             gb_affinity_init(&affinity);
@@ -601,8 +594,8 @@ static int server_listen_and_bind(server* s, const options* opts) {
         fprintf(stderr, "Failed to listen(2): %s\n", strerror(errno));
         return errno;
     }
-    server_add_event(s, s->fd);
-    printf("Listening: :%d\n", opts->port);
+    server_add_connection_events(s, s->fd, 0);
+    printf("Listening: :%d\n", s->opts.port);
     return 0;
 }
 
@@ -629,13 +622,13 @@ static void server_handle_events(server* s, int event_count) {
         const struct kevent* const e = &s->event_list[i];
         const int fd = e->ident;
 
-        if (e->filter == EVFILT_TIMER && e->ident == -1) {
-            LOG("Timer\n");
-            server_print_stats(s);
+        if (e->filter == EVFILT_TIMER) {
+            LOG("Timer for: fd=%d\n", fd);
+            server_remove_connection(s, server_find_conn_handle_by_fd(s, fd));
             continue;
         }
 
-        assert((e->filter & EVFILT_READ));
+        assert((e->filter == EVFILT_READ));
         if (fd == s->fd) {  // New connection to accept
             server_accept_new_connection(s);
             continue;
@@ -671,15 +664,12 @@ static void server_handle_events(server* s, int event_count) {
     }
 }
 
-static int server_run(server* s, const options* opts) {
+static int server_run(server* s) {
     assert(s != NULL);
-    assert(opts > 0);
 
     int res = 0;
-    res = server_listen_and_bind(s, opts);
+    res = server_listen_and_bind(s);
     if (res != 0) return res;
-
-    server_add_timer(s);
 
     while (1) {
         int event_count = 0;
@@ -707,10 +697,11 @@ static void options_parse_from_cli(int argc, char* argv[], options* opts) {
          .flag = NULL,
          .val = 'd'},
         {.name = "help", .has_arg = no_argument, .flag = NULL, .val = 'h'},
+        {.name = "verbose", .has_arg = no_argument, .flag = NULL, .val = 'v'},
     };
 
     int ch = 0;
-    while ((ch = getopt_long(argc, argv, "hj:d:p:", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "vhj:d:p:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'j': {
                 const u64 nprocs = gb_str_to_u64(optarg, NULL, 10);
@@ -743,6 +734,9 @@ static void options_parse_from_cli(int argc, char* argv[], options* opts) {
                 opts->connection_max_duration_seconds = seconds;
                 break;
             }
+            case 'v':
+                verbose = true;
+                break;
             default:
                 print_usage(argc, argv);
                 exit(0);
@@ -762,7 +756,7 @@ int main(int argc, char* argv[]) {
 
     int res = 0;
     gbAllocator allocator = gb_heap_allocator();
-    server s = {0};
+    server s = {.opts = opts};
     if ((res = server_init(&s, allocator)) != 0) return res;
-    if ((res = server_run(&s, &opts)) != 0) return res;
+    if ((res = server_run(&s)) != 0) return res;
 }

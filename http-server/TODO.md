@@ -1,4 +1,4 @@
-- Test on FreeBSD
+- Test on FreeBSD(?)
 - Add connection timeout (track time of last byte received & add timer for it, remove connection on timer trigger)
 - Linux support (?)
 - Validate that the `Host` header is there? 
