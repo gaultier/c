@@ -1,7 +1,6 @@
 - Test on FreeBSD
 - Add connection timeout (track time of last byte received & add timer for it, remove connection on timer trigger)
 - Linux support (?)
-- Histogram keys are percentages instead of fixed values
 - Validate that the `Host` header is there? 
-- React to header `Connection: Close` ?
-- Pool allocator for req_buf
+- https
+- Multi-processes/threads
