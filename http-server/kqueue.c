@@ -245,8 +245,8 @@ static int server_add_event(server* s, int fd) {
 
 static void print_usage(int argc, char* argv[]) {
     printf(
-        "%s (-p|--port) <port> [-j <number of processes>] "
-        "[--connection-max-duration-seconds <seconds>]\n",
+        "%s (-p|--port) <port> [(-j|--processes) <number of processes>] "
+        "[(-d|--connection-max-duration-seconds) <seconds>] [-h|--help]\n",
         argv[0]);
 }
 
@@ -705,16 +705,18 @@ static void options_parse_from_cli(int argc, char* argv[], options* opts) {
         {.name = "connection-max-duration-seconds",
          .has_arg = required_argument,
          .flag = NULL,
-         .val = 'm'},
+         .val = 'd'},
+        {.name = "help", .has_arg = no_argument, .flag = NULL, .val = 'h'},
     };
 
     int ch = 0;
-    while ((ch = getopt_long(argc, argv, "j:m:p:", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "hj:d:p:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'j': {
                 const u64 nprocs = gb_str_to_u64(optarg, NULL, 10);
                 if (nprocs > UINT8_MAX) {
-                    fprintf(stderr, "Invalid process count: %llu\n", nprocs);
+                    fprintf(stderr, "Invalid process count: %llu. Max: %d\n",
+                            nprocs, UINT8_MAX);
                     exit(EINVAL);
                 }
                 opts->nprocs = nprocs;
@@ -729,7 +731,18 @@ static void options_parse_from_cli(int argc, char* argv[], options* opts) {
                 opts->port = port;
                 break;
             }
-            case 0:
+            case 'd': {
+                const u64 seconds = gb_str_to_u64(optarg, NULL, 10);
+                if (seconds > UINT16_MAX) {
+                    fprintf(stderr,
+                            "Invalid connection-max-duration-seconds: %llu. "
+                            "Max: %d\n",
+                            seconds, UINT16_MAX);
+                    exit(EINVAL);
+                }
+                opts->connection_max_duration_seconds = seconds;
+                break;
+            }
             default:
                 print_usage(argc, argv);
                 exit(0);
