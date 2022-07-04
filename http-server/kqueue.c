@@ -243,6 +243,20 @@ static int server_add_connection_events(server* s, int fd,
     return 0;
 }
 
+static int server_remove_timer_event(server* s, int fd) {
+    assert(s != NULL);
+
+    struct kevent event = {0};
+    EV_SET(&event, fd, EVFILT_TIMER, EV_DELETE, 0, 0, NULL);
+
+    if (kevent(s->queue, &event, 1, NULL, 0, NULL)) {
+        fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
+                strerror(errno));
+        return errno;
+    }
+    return 0;
+}
+
 static void print_usage(int argc, char* argv[]) {
     printf(
         "%s (-p|--port) <port> [(-j|--processes) <number of processes>] "
@@ -289,7 +303,6 @@ static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
         conn_handle* ch = &s->conn_handles[i];
         if (ch->fd == fd) return ch;
     }
-    assert(0 && "Unreachable");
     return NULL;
 }
 
@@ -409,6 +422,7 @@ static void server_remove_connection(server* s, conn_handle* ch) {
     {
         // Closing the file descriptor also automatically removes the kevent
         close(ch->fd);
+        server_remove_timer_event(s, ch->fd);
 
         // Remove handle from array
         gb_array_free(ch->req_buf);
@@ -632,7 +646,10 @@ static void server_handle_events(server* s, int event_count) {
 
         if (e->filter == EVFILT_TIMER) {
             LOG("Timer expired for: fd=%d\n", fd);
-            server_remove_connection(s, server_find_conn_handle_by_fd(s, fd));
+            conn_handle* ch = server_find_conn_handle_by_fd(s, fd);
+            if (ch != NULL) {  // Might have already completed
+                server_remove_connection(s, ch);
+            }
             continue;
         }
 
@@ -643,7 +660,7 @@ static void server_handle_events(server* s, int event_count) {
         }
 
         LOG("[D008] Data to be read on: %d\n", fd);
-        conn_handle* ch = server_find_conn_handle_by_fd(s, fd);
+        conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
         assert(ch != NULL);
         assert(ch->fd == fd);
 
