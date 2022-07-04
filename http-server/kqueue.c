@@ -244,11 +244,15 @@ static void print_usage(int argc, char* argv[]) {
 static int server_accept_new_connection(server* s) {
     assert(s != NULL);
 
-    const int conn_fd = accept(s->fd, NULL, 0);
-    if (conn_fd == -1) {
-        fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
-        return errno;
-    }
+    int conn_fd = -1;
+    do {
+        conn_fd = accept(s->fd, NULL, 0);
+        if (conn_fd == -1 && errno != EAGAIN) {
+            fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
+            return errno;
+        }
+    } while (conn_fd == -1 && errno == EAGAIN);
+
     LOG("\n\n---------------- Request start "
         "(requests_in_flight=%llu)\n\n[D002] New conn: %d\n",
         s->requests_in_flight, conn_fd);
