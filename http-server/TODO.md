@@ -4,3 +4,4 @@
 - Histogram keys are percentages instead of fixed values
 - Validate that the `Host` header is there? 
 - React to header `Connection: Close` ?
+- Pool allocator for req_buf

@@ -170,7 +170,7 @@ static int fd_set_non_blocking(int fd) {
 static void conn_handle_init(conn_handle* ch, gbAllocator allocator) {
     gettimeofday(&ch->start, NULL);
 
-    gb_array_init_reserve(ch->req_buf, allocator, CONN_BUF_LEN);
+    gb_array_init_reserve(ch->req_buf, allocator, CONN_BUF_LEN_MAX);
     ch->req.num_headers = sizeof(ch->req.headers) / sizeof(ch->req.headers[0]);
 }
 
@@ -182,8 +182,6 @@ static int conn_handle_read_request(conn_handle* ch, u64 nbytes_to_read) {
     if (new_len >= CONN_BUF_LEN_MAX) {
         return EINVAL;
     }
-    gb_array_reserve(ch->req_buf, new_len);
-
     const ssize_t received =
         read(ch->fd, &ch->req_buf[prev_len], nbytes_to_read);
     if (received == -1) {
