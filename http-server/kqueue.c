@@ -558,10 +558,17 @@ static int server_listen_and_bind(server* s, u16 port) {
         return errno;
     }
 
-    pid_t pid = fork();
-    if (pid == -1) {
-        fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
-        exit(errno);
+    gbAffinity affinity = {0};
+    gb_affinity_init(&affinity);
+    for (int i = 1; i < affinity.thread_count; i++) {
+        pid_t pid = fork();
+        if (pid == -1) {
+            fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
+            exit(errno);
+        }
+        if (pid == 0) {  // Child
+            break;
+        }
     }
 
     // The file descriptor returned by kqueue(2) is not inherited after a fork
