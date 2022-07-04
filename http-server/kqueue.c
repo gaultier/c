@@ -5,11 +5,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/event.h>
 #include <sys/fcntl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
-#include <sys/syslimits.h>
 #include <sys/time.h>
 #include <unistd.h>
 
