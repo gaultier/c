@@ -1,5 +1,5 @@
 -std=c99
 -g
 -Wall
--isystem ./vendor 
+-isystem ./../vendor 
 -Wno-system-headers

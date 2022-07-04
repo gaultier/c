@@ -13,7 +13,8 @@
 
 #define GB_IMPLEMENTATION
 #define GB_STATIC
-#include "../vendor/gb/gb.h"
+#include <../vendor/gb/gb.h>
+
 #include "vendor/picohttpparser/picohttpparser.h"
 
 #define CONN_BUF_LEN 2048
