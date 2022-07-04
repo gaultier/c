@@ -210,13 +210,6 @@ static int server_init(server* s, gbAllocator allocator) {
 
     gb_array_init_reserve(s->conn_handles, s->allocator, LISTEN_BACKLOG);
 
-    s->queue = kqueue();
-    if (s->queue == -1) {
-        fprintf(stderr, "%s:%d:Failed to create queue with kqueue(): %s\n",
-                __FILE__, __LINE__, strerror(errno));
-        return errno;
-    }
-
     s->hist =
         (latency_histogram){.buckets = {
                                 {.upper_bound_milliseconds_excl = 5},
@@ -305,7 +298,7 @@ static int conn_handle_write(conn_handle* ch) {
     const int total = strlen(ch->res_buf);
 
     while (written < total) {
-        const int nb = write(ch->fd, &ch->res_buf[written], total - written);
+        const int nb = send(ch->fd, &ch->res_buf[written], total - written, 0);
         if (nb == -1) {
             fprintf(stderr, "Failed to write(2): err=%s\n", strerror(errno));
             return errno;
@@ -334,7 +327,6 @@ static void histogram_add_entry(latency_histogram* hist, float val) {
 static void histogram_print(latency_histogram* hist) {
     assert(hist != NULL);
 
-    puts("");
     for (int i = 0; i < sizeof(hist->buckets) / sizeof(hist->buckets[0]); i++) {
         latency_histogram_bucket* bucket = &hist->buckets[i];
         printf("Latency < %llu ms: %llu\n",
@@ -357,12 +349,14 @@ static void server_print_stats(server* s) {
         sum_cap_req_buf;
 
     printf(
-        "\n++++++++++\nStats:\nlen(conn_handles)=%td cap(conn_handles)=%td "
+        "++++++++++\nStats:\n pid=%d len(conn_handles)=%td "
+        "cap(conn_handles)=%td "
         "sum(len(req_buf))=%lld sum(cap(req_buf))=%lld total_mem=%llu\n",
-        gb_array_count(s->conn_handles), gb_array_capacity(s->conn_handles),
-        sum_len_req_buf, sum_cap_req_buf, total_mem);
+        getpid(), gb_array_count(s->conn_handles),
+        gb_array_capacity(s->conn_handles), sum_len_req_buf, sum_cap_req_buf,
+        total_mem);
     histogram_print(&s->hist);
-    puts("++++++++++\n\n");
+    puts("++++++++++\n");
 }
 
 static void conn_handles_rm_swap(gbArray(conn_handle) conn_handles,
@@ -564,6 +558,21 @@ static int server_listen_and_bind(server* s, u16 port) {
         return errno;
     }
 
+    pid_t pid = fork();
+    if (pid == -1) {
+        fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
+        exit(errno);
+    }
+
+    // The file descriptor returned by kqueue(2) is not inherited after a fork
+    // by the child so it needs to be created after the fork.
+    s->queue = kqueue();
+    if (s->queue == -1) {
+        fprintf(stderr, "%s:%d:Failed to create queue with kqueue(): %s\n",
+                __FILE__, __LINE__, strerror(errno));
+        return errno;
+    }
+
     if ((res = listen(s->fd, LISTEN_BACKLOG)) == -1) {
         fprintf(stderr, "Failed to listen(2): %s\n", strerror(errno));
         return errno;
@@ -647,6 +656,7 @@ static int server_run(server* s, u16 port) {
     if (res != 0) return res;
 
     server_add_timer(s);
+
     while (1) {
         int event_count = 0;
         server_poll_events(s, &event_count);
