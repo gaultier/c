@@ -61,7 +61,10 @@ typedef struct {
     gbArray(char) req_buf;
     char res_buf[CONN_BUF_LEN];
     http_req req;
-    int fd;
+    int socket_fd;  // For recv(2)/send(2)
+    // For sendfile(2)
+    int sendfile_file_fd;
+    u64 sendfile_total_file_bytes_sent;
 } conn_handle;
 
 struct server {
@@ -184,7 +187,7 @@ static int conn_handle_read_request(conn_handle* ch, u64 nbytes_to_read) {
         return EINVAL;
     }
     const ssize_t received =
-        read(ch->fd, &ch->req_buf[prev_len], nbytes_to_read);
+        read(ch->socket_fd, &ch->req_buf[prev_len], nbytes_to_read);
     if (received == -1) {
         fprintf(stderr, "Failed to read(2): err=%s\n", strerror(errno));
         return errno;
@@ -227,13 +230,14 @@ static int server_add_connection_events(server* s, int fd,
                                         u64 connection_max_duration_seconds) {
     assert(s != NULL);
 
-    struct kevent events[2] = {0};
+    struct kevent events[3] = {0};
     EV_SET(&events[0], fd, EVFILT_READ, EV_ADD, 0, 0, 0);
-    u8 events_count = 1;
+    EV_SET(&events[1], fd, EVFILT_WRITE, EV_ADD, 0, 0, 0);
+    u8 events_count = 2;
     if (connection_max_duration_seconds > 0) {
         EV_SET(&events[1], fd, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_SECONDS,
                s->opts.connection_max_duration_seconds, 0);
-        events_count = 2;
+        events_count += 1;
     }
 
     if (kevent(s->queue, events, events_count, NULL, 0, NULL) == -1) {
@@ -287,9 +291,9 @@ static int server_accept_new_connection(server* s) {
     server_add_connection_events(s, conn_fd,
                                  s->opts.connection_max_duration_seconds);
 
-    conn_handle ch = {.fd = conn_fd};
+    conn_handle ch = {.socket_fd = conn_fd};
     conn_handle_init(&ch, s->allocator);
-    assert(ch.fd == conn_fd);
+    assert(ch.socket_fd == conn_fd);
     gb_array_append(s->conn_handles, ch);
 
     s->requests_in_flight++;
@@ -302,7 +306,7 @@ static conn_handle* server_find_conn_handle_by_fd(server* s, int fd) {
 
     for (int i = 0; i < gb_array_count(s->conn_handles); i++) {
         conn_handle* ch = &s->conn_handles[i];
-        if (ch->fd == fd) return ch;
+        if (ch->socket_fd == fd) return ch;
     }
     return NULL;
 }
@@ -325,7 +329,8 @@ static int conn_handle_write(conn_handle* ch) {
     const int total = strlen(ch->res_buf);
 
     while (written < total) {
-        const int nb = send(ch->fd, &ch->res_buf[written], total - written, 0);
+        const int nb =
+            send(ch->socket_fd, &ch->res_buf[written], total - written, 0);
         if (nb == -1) {
             fprintf(stderr, "Failed to write(2): err=%s\n", strerror(errno));
             return errno;
@@ -413,15 +418,15 @@ static void server_remove_connection(server* s, conn_handle* ch) {
         LOG("Removing connection: fd=%d remaining=%td "
             "cap(conn_handles)=%td "
             "lifetime=%fms\n",
-            ch->fd, gb_array_count(s->conn_handles),
+            ch->socket_fd, gb_array_count(s->conn_handles),
             gb_array_capacity(s->conn_handles), total_msecs);
     }
 
     // Rm
     {
         // Closing the file descriptor also automatically removes the kevent
-        close(ch->fd);
-        server_remove_timer_event(s, ch->fd);
+        close(ch->socket_fd);
+        server_remove_timer_event(s, ch->socket_fd);
 
         // Remove handle from array
         gb_array_free(ch->req_buf);
@@ -464,8 +469,8 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
     const char* const ext = gb_path_extension(path);
     LOG("Serving static file `%s` ext=`%s`\n", path, ext);
 
-    const int fd = open(path, O_RDONLY);
-    if (fd == -1) {
+    ch->sendfile_file_fd = open(path, O_RDONLY);
+    if (ch->sendfile_file_fd == -1) {
         fprintf(stderr, "Failed to open(2): path=`%s` err=%s\n", path,
                 strerror(errno));
         conn_handle_respond_404(ch);
@@ -476,7 +481,7 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
     if (stat(path, &st) == -1) {
         fprintf(stderr, "Failed to stat(2): path=`%s` err=%s\n", path,
                 strerror(errno));
-        close(fd);
+        close(ch->sendfile_file_fd);
         conn_handle_respond_404(ch);
         return 0;
     }
@@ -500,36 +505,41 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
     off_t len = 0;
     // TODO: register EVFILT_WRITE event for this instead of blocking the event
     // loop
-    int res = sendfile(fd, ch->fd, 0, &len, &headers_trailers, 0);
+    int res = sendfile(ch->sendfile_file_fd, ch->socket_fd, 0, &len,
+                       &headers_trailers, 0);
     if (res == -1 && errno != EAGAIN) {
         fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
                 strerror(errno));
-        close(fd);
+        close(ch->sendfile_file_fd);
         return -1;
     }
     LOG("sendfile(2): res=%d len=%llu size=%llu\n", res, len, st.st_size);
 
-    u64 total_len_sent = len;
-    i64 offset = 0;
+    if (len < header.iov_len) {
+        // Too hard and unlikely to handle that case
+        return -1;
+    }
+    ch->sendfile_total_file_bytes_sent = len - header.iov_len;
     while (res != 0) {
         len = 0;
-        offset = gb_clamp(total_len_sent - header.iov_len, 0, UINT64_MAX);
-        res = sendfile(fd, ch->fd, offset, &len, NULL, 0);
+        res = sendfile(ch->sendfile_file_fd, ch->socket_fd,
+                       ch->sendfile_total_file_bytes_sent, &len, NULL, 0);
         if (res == -1 && errno != EAGAIN) {
             fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
                     strerror(errno));
-            close(fd);
+            close(ch->sendfile_file_fd);
             return -1;
         }
-        total_len_sent += len;
-        offset += len;
+        ch->sendfile_total_file_bytes_sent += len;
         if (len > 0)
-            LOG("sendfile(2): res=%d len=%llu offset=%llu %llu/%llu\n", res,
-                len, offset, total_len_sent, st.st_size);
+            LOG("sendfile(2): res=%d len=%llu %llu/%llu\n", res, len,
+                ch->sendfile_total_file_bytes_sent, st.st_size);
     }
-    LOG("sendfile(2): total_len_sent=%lld in_fd=%d out_fd=%d\n", total_len_sent,
-        fd, ch->fd);
-    close(fd);
+    LOG("sendfile(2): ch->sendfile_total_file_bytes_sent=%lld in_fd=%d "
+        "out_fd=%d\n",
+        ch->sendfile_total_file_bytes_sent, ch->sendfile_file_fd,
+        ch->socket_fd);
+    close(ch->sendfile_file_fd);
     return 0;
 }
 
@@ -687,7 +697,7 @@ static void server_handle_events(server* s, int event_count) {
         LOG("[D008] Data to be read on: %d\n", fd);
         conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
         assert(ch != NULL);
-        assert(ch->fd == fd);
+        assert(ch->socket_fd == fd);
 
         // Connection gone
         if (e->flags & EV_EOF) {
@@ -697,19 +707,19 @@ static void server_handle_events(server* s, int event_count) {
 
         int res = 0;
         if ((res = conn_handle_read_request(ch, e->data)) <= 0) {
-            assert(ch->fd == fd);
+            assert(ch->socket_fd == fd);
             if (res == -2) {  // Need more data
-                assert(ch->fd == fd);
+                assert(ch->socket_fd == fd);
                 continue;
             }
-            assert(ch->fd == fd);
+            assert(ch->socket_fd == fd);
             server_remove_connection(s, ch);
             continue;
         }
 
-        assert(ch->fd == fd);
+        assert(ch->socket_fd == fd);
         conn_handle_send_response(ch);
-        assert(ch->fd == fd);
+        assert(ch->socket_fd == fd);
         server_remove_connection(s, ch);
     }
 }
