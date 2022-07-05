@@ -501,6 +501,8 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
     off_t len = 0;
     u64 total_len_sent = 0;
     const u64 total_len_to_send = st.st_size;
+    // TODO: register EVFILT_WRITE event for this instead of blocking the event
+    // loop
     int res = sendfile(fd, ch->fd, 0, &len, &headers_trailers, 0);
     if (res == -1 && errno != EAGAIN) {
         fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
