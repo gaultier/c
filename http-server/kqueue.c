@@ -573,10 +573,10 @@ static int server_listen_and_bind(server* s) {
         return res;
     }
 
+    const u8 ip[4] = {127, 0, 0, 1};
     const struct sockaddr_in addr = {
         .sin_family = AF_INET,
-        .sin_addr = {.s_addr =
-                         127 | (0 << 8) | (0 << 16) | (1 << 24)},  // 127.0.0.1
+        .sin_addr = {.s_addr = *(u32*)ip},
         .sin_port = htons(s->opts.port),
     };
 
