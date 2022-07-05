@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#define __STDC_WANT_LIB_EXT1__ 1
 #include <string.h>
 #include <sys/fcntl.h>
 #include <sys/socket.h>
@@ -448,7 +449,7 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
 
     // TODO: security
     static char path[PATH_MAX] = "";
-    bzero(path, PATH_MAX);
+    memset_s(path, PATH_MAX, 0, PATH_MAX);
 
     if (ch->req.path_len >= PATH_MAX) {
         conn_handle_respond_404(ch);
