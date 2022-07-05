@@ -236,6 +236,19 @@ static int server_init(server* s, gbAllocator allocator) {
     return 0;
 }
 
+static int server_add_listen_event(server* s) {
+    assert(s != NULL);
+
+    struct kevent events[1] = {0};
+    EV_SET(&events[0], s->fd, EVFILT_READ, EV_ADD, 0, 0, 0);
+    if (kevent(s->queue, events, 1, NULL, 0, NULL) == -1) {
+        fprintf(stderr, "%s:%d:Failed to kevent(2): %s\n", __FILE__, __LINE__,
+                strerror(errno));
+        return errno;
+    }
+    return 0;
+}
+
 static int server_add_connection_events(server* s, int fd,
                                         u64 connection_max_duration_seconds) {
     assert(s != NULL);
@@ -694,7 +707,7 @@ static int server_listen_and_bind(server* s) {
         fprintf(stderr, "Failed to listen(2): %s\n", strerror(errno));
         return errno;
     }
-    server_add_connection_events(s, s->fd, 0);
+    server_add_listen_event(s);
     printf("Listening: :%d\n", s->opts.port);
     return 0;
 }
