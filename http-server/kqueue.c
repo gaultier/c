@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <sys/event.h>
 #define __STDC_WANT_LIB_EXT1__ 1
 #include <string.h>
 #include <sys/fcntl.h>
@@ -685,42 +686,42 @@ static void server_handle_events(server* s, int event_count) {
             if (ch != NULL) {  // Might have already completed
                 server_remove_connection(s, ch);
             }
-            continue;
-        }
-
-        assert((e->filter == EVFILT_READ));
-        if (fd == s->fd) {  // New connection to accept
+        } else if (e->filter == EVFILT_READ &&
+                   fd == s->fd) {  // New connection to accept
             server_accept_new_connection(s);
-            continue;
-        }
-
-        LOG("[D008] Data to be read on: %d\n", fd);
-        conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
-        assert(ch != NULL);
-        assert(ch->socket_fd == fd);
-
-        // Connection gone
-        if (e->flags & EV_EOF) {
-            server_remove_connection(s, ch);
-            continue;
-        }
-
-        int res = 0;
-        if ((res = conn_handle_read_request(ch, e->data)) <= 0) {
+        } else if (e->filter == EVFILT_READ) {
+            LOG("[D008] Data to be read on: %d\n", fd);
+            conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
+            assert(ch != NULL);
             assert(ch->socket_fd == fd);
-            if (res == -2) {  // Need more data
-                assert(ch->socket_fd == fd);
+
+            // Connection gone
+            if (e->flags & EV_EOF) {
+                server_remove_connection(s, ch);
                 continue;
             }
+
+            int res = 0;
+            if ((res = conn_handle_read_request(ch, e->data)) <= 0) {
+                assert(ch->socket_fd == fd);
+                if (res == -2) {  // Need more data
+                    assert(ch->socket_fd == fd);
+                    continue;
+                }
+                assert(ch->socket_fd == fd);
+                server_remove_connection(s, ch);
+                continue;
+            }
+
+            assert(ch->socket_fd == fd);
+            conn_handle_send_response(ch);
             assert(ch->socket_fd == fd);
             server_remove_connection(s, ch);
+
+        } else if (e->filter == EVFILT_WRITE) {
+            LOG("Data to be written on: fd=%d\n", fd);
             continue;
         }
-
-        assert(ch->socket_fd == fd);
-        conn_handle_send_response(ch);
-        assert(ch->socket_fd == fd);
-        server_remove_connection(s, ch);
     }
 }
 
