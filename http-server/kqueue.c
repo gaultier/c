@@ -594,7 +594,7 @@ static int server_listen_and_bind(server* s) {
             nprocs = affinity.thread_count;
         }
         for (int i = 1; i < nprocs; i++) {
-            pid_t pid = fork();
+            const pid_t pid = fork();
             if (pid == -1) {
                 fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
                 exit(errno);
