@@ -249,16 +249,15 @@ static int server_add_listen_event(server* s) {
     return 0;
 }
 
-static int server_add_connection_events(server* s, int fd,
-                                        u64 connection_max_duration_seconds) {
+static int server_add_connection_events(server* s, int fd) {
     assert(s != NULL);
 
     struct kevent events[3] = {0};
     EV_SET(&events[0], fd, EVFILT_READ, EV_ADD, 0, 0, 0);
     EV_SET(&events[1], fd, EVFILT_WRITE, EV_ADD, 0, 0, 0);
     u8 events_count = 2;
-    if (connection_max_duration_seconds > 0) {
-        EV_SET(&events[1], fd, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_SECONDS,
+    if (s->opts.connection_max_duration_seconds > 0) {
+        EV_SET(&events[2], fd, EVFILT_TIMER, EV_ADD | EV_ONESHOT, NOTE_SECONDS,
                s->opts.connection_max_duration_seconds, 0);
         events_count += 1;
     }
@@ -311,8 +310,7 @@ static int server_accept_new_connection(server* s) {
     int res = 0;
     if ((res = fd_set_non_blocking(conn_fd)) != 0) return res;
 
-    server_add_connection_events(s, conn_fd,
-                                 s->opts.connection_max_duration_seconds);
+    server_add_connection_events(s, conn_fd);
 
     conn_handle ch = {.socket_fd = conn_fd, .sendfile_file_fd = -1};
     conn_handle_init(&ch, s->allocator);
