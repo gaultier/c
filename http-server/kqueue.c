@@ -498,8 +498,6 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
     };
 
     off_t len = 0;
-    u64 total_len_sent = 0;
-    const u64 total_len_to_send = st.st_size;
     // TODO: register EVFILT_WRITE event for this instead of blocking the event
     // loop
     int res = sendfile(fd, ch->fd, 0, &len, &headers_trailers, 0);
@@ -509,12 +507,14 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
         close(fd);
         return -1;
     }
-    LOG("sendfile(2): res=%d len=%llu %llu/%llu\n", res, len, total_len_sent,
-        total_len_to_send);
+    LOG("sendfile(2): res=%d len=%llu size=%llu\n", res, len, st.st_size);
 
-    while (res == -1 && errno == EAGAIN && total_len_sent < total_len_to_send) {
+    u64 total_len_sent = len;
+    i64 offset = 0;
+    while (res != 0) {
         len = 0;
-        res = sendfile(fd, ch->fd, total_len_sent, &len, NULL, 0);
+        offset = gb_clamp(total_len_sent - header.iov_len, 0, UINT64_MAX);
+        res = sendfile(fd, ch->fd, offset, &len, NULL, 0);
         if (res == -1 && errno != EAGAIN) {
             fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
                     strerror(errno));
@@ -522,9 +522,10 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
             return -1;
         }
         total_len_sent += len;
+        offset += len;
         if (len > 0)
-            LOG("sendfile(2): res=%d len=%llu %llu/%llu\n", res, len,
-                total_len_sent, total_len_to_send);
+            LOG("sendfile(2): res=%d len=%llu offset=%llu %llu/%llu\n", res,
+                len, offset, total_len_sent, st.st_size);
     }
     LOG("sendfile(2): total_len_sent=%lld in_fd=%d out_fd=%d\n", total_len_sent,
         fd, ch->fd);
