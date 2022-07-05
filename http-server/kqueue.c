@@ -508,15 +508,12 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
         close(fd);
         return -1;
     }
-    LOG("sendfile(2) #0: %llu %llu/%llu res=%d\n", len, total_len_sent,
-        total_len_to_send, res);
+    LOG("sendfile(2): res=%d len=%llu %llu/%llu\n", res, len, total_len_sent,
+        total_len_to_send);
 
     while (res == -1 && errno == EAGAIN && total_len_sent < total_len_to_send) {
         len = 0;
-        LOG("sendfile(2) #1: %llu %llu/%llu\n", len, total_len_sent,
-            total_len_to_send);
-
-        int res = sendfile(fd, ch->fd, total_len_sent, &len, NULL, 0);
+        res = sendfile(fd, ch->fd, total_len_sent, &len, NULL, 0);
         if (res == -1 && errno != EAGAIN) {
             fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
                     strerror(errno));
@@ -524,8 +521,9 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
             return -1;
         }
         total_len_sent += len;
-        LOG("sendfile(2) #2: %llu %llu/%llu\n", len, total_len_sent,
-            total_len_to_send);
+        if (len > 0)
+            LOG("sendfile(2): res=%d len=%llu %llu/%llu\n", res, len,
+                total_len_sent, total_len_to_send);
     }
     LOG("sendfile(2): total_len_sent=%lld in_fd=%d out_fd=%d\n", total_len_sent,
         fd, ch->fd);
