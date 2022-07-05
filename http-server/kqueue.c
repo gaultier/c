@@ -337,17 +337,16 @@ static int conn_handle_write(conn_handle* ch) {
 static void histogram_add_entry(latency_histogram* hist, float val) {
     assert(hist != NULL);
 
-    latency_histogram_bucket* bucket = NULL;
+    LOG("histogram_add_entry: %f\n", val);
+
     for (int i = 0; i < sizeof(hist->buckets) / sizeof(hist->buckets[0]); i++) {
-        bucket = &hist->buckets[i];
+        latency_histogram_bucket* const bucket = &hist->buckets[i];
         if (bucket->upper_bound_milliseconds_excl > val) {
-            break;
+            bucket->count++;
+            return;
         }
     }
-    assert(bucket != NULL);
-    bucket->count++;
-
-    LOG("histogram_add_entry: %f\n", val);
+    assert(0 && "Unreachable");
 }
 
 static void histogram_print(latency_histogram* hist) {
