@@ -499,16 +499,36 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
     };
 
     off_t len = 0;
-    // TODO: partial writes
+    u64 total_len_sent = 0;
+    const u64 total_len_to_send = st.st_size;
     int res = sendfile(fd, ch->fd, 0, &len, &headers_trailers, 0);
-    if (res == -1) {
+    if (res == -1 && errno != EAGAIN) {
         fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
                 strerror(errno));
         close(fd);
         return -1;
     }
-    LOG("sendfile(2): res=%d len=%lld in_fd=%d out_fd=%d\n", res, len, fd,
-        ch->fd);
+    LOG("sendfile(2) #0: %llu %llu/%llu res=%d\n", len, total_len_sent,
+        total_len_to_send, res);
+
+    while (res == -1 && errno == EAGAIN && total_len_sent < total_len_to_send) {
+        len = 0;
+        LOG("sendfile(2) #1: %llu %llu/%llu\n", len, total_len_sent,
+            total_len_to_send);
+
+        int res = sendfile(fd, ch->fd, total_len_sent, &len, NULL, 0);
+        if (res == -1 && errno != EAGAIN) {
+            fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
+                    strerror(errno));
+            close(fd);
+            return -1;
+        }
+        total_len_sent += len;
+        LOG("sendfile(2) #2: %llu %llu/%llu\n", len, total_len_sent,
+            total_len_to_send);
+    }
+    LOG("sendfile(2): total_len_sent=%lld in_fd=%d out_fd=%d\n", total_len_sent,
+        fd, ch->fd);
     close(fd);
     return 0;
 }
@@ -533,6 +553,9 @@ static int conn_handle_send_response(conn_handle* ch) {
     }
 
     if (ch->req.path_len <= 1 ||
+        str_ends_with(ch->req.path, ch->req.path_len, ".txt", 4) ||
+        str_ends_with(ch->req.path, ch->req.path_len, ".csv", 4) ||
+        str_ends_with(ch->req.path, ch->req.path_len, ".iso", 4) ||
         str_ends_with(ch->req.path, ch->req.path_len, ".html", 5) ||
         str_ends_with(ch->req.path, ch->req.path_len, ".js", 3) ||
         str_ends_with(ch->req.path, ch->req.path_len, ".css", 4)) {
