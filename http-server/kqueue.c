@@ -4,9 +4,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <sys/event.h>
-#define __STDC_WANT_LIB_EXT1__ 1
 #include <string.h>
+#include <sys/event.h>
 #include <sys/fcntl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
@@ -57,6 +56,13 @@ typedef struct {
 
 typedef struct server server;
 
+typedef enum {
+    CHS_INIT,
+    CHS_PARSED_REQ,
+    CHS_PARTIALLY_SENT_RES,
+    CHS_TOTALLY_SENT_RES,
+} conn_handle_state;
+
 typedef struct {
     struct timeval start;
     gbArray(char) req_buf;
@@ -66,6 +72,8 @@ typedef struct {
     // For sendfile(2)
     int sendfile_file_fd;
     u64 sendfile_total_file_bytes_sent;
+    u64 sendfile_total_file_bytes_to_send;
+    conn_handle_state state;
 } conn_handle;
 
 struct server {
@@ -203,6 +211,7 @@ static int conn_handle_read_request(conn_handle* ch, u64 nbytes_to_read) {
         (int)gb_array_count(ch->req_buf), ch->req_buf);
 
     int res = http_request_parse(&ch->req, ch->req_buf, prev_len);
+    ch->state = CHS_PARSED_REQ;
     return res;
 }
 
@@ -292,7 +301,7 @@ static int server_accept_new_connection(server* s) {
     server_add_connection_events(s, conn_fd,
                                  s->opts.connection_max_duration_seconds);
 
-    conn_handle ch = {.socket_fd = conn_fd};
+    conn_handle ch = {.socket_fd = conn_fd, .sendfile_file_fd = -1};
     conn_handle_init(&ch, s->allocator);
     assert(ch.socket_fd == conn_fd);
     gb_array_append(s->conn_handles, ch);
@@ -425,9 +434,11 @@ static void server_remove_connection(server* s, conn_handle* ch) {
 
     // Rm
     {
-        // Closing the file descriptor also automatically removes the kevent
+        // Closing the file descriptor also automatically removes the kevents
+        // associated with it i.e. `EVFILT_READ` and `EVFILT_WRITE` but not
+        // `EVFILT_TIMER`
         close(ch->socket_fd);
-        server_remove_timer_event(s, ch->socket_fd);
+        /* server_remove_timer_event(s, ch->socket_fd); */
 
         // Remove handle from array
         gb_array_free(ch->req_buf);
@@ -451,96 +462,128 @@ static int conn_handle_respond_404(conn_handle* ch) {
 
 static int conn_handle_serve_static_file(conn_handle* ch) {
     assert(ch != NULL);
-
-    // TODO: security
-    static char path[PATH_MAX] = "";
-    memset_s(path, PATH_MAX, 0, PATH_MAX);
-
-    if (ch->req.path_len >= PATH_MAX) {
-        conn_handle_respond_404(ch);
-        return 0;
-    }
-    if (ch->req.path_len <= 1) {
-        memcpy(path, "index.html", sizeof("index.html"));
-    } else {
-        memcpy(path, ch->req.path + 1 /* Skip leading slash */,
-               ch->req.path_len - 1);
-    }
-
-    const char* const ext = gb_path_extension(path);
-    LOG("Serving static file `%s` ext=`%s`\n", path, ext);
-
-    ch->sendfile_file_fd = open(path, O_RDONLY);
-    if (ch->sendfile_file_fd == -1) {
-        fprintf(stderr, "Failed to open(2): path=`%s` err=%s\n", path,
-                strerror(errno));
-        conn_handle_respond_404(ch);
-        return 0;
-    }
-
-    struct stat st = {0};
-    if (stat(path, &st) == -1) {
-        fprintf(stderr, "Failed to stat(2): path=`%s` err=%s\n", path,
-                strerror(errno));
-        close(ch->sendfile_file_fd);
-        conn_handle_respond_404(ch);
-        return 0;
-    }
-    LOG("Serving static file `%s` size=%lld\n", path, st.st_size);
-
-    snprintf(ch->res_buf, CONN_BUF_LEN,
-             "HTTP/1.1 200 OK\r\n"
-             "Content-Type: %s; charset=utf8\r\n"
-             "Content-Length: %lld\r\n"
-             "\r\n",
-             http_content_type_for_file(ext, strlen(ext)), st.st_size);
-    struct iovec header = {
-        .iov_base = ch->res_buf,
-        .iov_len = strlen(ch->res_buf),
-    };
-    struct sf_hdtr headers_trailers = {
-        .headers = &header,
-        .hdr_cnt = 1,
-    };
-
+    int res = 0;
     off_t len = 0;
-    // TODO: register EVFILT_WRITE event for this instead of blocking the event
-    // loop
-    int res = sendfile(ch->sendfile_file_fd, ch->socket_fd, 0, &len,
-                       &headers_trailers, 0);
-    if (res == -1 && errno != EAGAIN) {
-        fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
-                strerror(errno));
-        close(ch->sendfile_file_fd);
-        return -1;
-    }
-    LOG("sendfile(2): res=%d len=%llu size=%llu\n", res, len, st.st_size);
 
-    if (len < header.iov_len) {
-        // Too hard and unlikely to handle that case
-        return -1;
-    }
-    ch->sendfile_total_file_bytes_sent = len - header.iov_len;
-    while (res != 0) {
-        len = 0;
-        res = sendfile(ch->sendfile_file_fd, ch->socket_fd,
-                       ch->sendfile_total_file_bytes_sent, &len, NULL, 0);
+    // First call
+    if (ch->sendfile_file_fd == -1) {
+        // TODO: security
+
+        if (ch->req.path_len >= PATH_MAX) {
+            conn_handle_respond_404(ch);
+            return 0;
+        }
+        char path[PATH_MAX] = "";
+        if (ch->req.path_len <= 1) {
+            memcpy(path, "index.html", sizeof("index.html"));
+        } else {
+            memcpy(path, ch->req.path + 1 /* Skip leading slash */,
+                   ch->req.path_len - 1);
+        }
+
+        const char* const ext = gb_path_extension(path);
+        LOG("Serving static file `%s` ext=`%s`\n", path, ext);
+
+        ch->sendfile_file_fd = open(path, O_RDONLY);
+        if (ch->sendfile_file_fd == -1) {
+            fprintf(stderr, "Failed to open(2): path=`%s` err=%s\n", path,
+                    strerror(errno));
+            conn_handle_respond_404(ch);
+            return 0;
+        }
+        struct stat st = {0};
+        if (stat(path, &st) == -1) {
+            fprintf(stderr, "Failed to stat(2): path=`%s` err=%s\n", path,
+                    strerror(errno));
+            close(ch->sendfile_file_fd);
+            conn_handle_respond_404(ch);
+            return 0;
+        }
+        LOG("Serving static file `%s` size=%lld\n", path, st.st_size);
+        ch->sendfile_total_file_bytes_to_send = st.st_size;
+
+        snprintf(ch->res_buf, CONN_BUF_LEN,
+                 "HTTP/1.1 200 OK\r\n"
+                 "Content-Type: %s; charset=utf8\r\n"
+                 "Content-Length: %lld\r\n"
+                 "\r\n",
+                 http_content_type_for_file(ext, strlen(ext)), st.st_size);
+        struct iovec header = {
+            .iov_base = ch->res_buf,
+            .iov_len = strlen(ch->res_buf),
+        };
+        struct sf_hdtr headers_trailers = {
+            .headers = &header,
+            .hdr_cnt = 1,
+        };
+
+        res = sendfile(ch->sendfile_file_fd, ch->socket_fd, 0, &len,
+                       &headers_trailers, 0);
         if (res == -1 && errno != EAGAIN) {
             fprintf(stderr, "Failed to sendfile(2): path=`%s` err=%s\n", path,
                     strerror(errno));
             close(ch->sendfile_file_fd);
             return -1;
         }
-        ch->sendfile_total_file_bytes_sent += len;
-        if (len > 0)
-            LOG("sendfile(2): res=%d len=%llu %llu/%llu\n", res, len,
-                ch->sendfile_total_file_bytes_sent, st.st_size);
+        LOG("sendfile(2): res=%d header_len=%zu len=%llu size=%llu\n", res,
+            header.iov_len, len, st.st_size);
+
+        if (len < header.iov_len) {
+            // Too hard and unlikely to handle that case
+            return -1;
+        }
+        ch->sendfile_total_file_bytes_sent = len - header.iov_len;
+
+        if (ch->sendfile_total_file_bytes_sent ==
+            ch->sendfile_total_file_bytes_to_send) {
+            close(ch->sendfile_file_fd);
+            LOG("Static file totally sent: path=`%s`\n", path);
+            ch->state = CHS_TOTALLY_SENT_RES;
+            return 0;
+        }
+
+        // More to send, will happen later when EVFILT_WRITE triggers for this
+        // socket
+        LOG("Static file partially sent: path=`%s`\n", path);
+        ch->state = CHS_PARTIALLY_SENT_RES;
+        return EAGAIN;
     }
-    LOG("sendfile(2): ch->sendfile_total_file_bytes_sent=%lld in_fd=%d "
+
+    // Subsequent calls
+    assert(ch->state == CHS_PARTIALLY_SENT_RES);
+    assert(ch->sendfile_file_fd > 0);
+    assert(ch->sendfile_total_file_bytes_to_send > 0);
+    assert(len == 0);
+    res = sendfile(ch->sendfile_file_fd, ch->socket_fd,
+                   ch->sendfile_total_file_bytes_sent, &len, NULL, 0);
+    if (res == -1 && errno != EAGAIN) {
+        fprintf(stderr, "Failed to sendfile(2): socket_fd=%d err=%s\n",
+                ch->socket_fd, strerror(errno));
+        close(ch->sendfile_file_fd);
+        return -1;
+    }
+    ch->sendfile_total_file_bytes_sent += len;
+    if (len > 0)
+        LOG("sendfile(2): res=%d len=%llu %llu/%llu\n", res, len,
+            ch->sendfile_total_file_bytes_sent,
+            ch->sendfile_total_file_bytes_to_send);
+    LOG("sendfile(2): res=%d ch->sendfile_total_file_bytes_sent=%lld in_fd=%d "
         "out_fd=%d\n",
-        ch->sendfile_total_file_bytes_sent, ch->sendfile_file_fd,
+        res, ch->sendfile_total_file_bytes_sent, ch->sendfile_file_fd,
         ch->socket_fd);
-    close(ch->sendfile_file_fd);
+    if (ch->sendfile_total_file_bytes_sent ==
+        ch->sendfile_total_file_bytes_to_send) {
+        close(ch->sendfile_file_fd);
+        LOG("Static file totally sent: socket_fd=%d\n", ch->socket_fd);
+        ch->state = CHS_TOTALLY_SENT_RES;
+        return 0;
+    }
+
+    // More to send, will happen later when EVFILT_WRITE triggers for this
+    // socket
+    LOG("Static file partially sent: socket_fd=%d\n", ch->socket_fd);
+    ch->state = CHS_PARTIALLY_SENT_RES;
+    return EAGAIN;
     return 0;
 }
 
@@ -570,8 +613,7 @@ static int conn_handle_send_response(conn_handle* ch) {
         str_ends_with(ch->req.path, ch->req.path_len, ".html", 5) ||
         str_ends_with(ch->req.path, ch->req.path_len, ".js", 3) ||
         str_ends_with(ch->req.path, ch->req.path_len, ".css", 4)) {
-        conn_handle_serve_static_file(ch);
-        return 0;
+        return conn_handle_serve_static_file(ch);
     }
 
     snprintf(ch->res_buf, CONN_BUF_LEN,
@@ -679,6 +721,7 @@ static void server_handle_events(server* s, int event_count) {
     for (int i = 0; i < event_count; i++) {
         const struct kevent* const e = &s->event_list[i];
         const int fd = e->ident;
+        int res = 0;
 
         if (e->filter == EVFILT_TIMER) {
             LOG("Timer expired for: fd=%d\n", fd);
@@ -701,7 +744,6 @@ static void server_handle_events(server* s, int event_count) {
                 continue;
             }
 
-            int res = 0;
             if ((res = conn_handle_read_request(ch, e->data)) <= 0) {
                 assert(ch->socket_fd == fd);
                 if (res == -2) {  // Need more data
@@ -714,13 +756,24 @@ static void server_handle_events(server* s, int event_count) {
             }
 
             assert(ch->socket_fd == fd);
-            conn_handle_send_response(ch);
+            if ((res = conn_handle_send_response(ch)) == EAGAIN)
+                continue;  // Don't remove the connection yet
+
             assert(ch->socket_fd == fd);
             server_remove_connection(s, ch);
 
         } else if (e->filter == EVFILT_WRITE) {
             LOG("Data to be written on: fd=%d\n", fd);
-            continue;
+            conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
+            assert(ch != NULL);
+            assert(ch->socket_fd == fd);
+            LOG("state=%d\n", ch->state);
+            if (ch->state != CHS_PARTIALLY_SENT_RES) continue;  // Ignore
+
+            if ((res = conn_handle_send_response(ch)) == EAGAIN)
+                continue;  // Don't remove the connection yet
+
+            server_remove_connection(s, ch);
         }
     }
 }
