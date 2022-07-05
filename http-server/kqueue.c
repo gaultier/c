@@ -408,7 +408,6 @@ static void server_remove_connection(server* s, conn_handle* ch) {
         const float total_msecs = usecs / 1000.0 + 1000 * secs;
 
         histogram_add_entry(&s->hist, total_msecs);
-        // TODO: add a timer to print it every X seconds?
         s->requests_in_flight--;
 
         LOG("Removing connection: fd=%d remaining=%td "

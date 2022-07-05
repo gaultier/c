@@ -2,3 +2,4 @@
 - Add connection idle timeout (track time of last byte received & add timer for it, remove connection on timer trigger)
 - Linux support (?)
 - https
+- /metrics
