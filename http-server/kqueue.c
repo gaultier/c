@@ -518,12 +518,13 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
     off_t len = 0;
 
     // First call
-    if (ch->sendfile_file_fd == -1) {
+    if (ch->sendfile_file_fd <= 0) {
         // TODO: security
 
         if (ch->req.path_len >= PATH_MAX) {
             ch->res.status = 404;
-            return 0;
+            conn_handle_write_response(ch);
+            return conn_handle_send(ch);
         }
         char path[PATH_MAX] = "";
         if (ch->req.path_len <= 1) {
@@ -541,7 +542,8 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
             fprintf(stderr, "Failed to open(2): path=`%s` err=%s\n", path,
                     strerror(errno));
             ch->res.status = 404;
-            return 0;
+            conn_handle_write_response(ch);
+            return conn_handle_send(ch);
         }
         struct stat st = {0};
         if (stat(path, &st) == -1) {
@@ -549,7 +551,8 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
                     strerror(errno));
             close(ch->sendfile_file_fd);
             ch->res.status = 404;
-            return 0;
+            conn_handle_write_response(ch);
+            return conn_handle_send(ch);
         }
         LOG("Serving static file `%s` size=%lld\n", path, st.st_size);
         ch->sendfile_total_file_bytes_to_send = st.st_size;
@@ -783,7 +786,9 @@ static void server_handle_events(server* s, int event_count) {
         } else if (e->filter == EVFILT_READ) {
             LOG("[D008] Data to be read on: %d\n", fd);
             conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
-            assert(ch != NULL);
+            if (ch == NULL)
+                continue;  // Connection might have been removed already, skip
+
             assert(ch->socket_fd == fd);
 
             // Connection gone
@@ -813,7 +818,9 @@ static void server_handle_events(server* s, int event_count) {
         } else if (e->filter == EVFILT_WRITE) {
             LOG("Data to be written on: fd=%d\n", fd);
             conn_handle* const ch = server_find_conn_handle_by_fd(s, fd);
-            assert(ch != NULL);
+            if (ch == NULL)
+                continue;  // Connection might have been removed already, skip
+                           //
             assert(ch->socket_fd == fd);
             LOG("state=%d\n", ch->state);
             if (ch->state != CHS_PARTIALLY_SENT_RES) continue;  // Ignore
