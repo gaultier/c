@@ -54,8 +54,6 @@ typedef struct {
     struct phr_header headers[50];
 } http_req;
 
-typedef struct server server;
-
 typedef enum {
     CHS_INIT,
     CHS_PARSED_REQ,
@@ -76,7 +74,7 @@ typedef struct {
     conn_handle_state state;
 } conn_handle;
 
-struct server {
+typedef struct {
     int fd;
     int queue;
     gbAllocator allocator;
@@ -85,7 +83,7 @@ struct server {
     latency_histogram hist;
     u64 requests_in_flight;
     options opts;
-};
+} server;
 
 #define LOG(fmt, ...)                                     \
     do {                                                  \
