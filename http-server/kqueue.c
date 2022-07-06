@@ -58,6 +58,7 @@ typedef struct {
 typedef struct {
     gbString content_type;
     gbString body;
+    gbString response;
     u16 status;
 } http_res;
 
@@ -195,7 +196,9 @@ static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
     gb_array_init_reserve(ch->req_buf, allocator, CONN_BUF_LEN_MAX);
     ch->req.num_headers = sizeof(ch->req.headers) / sizeof(ch->req.headers[0]);
 
-    gb_pool_init(&ch->pool, gb_heap_allocator(), 50, 128);
+    gb_pool_init(&ch->pool, allocator, 50, 128);
+    ch->res.response = gb_string_make_reserve(allocator, 256);
+    ch->res.body = gb_string_make_reserve(allocator, 0);
 }
 
 static int conn_handle_read_request(conn_handle* ch, u64 nbytes_to_read) {
@@ -358,11 +361,13 @@ static int conn_handle_send(conn_handle* ch) {
     assert(ch != NULL);
 
     int written = 0;
-    const int total = strlen(ch->res_buf);
+    const int total = gb_string_length(ch->res.response);
+    LOG("Responding: `%s`\n", ch->res.response);
 
+    // TODO: non blocking partial writes
     while (written < total) {
         const int nb =
-            send(ch->socket_fd, &ch->res_buf[written], total - written, 0);
+            send(ch->socket_fd, &ch->res.response[written], total - written, 0);
         if (nb == -1) {
             fprintf(stderr, "Failed to write(2): err=%s\n", strerror(errno));
             return errno;
@@ -460,7 +465,7 @@ static void server_remove_connection(server* s, conn_handle* ch) {
         // associated with it i.e. `EVFILT_READ` and `EVFILT_WRITE` but not
         // `EVFILT_TIMER`
         close(ch->socket_fd);
-        /* server_remove_timer_event(s, ch->socket_fd); */
+        server_remove_timer_event(s, ch->socket_fd);
 
         // Remove handle from array
         gb_array_free(ch->req_buf);
@@ -471,15 +476,40 @@ static void server_remove_connection(server* s, conn_handle* ch) {
         s->requests_in_flight);
 }
 
-static int conn_handle_respond_404(conn_handle* ch) {
+static void conn_handle_write_response_status(http_res* res) {
+    assert(res != NULL);
+    assert(res->status < 600);
+
+    if (res->status == 0) res->status = 200;
+
+    res->response = gb_string_appendc(res->response, "HTTP/1.1 ");
+
+    switch (res->status) {
+        case 200:
+            res->response = gb_string_appendc(res->response, "200 OK");
+            break;
+        case 404:
+            res->response = gb_string_appendc(res->response, "404 Not Found");
+            break;
+        default:
+            assert(0 && "Unimplemented");
+    }
+    res->response = gb_string_appendc(res->response, "\r\n");
+    LOG("conn_handle_write_response_status: response=`%s`\n", res->response);
+}
+
+static void conn_handle_write_response(conn_handle* ch) {
     assert(ch != NULL);
 
-    snprintf(ch->res_buf, CONN_BUF_LEN,
-             "HTTP/1.1 404 Not Found\r\n"
-             "Content-Length: 0\r\n"
-             "\r\n");
+    conn_handle_write_response_status(&ch->res);
 
-    return conn_handle_send(ch);
+    if (gb_string_length(ch->res.body) == 0) return;
+
+    ch->res.response =
+        gb_string_append_fmt(ch->res.response, "Content-Length: %llu\r\n",
+                             gb_string_length(ch->res.body));
+    ch->res.response = gb_string_appendc(ch->res.response, "\r\n");
+    ch->res.response = gb_string_append(ch->res.response, ch->res.body);
 }
 
 static int conn_handle_serve_static_file(conn_handle* ch) {
@@ -492,7 +522,7 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
         // TODO: security
 
         if (ch->req.path_len >= PATH_MAX) {
-            conn_handle_respond_404(ch);
+            ch->res.status = 404;
             return 0;
         }
         char path[PATH_MAX] = "";
@@ -510,7 +540,7 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
         if (ch->sendfile_file_fd == -1) {
             fprintf(stderr, "Failed to open(2): path=`%s` err=%s\n", path,
                     strerror(errno));
-            conn_handle_respond_404(ch);
+            ch->res.status = 404;
             return 0;
         }
         struct stat st = {0};
@@ -518,7 +548,7 @@ static int conn_handle_serve_static_file(conn_handle* ch) {
             fprintf(stderr, "Failed to stat(2): path=`%s` err=%s\n", path,
                     strerror(errno));
             close(ch->sendfile_file_fd);
-            conn_handle_respond_404(ch);
+            ch->res.status = 404;
             return 0;
         }
         LOG("Serving static file `%s` size=%lld\n", path, st.st_size);
@@ -620,88 +650,28 @@ static bool str_ends_with(const char* haystack, int haystack_len,
            0;
 }
 
-/* static void str_append(char* dst, u16* dst_len, u16 dst_cap, char* src0) { */
-/*     const u64 src_len = strlen(src0); */
-/*     if (*dst_len + src_len > dst_cap) return;  // TODO: report error? */
-
-/*     memcpy(dst, src0, src_len); */
-/*     *dst_len += src_len; */
-/* } */
-
-/* static void conn_handle_write_response_status(http_res* res) { */
-/*     assert(res != NULL); */
-/*     assert(status >= 100); */
-/*     assert(status < 600); */
-
-/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, "HTTP/1.1"); */
-
-/*     switch (status) { */
-/*         case 200: */
-/*             str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, */
-/*                        "200 OK\r\n"); */
-/*             break; */
-/*         case 404: */
-/*             str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, */
-/*                        "404 Not Found\r\n"); */
-/*             break; */
-/*         default: */
-/*             assert(0 && "Unimplemented"); */
-/*     } */
-/* } */
-
-/* static void conn_handle_write_response_header(conn_handle* ch, char* key, */
-/*                                               char* value) { */
-/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, key); */
-/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, ": "); */
-/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, value); */
-/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, "\r\n"); */
-/* } */
-
-/* static void conn_handle_write_response_content_length(conn_handle* ch, */
-/*                                                       u64 length) { */
-/*     char buf[30] = ""; */
-/*     gb_i64_to_str(length, buf, 10); */
-
-/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, "Content-Length:
- * "); */
-/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, buf); */
-/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, "\r\n"); */
-/* } */
-
-static int conn_handle_send_response(conn_handle* ch) {
+static int conn_handle_make_response(conn_handle* ch) {
     assert(ch != NULL);
 
     if (ch->req.method != HM_GET) {
-        conn_handle_respond_404(ch);
-        return 0;
+        ch->res.status = 404;  // TODO: support POST, etc
+    } else {
+        if (ch->req.path_len <= 1 ||
+            str_ends_with(ch->req.path, ch->req.path_len, ".txt", 4) ||
+            str_ends_with(ch->req.path, ch->req.path_len, ".csv", 4) ||
+            str_ends_with(ch->req.path, ch->req.path_len, ".iso", 4) ||
+            str_ends_with(ch->req.path, ch->req.path_len, ".html", 5) ||
+            str_ends_with(ch->req.path, ch->req.path_len, ".js", 3) ||
+            str_ends_with(ch->req.path, ch->req.path_len, ".css", 4)) {
+            return conn_handle_serve_static_file(ch);
+        }
     }
 
-    if (ch->req.path_len <= 1 ||
-        str_ends_with(ch->req.path, ch->req.path_len, ".txt", 4) ||
-        str_ends_with(ch->req.path, ch->req.path_len, ".csv", 4) ||
-        str_ends_with(ch->req.path, ch->req.path_len, ".iso", 4) ||
-        str_ends_with(ch->req.path, ch->req.path_len, ".html", 5) ||
-        str_ends_with(ch->req.path, ch->req.path_len, ".js", 3) ||
-        str_ends_with(ch->req.path, ch->req.path_len, ".css", 4)) {
-        return conn_handle_serve_static_file(ch);
-    }
+    // Dummy body for now
+    ch->res.body =
+        gb_string_append_length(ch->res.body, ch->req.path, ch->req.path_len);
 
-    ch->res.status = 200;
-    memcpy(ch->res.content_type, "text/plain",
-           MIN(sizeof(ch->res.content_type), sizeof("text/plain") - 1));
-    memcpy(ch->res.body, ch->req.path,
-           MIN(RESPONSE_BODY_CAP, ch->req.path_len));
-    // memcpy(ch->res.headers[0].name, "Content-Type", sizeof("Content-Type") -
-    // 1);
-
-    snprintf(ch->res_buf, CONN_BUF_LEN,
-             "HTTP/1.1 200 OK\r\n"
-             "Content-Type: text/plain; charset=utf8\r\n"
-             "Content-Length: %d\r\n"
-             "\r\n"
-             "%.*s",
-             (int)ch->req.path_len, (int)ch->req.path_len, ch->req.path);
-
+    conn_handle_write_response(ch);
     return conn_handle_send(ch);
 }
 
@@ -834,7 +804,7 @@ static void server_handle_events(server* s, int event_count) {
             }
 
             assert(ch->socket_fd == fd);
-            if ((res = conn_handle_send_response(ch)) == EAGAIN)
+            if ((res = conn_handle_make_response(ch)) == EAGAIN)
                 continue;  // Don't remove the connection yet
 
             assert(ch->socket_fd == fd);
@@ -848,7 +818,7 @@ static void server_handle_events(server* s, int event_count) {
             LOG("state=%d\n", ch->state);
             if (ch->state != CHS_PARTIALLY_SENT_RES) continue;  // Ignore
 
-            if ((res = conn_handle_send_response(ch)) == EAGAIN)
+            if ((res = conn_handle_make_response(ch)) == EAGAIN)
                 continue;  // Don't remove the connection yet
 
             server_remove_connection(s, ch);
