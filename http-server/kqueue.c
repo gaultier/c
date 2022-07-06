@@ -19,6 +19,7 @@
 #include "vendor/picohttpparser/picohttpparser.h"
 
 #define CONN_BUF_LEN 2048
+#define RESPONSE_BODY_CAP 2048
 #define CONN_BUF_LEN_MAX 10 * 1024 * 1024  // 10 MiB
 #define LISTEN_BACKLOG 512
 
@@ -54,6 +55,12 @@ typedef struct {
     struct phr_header headers[50];
 } http_req;
 
+typedef struct {
+    gbString content_type;
+    gbString body;
+    u16 status;
+} http_res;
+
 typedef enum {
     CHS_INIT,
     CHS_PARSED_REQ,
@@ -64,14 +71,16 @@ typedef enum {
 typedef struct {
     struct timeval start;
     gbArray(char) req_buf;
-    char res_buf[CONN_BUF_LEN];
     http_req req;
     int socket_fd;  // For recv(2)/send(2)
     // For sendfile(2)
     int sendfile_file_fd;
     u64 sendfile_total_file_bytes_sent;
     u64 sendfile_total_file_bytes_to_send;
+    http_res res;
+    char res_buf[CONN_BUF_LEN];
     conn_handle_state state;
+    gbPool pool;
 } conn_handle;
 
 typedef struct {
@@ -178,11 +187,15 @@ static int fd_set_non_blocking(int fd) {
     return 0;
 }
 
-static void conn_handle_init(conn_handle* ch, gbAllocator allocator) {
+static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
+                             int socket_fd) {
+    ch->socket_fd = socket_fd;
     gettimeofday(&ch->start, NULL);
 
     gb_array_init_reserve(ch->req_buf, allocator, CONN_BUF_LEN_MAX);
     ch->req.num_headers = sizeof(ch->req.headers) / sizeof(ch->req.headers[0]);
+
+    gb_pool_init(&ch->pool, gb_heap_allocator(), 50, 128);
 }
 
 static int conn_handle_read_request(conn_handle* ch, u64 nbytes_to_read) {
@@ -310,8 +323,8 @@ static int server_accept_new_connection(server* s) {
 
     server_add_connection_events(s, conn_fd);
 
-    conn_handle ch = {.socket_fd = conn_fd, .sendfile_file_fd = -1};
-    conn_handle_init(&ch, s->allocator);
+    conn_handle ch = {0};
+    conn_handle_init(&ch, s->allocator, conn_fd);
     assert(ch.socket_fd == conn_fd);
     gb_array_append(s->conn_handles, ch);
 
@@ -341,7 +354,7 @@ static char* http_content_type_for_file(const char* ext, int ext_len) {
         return "text/plain";
 }
 
-static int conn_handle_write(conn_handle* ch) {
+static int conn_handle_send(conn_handle* ch) {
     assert(ch != NULL);
 
     int written = 0;
@@ -466,7 +479,7 @@ static int conn_handle_respond_404(conn_handle* ch) {
              "Content-Length: 0\r\n"
              "\r\n");
 
-    return conn_handle_write(ch);
+    return conn_handle_send(ch);
 }
 
 static int conn_handle_serve_static_file(conn_handle* ch) {
@@ -607,6 +620,54 @@ static bool str_ends_with(const char* haystack, int haystack_len,
            0;
 }
 
+/* static void str_append(char* dst, u16* dst_len, u16 dst_cap, char* src0) { */
+/*     const u64 src_len = strlen(src0); */
+/*     if (*dst_len + src_len > dst_cap) return;  // TODO: report error? */
+
+/*     memcpy(dst, src0, src_len); */
+/*     *dst_len += src_len; */
+/* } */
+
+/* static void conn_handle_write_response_status(http_res* res) { */
+/*     assert(res != NULL); */
+/*     assert(status >= 100); */
+/*     assert(status < 600); */
+
+/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, "HTTP/1.1"); */
+
+/*     switch (status) { */
+/*         case 200: */
+/*             str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, */
+/*                        "200 OK\r\n"); */
+/*             break; */
+/*         case 404: */
+/*             str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, */
+/*                        "404 Not Found\r\n"); */
+/*             break; */
+/*         default: */
+/*             assert(0 && "Unimplemented"); */
+/*     } */
+/* } */
+
+/* static void conn_handle_write_response_header(conn_handle* ch, char* key, */
+/*                                               char* value) { */
+/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, key); */
+/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, ": "); */
+/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, value); */
+/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, "\r\n"); */
+/* } */
+
+/* static void conn_handle_write_response_content_length(conn_handle* ch, */
+/*                                                       u64 length) { */
+/*     char buf[30] = ""; */
+/*     gb_i64_to_str(length, buf, 10); */
+
+/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, "Content-Length:
+ * "); */
+/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, buf); */
+/*     str_append(ch->res_buf, &ch->res_buf_len, CONN_BUF_LEN, "\r\n"); */
+/* } */
+
 static int conn_handle_send_response(conn_handle* ch) {
     assert(ch != NULL);
 
@@ -625,6 +686,14 @@ static int conn_handle_send_response(conn_handle* ch) {
         return conn_handle_serve_static_file(ch);
     }
 
+    ch->res.status = 200;
+    memcpy(ch->res.content_type, "text/plain",
+           MIN(sizeof(ch->res.content_type), sizeof("text/plain") - 1));
+    memcpy(ch->res.body, ch->req.path,
+           MIN(RESPONSE_BODY_CAP, ch->req.path_len));
+    // memcpy(ch->res.headers[0].name, "Content-Type", sizeof("Content-Type") -
+    // 1);
+
     snprintf(ch->res_buf, CONN_BUF_LEN,
              "HTTP/1.1 200 OK\r\n"
              "Content-Type: text/plain; charset=utf8\r\n"
@@ -633,7 +702,7 @@ static int conn_handle_send_response(conn_handle* ch) {
              "%.*s",
              (int)ch->req.path_len, (int)ch->req.path_len, ch->req.path);
 
-    return conn_handle_write(ch);
+    return conn_handle_send(ch);
 }
 
 static int server_listen_and_bind(server* s) {
