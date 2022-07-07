@@ -26,6 +26,16 @@ static void print_usage(int argc, char* argv[]) {
         argv[0]);
 }
 
+static size_t on_http_response_body_chunk(void* contents, size_t size,
+                                          size_t nmemb, void* userp) {
+    size_t realsize = size * nmemb;
+    gbString* response_body = userp;
+    *response_body =
+        gb_string_append_length(*response_body, contents, realsize);
+
+    return realsize;
+}
+
 static void options_parse_from_cli(gbAllocator allocator, int argc,
                                    char* argv[], options* opts) {
     assert(argv != NULL);
@@ -89,6 +99,11 @@ static int api_query_projects(gbAllocator allocator, options* opts) {
     curl_easy_setopt(http_handle, CURLOPT_VERBOSE, verbose);
     curl_easy_setopt(http_handle, CURLOPT_FOLLOWLOCATION, true);
     curl_easy_setopt(http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
+    gbString response_body =
+        gb_string_make_reserve(allocator, 20 * 1024 * 1024);
+    curl_easy_setopt(http_handle, CURLOPT_WRITEFUNCTION,
+                     on_http_response_body_chunk);
+    curl_easy_setopt(http_handle, CURLOPT_WRITEDATA, &response_body);
 
     struct curl_slist* list = NULL;
     gbString token = gb_string_make_reserve(allocator, 512);
@@ -103,6 +118,8 @@ static int api_query_projects(gbAllocator allocator, options* opts) {
     gb_string_free(url);
     gb_string_free(token);
 
+    printf("[D001] response_body=%s\n", response_body);
+    gb_string_free(response_body);
     return res;
 }
 
