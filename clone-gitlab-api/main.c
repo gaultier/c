@@ -1,7 +1,9 @@
 #include <assert.h>
 #include <curl/curl.h>
 #include <getopt.h>
+#include <spawn.h>
 #include <stdio.h>
+#include <sys/param.h>
 #include <unistd.h>
 
 #define GB_IMPLEMENTATION
@@ -17,11 +19,6 @@ typedef struct {
     gbString url;
 } options;
 static bool verbose = false;
-
-typedef struct {
-    const char* s;
-    u16 len;
-} string_view;
 
 static void print_usage(int argc, char* argv[]) {
     printf(
@@ -132,8 +129,8 @@ static bool str_equal(const char* a, usize a_len, const char* b, usize b_len) {
 }
 
 static int api_parse_projects(gbString body,
-                              gbArray(string_view) * path_with_namespaces,
-                              gbArray(string_view) * git_urls) {
+                              gbArray(gbString) * path_with_namespaces,
+                              gbArray(gbString) * git_urls) {
     jsmn_parser p;
     gbArray(jsmntok_t) tokens;
     gb_array_init_reserve(tokens, gb_heap_allocator(), 50 * 1000);
@@ -164,21 +161,57 @@ static int api_parse_projects(gbString body,
 
         if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
                       key_path_with_namespace_len)) {
-            printf("[D003] %.*s\n", (int)next_s_len, next_s);
-            gb_array_append(*path_with_namespaces,
-                            ((string_view){.s = next_s, .len = next_s_len}));
+            gbString s =
+                gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
+            gb_array_append(*path_with_namespaces, s);
             i++;
             continue;
         }
         if (str_equal(cur_s, cur_s_len, key_git_url, key_git_url_len)) {
-            printf("[D004] %.*s\n", (int)next_s_len, next_s);
-            gb_array_append(*git_urls,
-                            ((string_view){.s = next_s, .len = next_s_len}));
+            gbString s =
+                gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
+            gb_array_append(*git_urls, s);
             i++;
         }
     }
 
     assert(gb_array_count(*path_with_namespaces) == gb_array_count(*git_urls));
+    return 0;
+}
+
+static int clone_projects(gbArray(gbString) path_with_namespaces,
+                          gbArray(gbString) git_urls, const options* opts) {
+    assert(opts != NULL);
+    assert(gb_array_count(path_with_namespaces) == gb_array_count(git_urls));
+
+    gbString cwd = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
+    if (getcwd(cwd, MAXPATHLEN) == NULL) {
+        fprintf(stderr, "Failed to getcwd(2): err=%s\n", strerror(errno));
+        return errno;
+    }
+
+    if (chdir(opts->root_directory) == -1) {
+        fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
+                opts->root_directory, strerror(errno));
+        return errno;
+    }
+
+    for (int i = 0; i < gb_array_count(path_with_namespaces); i++) {
+        gbString path = path_with_namespaces[i];
+        gbString url = git_urls[i];
+
+        char* const argv[] = {"git", "clone", url, path};
+
+        printf("%s %s %s %s\n", argv[0], argv[1], argv[2], argv[3]);
+        /* pid_t* pid = 0; */
+        /* posix_spawn(&pid, "git", NULL, NULL, argv, NULL ); */
+    }
+
+    if (chdir(cwd) == -1) {
+        fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
+                opts->root_directory, strerror(errno));
+        return errno;
+    }
     return 0;
 }
 
@@ -190,13 +223,16 @@ int main(int argc, char* argv[]) {
     gbString response_body =
         gb_string_make_reserve(allocator, 20 * 1024 * 1024);
     int res = api_query_projects(allocator, &opts, &response_body);
-    if (res != 0) return 1;
+    if (res != 0) return res;
 
-    gbArray(string_view) path_with_namespaces;
+    gbArray(gbString) path_with_namespaces;
     gb_array_init_reserve(path_with_namespaces, allocator, 100 * 1000);
-    gbArray(string_view) git_urls;
+    gbArray(gbString) git_urls;
     gb_array_init_reserve(git_urls, allocator, 100 * 1000);
 
-    api_parse_projects(response_body, &path_with_namespaces, &git_urls);
+    res = api_parse_projects(response_body, &path_with_namespaces, &git_urls);
+    if (res != 0) return res;
+
+    clone_projects(path_with_namespaces, git_urls, &opts);
     /* gb_string_free(response_body); */
 }
