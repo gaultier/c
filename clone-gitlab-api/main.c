@@ -7,6 +7,7 @@
 #define GB_IMPLEMENTATION
 #define GB_STATIC
 #include "../vendor/gb/gb.h"
+#include "vendor/jsmn/jsmn.h"
 
 #define MAX_URL_LEN 4096
 
@@ -16,6 +17,11 @@ typedef struct {
     gbString url;
 } options;
 static bool verbose = false;
+
+typedef struct {
+    const char* s;
+    u16 len;
+} string_view;
 
 static void print_usage(int argc, char* argv[]) {
     printf(
@@ -87,7 +93,8 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
     }
 }
 
-static int api_query_projects(gbAllocator allocator, options* opts) {
+static int api_query_projects(gbAllocator allocator, options* opts,
+                              gbString* response_body) {
     CURL* http_handle = curl_easy_init();
     gbString url = gb_string_make_reserve(allocator, MAX_URL_LEN);
     url = gb_string_append_fmt(
@@ -99,11 +106,9 @@ static int api_query_projects(gbAllocator allocator, options* opts) {
     curl_easy_setopt(http_handle, CURLOPT_VERBOSE, verbose);
     curl_easy_setopt(http_handle, CURLOPT_FOLLOWLOCATION, true);
     curl_easy_setopt(http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
-    gbString response_body =
-        gb_string_make_reserve(allocator, 20 * 1024 * 1024);
     curl_easy_setopt(http_handle, CURLOPT_WRITEFUNCTION,
                      on_http_response_body_chunk);
-    curl_easy_setopt(http_handle, CURLOPT_WRITEDATA, &response_body);
+    curl_easy_setopt(http_handle, CURLOPT_WRITEDATA, response_body);
 
     struct curl_slist* list = NULL;
     gbString token = gb_string_make_reserve(allocator, 512);
@@ -118,9 +123,63 @@ static int api_query_projects(gbAllocator allocator, options* opts) {
     gb_string_free(url);
     gb_string_free(token);
 
-    printf("[D001] response_body=%s\n", response_body);
-    gb_string_free(response_body);
+    /* printf("[D001] response_body=%s\n", *response_body); */
     return res;
+}
+
+static bool str_equal(const char* a, usize a_len, const char* b, usize b_len) {
+    return a_len == b_len && memcmp(a, b, a_len) == 0;
+}
+
+static int api_parse_projects(gbString body,
+                              gbArray(string_view) * path_with_namespaces,
+                              gbArray(string_view) * git_urls) {
+    jsmn_parser p;
+    gbArray(jsmntok_t) tokens;
+    gb_array_init_reserve(tokens, gb_heap_allocator(), 50 * 1000);
+
+    jsmn_init(&p);
+    int res = jsmn_parse(&p, body, gb_string_length(body), tokens,
+                         gb_array_capacity(tokens));
+    printf("[D002] res=%d\n", res);
+    if (res < 0) return res;
+    if (res == 0) return EINVAL;
+
+    gb_array_resize(tokens, res);
+
+    const char key_path_with_namespace[] = "path_with_namespace";
+    const usize key_path_with_namespace_len = sizeof("path_with_namespace") - 1;
+    const char key_git_url[] = "ssh_url_to_repo";
+    const usize key_git_url_len = sizeof("ssh_url_to_repo") - 1;
+
+    for (int i = 1; i < res; i++) {
+        jsmntok_t* const cur = &tokens[i - 1];
+        jsmntok_t* const next = &tokens[i];
+        if (!(cur->type == JSMN_STRING && next->type == JSMN_STRING)) continue;
+
+        const char* cur_s = &body[cur->start];
+        const usize cur_s_len = cur->end - cur->start;
+        const char* next_s = &body[next->start];
+        const usize next_s_len = next->end - next->start;
+
+        if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
+                      key_path_with_namespace_len)) {
+            printf("[D003] %.*s\n", (int)next_s_len, next_s);
+            gb_array_append(*path_with_namespaces,
+                            ((string_view){.s = next_s, .len = next_s_len}));
+            i++;
+            continue;
+        }
+        if (str_equal(cur_s, cur_s_len, key_git_url, key_git_url_len)) {
+            printf("[D004] %.*s\n", (int)next_s_len, next_s);
+            gb_array_append(*git_urls,
+                            ((string_view){.s = next_s, .len = next_s_len}));
+            i++;
+        }
+    }
+
+    assert(gb_array_count(*path_with_namespaces) == gb_array_count(*git_urls));
+    return 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -128,5 +187,16 @@ int main(int argc, char* argv[]) {
     options opts = {0};
     options_parse_from_cli(allocator, argc, argv, &opts);
 
-    api_query_projects(allocator, &opts);
+    gbString response_body =
+        gb_string_make_reserve(allocator, 20 * 1024 * 1024);
+    int res = api_query_projects(allocator, &opts, &response_body);
+    if (res != 0) return 1;
+
+    gbArray(string_view) path_with_namespaces;
+    gb_array_init_reserve(path_with_namespaces, allocator, 100 * 1000);
+    gbArray(string_view) git_urls;
+    gb_array_init_reserve(git_urls, allocator, 100 * 1000);
+
+    api_parse_projects(response_body, &path_with_namespaces, &git_urls);
+    /* gb_string_free(response_body); */
 }

@@ -4,3 +4,6 @@
 [submodule "http-server/vendor/picohttpparser"]
 	path = http-server/vendor/picohttpparser
 	url = https://github.com/h2o/picohttpparser
+[submodule "clone-gitlab-api/vendor/jsmn"]
+	path = clone-gitlab-api/vendor/jsmn
+	url = https://github.com/zserge/jsmn.git
