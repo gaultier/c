@@ -1,10 +1,14 @@
 #include <assert.h>
+#include <curl/curl.h>
 #include <getopt.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #define GB_IMPLEMENTATION
 #define GB_STATIC
 #include "../vendor/gb/gb.h"
+
+#define MAX_URL_LEN 4096
 
 typedef struct {
     gbString root_directory;
@@ -21,6 +25,7 @@ static void print_usage(int argc, char* argv[]) {
         "\t[(-t|--api-token) <api token>] [-h|--help] [-v|--verbose]\n",
         argv[0]);
 }
+
 static void options_parse_from_cli(gbAllocator allocator, int argc,
                                    char* argv[], options* opts) {
     assert(argv != NULL);
@@ -52,7 +57,14 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
                 break;
             }
             case 'u': {
-                opts->url = gb_string_make(allocator, optarg);
+                if (!gb_str_has_prefix(optarg, "https://")) {
+                    opts->url = gb_string_make_reserve(
+                        allocator, strlen(optarg) + sizeof("https://"));
+                    opts->url =
+                        gb_string_append_fmt(opts->url, "https://%s", optarg);
+                } else
+                    opts->url = gb_string_make(allocator, optarg);
+
                 break;
             }
             case 'v':
@@ -65,8 +77,39 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
     }
 }
 
+static int api_query_projects(gbAllocator allocator, options* opts) {
+    CURL* http_handle = curl_easy_init();
+    gbString url = gb_string_make_reserve(allocator, MAX_URL_LEN);
+    url = gb_string_append_fmt(
+        url,
+        "%s/api/v4/"
+        "projects?statistics=false&top_level=&with_custom_attributes=false",
+        opts->url);
+    curl_easy_setopt(http_handle, CURLOPT_URL, url);
+    curl_easy_setopt(http_handle, CURLOPT_VERBOSE, verbose);
+    curl_easy_setopt(http_handle, CURLOPT_FOLLOWLOCATION, true);
+    curl_easy_setopt(http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
+
+    struct curl_slist* list = NULL;
+    gbString token = gb_string_make_reserve(allocator, 512);
+    token = gb_string_append_fmt(token, "PRIVATE-TOKEN: %s", opts->api_token);
+    list = curl_slist_append(list, token);
+
+    curl_easy_setopt(http_handle, CURLOPT_HTTPHEADER, list);
+
+    CURLcode res = curl_easy_perform(http_handle);
+    printf("res=%d\n", res);
+
+    gb_string_free(url);
+    gb_string_free(token);
+
+    return res;
+}
+
 int main(int argc, char* argv[]) {
     gbAllocator allocator = gb_heap_allocator();
     options opts = {0};
     options_parse_from_cli(allocator, argc, argv, &opts);
+
+    api_query_projects(allocator, &opts);
 }
