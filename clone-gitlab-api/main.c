@@ -1,7 +1,6 @@
 #include <assert.h>
 #include <curl/curl.h>
 #include <getopt.h>
-#include <spawn.h>
 #include <stdio.h>
 #include <sys/param.h>
 #include <unistd.h>
@@ -195,16 +194,28 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                 opts->root_directory, strerror(errno));
         return errno;
     }
+    printf("Changed directory to: %s\n", opts->root_directory);
 
     for (int i = 0; i < gb_array_count(path_with_namespaces); i++) {
-        gbString path = path_with_namespaces[i];
-        gbString url = git_urls[i];
+        pid_t pid = fork();
+        if (pid == -1) {
+            fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
+            return errno;
+        }
+        if (pid == 0) {
+            gbString path = path_with_namespaces[i];
+            gbString url = git_urls[i];
 
-        char* const argv[] = {"git", "clone", url, path};
+            char* const argv[] = {"git", "clone", url, path, 0};
 
-        printf("%s %s %s %s\n", argv[0], argv[1], argv[2], argv[3]);
-        /* pid_t* pid = 0; */
-        /* posix_spawn(&pid, "git", NULL, NULL, argv, NULL ); */
+            printf("%s %s %s %s\n", argv[0], argv[1], argv[2], argv[3]);
+            if (execvp("git", argv) == -1) {
+                fprintf(stderr, "Failed to clone: url=%s err=%s\n", url,
+                        strerror(errno));
+                exit(errno);
+            }
+            assert(0 && "Unreachable");
+        }
     }
 
     if (chdir(cwd) == -1) {
