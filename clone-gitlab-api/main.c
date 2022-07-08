@@ -2,6 +2,7 @@
 #include <curl/curl.h>
 #include <getopt.h>
 #include <stdio.h>
+#include <sys/event.h>
 #include <sys/param.h>
 #include <unistd.h>
 
@@ -274,13 +275,22 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
     }
     printf("Changed directory to: %s\n", opts->root_directory);
 
+    int queue = kqueue();
+    if (queue == -1) {
+        fprintf(stderr, "Failed to kqueue(2): err=%s\n", strerror(errno));
+        exit(errno);
+    }
+
+    gbArray(pid_t) project_pids;
+    gb_array_init_reserve(project_pids, gb_heap_allocator(),
+                          gb_array_count(path_with_namespaces));
+
     for (int i = 0; i < gb_array_count(path_with_namespaces); i++) {
         pid_t pid = fork();
         if (pid == -1) {
             fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
             return errno;
-        }
-        if (pid == 0) {
+        } else if (pid == 0) {
             gbString path = path_with_namespaces[i];
             gbString url = git_urls[i];
 
@@ -295,6 +305,54 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                 exit(errno);
             }
             assert(0 && "Unreachable");
+        } else {
+            gb_array_append(project_pids, pid);
+            struct kevent event = {
+                .filter = EVFILT_PROC,
+                .ident = pid,
+                .flags = EV_ADD,
+                .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
+                .udata = (void*)(u64)i,
+            };
+            if (kevent(queue, &event, 1, NULL, 0, 0) == -1) {
+                fprintf(
+                    stderr,
+                    "Failed to kevent(2) to watch for child process: err=%s\n",
+                    strerror(errno));
+                exit(errno);
+            }
+        }
+    }
+
+    if (!opts->dry_run) {
+        gbArray(struct kevent) events;
+        gb_array_init_reserve(events, gb_heap_allocator(),
+                              gb_array_count(path_with_namespaces));
+        while (true) {
+            int event_count =
+                kevent(queue, NULL, 0, events, gb_array_capacity(events), 0);
+            if (event_count == -1) {
+                fprintf(stderr, "Failed to kevent(2) to query events: err=%s\n",
+                        strerror(errno));
+                exit(errno);
+            }
+
+            for (int i = 0; i < event_count; i++) {
+                const struct kevent* const event = &events[i];
+
+                if (event->fflags & EVFILT_PROC) {
+                    const pid_t pid = event->ident;
+                    const int return_code = event->data;
+                    const int project_i = (int)(u64)event->udata;
+                    assert(project_i >= 0);
+                    assert(project_i < gb_array_count(path_with_namespaces));
+
+                    printf(
+                        "Project clone finished: pid=%d return_code=%d "
+                        "path_with_namespace=%s\n",
+                        pid, return_code, path_with_namespaces[project_i]);
+                }
+            }
         }
     }
 
