@@ -16,6 +16,7 @@ typedef struct {
     gbString root_directory;
     gbString api_token;
     gbString url;
+    bool dry_run;
 } options;
 static bool verbose = false;
 
@@ -24,7 +25,10 @@ static void print_usage(int argc, char* argv[]) {
         "%s\n"
         "\t[(-d|--root-directory) <directory>]\n"
         "\t[(-u|--url) <gitlab url>]\n"
-        "\t[(-t|--api-token) <api token>] [-h|--help] [-v|--verbose]\n",
+        "\t[(-t|--api-token) <api token>]\n"
+        "\t[-h|--help]\n"
+        "\t[-n|--dry-run]\n"
+        "\t[-v|--verbose]\n",
         argv[0]);
 }
 
@@ -55,6 +59,10 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
         {.name = "url", .has_arg = required_argument, .flag = NULL, .val = 'u'},
         {.name = "help", .has_arg = no_argument, .flag = NULL, .val = 'h'},
         {.name = "verbose", .has_arg = no_argument, .flag = NULL, .val = 'v'},
+        {.name = "dry-run",
+         .has_arg = no_argument,
+         .flag = NULL,
+         .val = 'n' /* Like make */},
     };
 
     int ch = 0;
@@ -82,6 +90,9 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
             case 'v':
                 verbose = true;
                 break;
+            case 'n':
+                opts->dry_run = true;
+                break;
             default:
                 print_usage(argc, argv);
                 exit(0);
@@ -93,11 +104,12 @@ static int api_query_projects(gbAllocator allocator, options* opts,
                               gbString* response_body) {
     CURL* http_handle = curl_easy_init();
     gbString url = gb_string_make_reserve(allocator, MAX_URL_LEN);
-    url = gb_string_append_fmt(
-        url,
-        "%s/api/v4/"
-        "projects?statistics=false&top_level=&with_custom_attributes=false",
-        opts->url);
+    url =
+        gb_string_append_fmt(url,
+                             "%s/api/v4/"
+                             "projects?statistics=false&top_level=&with_custom_"
+                             "attributes=false&simple=true&per_page=100",
+                             opts->url);
     curl_easy_setopt(http_handle, CURLOPT_URL, url);
     curl_easy_setopt(http_handle, CURLOPT_VERBOSE, verbose);
     curl_easy_setopt(http_handle, CURLOPT_FOLLOWLOCATION, true);
@@ -209,6 +221,8 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
             char* const argv[] = {"git", "clone", url, path, 0};
 
             printf("%s %s %s %s\n", argv[0], argv[1], argv[2], argv[3]);
+            if (opts->dry_run) exit(0);
+
             if (execvp("git", argv) == -1) {
                 fprintf(stderr, "Failed to clone: url=%s err=%s\n", url,
                         strerror(errno));
