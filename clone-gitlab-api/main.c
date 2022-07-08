@@ -328,6 +328,8 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
         gbArray(struct kevent) events;
         gb_array_init_reserve(events, gb_heap_allocator(),
                               gb_array_count(path_with_namespaces));
+
+        u64 finished = 0;
         while (true) {
             int event_count =
                 kevent(queue, NULL, 0, events, gb_array_capacity(events), 0);
@@ -347,9 +349,12 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                     assert(project_i >= 0);
                     assert(project_i < gb_array_count(path_with_namespaces));
 
+                    finished += 1;
                     printf(
-                        "Project clone finished: pid=%d return_code=%d "
+                        "[%llu/%llu] Project clone finished: pid=%d "
+                        "return_code=%d "
                         "path_with_namespace=%s\n",
+                        finished, (u64)gb_array_count(path_with_namespaces),
                         pid, return_code, path_with_namespaces[project_i]);
                 }
             }
