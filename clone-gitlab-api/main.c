@@ -211,14 +211,21 @@ static int api_parse_projects(gbString body,
                               gbArray(gbString) * git_urls) {
     jsmn_parser p;
     gbArray(jsmntok_t) tokens;
-    gb_array_init_reserve(tokens, gb_heap_allocator(), 50 * 1000);
+    gb_array_init_reserve(tokens, gb_heap_allocator(), 10 * 1000);
 
-    jsmn_init(&p);
-    int res = jsmn_parse(&p, body, gb_string_length(body), tokens,
+    int res = 0;
+    do {
+        jsmn_init(&p);
+        res = jsmn_parse(&p, body, gb_string_length(body), tokens,
                          gb_array_capacity(tokens));
-    printf("[D002] res=%d\n", res);
-    if (res < 0) return res;
-    if (res == 0) return EINVAL;
+        printf("[D002] res=%d\n", res);
+        if (res == JSMN_ERROR_NOMEM) {
+            gb_array_reserve(tokens, gb_array_capacity(tokens) * 2);
+            continue;
+        }
+        if (res < 0 && res != JSMN_ERROR_NOMEM) return res;
+        if (res == 0) return EINVAL;
+    } while (res == JSMN_ERROR_NOMEM);
 
     gb_array_resize(tokens, res);
 
