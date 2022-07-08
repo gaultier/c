@@ -253,9 +253,12 @@ static int api_parse_projects(gbString body,
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
             fprintf(stderr, "Failed to parse JSON: body=%s res=%d\n", body,
                     res);
-            return res;
+            goto cleanup;
         }
-        if (res == 0) return EINVAL;
+        if (res == 0) {
+            res = EINVAL;
+            goto cleanup;
+        }
     } while (res == JSMN_ERROR_NOMEM);
 
     gb_array_resize(tokens, res);
@@ -291,6 +294,9 @@ static int api_parse_projects(gbString body,
         }
     }
 
+cleanup:
+    gb_array_free(tokens);
+
     assert(gb_array_count(*path_with_namespaces) == gb_array_count(*git_urls));
     return 0;
 }
@@ -305,7 +311,7 @@ static void* watch_project_cloning(void* varg) {
 
     const bool is_tty = isatty(2);
 
-    while (true) {
+    while (finished < project_count) {
         int event_count =
             kevent(arg->queue, NULL, 0, events, gb_array_capacity(events), 0);
         if (event_count == -1) {
@@ -341,13 +347,10 @@ static void* watch_project_cloning(void* varg) {
                     pg_colors[is_tty][COL_RESET]);
             }
         }
-        if (finished == project_count) {
-            struct timeval end = {0};
-            gettimeofday(&end, NULL);
-            printf("Finished in %lds\n", end.tv_sec - start.tv_sec);
-            return NULL;
-        }
     }
+    struct timeval end = {0};
+    gettimeofday(&end, NULL);
+    printf("Finished in %lds\n", end.tv_sec - start.tv_sec);
 
     return NULL;
 }
