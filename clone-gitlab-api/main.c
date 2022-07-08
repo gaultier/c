@@ -404,7 +404,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                     exit(errno);
                 }
 
-                printf("Updating %s\n", fs_path);
+                printf("Updating %s in %s\n", path, fs_path);
                 if (opts->dry_run) exit(0);
 
                 char* const argv[] = {"git", "pull",      "--quiet", "--depth",
@@ -421,7 +421,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                     exit(errno);
                 }
             } else {
-                printf("Cloning %s %s\n", url, path);
+                printf("Cloning %s %s to %s\n", url, path, fs_path);
                 if (opts->dry_run) exit(0);
 
                 char* const argv[] = {"git",     "clone", "--quiet",
