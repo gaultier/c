@@ -278,7 +278,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
     int queue = kqueue();
     if (queue == -1) {
         fprintf(stderr, "Failed to kqueue(2): err=%s\n", strerror(errno));
-        exit(errno);
+        return errno;
     }
 
     gbArray(pid_t) project_pids;
@@ -319,7 +319,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                     stderr,
                     "Failed to kevent(2) to watch for child process: err=%s\n",
                     strerror(errno));
-                exit(errno);
+                return errno;
             }
         }
     }
@@ -336,7 +336,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
             if (event_count == -1) {
                 fprintf(stderr, "Failed to kevent(2) to query events: err=%s\n",
                         strerror(errno));
-                exit(errno);
+                return errno;
             }
 
             for (int i = 0; i < event_count; i++) {
@@ -387,6 +387,6 @@ int main(int argc, char* argv[]) {
     res = api_parse_projects(response_body, &path_with_namespaces, &git_urls);
     if (res != 0) return res;
 
-    clone_projects(path_with_namespaces, git_urls, &opts);
-    /* gb_string_free(response_body); */
+    res = clone_projects(path_with_namespaces, git_urls, &opts);
+    if (res != 0) return res;
 }
