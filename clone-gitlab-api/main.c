@@ -288,7 +288,7 @@ static void* watch_project_cloning(void* varg) {
             const struct kevent* const event = &events[i];
 
             if ((event->filter == EVFILT_PROC) &&
-                (event->fflags & NOTE_EXIT & NOTE_EXITSTATUS)) {
+                (event->fflags & NOTE_EXITSTATUS)) {
                 const pid_t pid = event->ident;
                 const int exit_status = event->data;
                 const int project_i = (int)(u64)event->udata;
