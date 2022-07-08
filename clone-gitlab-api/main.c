@@ -362,8 +362,8 @@ static void* watch_project_cloning(void* varg) {
     return NULL;
 }
 
-static int update_project(gbString path, gbString fs_path, gbString url,
-                          const options* opts) {
+static int worker_update_project(gbString path, gbString fs_path, gbString url,
+                                 const options* opts) {
     if (chdir(fs_path) == -1) {
         fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n", fs_path,
                 strerror(errno));
@@ -376,6 +376,7 @@ static int update_project(gbString path, gbString fs_path, gbString url,
     char* const argv[] = {"git", "pull",      "--quiet", "--depth",
                           "1",   "--no-tags", 0};
 
+    fflush(stdout);
     if (freopen("/dev/null", "w", stdout) == NULL) {
         fprintf(stderr, "Failed to silence subprocess: err=%s\n",
                 strerror(errno));
@@ -390,8 +391,8 @@ static int update_project(gbString path, gbString fs_path, gbString url,
     return 0;
 }
 
-static int clone_project(gbString path, gbString fs_path, gbString url,
-                         const options* opts) {
+static int worker_clone_project(gbString path, gbString fs_path, gbString url,
+                                const options* opts) {
     printf("Cloning %s %s to %s\n", url, path, fs_path);
     if (opts->dry_run) exit(0);
 
@@ -469,9 +470,9 @@ static int clone_projects_at(gbArray(gbString) path_with_namespaces,
             }
             gbString url = git_urls[i];
             if (is_directory(fs_path)) {
-                update_project(path, fs_path, url, opts);
+                worker_update_project(path, fs_path, url, opts);
             } else {
-                clone_project(path, fs_path, url, opts);
+                worker_clone_project(path, fs_path, url, opts);
             }
             assert(0 && "Unreachable");
         } else {
