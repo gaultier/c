@@ -338,20 +338,21 @@ static void* watch_project_cloning(void* varg) {
                 assert(project_i < project_count);
 
                 finished += 1;
-                const char emoji[][5] = {
-                    "✓",
-                    "❌",
-                };
-                printf(
-                    "%s[%llu/%llu] %s Project finished: "
-                    "exit_status=%d "
-                    "path_with_namespace=%s%s\n",
-                    exit_status == 0 ? pg_colors[is_tty][COL_GREEN]
-                                     : pg_colors[is_tty][COL_RED],
-                    finished, project_count,
-                    exit_status == 0 ? emoji[0] : emoji[1], exit_status,
-                    arg->path_with_namespaces[project_i],
-                    pg_colors[is_tty][COL_RESET]);
+                if (exit_status == 0) {
+                    printf(
+                        "%s[%llu/%llu] ✓ "
+                        "%s%s\n",
+                        pg_colors[is_tty][COL_GREEN], finished, project_count,
+                        arg->path_with_namespaces[project_i],
+                        pg_colors[is_tty][COL_RESET]);
+                } else {
+                    printf(
+                        "%s[%llu/%llu] ❌ "
+                        "%s (%d)%s\n",
+                        pg_colors[is_tty][COL_RED], finished, project_count,
+                        arg->path_with_namespaces[project_i], exit_status,
+                        pg_colors[is_tty][COL_RESET]);
+                }
             }
         }
     }
