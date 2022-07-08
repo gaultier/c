@@ -18,7 +18,6 @@
 
 typedef enum {
     COL_RESET,
-    COL_GRAY,
     COL_RED,
     COL_GREEN,
     COL_COUNT,
@@ -27,7 +26,6 @@ typedef enum {
 static const char pg_colors[2][COL_COUNT][14] = {
     // is_tty == true
     [true] = {[COL_RESET] = "\x1b[0m",
-              [COL_GRAY] = "\x1b[38;5;243m",
               [COL_RED] = "\x1b[31m",
               [COL_GREEN] = "\x1b[32m"}};
 
