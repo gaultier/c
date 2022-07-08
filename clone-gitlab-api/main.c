@@ -34,12 +34,29 @@ static void print_usage(int argc, char* argv[]) {
 
 static size_t on_http_response_body_chunk(void* contents, size_t size,
                                           size_t nmemb, void* userp) {
-    size_t realsize = size * nmemb;
+    const size_t real_size = size * nmemb;
     gbString* response_body = userp;
     *response_body =
-        gb_string_append_length(*response_body, contents, realsize);
+        gb_string_append_length(*response_body, contents, real_size);
 
-    return realsize;
+    return real_size;
+}
+
+static size_t on_header(char* buffer, size_t size, size_t nitems,
+                        void* userdata) {
+    const size_t real_size = nitems * size;
+    const char* val = memchr(buffer, ':', real_size);
+    if (val == NULL) return real_size;  // Could be HTTP/1.1 OK, skip
+
+    assert(val > buffer);
+    assert(val < buffer + real_size);
+    const usize key_len = val - buffer - 1;
+    val++;  // Skip `:`
+    const usize val_len = buffer + real_size - val;
+
+    fprintf(stderr, "[D099] Header: key=`%.*s` val=`%.*s`\n", (int)key_len,
+            buffer, (int)val_len, val);
+    return nitems * size;
 }
 
 static void options_parse_from_cli(gbAllocator allocator, int argc,
@@ -104,19 +121,14 @@ static int api_query_projects(gbAllocator allocator, options* opts,
                               gbString* response_body) {
     CURL* http_handle = curl_easy_init();
     gbString url = gb_string_make_reserve(allocator, MAX_URL_LEN);
-    url =
-        gb_string_append_fmt(url,
-                             "%s/api/v4/"
-                             "projects?statistics=false&top_level=&with_custom_"
-                             "attributes=false&simple=true&per_page=100",
-                             opts->url);
-    curl_easy_setopt(http_handle, CURLOPT_URL, url);
     curl_easy_setopt(http_handle, CURLOPT_VERBOSE, verbose);
     curl_easy_setopt(http_handle, CURLOPT_FOLLOWLOCATION, true);
     curl_easy_setopt(http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
     curl_easy_setopt(http_handle, CURLOPT_WRITEFUNCTION,
                      on_http_response_body_chunk);
     curl_easy_setopt(http_handle, CURLOPT_WRITEDATA, response_body);
+    curl_easy_setopt(http_handle, CURLOPT_HEADERFUNCTION, on_header);
+    /* curl_easy_setopt(http_handle, CURLOPT_HEADERDATA, NULL); */
 
     struct curl_slist* list = NULL;
     gbString token = gb_string_make_reserve(allocator, 512);
@@ -125,14 +137,28 @@ static int api_query_projects(gbAllocator allocator, options* opts,
 
     curl_easy_setopt(http_handle, CURLOPT_HTTPHEADER, list);
 
-    CURLcode res = curl_easy_perform(http_handle);
-    printf("res=%d\n", res);
+    while (true) {
+        url = gb_string_append_fmt(
+            url,
+            "%s/api/v4/"
+            "projects?statistics=false&top_level=&with_custom_"
+            "attributes=false&simple=true&per_page=100",
+            opts->url);
+        curl_easy_setopt(http_handle, CURLOPT_URL, url);
 
-    gb_string_free(url);
-    gb_string_free(token);
+        CURLcode res = curl_easy_perform(http_handle);
+        printf("res=%d\n", res);
 
-    /* printf("[D001] response_body=%s\n", *response_body); */
-    return res;
+        if (res != 0) {
+            gb_string_free(url);
+            gb_string_free(token);
+
+            fprintf(stderr, "Failed to query api: response_body=%s\n",
+                    *response_body);
+            return res;
+        }
+    }
+    return 0;
 }
 
 static bool str_equal(const char* a, usize a_len, const char* b, usize b_len) {
