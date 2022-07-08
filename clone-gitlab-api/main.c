@@ -264,9 +264,9 @@ static int api_parse_projects(gbString body,
         }
     } while (res == JSMN_ERROR_NOMEM);
 
-    res = 0;
     gb_array_resize(tokens, res);
     gb_array_set_capacity(tokens, res);
+    res = 0;
 
     const char key_path_with_namespace[] = "path_with_namespace";
     const usize key_path_with_namespace_len = sizeof("path_with_namespace") - 1;
