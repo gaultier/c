@@ -475,10 +475,13 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                 if (fs_path[j] == '/') fs_path[j] = '.';
             }
             gbString url = git_urls[i];
-            if (is_directory(fs_path))
-                return update_project(path, fs_path, url, opts);
-            else
-                return clone_project(path, fs_path, url, opts);
+            if (is_directory(fs_path)) {
+                res = update_project(path, fs_path, url, opts);
+            } else {
+                res = clone_project(path, fs_path, url, opts);
+            }
+            gb_string_free(fs_path);
+            return res;
         } else {
             if ((res = record_process_finished_event(queue, pid, i)) != 0)
                 return res;
