@@ -20,6 +20,11 @@ typedef struct {
 } options;
 static bool verbose = false;
 
+typedef struct {
+    u64 current_page;
+    u64 total_pages;
+} api_pagination;
+
 static void print_usage(int argc, char* argv[]) {
     printf(
         "%s\n"
@@ -30,6 +35,29 @@ static void print_usage(int argc, char* argv[]) {
         "\t[-n|--dry-run]\n"
         "\t[-v|--verbose]\n",
         argv[0]);
+}
+
+static bool str_equal(const char* a, usize a_len, const char* b, usize b_len) {
+    return a_len == b_len && memcmp(a, b, a_len) == 0;
+}
+
+static bool str_equal_c(const char* a, usize a_len, const char* b0) {
+    return str_equal(a, a_len, b0, strlen(b0));
+}
+
+static u64 str_to_u64(const char* s, usize s_len) {
+    u64 res = 0;
+    for (u64 i = 0; i < s_len; i++) {
+        const char c = s[i];
+        if (gb_char_is_space(c)) continue;
+        if (gb_char_is_digit(c)) {
+            const int v = c - '0';
+            res *= 10;
+            res += v;
+        } else
+            return 0;
+    }
+    return res;
 }
 
 static size_t on_http_response_body_chunk(void* contents, size_t size,
@@ -44,18 +72,31 @@ static size_t on_http_response_body_chunk(void* contents, size_t size,
 
 static size_t on_header(char* buffer, size_t size, size_t nitems,
                         void* userdata) {
+    assert(buffer != NULL);
+    assert(userdata != NULL);
+
     const size_t real_size = nitems * size;
     const char* val = memchr(buffer, ':', real_size);
     if (val == NULL) return real_size;  // Could be HTTP/1.1 OK, skip
 
     assert(val > buffer);
     assert(val < buffer + real_size);
-    const usize key_len = val - buffer - 1;
+    const usize key_len = val - buffer;
     val++;  // Skip `:`
     const usize val_len = buffer + real_size - val;
 
     fprintf(stderr, "[D099] Header: key=`%.*s` val=`%.*s`\n", (int)key_len,
             buffer, (int)val_len, val);
+
+    api_pagination* const pagination = userdata;
+
+    // We re-parse it every time but because it could have changed
+    // since the last response
+    if (str_equal_c(buffer, key_len, "X-Total-Pages")) {
+        pagination->total_pages = str_to_u64(val, val_len);
+        fprintf(stderr, "[D005] total_pages=%llu\n", pagination->total_pages);
+    }
+
     return nitems * size;
 }
 
@@ -128,7 +169,8 @@ static int api_query_projects(gbAllocator allocator, options* opts,
                      on_http_response_body_chunk);
     curl_easy_setopt(http_handle, CURLOPT_WRITEDATA, response_body);
     curl_easy_setopt(http_handle, CURLOPT_HEADERFUNCTION, on_header);
-    /* curl_easy_setopt(http_handle, CURLOPT_HEADERDATA, NULL); */
+    api_pagination pagination = {.current_page = 1};
+    curl_easy_setopt(http_handle, CURLOPT_HEADERDATA, &pagination);
 
     struct curl_slist* list = NULL;
     gbString token = gb_string_make_reserve(allocator, 512);
@@ -137,13 +179,13 @@ static int api_query_projects(gbAllocator allocator, options* opts,
 
     curl_easy_setopt(http_handle, CURLOPT_HTTPHEADER, list);
 
-    while (true) {
+    do {
         url = gb_string_append_fmt(
             url,
             "%s/api/v4/"
             "projects?statistics=false&top_level=&with_custom_"
-            "attributes=false&simple=true&per_page=100",
-            opts->url);
+            "attributes=false&simple=true&per_page=100&page=%llu",
+            opts->url, pagination.current_page);
         curl_easy_setopt(http_handle, CURLOPT_URL, url);
 
         CURLcode res = curl_easy_perform(http_handle);
@@ -157,12 +199,10 @@ static int api_query_projects(gbAllocator allocator, options* opts,
                     *response_body);
             return res;
         }
-    }
-    return 0;
-}
 
-static bool str_equal(const char* a, usize a_len, const char* b, usize b_len) {
-    return a_len == b_len && memcmp(a, b, a_len) == 0;
+        pagination.current_page += 1;
+    } while (pagination.current_page <= pagination.total_pages);
+    return 0;
 }
 
 static int api_parse_projects(gbString body,
