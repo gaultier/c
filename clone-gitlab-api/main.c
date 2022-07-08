@@ -211,7 +211,7 @@ static int api_parse_projects(gbString body,
                               gbArray(gbString) * git_urls) {
     jsmn_parser p;
     gbArray(jsmntok_t) tokens;
-    gb_array_init_reserve(tokens, gb_heap_allocator(), 10 * 1000);
+    gb_array_init_reserve(tokens, gb_heap_allocator(), 100 * 1000);
 
     int res = 0;
     do {
