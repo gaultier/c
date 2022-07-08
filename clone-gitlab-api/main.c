@@ -290,18 +290,22 @@ static void* watch_project_cloning(void* varg) {
 
             if ((event->filter == EVFILT_PROC) &&
                 (event->fflags & NOTE_EXITSTATUS)) {
-                const pid_t pid = event->ident;
                 const u8 exit_status = event->data;
                 const int project_i = (int)(u64)event->udata;
                 assert(project_i >= 0);
                 assert(project_i < project_count);
 
                 finished += 1;
+                const char emoji[][5] = {
+                    "✓",
+                    "❌",
+                };
                 printf(
-                    "[%llu/%llu] Project clone finished: pid=%d "
+                    "[%llu/%llu] %s Project clone finished: "
                     "exit_status=%d "
                     "path_with_namespace=%s\n",
-                    finished, project_count, pid, exit_status,
+                    finished, project_count,
+                    exit_status == 0 ? emoji[0] : emoji[1], exit_status,
                     arg->path_with_namespaces[project_i]);
             }
         }
