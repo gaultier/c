@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <stdio.h>
 #include <sys/event.h>
+#include <sys/fcntl.h>
 #include <sys/param.h>
 #include <unistd.h>
 
@@ -248,6 +249,9 @@ static int api_parse_projects(gbString body,
                       key_path_with_namespace_len)) {
             gbString s =
                 gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
+            for (int j = 0; j < next_s_len; j++) {
+                if (s[j] == '/') s[j] = '.';
+            }
             gb_array_append(*path_with_namespaces, s);
             i++;
             continue;
@@ -305,6 +309,15 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
 
             printf("%s %s %s %s\n", argv[0], argv[1], argv[2], argv[3]);
             if (opts->dry_run) exit(0);
+
+            if (freopen("/dev/null", "w", stdout) == NULL) {
+                fprintf(stderr, "Failed to silence subprocess: err=%s\n",
+                        strerror(errno));
+            }
+            if (freopen("/dev/null", "w", stderr) == NULL) {
+                fprintf(stderr, "Failed to silence subprocess: err=%s\n",
+                        strerror(errno));
+            }
 
             if (execvp("git", argv) == -1) {
                 fprintf(stderr, "Failed to clone: url=%s err=%s\n", url,
