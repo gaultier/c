@@ -14,6 +14,21 @@
 
 #define MAX_URL_LEN 4096
 
+typedef enum {
+    COL_RESET,
+    COL_GRAY,
+    COL_RED,
+    COL_GREEN,
+    COL_COUNT,
+} pg_color;
+
+static const char pg_colors[2][COL_COUNT][14] = {
+    // is_tty == true
+    [true] = {[COL_RESET] = "\x1b[0m",
+              [COL_GRAY] = "\x1b[38;5;243m",
+              [COL_RED] = "\x1b[31m",
+              [COL_GREEN] = "\x1b[32m"}};
+
 typedef struct {
     gbString root_directory;
     gbString api_token;
@@ -276,6 +291,8 @@ static void* watch_project_cloning(void* varg) {
     gbArray(struct kevent) events;
     gb_array_init_reserve(events, gb_heap_allocator(), project_count);
 
+    const bool is_tty = isatty(2);
+
     while (true) {
         int event_count =
             kevent(arg->queue, NULL, 0, events, gb_array_capacity(events), 0);
@@ -301,12 +318,15 @@ static void* watch_project_cloning(void* varg) {
                     "❌",
                 };
                 printf(
-                    "[%llu/%llu] %s Project clone finished: "
+                    "%s[%llu/%llu] %s Project clone finished: "
                     "exit_status=%d "
-                    "path_with_namespace=%s\n",
+                    "path_with_namespace=%s%s\n",
+                    exit_status == 0 ? pg_colors[is_tty][COL_GREEN]
+                                     : pg_colors[is_tty][COL_RED],
                     finished, project_count,
                     exit_status == 0 ? emoji[0] : emoji[1], exit_status,
-                    arg->path_with_namespaces[project_i]);
+                    arg->path_with_namespaces[project_i],
+                    pg_colors[is_tty][COL_RESET]);
             }
         }
         if (finished == project_count) return NULL;
