@@ -187,7 +187,8 @@ static int api_query_projects(gbAllocator allocator, options* opts,
             url,
             "%s/api/v4/"
             "projects?statistics=false&top_level=&with_custom_"
-            "attributes=false&simple=true&per_page=100&page=%llu",
+            "attributes=false&simple=true&per_page=100&page=%llu&all_available="
+            "true&order_by=id&sort=asc",
             opts->url, pagination.current_page);
         curl_easy_setopt(http_handle, CURLOPT_URL, url);
 
@@ -290,7 +291,7 @@ static void* watch_project_cloning(void* varg) {
             if ((event->filter == EVFILT_PROC) &&
                 (event->fflags & NOTE_EXITSTATUS)) {
                 const pid_t pid = event->ident;
-                const int exit_status = event->data;
+                const u8 exit_status = event->data;
                 const int project_i = (int)(u64)event->udata;
                 assert(project_i >= 0);
                 assert(project_i < project_count);
