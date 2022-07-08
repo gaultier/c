@@ -98,7 +98,6 @@ static size_t on_header(char* buffer, size_t size, size_t nitems,
     // since the last response
     if (str_equal_c(buffer, key_len, "X-Total-Pages")) {
         pagination->total_pages = str_to_u64(val, val_len);
-        fprintf(stderr, "[D005] total_pages=%llu\n", pagination->total_pages);
     }
 
     return nitems * size;
@@ -193,8 +192,6 @@ static int api_query_projects(gbAllocator allocator, options* opts,
         curl_easy_setopt(http_handle, CURLOPT_URL, url);
 
         CURLcode res = curl_easy_perform(http_handle);
-        printf("res=%d\n", res);
-
         if (res != 0) {
             gb_string_free(url);
             gb_string_free(token);
@@ -221,12 +218,15 @@ static int api_parse_projects(gbString body,
         jsmn_init(&p);
         res = jsmn_parse(&p, body, gb_string_length(body), tokens,
                          gb_array_capacity(tokens));
-        printf("[D002] res=%d\n", res);
         if (res == JSMN_ERROR_NOMEM) {
             gb_array_reserve(tokens, gb_array_capacity(tokens) * 2);
             continue;
         }
-        if (res < 0 && res != JSMN_ERROR_NOMEM) return res;
+        if (res < 0 && res != JSMN_ERROR_NOMEM) {
+            fprintf(stderr, "Failed to parse JSON: body=%s res=%d\n", body,
+                    res);
+            return res;
+        }
         if (res == 0) return EINVAL;
     } while (res == JSMN_ERROR_NOMEM);
 
