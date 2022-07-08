@@ -384,6 +384,8 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
         } else if (pid == 0) {
             gbString path = path_with_namespaces[i];
             gbString url = git_urls[i];
+            // TODO: check if directory exists and `git pull` if it does.
+            // Otherwise clone.
             printf("Cloning %s %s\n", url, path);
             if (opts->dry_run) exit(0);
 
