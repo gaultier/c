@@ -326,7 +326,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
 
     if (chdir(opts->root_directory) == -1) {
         if (errno == ENOENT) {
-            if (mkdir(opts->root_directory, S_IRUSR | S_IWUSR) == -1) {
+            if (mkdir(opts->root_directory, S_IRWXU) == -1) {
                 fprintf(stderr, "Failed to mkdir(2): path=%s err=%s\n",
                         opts->root_directory, strerror(errno));
                 return errno;
