@@ -298,7 +298,7 @@ cleanup:
     gb_array_free(tokens);
 
     assert(gb_array_count(*path_with_namespaces) == gb_array_count(*git_urls));
-    return 0;
+    return res;
 }
 
 static void* watch_project_cloning(void* varg) {
