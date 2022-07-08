@@ -295,8 +295,6 @@ static void* watch_project_cloning(void* varg) {
                 assert(project_i >= 0);
                 assert(project_i < project_count);
 
-                if (exit_status == 32768) continue;  // Not exit status yet
-
                 finished += 1;
                 printf(
                     "[%llu/%llu] Project clone finished: pid=%d "
@@ -354,14 +352,9 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                 if (path[j] == '/') path[j] = '.';
             }
 
-            char* const argv[] = {"git", "clone", url, path, 0};
+            char* const argv[] = {"git", "clone", "--quiet", url, path, 0};
 
             if (freopen("/dev/null", "w", stdout) == NULL) {
-                fprintf(stderr, "Failed to silence subprocess: err=%s\n",
-                        strerror(errno));
-            }
-            // TODO: redirect to parent pipe to be able to show errors?
-            if (freopen("/dev/null", "w", stderr) == NULL) {
                 fprintf(stderr, "Failed to silence subprocess: err=%s\n",
                         strerror(errno));
             }
