@@ -27,6 +27,11 @@ typedef struct {
     u64 total_pages;
 } api_pagination;
 
+typedef struct {
+    int queue;
+    gbArray(gbString) path_with_namespaces;
+} watch_project_cloning_arg;
+
 static void print_usage(int argc, char* argv[]) {
     printf(
         "%s\n"
@@ -249,9 +254,6 @@ static int api_parse_projects(gbString body,
                       key_path_with_namespace_len)) {
             gbString s =
                 gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
-            for (int j = 0; j < next_s_len; j++) {
-                if (s[j] == '/') s[j] = '.';
-            }
             gb_array_append(*path_with_namespaces, s);
             i++;
             continue;
@@ -268,8 +270,51 @@ static int api_parse_projects(gbString body,
     return 0;
 }
 
+static void* watch_project_cloning(void* varg) {
+    watch_project_cloning_arg* arg = varg;
+
+    u64 finished = 0;
+    const u64 project_count = gb_array_count(arg->path_with_namespaces);
+    gbArray(struct kevent) events;
+    gb_array_init_reserve(events, gb_heap_allocator(), project_count);
+
+    while (true) {
+        int event_count =
+            kevent(arg->queue, NULL, 0, events, gb_array_capacity(events), 0);
+        if (event_count == -1) {
+            fprintf(stderr, "Failed to kevent(2) to query events: err=%s\n",
+                    strerror(errno));
+            return NULL;
+        }
+
+        for (int i = 0; i < event_count; i++) {
+            const struct kevent* const event = &events[i];
+
+            if (event->fflags & EVFILT_PROC) {
+                const pid_t pid = event->ident;
+                const int return_code = event->data;
+                const int project_i = (int)(u64)event->udata;
+                assert(project_i >= 0);
+                assert(project_i < project_count);
+
+                finished += 1;
+                printf(
+                    "[%llu/%llu] Project clone finished: pid=%d "
+                    "return_code=%d "
+                    "path_with_namespace=%s\n",
+                    finished, project_count, pid, return_code,
+                    arg->path_with_namespaces[project_i]);
+            }
+        }
+        if (finished == project_count) return NULL;
+    }
+
+    return NULL;
+}
+
 static int clone_projects(gbArray(gbString) path_with_namespaces,
-                          gbArray(gbString) git_urls, const options* opts) {
+                          gbArray(gbString) git_urls, const options* opts,
+                          int queue) {
     assert(opts != NULL);
     assert(gb_array_count(path_with_namespaces) == gb_array_count(git_urls));
 
@@ -286,16 +331,6 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
     }
     printf("Changed directory to: %s\n", opts->root_directory);
 
-    int queue = kqueue();
-    if (queue == -1) {
-        fprintf(stderr, "Failed to kqueue(2): err=%s\n", strerror(errno));
-        return errno;
-    }
-
-    gbArray(pid_t) project_pids;
-    gb_array_init_reserve(project_pids, gb_heap_allocator(),
-                          gb_array_count(path_with_namespaces));
-
     for (int i = 0; i < gb_array_count(path_with_namespaces); i++) {
         pid_t pid = fork();
         if (pid == -1) {
@@ -304,11 +339,14 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
         } else if (pid == 0) {
             gbString path = path_with_namespaces[i];
             gbString url = git_urls[i];
+            printf("Cloning %s %s\n", url, path);
+            if (opts->dry_run) exit(0);
+
+            for (int j = 0; j < gb_string_length(path); j++) {
+                if (path[j] == '/') path[j] = '.';
+            }
 
             char* const argv[] = {"git", "clone", url, path, 0};
-
-            printf("%s %s %s %s\n", argv[0], argv[1], argv[2], argv[3]);
-            if (opts->dry_run) exit(0);
 
             if (freopen("/dev/null", "w", stdout) == NULL) {
                 fprintf(stderr, "Failed to silence subprocess: err=%s\n",
@@ -327,7 +365,6 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
             }
             assert(0 && "Unreachable");
         } else {
-            gb_array_append(project_pids, pid);
             struct kevent event = {
                 .filter = EVFILT_PROC,
                 .ident = pid,
@@ -345,48 +382,12 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
         }
     }
 
-    if (!opts->dry_run) {
-        gbArray(struct kevent) events;
-        gb_array_init_reserve(events, gb_heap_allocator(),
-                              gb_array_count(path_with_namespaces));
-
-        u64 finished = 0;
-        while (true) {
-            int event_count =
-                kevent(queue, NULL, 0, events, gb_array_capacity(events), 0);
-            if (event_count == -1) {
-                fprintf(stderr, "Failed to kevent(2) to query events: err=%s\n",
-                        strerror(errno));
-                return errno;
-            }
-
-            for (int i = 0; i < event_count; i++) {
-                const struct kevent* const event = &events[i];
-
-                if (event->fflags & EVFILT_PROC) {
-                    const pid_t pid = event->ident;
-                    const int return_code = event->data;
-                    const int project_i = (int)(u64)event->udata;
-                    assert(project_i >= 0);
-                    assert(project_i < gb_array_count(path_with_namespaces));
-
-                    finished += 1;
-                    printf(
-                        "[%llu/%llu] Project clone finished: pid=%d "
-                        "return_code=%d "
-                        "path_with_namespace=%s\n",
-                        finished, (u64)gb_array_count(path_with_namespaces),
-                        pid, return_code, path_with_namespaces[project_i]);
-                }
-            }
-        }
-    }
-
     if (chdir(cwd) == -1) {
         fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
                 opts->root_directory, strerror(errno));
         return errno;
     }
+
     return 0;
 }
 
@@ -408,6 +409,24 @@ int main(int argc, char* argv[]) {
     res = api_parse_projects(response_body, &path_with_namespaces, &git_urls);
     if (res != 0) return res;
 
-    res = clone_projects(path_with_namespaces, git_urls, &opts);
+    int queue = kqueue();
+    if (queue == -1) {
+        fprintf(stderr, "Failed to kqueue(2): err=%s\n", strerror(errno));
+        return errno;
+    }
+
+    pthread_t thread;
+    if (!opts.dry_run) {
+        watch_project_cloning_arg arg = {
+            .queue = queue, .path_with_namespaces = path_with_namespaces};
+        if (pthread_create(&thread, NULL, watch_project_cloning, &arg) != 0) {
+            fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
+                    strerror(errno));
+        }
+    }
+
+    res = clone_projects(path_with_namespaces, git_urls, &opts, queue);
     if (res != 0) return res;
+
+    if (!opts.dry_run) pthread_join(thread, NULL);
 }
