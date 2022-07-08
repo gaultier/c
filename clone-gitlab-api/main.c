@@ -325,9 +325,17 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
     }
 
     if (chdir(opts->root_directory) == -1) {
-        fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
-                opts->root_directory, strerror(errno));
-        return errno;
+        if (errno == ENOENT) {
+            if (mkdir(opts->root_directory, S_IRUSR | S_IWUSR) == -1) {
+                fprintf(stderr, "Failed to mkdir(2): path=%s err=%s\n",
+                        opts->root_directory, strerror(errno));
+                return errno;
+            }
+        } else {
+            fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
+                    opts->root_directory, strerror(errno));
+            return errno;
+        }
     }
     printf("Changed directory to: %s\n", opts->root_directory);
 
@@ -416,9 +424,9 @@ int main(int argc, char* argv[]) {
     }
 
     pthread_t thread;
+    watch_project_cloning_arg arg = {
+        .queue = queue, .path_with_namespaces = path_with_namespaces};
     if (!opts.dry_run) {
-        watch_project_cloning_arg arg = {
-            .queue = queue, .path_with_namespaces = path_with_namespaces};
         if (pthread_create(&thread, NULL, watch_project_cloning, &arg) != 0) {
             fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
                     strerror(errno));
