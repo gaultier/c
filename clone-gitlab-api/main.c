@@ -273,7 +273,7 @@ static int api_parse_projects(gbString body,
     const char key_git_url[] = "ssh_url_to_repo";
     const usize key_git_url_len = sizeof("ssh_url_to_repo") - 1;
 
-    for (int i = 1; i < res; i++) {
+    for (int i = 1; i < gb_array_count(tokens); i++) {
         jsmntok_t* const cur = &tokens[i - 1];
         jsmntok_t* const next = &tokens[i];
         if (!(cur->type == JSMN_STRING && next->type == JSMN_STRING)) continue;
