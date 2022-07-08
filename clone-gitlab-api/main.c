@@ -335,6 +335,11 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                 return errno;
             }
             printf("Created directory: %s\n", opts->root_directory);
+            if (chdir(opts->root_directory) == -1) {
+                fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
+                        opts->root_directory, strerror(errno));
+                return errno;
+            }
         } else {
             fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
                     opts->root_directory, strerror(errno));
@@ -358,7 +363,6 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                 if (path[j] == '/') path[j] = '.';
             }
 
-            fprintf(stderr, "[D001] %s\n", getcwd(NULL, 0));
             char* const argv[] = {"git", "clone", "--quiet", url, path, 0};
 
             if (freopen("/dev/null", "w", stdout) == NULL) {
