@@ -264,6 +264,7 @@ static int api_parse_projects(gbString body,
         }
     } while (res == JSMN_ERROR_NOMEM);
 
+    res = 0;
     gb_array_resize(tokens, res);
     gb_array_set_capacity(tokens, res);
 
