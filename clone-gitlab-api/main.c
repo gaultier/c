@@ -391,7 +391,9 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                 if (path[j] == '/') path[j] = '.';
             }
 
-            char* const argv[] = {"git", "clone", "--quiet", url, path, 0};
+            char* const argv[] = {"git",     "clone", "--quiet",
+                                  "--depth", "1",     "--no-tags",
+                                  url,       path,    0};
 
             if (freopen("/dev/null", "w", stdout) == NULL) {
                 fprintf(stderr, "Failed to silence subprocess: err=%s\n",
