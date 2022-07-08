@@ -423,6 +423,23 @@ static int change_directory(char* path) {
     return 0;
 }
 
+static int record_process_finished_event(int queue, pid_t pid, int i) {
+    struct kevent event = {
+        .filter = EVFILT_PROC,
+        .ident = pid,
+        .flags = EV_ADD | EV_ONESHOT,
+        .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
+        .udata = (void*)(u64)i,
+    };
+    if (kevent(queue, &event, 1, NULL, 0, 0) == -1) {
+        fprintf(stderr,
+                "Failed to kevent(2) to watch for child process: err=%s\n",
+                strerror(errno));
+        return errno;
+    }
+    return 0;
+}
+
 // static int clone_projects_at(gbArray(gbString) path_with_namespaces,
 //                           gbArray(gbString) git_urls, const options* opts,
 //                           int queue,
@@ -458,27 +475,13 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                 if (fs_path[j] == '/') fs_path[j] = '.';
             }
             gbString url = git_urls[i];
-            if (is_directory(fs_path)) {
+            if (is_directory(fs_path))
                 return update_project(path, fs_path, url, opts);
-            } else {
+            else
                 return clone_project(path, fs_path, url, opts);
-            }
-            assert(0 && "Unreachable");
         } else {
-            struct kevent event = {
-                .filter = EVFILT_PROC,
-                .ident = pid,
-                .flags = EV_ADD | EV_ONESHOT,
-                .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
-                .udata = (void*)(u64)i,
-            };
-            if (kevent(queue, &event, 1, NULL, 0, 0) == -1) {
-                fprintf(
-                    stderr,
-                    "Failed to kevent(2) to watch for child process: err=%s\n",
-                    strerror(errno));
-                return errno;
-            }
+            if ((res = record_process_finished_event(queue, pid, i)) != 0)
+                return res;
         }
     }
 
