@@ -479,13 +479,13 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
     assert(opts != NULL);
     assert(gb_array_count(path_with_namespaces) == gb_array_count(git_urls));
 
-    gbString cwd = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
+    int res = 0;
+    static char cwd[MAXPATHLEN] = "";
     if (getcwd(cwd, MAXPATHLEN) == NULL) {
         fprintf(stderr, "Failed to getcwd(2): err=%s\n", strerror(errno));
         return errno;
     }
 
-    int res = 0;
     if ((res = change_directory(opts->root_directory)) != 0) return res;
 
     printf("Changed directory to: %s\n", opts->root_directory);
@@ -494,7 +494,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
 
     if ((res = change_directory(cwd)) != 0) return res;
 
-    return 0;
+    return res;
 }
 
 int main(int argc, char* argv[]) {
@@ -515,6 +515,7 @@ int main(int argc, char* argv[]) {
 
     res = api_parse_projects(response_body, &path_with_namespaces, &git_urls);
     if (res != 0) return res;
+    gb_string_free(response_body);
 
     int queue = kqueue();
     if (queue == -1) {
