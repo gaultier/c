@@ -307,7 +307,7 @@ static void* watch_project_cloning(void* varg) {
 
             if ((event->filter == EVFILT_PROC) &&
                 (event->fflags & NOTE_EXITSTATUS)) {
-                const u8 exit_status = event->data;
+                const int exit_status = (event->data >> 8);
                 const int project_i = (int)(u64)event->udata;
                 assert(project_i >= 0);
                 assert(project_i < project_count);
