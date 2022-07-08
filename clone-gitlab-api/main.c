@@ -92,9 +92,6 @@ static size_t on_header(char* buffer, size_t size, size_t nitems,
     val++;  // Skip `:`
     const usize val_len = buffer + real_size - val;
 
-    fprintf(stderr, "[D099] Header: key=`%.*s` val=`%.*s`\n", (int)key_len,
-            buffer, (int)val_len, val);
-
     api_pagination* const pagination = userdata;
 
     // We re-parse it every time but because it could have changed
@@ -290,7 +287,8 @@ static void* watch_project_cloning(void* varg) {
         for (int i = 0; i < event_count; i++) {
             const struct kevent* const event = &events[i];
 
-            if (event->fflags & EVFILT_PROC) {
+            if ((event->filter == EVFILT_PROC) &&
+                (event->fflags & NOTE_EXITSTATUS)) {
                 const pid_t pid = event->ident;
                 const int return_code = event->data;
                 const int project_i = (int)(u64)event->udata;
