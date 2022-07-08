@@ -207,6 +207,7 @@ static int api_query_projects(gbAllocator allocator, options* opts,
 
     curl_easy_setopt(http_handle, CURLOPT_HTTPHEADER, list);
 
+    int res = 0;
     do {
         url = gb_string_append_fmt(
             url,
@@ -217,19 +218,20 @@ static int api_query_projects(gbAllocator allocator, options* opts,
             opts->url, pagination.current_page);
         curl_easy_setopt(http_handle, CURLOPT_URL, url);
 
-        CURLcode res = curl_easy_perform(http_handle);
-        if (res != 0) {
-            gb_string_free(url);
-            gb_string_free(token);
-
-            fprintf(stderr, "Failed to query api: response_body=%s\n",
-                    *response_body);
-            return res;
+        if ((res = curl_easy_perform(http_handle)) != 0) {
+            fprintf(stderr, "Failed to query api: response_body=%s res=%d\n",
+                    *response_body, res);
+            goto cleanup;
         }
 
         pagination.current_page += 1;
     } while (pagination.current_page <= pagination.total_pages);
-    return 0;
+
+cleanup:
+    gb_string_free(url);
+    gb_string_free(token);
+
+    return res;
 }
 
 static int api_parse_projects(gbString body,
@@ -328,7 +330,7 @@ static void* watch_project_cloning(void* varg) {
                     "❌",
                 };
                 printf(
-                    "%s[%llu/%llu] %s Project clone finished: "
+                    "%s[%llu/%llu] %s Project finished: "
                     "exit_status=%d "
                     "path_with_namespace=%s%s\n",
                     exit_status == 0 ? pg_colors[is_tty][COL_GREEN]
@@ -440,11 +442,36 @@ static int record_process_finished_event(int queue, pid_t pid, int i) {
     return 0;
 }
 
-// static int clone_projects_at(gbArray(gbString) path_with_namespaces,
-//                           gbArray(gbString) git_urls, const options* opts,
-//                           int queue,
-//                           u64 project_offset) {
-// }
+static int clone_projects_at(gbArray(gbString) path_with_namespaces,
+                             gbArray(gbString) git_urls, const options* opts,
+                             int queue, u64 project_offset) {
+    for (int i = project_offset; i < gb_array_count(path_with_namespaces);
+         i++) {
+        pid_t pid = fork();
+        if (pid == -1) {
+            fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
+            return errno;
+        } else if (pid == 0) {
+            gbString path = path_with_namespaces[i];
+            gbString fs_path = gb_string_duplicate(gb_heap_allocator(), path);
+            for (int j = 0; j < gb_string_length(fs_path); j++) {
+                if (fs_path[j] == '/') fs_path[j] = '.';
+            }
+            gbString url = git_urls[i];
+            if (is_directory(fs_path)) {
+                update_project(path, fs_path, url, opts);
+            } else {
+                clone_project(path, fs_path, url, opts);
+            }
+            assert(0 && "Unreachable");
+        } else {
+            int res = 0;
+            if ((res = record_process_finished_event(queue, pid, i)) != 0)
+                return res;
+        }
+    }
+    return 0;
+}
 
 static int clone_projects(gbArray(gbString) path_with_namespaces,
                           gbArray(gbString) git_urls, const options* opts,
@@ -463,30 +490,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
 
     printf("Changed directory to: %s\n", opts->root_directory);
 
-    for (int i = 0; i < gb_array_count(path_with_namespaces); i++) {
-        pid_t pid = fork();
-        if (pid == -1) {
-            fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
-            return errno;
-        } else if (pid == 0) {
-            gbString path = path_with_namespaces[i];
-            gbString fs_path = gb_string_duplicate(gb_heap_allocator(), path);
-            for (int j = 0; j < gb_string_length(fs_path); j++) {
-                if (fs_path[j] == '/') fs_path[j] = '.';
-            }
-            gbString url = git_urls[i];
-            if (is_directory(fs_path)) {
-                res = update_project(path, fs_path, url, opts);
-            } else {
-                res = clone_project(path, fs_path, url, opts);
-            }
-            gb_string_free(fs_path);
-            return res;
-        } else {
-            if ((res = record_process_finished_event(queue, pid, i)) != 0)
-                return res;
-        }
-    }
+    clone_projects_at(path_with_namespaces, git_urls, opts, queue, 0);
 
     if ((res = change_directory(cwd)) != 0) return res;
 
