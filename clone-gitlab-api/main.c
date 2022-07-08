@@ -74,8 +74,6 @@ static bool str_equal_c(const char* a, usize a_len, const char* b0) {
 static bool is_directory(const char* path) {
     struct stat s = {0};
     if (stat(path, &s) == -1) {
-        fprintf(stderr, "Failed to stat(2): path=%s err=%s\n", path,
-                strerror(errno));
         return false;
     }
     return S_ISDIR(s.st_mode);
@@ -394,20 +392,41 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
             return errno;
         } else if (pid == 0) {
             gbString path = path_with_namespaces[i];
+            gbString fs_path = gb_string_duplicate(gb_heap_allocator(), path);
+            for (int j = 0; j < gb_string_length(fs_path); j++) {
+                if (fs_path[j] == '/') fs_path[j] = '.';
+            }
             gbString url = git_urls[i];
-            if (is_directory(path)) {
-                // TODO
+            if (is_directory(fs_path)) {
+                if (chdir(fs_path) == -1) {
+                    fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
+                            fs_path, strerror(errno));
+                    exit(errno);
+                }
+
+                printf("Updating %s\n", fs_path);
+                if (opts->dry_run) exit(0);
+
+                char* const argv[] = {"git", "pull",      "--quiet", "--depth",
+                                      "1",   "--no-tags", 0};
+
+                if (freopen("/dev/null", "w", stdout) == NULL) {
+                    fprintf(stderr, "Failed to silence subprocess: err=%s\n",
+                            strerror(errno));
+                }
+
+                if (execvp("git", argv) == -1) {
+                    fprintf(stderr, "Failed to pull: url=%s err=%s\n", url,
+                            strerror(errno));
+                    exit(errno);
+                }
             } else {
                 printf("Cloning %s %s\n", url, path);
                 if (opts->dry_run) exit(0);
 
-                for (int j = 0; j < gb_string_length(path); j++) {
-                    if (path[j] == '/') path[j] = '.';
-                }
-
                 char* const argv[] = {"git",     "clone", "--quiet",
                                       "--depth", "1",     "--no-tags",
-                                      url,       path,    0};
+                                      url,       fs_path, 0};
 
                 if (freopen("/dev/null", "w", stdout) == NULL) {
                     fprintf(stderr, "Failed to silence subprocess: err=%s\n",
