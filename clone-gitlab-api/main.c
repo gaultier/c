@@ -5,6 +5,7 @@
 #include <sys/event.h>
 #include <sys/fcntl.h>
 #include <sys/param.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -68,6 +69,16 @@ static bool str_equal(const char* a, usize a_len, const char* b, usize b_len) {
 
 static bool str_equal_c(const char* a, usize a_len, const char* b0) {
     return str_equal(a, a_len, b0, strlen(b0));
+}
+
+static bool is_directory(const char* path) {
+    struct stat s = {0};
+    if (stat(path, &s) == -1) {
+        fprintf(stderr, "Failed to stat(2): path=%s err=%s\n", path,
+                strerror(errno));
+        return false;
+    }
+    return S_ISDIR(s.st_mode);
 }
 
 static u64 str_to_u64(const char* s, usize s_len) {
