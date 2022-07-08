@@ -1,3 +1,4 @@
 a.out*
 *.kt
 *.kts
+*.dSYM
