@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <curl/curl.h>
 #include <getopt.h>
+#include <signal.h>
 #include <stdio.h>
 #include <sys/event.h>
 #include <sys/fcntl.h>
@@ -512,9 +513,16 @@ int main(int argc, char* argv[]) {
     options opts = {0};
     options_parse_from_cli(allocator, argc, argv, &opts);
 
+    int res = 0;
+    struct sigaction sa = {.sa_flags = SA_NOCLDWAIT};
+    if ((res = sigaction(SIGCHLD, &sa, NULL)) == -1) {
+        fprintf(stderr, "Failed to sigaction(2): err=%s\n", strerror(errno));
+        return errno;
+    }
+
     gbString response_body =
         gb_string_make_reserve(allocator, 20 * 1024 * 1024);
-    int res = api_query_projects(allocator, &opts, &response_body);
+    res = api_query_projects(allocator, &opts, &response_body);
     if (res != 0) return res;
 
     gbArray(gbString) path_with_namespaces;
