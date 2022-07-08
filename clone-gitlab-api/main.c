@@ -288,19 +288,21 @@ static void* watch_project_cloning(void* varg) {
             const struct kevent* const event = &events[i];
 
             if ((event->filter == EVFILT_PROC) &&
-                (event->fflags & NOTE_EXITSTATUS)) {
+                (event->fflags & NOTE_EXIT & NOTE_EXITSTATUS)) {
                 const pid_t pid = event->ident;
-                const int return_code = event->data;
+                const int exit_status = event->data;
                 const int project_i = (int)(u64)event->udata;
                 assert(project_i >= 0);
                 assert(project_i < project_count);
 
+                if (exit_status == 32768) continue;  // Not exit status yet
+
                 finished += 1;
                 printf(
                     "[%llu/%llu] Project clone finished: pid=%d "
-                    "return_code=%d "
+                    "exit_status=%d "
                     "path_with_namespace=%s\n",
-                    finished, project_count, pid, return_code,
+                    finished, project_count, pid, exit_status,
                     arg->path_with_namespaces[project_i]);
             }
         }
@@ -374,7 +376,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
             struct kevent event = {
                 .filter = EVFILT_PROC,
                 .ident = pid,
-                .flags = EV_ADD,
+                .flags = EV_ADD | EV_ONESHOT,
                 .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
                 .udata = (void*)(u64)i,
             };
