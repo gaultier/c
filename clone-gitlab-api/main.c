@@ -395,28 +395,30 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
         } else if (pid == 0) {
             gbString path = path_with_namespaces[i];
             gbString url = git_urls[i];
-            // TODO: check if directory exists and `git pull` if it does.
-            // Otherwise clone.
-            printf("Cloning %s %s\n", url, path);
-            if (opts->dry_run) exit(0);
+            if (is_directory(path)) {
+                // TODO
+            } else {
+                printf("Cloning %s %s\n", url, path);
+                if (opts->dry_run) exit(0);
 
-            for (int j = 0; j < gb_string_length(path); j++) {
-                if (path[j] == '/') path[j] = '.';
-            }
+                for (int j = 0; j < gb_string_length(path); j++) {
+                    if (path[j] == '/') path[j] = '.';
+                }
 
-            char* const argv[] = {"git",     "clone", "--quiet",
-                                  "--depth", "1",     "--no-tags",
-                                  url,       path,    0};
+                char* const argv[] = {"git",     "clone", "--quiet",
+                                      "--depth", "1",     "--no-tags",
+                                      url,       path,    0};
 
-            if (freopen("/dev/null", "w", stdout) == NULL) {
-                fprintf(stderr, "Failed to silence subprocess: err=%s\n",
-                        strerror(errno));
-            }
+                if (freopen("/dev/null", "w", stdout) == NULL) {
+                    fprintf(stderr, "Failed to silence subprocess: err=%s\n",
+                            strerror(errno));
+                }
 
-            if (execvp("git", argv) == -1) {
-                fprintf(stderr, "Failed to clone: url=%s err=%s\n", url,
-                        strerror(errno));
-                exit(errno);
+                if (execvp("git", argv) == -1) {
+                    fprintf(stderr, "Failed to clone: url=%s err=%s\n", url,
+                            strerror(errno));
+                    exit(errno);
+                }
             }
             assert(0 && "Unreachable");
         } else {
