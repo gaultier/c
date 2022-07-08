@@ -5,6 +5,7 @@
 #include <sys/event.h>
 #include <sys/fcntl.h>
 #include <sys/param.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #define GB_IMPLEMENTATION
@@ -28,6 +29,8 @@ static const char pg_colors[2][COL_COUNT][14] = {
               [COL_GRAY] = "\x1b[38;5;243m",
               [COL_RED] = "\x1b[31m",
               [COL_GREEN] = "\x1b[32m"}};
+
+static struct timeval start;
 
 typedef struct {
     gbString root_directory;
@@ -329,7 +332,12 @@ static void* watch_project_cloning(void* varg) {
                     pg_colors[is_tty][COL_RESET]);
             }
         }
-        if (finished == project_count) return NULL;
+        if (finished == project_count) {
+            struct timeval end = {0};
+            gettimeofday(&end, NULL);
+            printf("Finished in %lds", end.tv_sec - start.tv_sec);
+            return NULL;
+        }
     }
 
     return NULL;
@@ -424,6 +432,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
 }
 
 int main(int argc, char* argv[]) {
+    gettimeofday(&start, NULL);
     gbAllocator allocator = gb_heap_allocator();
     options opts = {0};
     options_parse_from_cli(allocator, argc, argv, &opts);
