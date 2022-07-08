@@ -314,6 +314,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
                 fprintf(stderr, "Failed to silence subprocess: err=%s\n",
                         strerror(errno));
             }
+            // TODO: redirect to parent pipe to be able to show errors?
             if (freopen("/dev/null", "w", stderr) == NULL) {
                 fprintf(stderr, "Failed to silence subprocess: err=%s\n",
                         strerror(errno));
