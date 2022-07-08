@@ -505,10 +505,36 @@ int main(int argc, char* argv[]) {
     options_parse_from_cli(allocator, argc, argv, &opts);
 
     int res = 0;
-    struct sigaction sa = {.sa_flags = SA_NOCLDWAIT};
-    if ((res = sigaction(SIGCHLD, &sa, NULL)) == -1) {
-        fprintf(stderr, "Failed to sigaction(2): err=%s\n", strerror(errno));
+    // Do not require wait(2) on child processes
+    {
+        struct sigaction sa = {.sa_flags = SA_NOCLDWAIT};
+        if ((res = sigaction(SIGCHLD, &sa, NULL)) == -1) {
+            fprintf(stderr, "Failed to sigaction(2): err=%s\n",
+                    strerror(errno));
+            return errno;
+        }
+    }
+
+    // Queue to get notified that child processes finished
+    int queue = kqueue();
+    if (queue == -1) {
+        fprintf(stderr, "Failed to kqueue(2): err=%s\n", strerror(errno));
         return errno;
+    }
+
+    gbArray(gbString) path_with_namespaces;
+    gb_array_init_reserve(path_with_namespaces, allocator, 100 * 1000);
+
+    // Start process exit watcher thread
+    pthread_t process_exit_watcher = {0};
+    {
+        watch_project_cloning_arg arg = {
+            .queue = queue, .path_with_namespaces = path_with_namespaces};
+        if (pthread_create(&process_exit_watcher, NULL, watch_project_cloning,
+                           &arg) != 0) {
+            fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
+                    strerror(errno));
+        }
     }
 
     gbString response_body =
@@ -516,8 +542,6 @@ int main(int argc, char* argv[]) {
     res = api_query_projects(allocator, &opts, &response_body);
     if (res != 0) return res;
 
-    gbArray(gbString) path_with_namespaces;
-    gb_array_init_reserve(path_with_namespaces, allocator, 100 * 1000);
     gbArray(gbString) git_urls;
     gb_array_init_reserve(git_urls, allocator, 100 * 1000);
 
@@ -525,22 +549,8 @@ int main(int argc, char* argv[]) {
     if (res != 0) return res;
     gb_string_free(response_body);
 
-    int queue = kqueue();
-    if (queue == -1) {
-        fprintf(stderr, "Failed to kqueue(2): err=%s\n", strerror(errno));
-        return errno;
-    }
-
-    pthread_t thread = {0};
-    watch_project_cloning_arg arg = {
-        .queue = queue, .path_with_namespaces = path_with_namespaces};
-    if (pthread_create(&thread, NULL, watch_project_cloning, &arg) != 0) {
-        fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
-                strerror(errno));
-    }
-
     res = clone_projects(path_with_namespaces, git_urls, &opts, queue);
     if (res != 0) return res;
 
-    pthread_join(thread, NULL);
+    pthread_join(process_exit_watcher, NULL);
 }
