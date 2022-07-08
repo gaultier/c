@@ -256,6 +256,9 @@ static int api_parse_projects(gbString body,
             goto cleanup;
         }
         if (res == 0) {
+            fprintf(stderr,
+                    "Failed to parse JSON (is it empty?): body=%s res=%d\n",
+                    body, res);
             res = EINVAL;
             goto cleanup;
         }
@@ -302,6 +305,7 @@ cleanup:
 }
 
 static void* watch_project_cloning(void* varg) {
+    assert(varg != NULL);
     watch_project_cloning_arg* arg = varg;
 
     u64 finished = 0;
