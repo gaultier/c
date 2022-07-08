@@ -335,7 +335,7 @@ static void* watch_project_cloning(void* varg) {
         if (finished == project_count) {
             struct timeval end = {0};
             gettimeofday(&end, NULL);
-            printf("Finished in %lds", end.tv_sec - start.tv_sec);
+            printf("Finished in %lds\n", end.tv_sec - start.tv_sec);
             return NULL;
         }
     }
