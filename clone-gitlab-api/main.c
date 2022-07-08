@@ -42,7 +42,7 @@ static bool verbose = false;
 typedef struct {
     u64 current_page;
     u64 total_pages;
-} api_pagination;
+} pagination_t;
 
 typedef struct {
     int queue;
@@ -91,6 +91,13 @@ static u64 str_to_u64(const char* s, usize s_len) {
     return res;
 }
 
+typedef struct {
+    CURL* http_handle;
+    gbString response_body;
+    gbString url;
+    pagination_t pagination;
+} api_t;
+
 static size_t on_http_response_body_chunk(void* contents, size_t size,
                                           size_t nmemb, void* userp) {
     const size_t real_size = size * nmemb;
@@ -116,7 +123,7 @@ static size_t on_header(char* buffer, size_t size, size_t nitems,
     val++;  // Skip `:`
     const usize val_len = buffer + real_size - val;
 
-    api_pagination* const pagination = userdata;
+    pagination_t* const pagination = userdata;
 
     // We re-parse it every time but because it could have changed
     // since the last response
@@ -125,6 +132,32 @@ static size_t on_header(char* buffer, size_t size, size_t nitems,
     }
 
     return nitems * size;
+}
+
+static void api_init(gbAllocator allocator, api_t* api, gbString token) {
+    assert(api != NULL);
+
+    api->pagination = (pagination_t){.current_page = 1};
+    api->response_body = gb_string_make_reserve(allocator, 20 * 1024 * 1024);
+    api->http_handle = curl_easy_init();
+    assert(api->http_handle != NULL);
+
+    api->url = gb_string_make_reserve(allocator, MAX_URL_LEN);
+    curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose);
+    curl_easy_setopt(api->http_handle, CURLOPT_FOLLOWLOCATION, true);
+    curl_easy_setopt(api->http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
+    curl_easy_setopt(api->http_handle, CURLOPT_WRITEFUNCTION,
+                     on_http_response_body_chunk);
+    curl_easy_setopt(api->http_handle, CURLOPT_WRITEDATA, api->response_body);
+    curl_easy_setopt(api->http_handle, CURLOPT_HEADERFUNCTION, on_header);
+    curl_easy_setopt(api->http_handle, CURLOPT_HEADERDATA, &api->pagination);
+
+    struct curl_slist* list = NULL;
+    gbString token_header = gb_string_make_reserve(allocator, 512);
+    token_header = gb_string_append_fmt(token, "PRIVATE-TOKEN: %s", token);
+    list = curl_slist_append(list, token_header);
+
+    curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list);
 }
 
 static void options_parse_from_cli(gbAllocator allocator, int argc,
@@ -178,50 +211,26 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
     }
 }
 
-static int api_query_projects(gbAllocator allocator, options* opts,
-                              gbString* response_body) {
-    CURL* http_handle = curl_easy_init();
-    gbString url = gb_string_make_reserve(allocator, MAX_URL_LEN);
-    curl_easy_setopt(http_handle, CURLOPT_VERBOSE, verbose);
-    curl_easy_setopt(http_handle, CURLOPT_FOLLOWLOCATION, true);
-    curl_easy_setopt(http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
-    curl_easy_setopt(http_handle, CURLOPT_WRITEFUNCTION,
-                     on_http_response_body_chunk);
-    curl_easy_setopt(http_handle, CURLOPT_WRITEDATA, response_body);
-    curl_easy_setopt(http_handle, CURLOPT_HEADERFUNCTION, on_header);
-    api_pagination pagination = {.current_page = 1};
-    curl_easy_setopt(http_handle, CURLOPT_HEADERDATA, &pagination);
-
-    struct curl_slist* list = NULL;
-    gbString token = gb_string_make_reserve(allocator, 512);
-    token = gb_string_append_fmt(token, "PRIVATE-TOKEN: %s", opts->api_token);
-    list = curl_slist_append(list, token);
-
-    curl_easy_setopt(http_handle, CURLOPT_HTTPHEADER, list);
-
+static int api_query_projects(gbAllocator allocator, api_t* api) {
     int res = 0;
     do {
-        url = gb_string_append_fmt(
-            url,
+        api->url = gb_string_append_fmt(
+            api->url,
             "%s/api/v4/"
             "projects?statistics=false&top_level=&with_custom_"
             "attributes=false&simple=true&per_page=100&page=%llu&all_available="
             "true&order_by=id&sort=asc",
-            opts->url, pagination.current_page);
-        curl_easy_setopt(http_handle, CURLOPT_URL, url);
+            api->url, api->pagination.current_page);
+        curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url);
 
-        if ((res = curl_easy_perform(http_handle)) != 0) {
+        if ((res = curl_easy_perform(api->http_handle)) != 0) {
             fprintf(stderr, "Failed to query api: response_body=%s res=%d\n",
-                    *response_body, res);
-            goto cleanup;
+                    api->response_body, res);
+            return res;
         }
 
-        pagination.current_page += 1;
-    } while (pagination.current_page <= pagination.total_pages);
-
-cleanup:
-    gb_string_free(url);
-    gb_string_free(token);
+        api->pagination.current_page += 1;
+    } while (api->pagination.current_page <= api->pagination.total_pages);
 
     return res;
 }
@@ -537,17 +546,18 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    gbString response_body =
-        gb_string_make_reserve(allocator, 20 * 1024 * 1024);
-    res = api_query_projects(allocator, &opts, &response_body);
+    api_t api = {0};
+    api_init(allocator, &api, opts.api_token);
+    res = api_query_projects(allocator, &api);
     if (res != 0) return res;
 
     gbArray(gbString) git_urls;
     gb_array_init_reserve(git_urls, allocator, 100 * 1000);
 
-    res = api_parse_projects(response_body, &path_with_namespaces, &git_urls);
+    res =
+        api_parse_projects(api.response_body, &path_with_namespaces, &git_urls);
     if (res != 0) return res;
-    gb_string_free(response_body);
+    gb_string_free(api.response_body);
 
     res = clone_projects(path_with_namespaces, git_urls, &opts, queue);
     if (res != 0) return res;
