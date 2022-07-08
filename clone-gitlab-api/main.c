@@ -36,7 +36,6 @@ typedef struct {
     gbString root_directory;
     gbString api_token;
     gbString url;
-    bool dry_run;
 } options;
 static bool verbose = false;
 
@@ -57,7 +56,6 @@ static void print_usage(int argc, char* argv[]) {
         "\t[(-u|--url) <gitlab url>]\n"
         "\t[(-t|--api-token) <api token>]\n"
         "\t[-h|--help]\n"
-        "\t[-n|--dry-run]\n"
         "\t[-v|--verbose]\n",
         argv[0]);
 }
@@ -146,10 +144,6 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
         {.name = "url", .has_arg = required_argument, .flag = NULL, .val = 'u'},
         {.name = "help", .has_arg = no_argument, .flag = NULL, .val = 'h'},
         {.name = "verbose", .has_arg = no_argument, .flag = NULL, .val = 'v'},
-        {.name = "dry-run",
-         .has_arg = no_argument,
-         .flag = NULL,
-         .val = 'n' /* Like make */},
     };
 
     int ch = 0;
@@ -176,9 +170,6 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
             }
             case 'v':
                 verbose = true;
-                break;
-            case 'n':
-                opts->dry_run = true;
                 break;
             default:
                 print_usage(argc, argv);
@@ -372,7 +363,6 @@ static int worker_update_project(gbString path, gbString fs_path, gbString url,
     }
 
     printf("Updating %s in %s\n", path, fs_path);
-    if (opts->dry_run) exit(0);
 
     char* const argv[] = {"git", "pull",      "--quiet", "--depth",
                           "1",   "--no-tags", 0};
@@ -395,7 +385,6 @@ static int worker_update_project(gbString path, gbString fs_path, gbString url,
 static int worker_clone_project(gbString path, gbString fs_path, gbString url,
                                 const options* opts) {
     printf("Cloning %s %s to %s\n", url, path, fs_path);
-    if (opts->dry_run) exit(0);
 
     char* const argv[] = {"git",       "clone", "--quiet", "--depth", "1",
                           "--no-tags", url,     fs_path,   0};
@@ -542,18 +531,16 @@ int main(int argc, char* argv[]) {
         return errno;
     }
 
-    pthread_t thread;
+    pthread_t thread = {0};
     watch_project_cloning_arg arg = {
         .queue = queue, .path_with_namespaces = path_with_namespaces};
-    if (!opts.dry_run) {
-        if (pthread_create(&thread, NULL, watch_project_cloning, &arg) != 0) {
-            fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
-                    strerror(errno));
-        }
+    if (pthread_create(&thread, NULL, watch_project_cloning, &arg) != 0) {
+        fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
+                strerror(errno));
     }
 
     res = clone_projects(path_with_namespaces, git_urls, &opts, queue);
     if (res != 0) return res;
 
-    if (!opts.dry_run) pthread_join(thread, NULL);
+    pthread_join(thread, NULL);
 }
