@@ -350,6 +350,85 @@ static void* watch_project_cloning(void* varg) {
     return NULL;
 }
 
+static int update_project(gbString path, gbString fs_path, gbString url,
+                          const options* opts) {
+    if (chdir(fs_path) == -1) {
+        fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n", fs_path,
+                strerror(errno));
+        exit(errno);
+    }
+
+    printf("Updating %s in %s\n", path, fs_path);
+    if (opts->dry_run) exit(0);
+
+    char* const argv[] = {"git", "pull",      "--quiet", "--depth",
+                          "1",   "--no-tags", 0};
+
+    if (freopen("/dev/null", "w", stdout) == NULL) {
+        fprintf(stderr, "Failed to silence subprocess: err=%s\n",
+                strerror(errno));
+    }
+
+    if (execvp("git", argv) == -1) {
+        fprintf(stderr, "Failed to pull: url=%s err=%s\n", url,
+                strerror(errno));
+        exit(errno);
+    }
+    assert(0 && "Unreachable");
+    return 0;
+}
+
+static int clone_project(gbString path, gbString fs_path, gbString url,
+                         const options* opts) {
+    printf("Cloning %s %s to %s\n", url, path, fs_path);
+    if (opts->dry_run) exit(0);
+
+    char* const argv[] = {"git",       "clone", "--quiet", "--depth", "1",
+                          "--no-tags", url,     fs_path,   0};
+
+    if (freopen("/dev/null", "w", stdout) == NULL) {
+        fprintf(stderr, "Failed to silence subprocess: err=%s\n",
+                strerror(errno));
+    }
+
+    if (execvp("git", argv) == -1) {
+        fprintf(stderr, "Failed to clone: url=%s err=%s\n", url,
+                strerror(errno));
+        exit(errno);
+    }
+    assert(0 && "Unreachable");
+    return 0;
+}
+
+static int change_directory(char* path) {
+    if (chdir(path) == -1) {
+        if (errno == ENOENT) {
+            if (mkdir(path, S_IRWXU) == -1) {
+                fprintf(stderr, "Failed to mkdir(2): path=%s err=%s\n", path,
+                        strerror(errno));
+                return errno;
+            }
+            printf("Created directory: %s\n", path);
+            if (chdir(path) == -1) {
+                fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n", path,
+                        strerror(errno));
+                return errno;
+            }
+        } else {
+            fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n", path,
+                    strerror(errno));
+            return errno;
+        }
+    }
+    return 0;
+}
+
+// static int clone_projects_at(gbArray(gbString) path_with_namespaces,
+//                           gbArray(gbString) git_urls, const options* opts,
+//                           int queue,
+//                           u64 project_offset) {
+// }
+
 static int clone_projects(gbArray(gbString) path_with_namespaces,
                           gbArray(gbString) git_urls, const options* opts,
                           int queue) {
@@ -362,25 +441,9 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
         return errno;
     }
 
-    if (chdir(opts->root_directory) == -1) {
-        if (errno == ENOENT) {
-            if (mkdir(opts->root_directory, S_IRWXU) == -1) {
-                fprintf(stderr, "Failed to mkdir(2): path=%s err=%s\n",
-                        opts->root_directory, strerror(errno));
-                return errno;
-            }
-            printf("Created directory: %s\n", opts->root_directory);
-            if (chdir(opts->root_directory) == -1) {
-                fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
-                        opts->root_directory, strerror(errno));
-                return errno;
-            }
-        } else {
-            fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
-                    opts->root_directory, strerror(errno));
-            return errno;
-        }
-    }
+    int res = 0;
+    if ((res = change_directory(opts->root_directory)) != 0) return res;
+
     printf("Changed directory to: %s\n", opts->root_directory);
 
     for (int i = 0; i < gb_array_count(path_with_namespaces); i++) {
@@ -396,46 +459,9 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
             }
             gbString url = git_urls[i];
             if (is_directory(fs_path)) {
-                if (chdir(fs_path) == -1) {
-                    fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
-                            fs_path, strerror(errno));
-                    exit(errno);
-                }
-
-                printf("Updating %s in %s\n", path, fs_path);
-                if (opts->dry_run) exit(0);
-
-                char* const argv[] = {"git", "pull",      "--quiet", "--depth",
-                                      "1",   "--no-tags", 0};
-
-                if (freopen("/dev/null", "w", stdout) == NULL) {
-                    fprintf(stderr, "Failed to silence subprocess: err=%s\n",
-                            strerror(errno));
-                }
-
-                if (execvp("git", argv) == -1) {
-                    fprintf(stderr, "Failed to pull: url=%s err=%s\n", url,
-                            strerror(errno));
-                    exit(errno);
-                }
+                return update_project(path, fs_path, url, opts);
             } else {
-                printf("Cloning %s %s to %s\n", url, path, fs_path);
-                if (opts->dry_run) exit(0);
-
-                char* const argv[] = {"git",     "clone", "--quiet",
-                                      "--depth", "1",     "--no-tags",
-                                      url,       fs_path, 0};
-
-                if (freopen("/dev/null", "w", stdout) == NULL) {
-                    fprintf(stderr, "Failed to silence subprocess: err=%s\n",
-                            strerror(errno));
-                }
-
-                if (execvp("git", argv) == -1) {
-                    fprintf(stderr, "Failed to clone: url=%s err=%s\n", url,
-                            strerror(errno));
-                    exit(errno);
-                }
+                return clone_project(path, fs_path, url, opts);
             }
             assert(0 && "Unreachable");
         } else {
@@ -456,11 +482,7 @@ static int clone_projects(gbArray(gbString) path_with_namespaces,
         }
     }
 
-    if (chdir(cwd) == -1) {
-        fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n",
-                opts->root_directory, strerror(errno));
-        return errno;
-    }
+    if ((res = change_directory(cwd)) != 0) return res;
 
     return 0;
 }
