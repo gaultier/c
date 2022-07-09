@@ -489,30 +489,6 @@ static int clone_projects_at(gbArray(gbString) path_with_namespaces,
     return 0;
 }
 
-static int clone_projects(gbArray(gbString) path_with_namespaces,
-                          gbArray(gbString) git_urls, const options* opts,
-                          int queue) {
-    assert(opts != NULL);
-    assert(gb_array_count(path_with_namespaces) == gb_array_count(git_urls));
-
-    int res = 0;
-    static char cwd[MAXPATHLEN] = "";
-    if (getcwd(cwd, MAXPATHLEN) == NULL) {
-        fprintf(stderr, "Failed to getcwd(2): err=%s\n", strerror(errno));
-        return errno;
-    }
-
-    if ((res = change_directory(opts->root_directory)) != 0) return res;
-
-    printf("Changed directory to: %s\n", opts->root_directory);
-
-    clone_projects_at(path_with_namespaces, git_urls, opts, queue, 0);
-
-    if ((res = change_directory(cwd)) != 0) return res;
-
-    return res;
-}
-
 int main(int argc, char* argv[]) {
     gettimeofday(&start, NULL);
     gbAllocator allocator = gb_heap_allocator();
