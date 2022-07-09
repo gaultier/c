@@ -134,8 +134,9 @@ static size_t on_header(char* buffer, size_t size, size_t nitems,
     return nitems * size;
 }
 
-static void api_init(gbAllocator allocator, api_t* api, gbString token) {
+static void api_init(gbAllocator allocator, api_t* api, options* opts) {
     assert(api != NULL);
+    assert(opts != NULL);
 
     api->pagination = (pagination_t){.current_page = 1};
     api->response_body = gb_string_make_reserve(allocator, 20 * 1024 * 1024);
@@ -143,18 +144,20 @@ static void api_init(gbAllocator allocator, api_t* api, gbString token) {
     assert(api->http_handle != NULL);
 
     api->url = gb_string_make_reserve(allocator, MAX_URL_LEN);
+    api->url = gb_string_append(api->url, opts->url);
     curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose);
     curl_easy_setopt(api->http_handle, CURLOPT_FOLLOWLOCATION, true);
     curl_easy_setopt(api->http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
     curl_easy_setopt(api->http_handle, CURLOPT_WRITEFUNCTION,
                      on_http_response_body_chunk);
-    curl_easy_setopt(api->http_handle, CURLOPT_WRITEDATA, api->response_body);
+    curl_easy_setopt(api->http_handle, CURLOPT_WRITEDATA, &api->response_body);
     curl_easy_setopt(api->http_handle, CURLOPT_HEADERFUNCTION, on_header);
     curl_easy_setopt(api->http_handle, CURLOPT_HEADERDATA, &api->pagination);
 
     struct curl_slist* list = NULL;
     gbString token_header = gb_string_make_reserve(allocator, 512);
-    token_header = gb_string_append_fmt(token, "PRIVATE-TOKEN: %s", token);
+    token_header = gb_string_append_fmt(token_header, "PRIVATE-TOKEN: %s",
+                                        opts->api_token);
     list = curl_slist_append(list, token_header);
 
     curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list);
@@ -213,24 +216,27 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
 
 static int api_query_projects(gbAllocator allocator, api_t* api) {
     int res = 0;
-    do {
-        api->url = gb_string_append_fmt(
-            api->url,
-            "%s/api/v4/"
-            "projects?statistics=false&top_level=&with_custom_"
-            "attributes=false&simple=true&per_page=100&page=%llu&all_available="
-            "true&order_by=id&sort=asc",
-            api->url, api->pagination.current_page);
-        curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url);
+    api->url = gb_string_append_fmt(
+        api->url,
+        "/api/v4/"
+        "projects?statistics=false&top_level=&with_custom_"
+        "attributes=false&simple=true&per_page=100&page=%llu&all_available="
+        "true&order_by=id&sort=asc",
+        api->pagination.current_page);
+    curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url);
 
-        if ((res = curl_easy_perform(api->http_handle)) != 0) {
-            fprintf(stderr, "Failed to query api: response_body=%s res=%d\n",
-                    api->response_body, res);
-            return res;
-        }
+    if ((res = curl_easy_perform(api->http_handle)) != 0) {
+        i32 error;
+        curl_easy_getinfo(api->http_handle, CURLINFO_OS_ERRNO, &error);
+        fprintf(stderr,
+                "Failed to query api: url=%s response_body=%s res=%d err=%s "
+                "errno=%d\n",
+                api->url, api->response_body, res, curl_easy_strerror(res),
+                error);
+        return res;
+    }
 
-        api->pagination.current_page += 1;
-    } while (api->pagination.current_page <= api->pagination.total_pages);
+    api->pagination.current_page += 1;
 
     return res;
 }
@@ -536,9 +542,9 @@ int main(int argc, char* argv[]) {
 
     // Start process exit watcher thread
     pthread_t process_exit_watcher = {0};
+    watch_project_cloning_arg arg = {
+        .queue = queue, .path_with_namespaces = path_with_namespaces};
     {
-        watch_project_cloning_arg arg = {
-            .queue = queue, .path_with_namespaces = path_with_namespaces};
         if (pthread_create(&process_exit_watcher, NULL, watch_project_cloning,
                            &arg) != 0) {
             fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
@@ -547,20 +553,37 @@ int main(int argc, char* argv[]) {
     }
 
     api_t api = {0};
-    api_init(allocator, &api, opts.api_token);
-    res = api_query_projects(allocator, &api);
-    if (res != 0) return res;
-
+    api_init(allocator, &api, &opts);
     gbArray(gbString) git_urls;
     gb_array_init_reserve(git_urls, allocator, 100 * 1000);
 
-    res =
-        api_parse_projects(api.response_body, &path_with_namespaces, &git_urls);
-    if (res != 0) return res;
-    gb_string_free(api.response_body);
+    static char cwd[MAXPATHLEN] = "";
+    if (getcwd(cwd, MAXPATHLEN) == NULL) {
+        fprintf(stderr, "Failed to getcwd(2): err=%s\n", strerror(errno));
+        return errno;
+    }
 
-    res = clone_projects(path_with_namespaces, git_urls, &opts, queue);
-    if (res != 0) return res;
+    if ((res = change_directory(opts.root_directory)) != 0) return res;
+
+    printf("Changed directory to: %s\n", opts.root_directory);
+
+    do {
+        const u64 last_projects_count = gb_array_count(path_with_namespaces);
+        if ((res = api_query_projects(allocator, &api)) != 0) goto end;
+
+        if ((res = api_parse_projects(api.response_body, &path_with_namespaces,
+                                      &git_urls)) != 0)
+            goto end;
+
+        if ((res = clone_projects_at(path_with_namespaces, git_urls, &opts,
+                                     queue, last_projects_count)) != 0)
+            goto end;
+    } while (api.pagination.current_page <= api.pagination.total_pages);
+
+    // TODO: change directory back even on error
+end:
+    if ((res = change_directory(cwd)) != 0) return res;
+    /* gb_string_free(api.response_body); */
 
     pthread_join(process_exit_watcher, NULL);
 }
