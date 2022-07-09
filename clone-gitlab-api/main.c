@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <curl/curl.h>
 #include <getopt.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <sys/event.h>
@@ -47,6 +48,8 @@ typedef struct {
 typedef struct {
     int queue;
     gbArray(gbString) path_with_namespaces;
+    pthread_mutex_t project_mutex;
+    gbAtomic64 project_count;
 } watch_project_cloning_arg;
 
 static void print_usage(int argc, char* argv[]) {
@@ -243,7 +246,9 @@ static int api_query_projects(gbAllocator allocator, api_t* api) {
 
 static int api_parse_projects(gbString body,
                               gbArray(gbString) * path_with_namespaces,
-                              gbArray(gbString) * git_urls) {
+                              gbArray(gbString) * git_urls,
+                              pthread_mutex_t* project_mutex,
+                              gbAtomic64* project_count) {
     jsmn_parser p;
     gbArray(jsmntok_t) tokens;
     gb_array_init_reserve(tokens, gb_heap_allocator(), 100 * 1000);
@@ -294,14 +299,20 @@ static int api_parse_projects(gbString body,
                       key_path_with_namespace_len)) {
             gbString s =
                 gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
+            pthread_mutex_lock(project_mutex);
             gb_array_append(*path_with_namespaces, s);
+            gb_atomic64_fetch_add(project_count, 1);
+            pthread_mutex_unlock(project_mutex);
             i++;
             continue;
         }
         if (str_equal(cur_s, cur_s_len, key_git_url, key_git_url_len)) {
             gbString s =
                 gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
+            pthread_mutex_lock(&project_mutex);
             gb_array_append(*git_urls, s);
+            gb_atomic64_fetch_add(project_count, 1);
+            pthread_mutex_unlock(&project_mutex);
             i++;
         }
     }
@@ -313,25 +324,24 @@ cleanup:
     return res;
 }
 
-static void* watch_project_cloning(void* varg) {
+static void* watch_workers(void* varg) {
     assert(varg != NULL);
     watch_project_cloning_arg* arg = varg;
 
     u64 finished = 0;
-    const u64 project_count = gb_array_count(arg->path_with_namespaces);
-    gbArray(struct kevent) events;
-    gb_array_init_reserve(events, gb_heap_allocator(), project_count);
+    struct kevent events[512] = {0};
 
     const bool is_tty = isatty(2);
 
-    while (finished < project_count) {
-        int event_count =
-            kevent(arg->queue, NULL, 0, events, gb_array_capacity(events), 0);
+    do {
+        /* printf("[D002] Watching"); */
+        int event_count = kevent(arg->queue, NULL, 0, events, 512, 0);
         if (event_count == -1) {
             fprintf(stderr, "Failed to kevent(2) to query events: err=%s\n",
                     strerror(errno));
             return NULL;
         }
+        /* printf("[D003] Watching %d\n", event_count); */
 
         for (int i = 0; i < event_count; i++) {
             const struct kevent* const event = &events[i];
@@ -341,27 +351,32 @@ static void* watch_project_cloning(void* varg) {
                 const int exit_status = (event->data >> 8);
                 const int project_i = (int)(u64)event->udata;
                 assert(project_i >= 0);
-                assert(project_i < project_count);
 
                 finished += 1;
+                pthread_mutex_lock(&arg->project_mutex);
                 if (exit_status == 0) {
                     printf(
                         "%s[%llu/%llu] ✓ "
                         "%s%s\n",
-                        pg_colors[is_tty][COL_GREEN], finished, project_count,
+                        pg_colors[is_tty][COL_GREEN], finished,
+                        gb_atomic64_load(&arg->project_count),
                         arg->path_with_namespaces[project_i],
                         pg_colors[is_tty][COL_RESET]);
                 } else {
                     printf(
                         "%s[%llu/%llu] ❌ "
                         "%s (%d)%s\n",
-                        pg_colors[is_tty][COL_RED], finished, project_count,
+                        pg_colors[is_tty][COL_RED], finished,
+                        gb_atomic64_load(&arg->project_count),
                         arg->path_with_namespaces[project_i], exit_status,
                         pg_colors[is_tty][COL_RESET]);
                 }
+                pthread_mutex_unlock(&arg->project_mutex);
             }
         }
-    }
+    } while (gb_atomic64_load(&arg->project_count) == 0 ||
+             finished < gb_atomic64_load(&arg->project_count));
+
     struct timeval end = {0};
     gettimeofday(&end, NULL);
     printf("Finished in %lds\n", end.tv_sec - start.tv_sec);
@@ -382,7 +397,6 @@ static int worker_update_project(gbString path, gbString fs_path, gbString url,
     char* const argv[] = {"git", "pull",      "--quiet", "--depth",
                           "1",   "--no-tags", 0};
 
-    fflush(stdout);
     if (freopen("/dev/null", "w", stdout) == NULL) {
         fprintf(stderr, "Failed to silence subprocess: err=%s\n",
                 strerror(errno));
@@ -520,9 +534,10 @@ int main(int argc, char* argv[]) {
     pthread_t process_exit_watcher = {0};
     watch_project_cloning_arg arg = {
         .queue = queue, .path_with_namespaces = path_with_namespaces};
+    pthread_mutex_init(&arg.project_mutex, NULL);
     {
-        if (pthread_create(&process_exit_watcher, NULL, watch_project_cloning,
-                           &arg) != 0) {
+        if (pthread_create(&process_exit_watcher, NULL, watch_workers, &arg) !=
+            0) {
             fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
                     strerror(errno));
         }
@@ -545,15 +560,20 @@ int main(int argc, char* argv[]) {
 
     do {
         const u64 last_projects_count = gb_array_count(path_with_namespaces);
+        fprintf(stderr, "[D001] page=%llu/%llu\n", api.pagination.current_page,
+                api.pagination.total_pages);
         if ((res = api_query_projects(allocator, &api)) != 0) goto end;
 
         if ((res = api_parse_projects(api.response_body, &path_with_namespaces,
-                                      &git_urls)) != 0)
+                                      &git_urls, &arg.project_mutex,
+                                      &arg.project_count)) != 0)
             goto end;
 
         if ((res = clone_projects_at(path_with_namespaces, git_urls, &opts,
                                      queue, last_projects_count)) != 0)
             goto end;
+
+        gb_string_clear(api.response_body);
     } while (api.pagination.current_page <= api.pagination.total_pages);
 
     // TODO: change directory back even on error
