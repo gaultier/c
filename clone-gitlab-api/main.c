@@ -103,9 +103,9 @@ static u64 str_to_u64(const char* s, usize s_len) {
     return res;
 }
 
-static size_t on_http_response_body_chunk(void* contents, size_t size,
-                                          size_t nmemb, void* userp) {
-    const size_t real_size = size * nmemb;
+static usize on_http_response_body_chunk(void* contents, usize size,
+                                         usize nmemb, void* userp) {
+    const usize real_size = size * nmemb;
     gbString* response_body = userp;
     *response_body =
         gb_string_append_length(*response_body, contents, real_size);
@@ -113,12 +113,11 @@ static size_t on_http_response_body_chunk(void* contents, size_t size,
     return real_size;
 }
 
-static size_t on_header(char* buffer, size_t size, size_t nitems,
-                        void* userdata) {
+static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
     assert(buffer != NULL);
     assert(userdata != NULL);
 
-    const size_t real_size = nitems * size;
+    const usize real_size = nitems * size;
     const char* val = memchr(buffer, ':', real_size);
     if (val == NULL) return real_size;  // Could be HTTP/1.1 OK, skip
 
