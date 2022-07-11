@@ -420,7 +420,7 @@ static void* watch_workers(void* varg) {
             if ((event->filter == EVFILT_PROC) &&
                 (event->fflags & NOTE_EXITSTATUS)) {
                 const int exit_status = (event->data >> 8);
-                const char* const path_with_namespace = event->udata;
+                char* const path_with_namespace = event->udata;
 
                 finished += 1;
                 if (exit_status == 0) {
@@ -438,6 +438,7 @@ static void* watch_workers(void* varg) {
                         arg->project_count, path_with_namespace, exit_status,
                         pg_colors[is_tty][COL_RESET]);
                 }
+                gb_string_free(path_with_namespace);
             }
         }
     } while (finished < arg->project_count);
@@ -680,8 +681,6 @@ end:
     if ((res = change_directory(cwd)) != 0) return res;
     api_destroy(&api);
 
-    for (int i = 0; i < gb_array_count(path_with_namespaces); i++)
-        gb_string_free(path_with_namespaces[i]);
     gb_array_free(path_with_namespaces);
 
     for (int i = 0; i < gb_array_count(git_urls); i++)
