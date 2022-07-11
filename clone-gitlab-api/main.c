@@ -51,7 +51,6 @@ typedef struct {
 typedef struct {
     int queue;
     gbArray(gbString) path_with_namespaces;
-    pthread_mutex_t project_mutex;
     u64 project_count;
 } watch_project_cloning_arg;
 
@@ -305,8 +304,7 @@ static int api_query_projects(gbAllocator allocator, api_t* api,
 
 static int api_parse_projects(api_t* api,
                               gbArray(gbString) * path_with_namespaces,
-                              gbArray(gbString) * git_urls,
-                              pthread_mutex_t* project_mutex) {
+                              gbArray(gbString) * git_urls) {
     jsmn_parser p;
 
     gb_array_clear(api->tokens);
@@ -357,18 +355,14 @@ static int api_parse_projects(api_t* api,
                       key_path_with_namespace_len)) {
             gbString s =
                 gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
-            pthread_mutex_lock(project_mutex);
             gb_array_append(*path_with_namespaces, s);
-            pthread_mutex_unlock(project_mutex);
             i++;
             continue;
         }
         if (str_equal(cur_s, cur_s_len, key_git_url, key_git_url_len)) {
             gbString s =
                 gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
-            pthread_mutex_lock(project_mutex);
             gb_array_append(*git_urls, s);
-            pthread_mutex_unlock(project_mutex);
             i++;
         }
     }
@@ -404,7 +398,6 @@ static void* watch_workers(void* varg) {
                 assert(project_i >= 0);
 
                 finished += 1;
-                pthread_mutex_lock(&arg->project_mutex);
                 if (exit_status == 0) {
                     printf(
                         "%s[%llu/%llu] ✓ "
@@ -422,7 +415,6 @@ static void* watch_workers(void* varg) {
                         arg->path_with_namespaces[project_i], exit_status,
                         pg_colors[is_tty][COL_RESET]);
                 }
-                pthread_mutex_unlock(&arg->project_mutex);
             }
         }
     } while (finished < arg->project_count);
@@ -542,16 +534,13 @@ static int clone_projects_at(gbArray(gbString) path_with_namespaces,
 static int api_fetch_projects(gbAllocator allocator, api_t* api,
                               gbArray(gbString) path_with_namespaces,
                               gbArray(gbString) git_urls, const options* opts,
-                              pthread_mutex_t* project_mutex, int queue) {
+                              int queue) {
     int res = 0;
-    pthread_mutex_lock(project_mutex);
     const u64 last_projects_count = gb_array_count(path_with_namespaces);
-    pthread_mutex_unlock(project_mutex);
 
     if ((res = api_query_projects(allocator, api, opts->url)) != 0) goto end;
 
-    if ((res = api_parse_projects(api, &path_with_namespaces, &git_urls,
-                                  project_mutex)) != 0)
+    if ((res = api_parse_projects(api, &path_with_namespaces, &git_urls)) != 0)
         goto end;
 
     if ((res = clone_projects_at(path_with_namespaces, git_urls, opts, queue,
@@ -589,7 +578,9 @@ int main(int argc, char* argv[]) {
     }
 
     gbArray(gbString) path_with_namespaces;
-    gb_array_init_reserve(path_with_namespaces, allocator, 100 * 1000);
+    // Need a big capacity to be pretty sure it never gets reallocated and thus
+    // it is thread-safe to read/write it concurrently
+    gb_array_init_reserve(path_with_namespaces, allocator, 10 * 1000 * 1000);
 
     api_t api = {0};
     api_init(allocator, &api, &opts);
@@ -610,11 +601,9 @@ int main(int argc, char* argv[]) {
         .queue = queue,
         .path_with_namespaces = path_with_namespaces,
     };
-    assert(pthread_mutex_init(&arg.project_mutex, NULL) == 0);
 
-    if ((res =
-             api_fetch_projects(allocator, &api, path_with_namespaces, git_urls,
-                                &opts, &arg.project_mutex, queue)) != 0)
+    if ((res = api_fetch_projects(allocator, &api, path_with_namespaces,
+                                  git_urls, &opts, queue)) != 0)
         goto end;
 
     assert(api.pagination.total_pages > 0);
@@ -635,8 +624,7 @@ int main(int argc, char* argv[]) {
 
     while (api.pagination.current_page <= api.pagination.total_pages) {
         if ((res = api_fetch_projects(allocator, &api, path_with_namespaces,
-                                      git_urls, &opts, &arg.project_mutex,
-                                      queue)) != 0)
+                                      git_urls, &opts, queue)) != 0)
             goto end;
     }
 
