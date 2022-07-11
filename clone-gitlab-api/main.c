@@ -674,10 +674,10 @@ int main(int argc, char* argv[]) {
             goto end;
     }
 
-    // TODO: change directory back even on error
 end:
     if ((res = change_directory(cwd)) != 0) return res;
     api_destroy(&api);
+    gb_array_free(git_urls);
 
     pthread_join(process_exit_watcher, NULL);
 }
