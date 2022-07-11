@@ -2,7 +2,7 @@
 
 Clone locally all git projects from Gitlab. This is handy for example to search locally with `ripgrep` very quickly, or hack on projects.
 
-Every project is cloned concurrently for maximum performance and the memory usage remains under 30MiB even with thousands of big projects (without counting git, of course).
+Every project is cloned concurrently for maximum performance and the memory usage remains under 30MiB even with thousands of big projects (without counting git, of course), and the single executable is smaller than 100 KiB.
 
 ## Usage
 
@@ -14,7 +14,7 @@ Usage:
 Clone all git repositories from Gitlab.
 
 USAGE:
-	./clone-gitlab-api [OPTIONS]
+	clone-gitlab-api [OPTIONS]
 
 OPTIONS:
 	-d, --root-directory <DIRECTORY>    The root directory to clone all the projects
@@ -60,6 +60,7 @@ Finished in 2s
 ## Limitations
 
 - Due to [Gitlab's pagination behavior](https://docs.gitlab.com/ee/api/index.html#pagination-response-headers) when there are lots of items, some HTTP headers which we rely upon are missing in the response, so the command will fail.
+- We use `kqueue` internally so it's MacOS/BSDs only for now. It should work on Linux by installing `libkqueue` but this is untested for now
 
 ## Roadmap
 
@@ -69,3 +70,4 @@ Finished in 2s
 - [ ] Max network rate CLI option
 - [ ] Git clone/pull options
 - [ ] Do not rely on HTTP headers which are sometimes missing
+- [ ] Linux support
