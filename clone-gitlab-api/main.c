@@ -93,14 +93,22 @@ static void print_usage(int argc, char* argv[]) {
 }
 
 static bool str_equal(const char* a, usize a_len, const char* b, usize b_len) {
+    assert(a != NULL);
+    assert(b != NULL);
+
     return a_len == b_len && memcmp(a, b, a_len) == 0;
 }
 
 static bool str_equal_c(const char* a, usize a_len, const char* b0) {
+    assert(a != NULL);
+    assert(b0 != NULL);
+
     return str_equal(a, a_len, b0, strlen(b0));
 }
 
 static bool is_directory(const char* path) {
+    assert(path != NULL);
+
     struct stat s = {0};
     if (stat(path, &s) == -1) {
         return false;
@@ -109,6 +117,8 @@ static bool is_directory(const char* path) {
 }
 
 static u64 str_to_u64(const char* s, usize s_len) {
+    assert(s != NULL);
+
     u64 res = 0;
     for (u64 i = 0; i < s_len; i++) {
         const char c = s[i];
@@ -125,6 +135,9 @@ static u64 str_to_u64(const char* s, usize s_len) {
 
 static usize on_http_response_body_chunk(void* contents, usize size,
                                          usize nmemb, void* userp) {
+    assert(contents != NULL);
+    assert(userp != NULL);
+
     const usize real_size = size * nmemb;
     gbString* response_body = userp;
     *response_body =
@@ -200,6 +213,8 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
 }
 
 static void api_destroy(api_t* api) {
+    assert(api != NULL);
+
     gb_string_free(api->response_body);
     gb_array_free(api->tokens);
 }
@@ -274,6 +289,10 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
 
 static int api_query_projects(gbAllocator allocator, api_t* api,
                               gbString base_url) {
+    assert(api != NULL);
+    assert(api->url != NULL);
+    assert(base_url != NULL);
+
     int res = 0;
     gb_string_clear(api->url);
     api->url = gb_string_append_fmt(
@@ -304,6 +323,12 @@ static int api_query_projects(gbAllocator allocator, api_t* api,
 static int api_parse_projects(api_t* api,
                               gbArray(gbString) * path_with_namespaces,
                               gbArray(gbString) * git_urls) {
+    assert(api != NULL);
+    assert(path_with_namespaces != NULL);
+    assert(git_urls != NULL);
+    assert(*path_with_namespaces != NULL);
+    assert(*git_urls != NULL);
+
     jsmn_parser p;
 
     gb_array_clear(api->tokens);
@@ -424,6 +449,11 @@ static void* watch_workers(void* varg) {
 
 static int worker_update_project(gbString path, gbString fs_path, gbString url,
                                  const options* opts) {
+    assert(path != NULL);
+    assert(fs_path != NULL);
+    assert(url != NULL);
+    assert(opts != NULL);
+
     if (chdir(fs_path) == -1) {
         fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n", fs_path,
                 strerror(errno));
@@ -444,6 +474,11 @@ static int worker_update_project(gbString path, gbString fs_path, gbString url,
 
 static int worker_clone_project(gbString path, gbString fs_path, gbString url,
                                 const options* opts) {
+    assert(path != NULL);
+    assert(fs_path != NULL);
+    assert(url != NULL);
+    assert(opts != NULL);
+
     char* const argv[] = {"git",       "clone", "--quiet", "--depth", "1",
                           "--no-tags", url,     fs_path,   0};
 
@@ -457,6 +492,8 @@ static int worker_clone_project(gbString path, gbString fs_path, gbString url,
 }
 
 static int change_directory(char* path) {
+    assert(path != NULL);
+
     if (chdir(path) == -1) {
         if (errno == ENOENT) {
             if (mkdir(path, S_IRWXU) == -1) {
@@ -481,6 +518,8 @@ static int change_directory(char* path) {
 
 static int record_process_finished_event(int queue, pid_t pid,
                                          char* path_with_namespace) {
+    assert(path_with_namespace != NULL);
+
     struct kevent event = {
         .filter = EVFILT_PROC,
         .ident = pid,
@@ -500,6 +539,10 @@ static int record_process_finished_event(int queue, pid_t pid,
 static int clone_projects_at(gbArray(gbString) path_with_namespaces,
                              gbArray(gbString) git_urls, const options* opts,
                              int queue, u64 project_offset) {
+    assert(path_with_namespaces != NULL);
+    assert(git_urls != NULL);
+    assert(opts != NULL);
+
     for (int i = project_offset; i < gb_array_count(path_with_namespaces);
          i++) {
         gbString path = path_with_namespaces[i];
@@ -532,6 +575,11 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
                               gbArray(gbString) path_with_namespaces,
                               gbArray(gbString) git_urls, const options* opts,
                               int queue) {
+    assert(api != NULL);
+    assert(path_with_namespaces != NULL);
+    assert(git_urls != NULL);
+    assert(opts != NULL);
+
     int res = 0;
     const u64 last_projects_count =
         path_with_namespaces == NULL ? 0 : gb_array_count(path_with_namespaces);
