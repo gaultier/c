@@ -49,9 +49,8 @@ typedef struct {
 } pagination_t;
 
 typedef struct {
-    int queue;
-    gbArray(gbString) path_with_namespaces;
-    u64 project_count;
+    const int queue;
+    const u64 project_count;
 } watch_project_cloning_arg;
 
 typedef struct {
@@ -394,8 +393,7 @@ static void* watch_workers(void* varg) {
             if ((event->filter == EVFILT_PROC) &&
                 (event->fflags & NOTE_EXITSTATUS)) {
                 const int exit_status = (event->data >> 8);
-                const int project_i = (int)(u64)event->udata;
-                assert(project_i >= 0);
+                const char* const path_with_namespace = event->udata;
 
                 finished += 1;
                 if (exit_status == 0) {
@@ -403,16 +401,14 @@ static void* watch_workers(void* varg) {
                         "%s[%llu/%llu] ✓ "
                         "%s%s\n",
                         pg_colors[is_tty][COL_GREEN], finished,
-                        arg->project_count,
-                        arg->path_with_namespaces[project_i],
+                        arg->project_count, path_with_namespace,
                         pg_colors[is_tty][COL_RESET]);
                 } else {
                     printf(
                         "%s[%llu/%llu] ❌ "
                         "%s (%d)%s\n",
                         pg_colors[is_tty][COL_RED], finished,
-                        arg->project_count,
-                        arg->path_with_namespaces[project_i], exit_status,
+                        arg->project_count, path_with_namespace, exit_status,
                         pg_colors[is_tty][COL_RESET]);
                 }
             }
@@ -483,13 +479,14 @@ static int change_directory(char* path) {
     return 0;
 }
 
-static int record_process_finished_event(int queue, pid_t pid, int i) {
+static int record_process_finished_event(int queue, pid_t pid,
+                                         char* path_with_namespace) {
     struct kevent event = {
         .filter = EVFILT_PROC,
         .ident = pid,
         .flags = EV_ADD | EV_ONESHOT,
         .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
-        .udata = (void*)(u64)i,
+        .udata = path_with_namespace,
     };
     if (kevent(queue, &event, 1, NULL, 0, 0) == -1) {
         fprintf(stderr,
@@ -505,12 +502,12 @@ static int clone_projects_at(gbArray(gbString) path_with_namespaces,
                              int queue, u64 project_offset) {
     for (int i = project_offset; i < gb_array_count(path_with_namespaces);
          i++) {
+        gbString path = path_with_namespaces[i];
         pid_t pid = fork();
         if (pid == -1) {
             fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
             return errno;
         } else if (pid == 0) {
-            gbString path = path_with_namespaces[i];
             gbString fs_path = gb_string_duplicate(gb_heap_allocator(), path);
             for (int j = 0; j < gb_string_length(fs_path); j++) {
                 if (fs_path[j] == '/') fs_path[j] = '.';
@@ -524,7 +521,7 @@ static int clone_projects_at(gbArray(gbString) path_with_namespaces,
             assert(0 && "Unreachable");
         } else {
             int res = 0;
-            if ((res = record_process_finished_event(queue, pid, i)) != 0)
+            if ((res = record_process_finished_event(queue, pid, path)) != 0)
                 return res;
         }
     }
@@ -597,18 +594,16 @@ int main(int argc, char* argv[]) {
 
     printf("Changed directory to: %s\n", opts.root_directory);
 
-    watch_project_cloning_arg arg = {
-        .queue = queue,
-        .path_with_namespaces = path_with_namespaces,
-    };
-
     if ((res = api_fetch_projects(allocator, &api, path_with_namespaces,
                                   git_urls, &opts, queue)) != 0)
         goto end;
 
     assert(api.pagination.total_pages > 0);
     assert(api.pagination.current_page == 2);
-    arg.project_count = api.pagination.total_items;
+    watch_project_cloning_arg arg = {
+        .queue = queue,
+        .project_count = api.pagination.total_items,
+    };
 
     // Start process exit watcher thread, only after we know from the first API
     // query how many items there are
