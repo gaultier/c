@@ -63,12 +63,35 @@ typedef struct {
 
 static void print_usage(int argc, char* argv[]) {
     printf(
-        "%s\n"
-        "\t[(-d|--root-directory) <directory>]\n"
-        "\t[(-u|--url) <gitlab url>]\n"
-        "\t[(-t|--api-token) <api token>]\n"
-        "\t[-h|--help]\n"
-        "\t[-v|--verbose]\n",
+        "Clone all git repositories from Gitlab.\n\n"
+        "USAGE:\n"
+        "\t%s [OPTIONS]\n\n"
+        "OPTIONS:\n"
+        "\t-d, --root-directory <DIRECTORY>    The root directory to clone all "
+        "the projects\n"
+        "\t-u, --url <GITLAB URL>\n"
+        "\t-t, --api-token <API TOKEN>         The api token from gitlab to "
+        "fetch "
+        "private repositories\n"
+        "\t-h, --help\n"
+        "\t-v, --verbose\n\n"
+        "The repositories are cloned with git over ssh with a depth of 1, "
+        "without tags, in a flat manner.\n"
+        "If some repositories already exist in the root directory, they are "
+        "updated instead of cloned.\n"
+        "If some repositories fail, this command does not stop and tries to "
+        "clone or update the other repositories.\n\n"
+        "EXAMPLES:\n\n"
+        "Clone all repositories from gitlab.com with the token 'abcdef123' "
+        "in "
+        "the directory /tmp/git:\n\n"
+        "\tclone-gitlab-api -u gitlab.com -t abcdef123 -d /tmp/git/\n\n"
+        "Clone all repositories from gitlab.custom.com with the token "
+        "'abcdef123' "
+        "in "
+        "the directory /tmp/git verbosely:\n\n"
+        "\tclone-gitlab-api -u gitlab.custom.com -t abcdef123 -d /tmp/git/ "
+        "-v\n\n",
         argv[0]);
 }
 
@@ -419,8 +442,6 @@ static int worker_update_project(gbString path, gbString fs_path, gbString url,
         exit(errno);
     }
 
-    /* printf("Updating %s in %s\n", path, fs_path); */
-
     char* const argv[] = {"git", "pull",      "--quiet", "--depth",
                           "1",   "--no-tags", 0};
 
@@ -435,8 +456,6 @@ static int worker_update_project(gbString path, gbString fs_path, gbString url,
 
 static int worker_clone_project(gbString path, gbString fs_path, gbString url,
                                 const options* opts) {
-    /* printf("Cloning %s %s to %s\n", url, path, fs_path); */
-
     char* const argv[] = {"git",       "clone", "--quiet", "--depth", "1",
                           "--no-tags", url,     fs_path,   0};
 
