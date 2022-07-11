@@ -64,6 +64,10 @@ $ brew install curl
 $ make
 ```
 
+## Limitations
+
+- Due to [Gitlab's pagination behavior](https://docs.gitlab.com/ee/api/index.html#pagination-response-headers) when there are lots of items, some HTTP headers which we rely upon are missing in the response, so the command will fail.
+
 ## Roadmap
 
 - [ ] Retrying
@@ -71,3 +75,4 @@ $ make
 - [ ] Stop if no project could be fetched from the Gitlab API at all
 - [ ] Max network rate CLI option
 - [ ] Git clone/pull options
+- [ ] Do not rely on HTTP headers which are sometimes missing
