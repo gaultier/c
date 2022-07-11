@@ -183,7 +183,7 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
     assert(opts->url != NULL);
 
     api->pagination = (pagination_t){.current_page = 1};
-    api->response_body = gb_string_make_reserve(allocator, 20 * 1024 * 1024);
+    api->response_body = gb_string_make_reserve(allocator, 200 * 1024);
 
     gb_array_init_reserve(api->tokens, gb_heap_allocator(), 100 * 1000);
 
@@ -203,7 +203,8 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
 
     if (opts->api_token != NULL) {
         struct curl_slist* list = NULL;
-        gbString token_header = gb_string_make_reserve(allocator, 512);
+        gbString token_header = gb_string_make_reserve(
+            allocator, 20 + gb_string_length(opts->api_token));
         token_header = gb_string_append_fmt(token_header, "PRIVATE-TOKEN: %s",
                                             opts->api_token);
         list = curl_slist_append(list, token_header);
