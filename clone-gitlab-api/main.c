@@ -328,6 +328,8 @@ static int api_parse_projects(api_t* api,
     assert(api != NULL);
     assert(path_with_namespaces != NULL);
     assert(git_urls != NULL);
+    assert(path_with_namespaces != NULL);
+    assert(git_urls != NULL);
     assert(*path_with_namespaces != NULL);
     assert(*git_urls != NULL);
 
@@ -575,31 +577,35 @@ static int clone_projects_at(gbArray(gbString) path_with_namespaces,
 }
 
 static int api_fetch_projects(gbAllocator allocator, api_t* api,
-                              gbArray(gbString) path_with_namespaces,
-                              gbArray(gbString) git_urls, const options* opts,
+                              gbArray(gbString) * path_with_namespaces,
+                              gbArray(gbString) * git_urls, const options* opts,
                               int queue) {
     assert(api != NULL);
+    assert(path_with_namespaces != NULL);
+    assert(git_urls != NULL);
     assert(opts != NULL);
 
     int res = 0;
-    const u64 last_projects_count =
-        path_with_namespaces == NULL ? 0 : gb_array_count(path_with_namespaces);
+    const u64 last_projects_count = *path_with_namespaces == NULL
+                                        ? 0
+                                        : gb_array_count(*path_with_namespaces);
 
     if ((res = api_query_projects(allocator, api, opts->url)) != 0) goto end;
 
-    if (path_with_namespaces == NULL) {
-        gb_array_init_reserve(path_with_namespaces, allocator,
+    if (*path_with_namespaces == NULL) {
+        gb_array_init_reserve(*path_with_namespaces, allocator,
                               api->pagination.total_items);
-        gb_array_init_reserve(git_urls, allocator, api->pagination.total_items);
+        gb_array_init_reserve(*git_urls, allocator,
+                              api->pagination.total_items);
     }
 
-    assert(path_with_namespaces != NULL);
-    assert(git_urls != NULL);
+    assert(*path_with_namespaces != NULL);
+    assert(*git_urls != NULL);
 
-    if ((res = api_parse_projects(api, &path_with_namespaces, &git_urls)) != 0)
+    if ((res = api_parse_projects(api, path_with_namespaces, git_urls)) != 0)
         goto end;
 
-    if ((res = clone_projects_at(path_with_namespaces, git_urls, opts, queue,
+    if ((res = clone_projects_at(*path_with_namespaces, *git_urls, opts, queue,
                                  last_projects_count)) != 0)
         goto end;
 
@@ -648,8 +654,8 @@ int main(int argc, char* argv[]) {
 
     gbArray(gbString) path_with_namespaces = NULL;
     gbArray(gbString) git_urls = NULL;
-    if ((res = api_fetch_projects(allocator, &api, path_with_namespaces,
-                                  git_urls, &opts, queue)) != 0)
+    if ((res = api_fetch_projects(allocator, &api, &path_with_namespaces,
+                                  &git_urls, &opts, queue)) != 0)
         goto end;
 
     assert(api.pagination.total_pages > 0);
@@ -672,8 +678,8 @@ int main(int argc, char* argv[]) {
     }
 
     while (api.pagination.current_page <= api.pagination.total_pages) {
-        if ((res = api_fetch_projects(allocator, &api, path_with_namespaces,
-                                      git_urls, &opts, queue)) != 0)
+        if ((res = api_fetch_projects(allocator, &api, &path_with_namespaces,
+                                      &git_urls, &opts, queue)) != 0)
             goto end;
     }
 
