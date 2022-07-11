@@ -419,15 +419,10 @@ static int worker_update_project(gbString path, gbString fs_path, gbString url,
         exit(errno);
     }
 
-    printf("Updating %s in %s\n", path, fs_path);
+    /* printf("Updating %s in %s\n", path, fs_path); */
 
     char* const argv[] = {"git", "pull",      "--quiet", "--depth",
                           "1",   "--no-tags", 0};
-
-    if (freopen("/dev/null", "w", stdout) == NULL) {
-        fprintf(stderr, "Failed to silence subprocess: err=%s\n",
-                strerror(errno));
-    }
 
     if (execvp("git", argv) == -1) {
         fprintf(stderr, "Failed to pull: url=%s err=%s\n", url,
@@ -440,15 +435,10 @@ static int worker_update_project(gbString path, gbString fs_path, gbString url,
 
 static int worker_clone_project(gbString path, gbString fs_path, gbString url,
                                 const options* opts) {
-    printf("Cloning %s %s to %s\n", url, path, fs_path);
+    /* printf("Cloning %s %s to %s\n", url, path, fs_path); */
 
     char* const argv[] = {"git",       "clone", "--quiet", "--depth", "1",
                           "--no-tags", url,     fs_path,   0};
-
-    if (freopen("/dev/null", "w", stdout) == NULL) {
-        fprintf(stderr, "Failed to silence subprocess: err=%s\n",
-                strerror(errno));
-    }
 
     if (execvp("git", argv) == -1) {
         fprintf(stderr, "Failed to clone: url=%s err=%s\n", url,
