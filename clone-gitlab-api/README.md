@@ -42,6 +42,7 @@ Clone all repositories from gitlab.custom.com with the token 'abcdef123' in the 
 Build:
 
 ```sh
+$ brew install curl
 $ make
 ```
 
@@ -54,14 +55,6 @@ Changed directory to: /tmp/git
 ...
 [13/13] ✓ hello/world
 Finished in 2s
-```
-
-## Development
-
-```sh
-# Adapt for your platform
-$ brew install curl
-$ make
 ```
 
 ## Limitations
