@@ -42,7 +42,7 @@ Clone all repositories from gitlab.custom.com with the token 'abcdef123' in the 
 Install:
 
 ```sh
-$ brew install curl
+$ brew install curl git
 $ make install
 ```
 
