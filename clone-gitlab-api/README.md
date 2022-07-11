@@ -39,11 +39,11 @@ Clone all repositories from gitlab.custom.com with the token 'abcdef123' in the 
 
 ```
 
-Build:
+Install:
 
 ```sh
 $ brew install curl
-$ make
+$ make install
 ```
 
 Example (the exact output will be different for you):
