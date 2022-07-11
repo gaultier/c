@@ -68,7 +68,7 @@ hello.world
 ## Limitations
 
 - Due to [Gitlab's pagination behavior](https://docs.gitlab.com/ee/api/index.html#pagination-response-headers) when there are lots of items, some HTTP headers which we rely upon are missing in the response, so the command will fail when there are more than 10,000 projects.
-- We use `kqueue` internally so it's MacOS/BSDs only for now. It should work on Linux by installing `libkqueue` but this is untested for now
+- We use `kqueue` internally so it's MacOS/BSDs only for now. It should work on Linux by installing `libkqueue` but this is untested.
 
 ## Roadmap
 
