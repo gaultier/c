@@ -50,7 +50,7 @@ typedef struct {
     int queue;
     gbArray(gbString) path_with_namespaces;
     pthread_mutex_t project_mutex;
-    const u64 project_count;
+    u64 project_count;
 } watch_project_cloning_arg;
 
 typedef struct {
@@ -537,6 +537,31 @@ static int clone_projects_at(gbArray(gbString) path_with_namespaces,
     return 0;
 }
 
+static int api_fetch_projects(gbAllocator allocator, api_t* api,
+                              gbArray(gbString) path_with_namespaces,
+                              gbArray(gbString) git_urls, const options* opts,
+                              pthread_mutex_t* project_mutex, int queue) {
+    int res = 0;
+    pthread_mutex_lock(project_mutex);
+    const u64 last_projects_count = gb_array_count(path_with_namespaces);
+    pthread_mutex_unlock(project_mutex);
+
+    if ((res = api_query_projects(allocator, api, opts->url)) != 0) goto end;
+
+    if ((res = api_parse_projects(api, &path_with_namespaces, &git_urls,
+                                  project_mutex)) != 0)
+        goto end;
+
+    if ((res = clone_projects_at(path_with_namespaces, git_urls, opts, queue,
+                                 last_projects_count)) != 0)
+        goto end;
+
+end:
+    gb_string_clear(api->response_body);
+
+    return res;
+}
+
 int main(int argc, char* argv[]) {
     gettimeofday(&start, NULL);
     gbAllocator allocator = gb_heap_allocator();
@@ -579,39 +604,38 @@ int main(int argc, char* argv[]) {
 
     printf("Changed directory to: %s\n", opts.root_directory);
 
-    if ((res = api_query_projects(allocator, &api, opts.url)) != 0) goto end;
-    assert(api.pagination.total_pages > 0);
-    assert(api.pagination.current_page == 2);
-
-    // Start process exit watcher thread
-    pthread_t process_exit_watcher = {0};
     watch_project_cloning_arg arg = {
         .queue = queue,
         .path_with_namespaces = path_with_namespaces,
-        .project_count = api.pagination.total_items};
-    pthread_mutex_init(&arg.project_mutex, NULL);
+    };
+    assert(pthread_mutex_init(&arg.project_mutex, NULL) == 0);
+
+    if ((res =
+             api_fetch_projects(allocator, &api, path_with_namespaces, git_urls,
+                                &opts, &arg.project_mutex, queue)) != 0)
+        goto end;
+
+    assert(api.pagination.total_pages > 0);
+    assert(api.pagination.current_page == 2);
+    arg.project_count = api.pagination.total_items;
+
+    // Start process exit watcher thread, only after we know from the first API
+    // query how many items there are
+    pthread_t process_exit_watcher = {0};
     {
         if (pthread_create(&process_exit_watcher, NULL, watch_workers, &arg) !=
             0) {
             fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
                     strerror(errno));
+            goto end;
         }
     }
 
     while (api.pagination.current_page <= api.pagination.total_pages) {
-        const u64 last_projects_count = gb_array_count(path_with_namespaces);
-        if ((res = api_query_projects(allocator, &api, opts.url)) != 0)
+        if ((res = api_fetch_projects(allocator, &api, path_with_namespaces,
+                                      git_urls, &opts, &arg.project_mutex,
+                                      queue)) != 0)
             goto end;
-
-        if ((res = api_parse_projects(&api, &path_with_namespaces, &git_urls,
-                                      &arg.project_mutex)) != 0)
-            goto end;
-
-        if ((res = clone_projects_at(path_with_namespaces, git_urls, &opts,
-                                     queue, last_projects_count)) != 0)
-            goto end;
-
-        gb_string_clear(api.response_body);
     }
 
     // TODO: change directory back even on error
