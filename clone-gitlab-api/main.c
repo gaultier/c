@@ -576,8 +576,6 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
                               gbArray(gbString) git_urls, const options* opts,
                               int queue) {
     assert(api != NULL);
-    assert(path_with_namespaces != NULL);
-    assert(git_urls != NULL);
     assert(opts != NULL);
 
     int res = 0;
