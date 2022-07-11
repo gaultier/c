@@ -232,15 +232,17 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
     }
 }
 
-static int api_query_projects(gbAllocator allocator, api_t* api) {
+static int api_query_projects(gbAllocator allocator, api_t* api,
+                              gbString base_url) {
     int res = 0;
+    gb_string_clear(api->url);
     api->url = gb_string_append_fmt(
         api->url,
-        "/api/v4/"
+        "%s/api/v4/"
         "projects?statistics=false&top_level=&with_custom_"
         "attributes=false&simple=true&per_page=100&page=%llu&all_available="
         "true&order_by=id&sort=asc",
-        api->pagination.current_page);
+        base_url, api->pagination.current_page);
     curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url);
 
     if ((res = curl_easy_perform(api->http_handle)) != 0) {
@@ -551,7 +553,7 @@ int main(int argc, char* argv[]) {
 
     printf("Changed directory to: %s\n", opts.root_directory);
 
-    if ((res = api_query_projects(allocator, &api)) != 0) goto end;
+    if ((res = api_query_projects(allocator, &api, opts.url)) != 0) goto end;
     assert(api.pagination.total_pages > 0);
     assert(api.pagination.current_page == 2);
 
@@ -572,7 +574,8 @@ int main(int argc, char* argv[]) {
 
     while (api.pagination.current_page <= api.pagination.total_pages) {
         const u64 last_projects_count = gb_array_count(path_with_namespaces);
-        if ((res = api_query_projects(allocator, &api)) != 0) goto end;
+        if ((res = api_query_projects(allocator, &api, opts.url)) != 0)
+            goto end;
 
         if ((res = api_parse_projects(&api, &path_with_namespaces, &git_urls,
                                       &arg.project_mutex)) != 0)
