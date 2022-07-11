@@ -55,7 +55,15 @@ Changed directory to: /tmp/git
 ...
 [13/13] ✓ hello/world
 Finished in 2s
+
+$ ls /tmp/git/
+foo.bar
+...
+hello.world
 ```
+
+
+
 
 ## Limitations
 
