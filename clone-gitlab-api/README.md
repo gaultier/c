@@ -74,7 +74,6 @@ hello.world
 
 - [ ] Retrying
 - [ ] `--me` option to only clone my repositories
-- [ ] Stop if no project could be fetched from the Gitlab API at all
 - [ ] Max network rate CLI option
 - [ ] Git clone/pull options
 - [ ] Do not rely on HTTP headers which are sometimes missing
