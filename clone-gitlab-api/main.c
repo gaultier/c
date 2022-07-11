@@ -82,9 +82,6 @@ static void print_usage(int argc, char* argv[]) {
         "If some repositories fail, this command does not stop and tries to "
         "clone or update the other repositories.\n\n"
         "EXAMPLES:\n\n"
-        "Clone all repositories from gitlab.com with the token 'abcdef123' "
-        "in "
-        "the directory /tmp/git:\n\n"
         "\tclone-gitlab-api -u gitlab.com -t abcdef123 -d /tmp/git/\n\n"
         "Clone all repositories from gitlab.custom.com with the token "
         "'abcdef123' "
@@ -171,7 +168,6 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
     assert(api != NULL);
     assert(opts != NULL);
     assert(opts->url != NULL);
-    assert(opts->api_token != NULL);
 
     api->pagination = (pagination_t){.current_page = 1};
     api->response_body = gb_string_make_reserve(allocator, 20 * 1024 * 1024);
@@ -192,13 +188,15 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
     curl_easy_setopt(api->http_handle, CURLOPT_HEADERFUNCTION, on_header);
     curl_easy_setopt(api->http_handle, CURLOPT_HEADERDATA, &api->pagination);
 
-    struct curl_slist* list = NULL;
-    gbString token_header = gb_string_make_reserve(allocator, 512);
-    token_header = gb_string_append_fmt(token_header, "PRIVATE-TOKEN: %s",
-                                        opts->api_token);
-    list = curl_slist_append(list, token_header);
+    if (opts->api_token != NULL) {
+        struct curl_slist* list = NULL;
+        gbString token_header = gb_string_make_reserve(allocator, 512);
+        token_header = gb_string_append_fmt(token_header, "PRIVATE-TOKEN: %s",
+                                            opts->api_token);
+        list = curl_slist_append(list, token_header);
 
-    curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list);
+        curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list);
+    }
 }
 
 static void api_destroy(api_t* api) {
