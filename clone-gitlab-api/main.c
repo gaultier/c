@@ -209,12 +209,14 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
         list = curl_slist_append(list, token_header);
 
         curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list);
+        // TODO: free token_header?
     }
 }
 
 static void api_destroy(api_t* api) {
     assert(api != NULL);
 
+    gb_string_free(api->url);
     gb_string_free(api->response_body);
     gb_array_free(api->tokens);
 }
@@ -677,6 +679,13 @@ int main(int argc, char* argv[]) {
 end:
     if ((res = change_directory(cwd)) != 0) return res;
     api_destroy(&api);
+
+    for (int i = 0; i < gb_array_count(path_with_namespaces); i++)
+        gb_string_free(path_with_namespaces[i]);
+    gb_array_free(path_with_namespaces);
+
+    for (int i = 0; i < gb_array_count(git_urls); i++)
+        gb_string_free(git_urls[i]);
     gb_array_free(git_urls);
 
     pthread_join(process_exit_watcher, NULL);
