@@ -533,9 +533,19 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
                               gbArray(gbString) git_urls, const options* opts,
                               int queue) {
     int res = 0;
-    const u64 last_projects_count = gb_array_count(path_with_namespaces);
+    const u64 last_projects_count =
+        path_with_namespaces == NULL ? 0 : gb_array_count(path_with_namespaces);
 
     if ((res = api_query_projects(allocator, api, opts->url)) != 0) goto end;
+
+    if (path_with_namespaces == NULL) {
+        gb_array_init_reserve(path_with_namespaces, allocator,
+                              api->pagination.total_items);
+        gb_array_init_reserve(git_urls, allocator, api->pagination.total_items);
+    }
+
+    assert(path_with_namespaces != NULL);
+    assert(git_urls != NULL);
 
     if ((res = api_parse_projects(api, &path_with_namespaces, &git_urls)) != 0)
         goto end;
@@ -574,15 +584,8 @@ int main(int argc, char* argv[]) {
         return errno;
     }
 
-    gbArray(gbString) path_with_namespaces;
-    // Need a big capacity to be pretty sure it never gets reallocated and thus
-    // it is thread-safe to read/write it concurrently
-    gb_array_init_reserve(path_with_namespaces, allocator, 10 * 1000 * 1000);
-
     api_t api = {0};
     api_init(allocator, &api, &opts);
-    gbArray(gbString) git_urls;
-    gb_array_init_reserve(git_urls, allocator, 100 * 1000);
 
     static char cwd[MAXPATHLEN] = "";
     if (getcwd(cwd, MAXPATHLEN) == NULL) {
@@ -594,6 +597,8 @@ int main(int argc, char* argv[]) {
 
     printf("Changed directory to: %s\n", opts.root_directory);
 
+    gbArray(gbString) path_with_namespaces = NULL;
+    gbArray(gbString) git_urls = NULL;
     if ((res = api_fetch_projects(allocator, &api, path_with_namespaces,
                                   git_urls, &opts, queue)) != 0)
         goto end;
