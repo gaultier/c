@@ -53,6 +53,14 @@ typedef struct {
     const u64 project_count;
 } watch_project_cloning_arg;
 
+typedef struct {
+    CURL* http_handle;
+    gbString response_body;
+    gbString url;
+    pagination_t pagination;
+    gbArray(jsmntok_t) tokens;
+} api_t;
+
 static void print_usage(int argc, char* argv[]) {
     printf(
         "%s\n"
@@ -94,13 +102,6 @@ static u64 str_to_u64(const char* s, usize s_len) {
     }
     return res;
 }
-
-typedef struct {
-    CURL* http_handle;
-    gbString response_body;
-    gbString url;
-    pagination_t pagination;
-} api_t;
 
 static size_t on_http_response_body_chunk(void* contents, size_t size,
                                           size_t nmemb, void* userp) {
@@ -150,6 +151,9 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
 
     api->pagination = (pagination_t){.current_page = 1};
     api->response_body = gb_string_make_reserve(allocator, 20 * 1024 * 1024);
+
+    gb_array_init_reserve(api->tokens, gb_heap_allocator(), 100 * 1000);
+
     api->http_handle = curl_easy_init();
     assert(api->http_handle != NULL);
 
@@ -171,6 +175,11 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
     list = curl_slist_append(list, token_header);
 
     curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list);
+}
+
+static void api_destroy(api_t* api) {
+    gb_string_free(api->response_body);
+    gb_array_free(api->tokens);
 }
 
 static void options_parse_from_cli(gbAllocator allocator, int argc,
@@ -251,39 +260,39 @@ static int api_query_projects(gbAllocator allocator, api_t* api) {
     return res;
 }
 
-static int api_parse_projects(gbString body,
+static int api_parse_projects(api_t* api,
                               gbArray(gbString) * path_with_namespaces,
                               gbArray(gbString) * git_urls,
                               pthread_mutex_t* project_mutex) {
     jsmn_parser p;
-    gbArray(jsmntok_t) tokens;
-    gb_array_init_reserve(tokens, gb_heap_allocator(), 100 * 1000);
 
+    gb_array_clear(api->tokens);
     int res = 0;
     do {
         jsmn_init(&p);
-        res = jsmn_parse(&p, body, gb_string_length(body), tokens,
-                         gb_array_capacity(tokens));
+        res = jsmn_parse(&p, api->response_body,
+                         gb_string_length(api->response_body), api->tokens,
+                         gb_array_capacity(api->tokens));
         if (res == JSMN_ERROR_NOMEM) {
-            gb_array_reserve(tokens, gb_array_capacity(tokens) * 2);
+            gb_array_reserve(api->tokens, gb_array_capacity(api->tokens) * 2);
             continue;
         }
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
-            fprintf(stderr, "Failed to parse JSON: body=%s res=%d\n", body,
-                    res);
-            goto cleanup;
+            fprintf(stderr, "Failed to parse JSON: body=%s res=%d\n",
+                    api->response_body, res);
+            return res;
         }
         if (res == 0) {
             fprintf(stderr,
                     "Failed to parse JSON (is it empty?): body=%s res=%d\n",
-                    body, res);
+                    api->response_body, res);
             res = EINVAL;
-            goto cleanup;
+            return res;
         }
     } while (res == JSMN_ERROR_NOMEM);
 
-    gb_array_resize(tokens, res);
-    gb_array_set_capacity(tokens, res);
+    gb_array_resize(api->tokens, res);
+    gb_array_set_capacity(api->tokens, res);
     res = 0;
 
     const char key_path_with_namespace[] = "path_with_namespace";
@@ -291,14 +300,14 @@ static int api_parse_projects(gbString body,
     const char key_git_url[] = "ssh_url_to_repo";
     const usize key_git_url_len = sizeof("ssh_url_to_repo") - 1;
 
-    for (int i = 1; i < gb_array_count(tokens); i++) {
-        jsmntok_t* const cur = &tokens[i - 1];
-        jsmntok_t* const next = &tokens[i];
+    for (int i = 1; i < gb_array_count(api->tokens); i++) {
+        jsmntok_t* const cur = &api->tokens[i - 1];
+        jsmntok_t* const next = &api->tokens[i];
         if (!(cur->type == JSMN_STRING && next->type == JSMN_STRING)) continue;
 
-        const char* cur_s = &body[cur->start];
+        const char* cur_s = &api->response_body[cur->start];
         const usize cur_s_len = cur->end - cur->start;
-        const char* next_s = &body[next->start];
+        const char* next_s = &api->response_body[next->start];
         const usize next_s_len = next->end - next->start;
 
         if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
@@ -321,9 +330,6 @@ static int api_parse_projects(gbString body,
         }
     }
 
-cleanup:
-    gb_array_free(tokens);
-
     assert(gb_array_count(*path_with_namespaces) == gb_array_count(*git_urls));
     return res;
 }
@@ -338,14 +344,12 @@ static void* watch_workers(void* varg) {
     const bool is_tty = isatty(2);
 
     do {
-        /* printf("[D002] Watching"); */
         int event_count = kevent(arg->queue, NULL, 0, events, 512, 0);
         if (event_count == -1) {
             fprintf(stderr, "Failed to kevent(2) to query events: err=%s\n",
                     strerror(errno));
             return NULL;
         }
-        /* printf("[D003] Watching %d\n", event_count); */
 
         for (int i = 0; i < event_count; i++) {
             const struct kevent* const event = &events[i];
@@ -569,12 +573,10 @@ int main(int argc, char* argv[]) {
 
     while (api.pagination.current_page <= api.pagination.total_pages) {
         const u64 last_projects_count = gb_array_count(path_with_namespaces);
-        fprintf(stderr, "[D001] page=%llu/%llu\n", api.pagination.current_page,
-                api.pagination.total_pages);
         if ((res = api_query_projects(allocator, &api)) != 0) goto end;
 
-        if ((res = api_parse_projects(api.response_body, &path_with_namespaces,
-                                      &git_urls, &arg.project_mutex)) != 0)
+        if ((res = api_parse_projects(&api, &path_with_namespaces, &git_urls,
+                                      &arg.project_mutex)) != 0)
             goto end;
 
         if ((res = clone_projects_at(path_with_namespaces, git_urls, &opts,
@@ -587,7 +589,7 @@ int main(int argc, char* argv[]) {
     // TODO: change directory back even on error
 end:
     if ((res = change_directory(cwd)) != 0) return res;
-    /* gb_string_free(api.response_body); */
+    api_destroy(&api);
 
     pthread_join(process_exit_watcher, NULL);
 }
