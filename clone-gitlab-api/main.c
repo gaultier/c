@@ -147,6 +147,8 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
 static void api_init(gbAllocator allocator, api_t* api, options* opts) {
     assert(api != NULL);
     assert(opts != NULL);
+    assert(opts->url != NULL);
+    assert(opts->api_token != NULL);
 
     api->pagination = (pagination_t){.current_page = 1};
     api->response_body = gb_string_make_reserve(allocator, 20 * 1024 * 1024);
@@ -205,13 +207,30 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
         switch (ch) {
             case 'd': {
                 opts->root_directory = gb_string_make(allocator, optarg);
+                if (strlen(optarg) > MAXPATHLEN) {
+                    fprintf(stderr,
+                            "Directory is too long: maximum %d characters\n",
+                            MAXPATHLEN);
+                    exit(EINVAL);
+                }
                 break;
             }
             case 't': {
+                if (strlen(optarg) > 128) {
+                    fprintf(stderr,
+                            "Token is too long: maximum 128 characters\n");
+                    exit(EINVAL);
+                }
                 opts->api_token = gb_string_make(allocator, optarg);
                 break;
             }
             case 'u': {
+                if (strlen(optarg) > MAX_URL_LEN) {
+                    fprintf(stderr, "Url is too long: maximum %d characters\n",
+                            MAX_URL_LEN);
+                    exit(EINVAL);
+                }
+
                 if (!gb_str_has_prefix(optarg, "https://")) {
                     opts->url = gb_string_make_reserve(
                         allocator, strlen(optarg) + sizeof("https://"));
