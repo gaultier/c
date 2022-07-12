@@ -89,10 +89,10 @@ static void print_usage(int argc, char* argv[]) {
         "Clone/update all repositories from gitlab.com over https in the "
         "directory /tmp/git:\n\n"
         "\tclone-gitlab-api -u gitlab.com -d /tmp/git/ --clone-method=https\n\n"
-        "Clone/update all repositories from gitlab.custom.com (over ssh which "
+        "Clone/update all repositories from gitlab.example.com (over ssh which "
         "is the default) with the token 'abcdef123' in the directory /tmp/git "
         "verbosely:\n\n"
-        "\tclone-gitlab-api -u gitlab.custom.com -t abcdef123 -d /tmp/git/ "
+        "\tclone-gitlab-api -u gitlab.example.com -t abcdef123 -d /tmp/git/ "
         "-v\n\n",
         argv[0]);
 }

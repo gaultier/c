@@ -6,7 +6,7 @@ Every project is cloned concurrently for maximum performance and the memory usag
 
 ## Usage
 
-*The api token is optional. Without it, only publicly accessible repositories can be cloned. Go to https://gitlab.custom.com/-/profile/personal_access_tokens to create one with `read_api` and `read_repository` access.*
+*The api token is optional. Without it, only publicly accessible repositories can be cloned. Go to https://gitlab.example.com/-/profile/personal_access_tokens to create one with `read_api` and `read_repository` access.*
 
 Usage:
 
@@ -36,9 +36,9 @@ Clone/update all repositories from gitlab.com over https in the directory /tmp/g
 
 	clone-gitlab-api -u gitlab.com -d /tmp/git/ --clone-method=https
 
-Clone/update all repositories from gitlab.custom.com (over ssh which is the default) with the token 'abcdef123' in the directory /tmp/git verbosely:
+Clone/update all repositories from gitlab.example.com (over ssh which is the default) with the token 'abcdef123' in the directory /tmp/git verbosely:
 
-	clone-gitlab-api -u gitlab.custom.com -t abcdef123 -d /tmp/git/ -v
+	clone-gitlab-api -u gitlab.example.com -t abcdef123 -d /tmp/git/ -v
 
 ```
 
@@ -52,7 +52,7 @@ $ make install
 Example (the exact output will be different for you):
 
 ```
-$ clone-gitlab-api -u gitlab.custom.com -d /tmp/git
+$ clone-gitlab-api -u gitlab.example.com -d /tmp/git
 Changed directory to: /tmp/git
 [1/13] ✓ foo/bar
 ...
