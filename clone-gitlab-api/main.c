@@ -38,13 +38,9 @@ static struct timeval start;
 typedef struct {
     gbString root_directory;
     gbString api_token;
-    gbString url;
+    gbString gitlab_domain;
 } options;
 static bool verbose = false;
-
-typedef struct {
-    u64 current_page;
-} pagination_t;
 
 typedef struct {
     const int queue;
@@ -54,7 +50,6 @@ typedef struct {
     CURL* http_handle;
     gbString response_body;
     gbString url;
-    pagination_t pagination;
     gbArray(jsmntok_t) tokens;
 } api_t;
 
@@ -148,7 +143,8 @@ static usize on_http_response_body_chunk(void* contents, usize size,
 
 static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
     assert(buffer != NULL);
-    assert(userdata == NULL);
+    assert(userdata != NULL);
+    api_t* const api = userdata;
 
     const usize real_size = nitems * size;
     const char* val = memchr(buffer, ':', real_size);
@@ -181,6 +177,10 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
         }
         val_len--;  // Skip the final `>`
         printf("[D003] Link: `%.*s`\n", (int)val_len, val);
+
+        assert(api->url != NULL);
+        gb_string_clear(api->url);
+        api->url = gb_string_append_length(api->url, val, val_len);
     }
 
     // Only set once
@@ -195,9 +195,8 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
 static void api_init(gbAllocator allocator, api_t* api, options* opts) {
     assert(api != NULL);
     assert(opts != NULL);
-    assert(opts->url != NULL);
+    assert(opts->gitlab_domain != NULL);
 
-    api->pagination = (pagination_t){.current_page = 1};
     api->response_body = gb_string_make_reserve(allocator, 200 * 1024);
 
     gb_array_init_reserve(api->tokens, gb_heap_allocator(), 8 * 1000);
@@ -206,7 +205,13 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
     assert(api->http_handle != NULL);
 
     api->url = gb_string_make_reserve(allocator, MAX_URL_LEN);
-    api->url = gb_string_append(api->url, opts->url);
+    api->url = gb_string_append_fmt(
+        api->url,
+        "%s/api/v4/"
+        "projects?statistics=false&top_level=&with_custom_"
+        "attributes=false&simple=true&per_page=100&all_available="
+        "true&order_by=id&sort=asc",
+        opts->gitlab_domain);
     curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose);
     curl_easy_setopt(api->http_handle, CURLOPT_FOLLOWLOCATION, true);
     curl_easy_setopt(api->http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
@@ -285,12 +290,12 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
                 }
 
                 if (!gb_str_has_prefix(optarg, "https://")) {
-                    opts->url = gb_string_make_reserve(
+                    opts->gitlab_domain = gb_string_make_reserve(
                         allocator, strlen(optarg) + sizeof("https://"));
-                    opts->url =
-                        gb_string_append_fmt(opts->url, "https://%s", optarg);
+                    opts->gitlab_domain = gb_string_append_fmt(
+                        opts->gitlab_domain, "https://%s", optarg);
                 } else
-                    opts->url = gb_string_make(allocator, optarg);
+                    opts->gitlab_domain = gb_string_make(allocator, optarg);
 
                 break;
             }
@@ -304,21 +309,11 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
     }
 }
 
-static int api_query_projects(gbAllocator allocator, api_t* api,
-                              gbString base_url) {
+static int api_query_projects(gbAllocator allocator, api_t* api) {
     assert(api != NULL);
     assert(api->url != NULL);
-    assert(base_url != NULL);
 
     int res = 0;
-    gb_string_clear(api->url);
-    api->url = gb_string_append_fmt(
-        api->url,
-        "%s/api/v4/"
-        "projects?statistics=false&top_level=&with_custom_"
-        "attributes=false&simple=true&per_page=100&page=%llu&all_available="
-        "true&order_by=id&sort=asc",
-        base_url, api->pagination.current_page);
     curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url);
 
     if ((res = curl_easy_perform(api->http_handle)) != 0) {
@@ -332,12 +327,10 @@ static int api_query_projects(gbAllocator allocator, api_t* api,
         return res;
     }
 
-    api->pagination.current_page += 1;
-
     return res;
 }
 
-static int upsert_project(gbString path, char* url, char* fs_path,
+static int upsert_project(gbString path, char* git_url, char* fs_path,
                           const options* opts, int queue);
 
 static int api_parse_and_upsert_projects(api_t* api, const options* opts,
@@ -368,13 +361,27 @@ static int api_parse_and_upsert_projects(api_t* api, const options* opts,
             fprintf(stderr,
                     "Failed to parse JSON (is it empty?): body=%s res=%d\n",
                     api->response_body, res);
-            res = EINVAL;
             return res;
         }
     } while (res == JSMN_ERROR_NOMEM);
 
     gb_array_resize(api->tokens, res);
     res = 0;
+
+    const usize tokens_count = gb_array_count(api->tokens);
+    assert(tokens_count > 0);
+    if (api->tokens[0].type != JSMN_ARRAY) {
+        fprintf(
+            stderr,
+            "Received unexpected JSON response: expected array, got: %.*s\n",
+            (int)gb_string_length(api->response_body), api->response_body);
+        return EINVAL;
+    }
+
+    if (api->tokens[0].size == 0) {
+        // TODO: signal end
+        return 0;
+    }
 
     const char key_path_with_namespace[] = "path_with_namespace";
     const usize key_path_with_namespace_len = sizeof("path_with_namespace") - 1;
@@ -383,8 +390,9 @@ static int api_parse_and_upsert_projects(api_t* api, const options* opts,
 
     char* fs_path = NULL;
     gbString path_with_namespace = NULL;
-    char* url = NULL;
+    char* git_url = NULL;
     u64 field_count = 0;
+
     for (int i = 1; i < gb_array_count(api->tokens); i++) {
         jsmntok_t* const cur = &api->tokens[i - 1];
         jsmntok_t* const next = &api->tokens[i];
@@ -415,20 +423,20 @@ static int api_parse_and_upsert_projects(api_t* api, const options* opts,
         }
         if (str_equal(cur_s, cur_s_len, key_git_url, key_git_url_len)) {
             field_count++;
-            url = next_s;
+            git_url = next_s;
             // `execvp(2)` expects null terminated strings
             // This is safe to do because we override the terminating double
             // quote which no one cares about
-            url[next_s_len] = 0;
+            git_url[next_s_len] = 0;
 
             if (field_count > 0 && field_count % 2 == 0) {
                 assert(fs_path != NULL);
                 assert(path_with_namespace != NULL);
 
-                if ((res = upsert_project(path_with_namespace, url, fs_path,
+                if ((res = upsert_project(path_with_namespace, git_url, fs_path,
                                           opts, queue)) != 0)
                     return res;
-                url = NULL;
+                git_url = NULL;
 
                 *projects_handled += 1;
             }
@@ -501,10 +509,10 @@ static void* watch_workers(void* varg) {
     return NULL;
 }
 
-static int worker_update_project(char* fs_path, gbString url,
+static int worker_update_project(char* fs_path, gbString git_url,
                                  const options* opts) {
     assert(fs_path != NULL);
-    assert(url != NULL);
+    assert(git_url != NULL);
     assert(opts != NULL);
 
     if (chdir(fs_path) == -1) {
@@ -517,7 +525,7 @@ static int worker_update_project(char* fs_path, gbString url,
                           "1",   "--no-tags", 0};
 
     if (execvp("git", argv) == -1) {
-        fprintf(stderr, "Failed to pull: url=%s err=%s\n", url,
+        fprintf(stderr, "Failed to pull: git_url=%s err=%s\n", git_url,
                 strerror(errno));
         exit(errno);
     }
@@ -525,17 +533,17 @@ static int worker_update_project(char* fs_path, gbString url,
     return 0;
 }
 
-static int worker_clone_project(char* fs_path, gbString url,
+static int worker_clone_project(char* fs_path, gbString git_url,
                                 const options* opts) {
     assert(fs_path != NULL);
-    assert(url != NULL);
+    assert(git_url != NULL);
     assert(opts != NULL);
 
     char* const argv[] = {"git",       "clone", "--quiet", "--depth", "1",
-                          "--no-tags", url,     fs_path,   0};
+                          "--no-tags", git_url, fs_path,   0};
 
     if (execvp("git", argv) == -1) {
-        fprintf(stderr, "Failed to clone: url=%s err=%s\n", url,
+        fprintf(stderr, "Failed to clone: git_url=%s err=%s\n", git_url,
                 strerror(errno));
         exit(errno);
     }
@@ -588,10 +596,10 @@ static int record_process_finished_event(int queue, pid_t pid,
     return 0;
 }
 
-static int upsert_project(gbString path, char* url, char* fs_path,
+static int upsert_project(gbString path, char* git_url, char* fs_path,
                           const options* opts, int queue) {
     assert(path != NULL);
-    assert(url != NULL);
+    assert(git_url != NULL);
     assert(opts != NULL);
 
     pid_t pid = fork();
@@ -600,9 +608,9 @@ static int upsert_project(gbString path, char* url, char* fs_path,
         return errno;
     } else if (pid == 0) {
         if (is_directory(fs_path)) {
-            worker_update_project(fs_path, url, opts);
+            worker_update_project(fs_path, git_url, opts);
         } else {
-            worker_clone_project(fs_path, url, opts);
+            worker_clone_project(fs_path, git_url, opts);
         }
         assert(0 && "Unreachable");
     } else {
@@ -621,7 +629,7 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
 
     int res = 0;
 
-    if ((res = api_query_projects(allocator, api, opts->url)) != 0) goto end;
+    if ((res = api_query_projects(allocator, api)) != 0) goto end;
 
     if ((res = api_parse_and_upsert_projects(api, opts, queue,
                                              projects_handled)) != 0)
