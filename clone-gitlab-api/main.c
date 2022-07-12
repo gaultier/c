@@ -39,7 +39,7 @@ typedef struct {
     gbString root_directory;
     gbString api_token;
     gbString gitlab_domain;
-} options;
+} options_t;
 static bool verbose = false;
 
 typedef struct {
@@ -190,10 +190,10 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
     return nitems * size;
 }
 
-static void api_init(gbAllocator allocator, api_t* api, options* opts) {
+static void api_init(gbAllocator allocator, api_t* api, options_t* options) {
     assert(api != NULL);
-    assert(opts != NULL);
-    assert(opts->gitlab_domain != NULL);
+    assert(options != NULL);
+    assert(options->gitlab_domain != NULL);
 
     api->response_body = gb_string_make_reserve(allocator, 200 * 1024);
 
@@ -209,7 +209,7 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
         "projects?statistics=false&top_level=&with_custom_"
         "attributes=false&simple=true&per_page=100&all_available="
         "true&order_by=id&sort=asc",
-        opts->gitlab_domain);
+        options->gitlab_domain);
     curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose);
     curl_easy_setopt(api->http_handle, CURLOPT_FOLLOWLOCATION, true);
     curl_easy_setopt(api->http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
@@ -219,12 +219,12 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
     curl_easy_setopt(api->http_handle, CURLOPT_HEADERFUNCTION, on_header);
     curl_easy_setopt(api->http_handle, CURLOPT_HEADERDATA, api);
 
-    if (opts->api_token != NULL) {
+    if (options->api_token != NULL) {
         struct curl_slist* list = NULL;
         gbString token_header = gb_string_make_reserve(
-            allocator, 20 + gb_string_length(opts->api_token));
+            allocator, 20 + gb_string_length(options->api_token));
         token_header = gb_string_append_fmt(token_header, "PRIVATE-TOKEN: %s",
-                                            opts->api_token);
+                                            options->api_token);
         list = curl_slist_append(list, token_header);
 
         curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list);
@@ -241,9 +241,9 @@ static void api_destroy(api_t* api) {
 }
 
 static void options_parse_from_cli(gbAllocator allocator, int argc,
-                                   char* argv[], options* opts) {
+                                   char* argv[], options_t* options) {
     assert(argv != NULL);
-    assert(opts != NULL);
+    assert(options != NULL);
 
     struct option longopts[] = {
         {.name = "root-directory",
@@ -263,7 +263,7 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
     while ((ch = getopt_long(argc, argv, "vhd:t:u:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'd': {
-                opts->root_directory = gb_string_make(allocator, optarg);
+                options->root_directory = gb_string_make(allocator, optarg);
                 if (strlen(optarg) > MAXPATHLEN) {
                     fprintf(stderr,
                             "Directory is too long: maximum %d characters\n",
@@ -283,7 +283,7 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
                             "Token is too long: maximum 128 characters\n");
                     exit(EINVAL);
                 }
-                opts->api_token = gb_string_make(allocator, optarg);
+                options->api_token = gb_string_make(allocator, optarg);
                 break;
             }
             case 'u': {
@@ -294,12 +294,12 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
                 }
 
                 if (!gb_str_has_prefix(optarg, "https://")) {
-                    opts->gitlab_domain = gb_string_make_reserve(
+                    options->gitlab_domain = gb_string_make_reserve(
                         allocator, strlen(optarg) + sizeof("https://"));
-                    opts->gitlab_domain = gb_string_append_fmt(
-                        opts->gitlab_domain, "https://%s", optarg);
+                    options->gitlab_domain = gb_string_append_fmt(
+                        options->gitlab_domain, "https://%s", optarg);
                 } else
-                    opts->gitlab_domain = gb_string_make(allocator, optarg);
+                    options->gitlab_domain = gb_string_make(allocator, optarg);
 
                 break;
             }
@@ -312,11 +312,11 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
         }
     }
 
-    if (opts->root_directory == NULL) {
+    if (options->root_directory == NULL) {
         fprintf(stderr, "Missing required --root-directory CLI argument.\n");
         exit(EINVAL);
     }
-    if (opts->gitlab_domain == NULL) {
+    if (options->gitlab_domain == NULL) {
         fprintf(stderr, "Missing required --url CLI argument.\n");
         exit(EINVAL);
     }
@@ -344,9 +344,9 @@ static int api_query_projects(gbAllocator allocator, api_t* api) {
 }
 
 static int upsert_project(gbString path, char* git_url, char* fs_path,
-                          const options* opts, int queue);
+                          const options_t* options, int queue);
 
-static int api_parse_and_upsert_projects(api_t* api, const options* opts,
+static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
                                          int queue,
                                          uint64_t* projects_handled) {
     assert(api != NULL);
@@ -442,7 +442,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options* opts,
                 assert(path_with_namespace != NULL);
 
                 if ((res = upsert_project(path_with_namespace, git_url, fs_path,
-                                          opts, queue)) != 0)
+                                          options, queue)) != 0)
                     return res;
                 git_url = NULL;
 
@@ -518,10 +518,10 @@ static void* watch_workers(void* varg) {
 }
 
 static int worker_update_project(char* fs_path, gbString git_url,
-                                 const options* opts) {
+                                 const options_t* options) {
     assert(fs_path != NULL);
     assert(git_url != NULL);
-    assert(opts != NULL);
+    assert(options != NULL);
 
     if (chdir(fs_path) == -1) {
         fprintf(stderr, "Failed to chdir(2): fs_path=%s err=%s\n", fs_path,
@@ -542,10 +542,10 @@ static int worker_update_project(char* fs_path, gbString git_url,
 }
 
 static int worker_clone_project(char* fs_path, gbString git_url,
-                                const options* opts) {
+                                const options_t* options) {
     assert(fs_path != NULL);
     assert(git_url != NULL);
-    assert(opts != NULL);
+    assert(options != NULL);
 
     char* const argv[] = {"git",       "clone", "--quiet", "--depth", "1",
                           "--no-tags", git_url, fs_path,   0};
@@ -605,10 +605,10 @@ static int record_process_finished_event(int queue, pid_t pid,
 }
 
 static int upsert_project(gbString path, char* git_url, char* fs_path,
-                          const options* opts, int queue) {
+                          const options_t* options, int queue) {
     assert(path != NULL);
     assert(git_url != NULL);
-    assert(opts != NULL);
+    assert(options != NULL);
 
     pid_t pid = fork();
     if (pid == -1) {
@@ -616,9 +616,9 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
         return errno;
     } else if (pid == 0) {
         if (is_directory(fs_path)) {
-            worker_update_project(fs_path, git_url, opts);
+            worker_update_project(fs_path, git_url, options);
         } else {
-            worker_clone_project(fs_path, git_url, opts);
+            worker_clone_project(fs_path, git_url, options);
         }
         assert(0 && "Unreachable");
     } else {
@@ -630,17 +630,17 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
 }
 
 static int api_fetch_projects(gbAllocator allocator, api_t* api,
-                              const options* opts, int queue,
+                              const options_t* options, int queue,
                               uint64_t* projects_handled) {
     assert(api != NULL);
-    assert(opts != NULL);
+    assert(options != NULL);
 
     int res = 0;
     gb_string_clear(api->response_body);
 
     if ((res = api_query_projects(allocator, api)) != 0) return res;
 
-    if ((res = api_parse_and_upsert_projects(api, opts, queue,
+    if ((res = api_parse_and_upsert_projects(api, options, queue,
                                              projects_handled)) != 0)
         return res;
 
@@ -650,8 +650,8 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
 int main(int argc, char* argv[]) {
     gettimeofday(&start, NULL);
     gbAllocator allocator = gb_heap_allocator();
-    options opts = {0};
-    options_parse_from_cli(allocator, argc, argv, &opts);
+    options_t options = {0};
+    options_parse_from_cli(allocator, argc, argv, &options);
 
     int res = 0;
     // Do not require wait(2) on child processes
@@ -672,7 +672,7 @@ int main(int argc, char* argv[]) {
     }
 
     api_t api = {0};
-    api_init(allocator, &api, &opts);
+    api_init(allocator, &api, &options);
 
     static char cwd[MAXPATHLEN] = "";
     if (getcwd(cwd, MAXPATHLEN) == NULL) {
@@ -680,9 +680,9 @@ int main(int argc, char* argv[]) {
         return errno;
     }
 
-    if ((res = change_directory(opts.root_directory)) != 0) return res;
+    if ((res = change_directory(options.root_directory)) != 0) return res;
 
-    printf("Changed directory to: %s\n", opts.root_directory);
+    printf("Changed directory to: %s\n", options.root_directory);
 
     watch_project_cloning_arg arg = {
         .queue = queue,
@@ -702,7 +702,7 @@ int main(int argc, char* argv[]) {
 
     uint64_t projects_handled = 0;
     while (!api.finished &&
-           (res = api_fetch_projects(allocator, &api, &opts, queue,
+           (res = api_fetch_projects(allocator, &api, &options, queue,
                                      &projects_handled)) == 0) {
     }
     gb_atomic64_compare_exchange(&projects_count, 0, projects_handled);
