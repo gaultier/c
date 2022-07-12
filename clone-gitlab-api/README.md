@@ -2,7 +2,7 @@
 
 Clone locally all git projects from Gitlab. This is handy for example to search locally with `ripgrep` very quickly, or hack on projects.
 
-Every project is cloned concurrently for maximum performance and the memory usage remains under 30MiB even with thousands of big projects (without counting git, of course), and the single executable is smaller than 100 KiB.
+Every project is cloned concurrently for maximum performance and the memory usage of the main process remains under 8 MiB even with thousands of big projects (without counting git, of course), and the single executable is smaller than 100 KiB.
 
 ## Usage
 
@@ -78,3 +78,4 @@ hello.world
 - [ ] Git clone/pull options
 - [ ] Do not rely on HTTP headers which are sometimes missing
 - [ ] Linux support
+- [ ] Stderr of child process over pipe
