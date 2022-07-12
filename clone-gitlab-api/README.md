@@ -48,7 +48,7 @@ $ make install
 
 Example (the exact output will be different for you):
 
-```sh
+```
 $ clone-gitlab-api -u gitlab.custom.com -d /tmp/git
 Changed directory to: /tmp/git
 [1/13] ✓ foo/bar
