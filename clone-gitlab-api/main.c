@@ -324,8 +324,8 @@ static int api_query_projects(gbAllocator allocator, api_t* api,
     return res;
 }
 
-static int upsert_project(gbString path, char* url, const options* opts,
-                          int queue);
+static int upsert_project(gbString path, char* url, char* fs_path,
+                          const options* opts, int queue);
 
 static int api_parse_and_upsert_projects(api_t* api,
                                          gbArray(gbString) *
@@ -371,6 +371,7 @@ static int api_parse_and_upsert_projects(api_t* api,
     const char key_git_url[] = "ssh_url_to_repo";
     const usize key_git_url_len = sizeof("ssh_url_to_repo") - 1;
 
+    char* fs_path = NULL;
     char* url = NULL;
     u64 field_count = 0;
     for (int i = 1; i < gb_array_count(api->tokens); i++) {
@@ -389,6 +390,16 @@ static int api_parse_and_upsert_projects(api_t* api,
             gbString s =
                 gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
             gb_array_append(*path_with_namespaces, s);
+
+            // `execvp(2)` expects null terminated strings
+            // This is safe to do because we override the terminating double
+            // quote which no one cares about
+            fs_path = next_s;
+            fs_path[next_s_len] = 0;
+            for (int j = 0; j < next_s_len; j++) {
+                if (fs_path[j] == '/') fs_path[j] = '.';
+            }
+
             i++;
             continue;
         }
@@ -402,10 +413,13 @@ static int api_parse_and_upsert_projects(api_t* api,
 
             if (field_count > 0 && field_count % 2 == 0) {
                 assert(gb_array_count(*path_with_namespaces) > 0);
+                assert(fs_path != NULL);
 
                 const gbString path = (*path_with_namespaces)
                     [gb_array_count(*path_with_namespaces) - 1];
-                if ((res = upsert_project(path, url, opts, queue)) != 0)
+
+                if ((res = upsert_project(path, url, fs_path, opts, queue)) !=
+                    0)
                     return res;
                 url = NULL;
             }
@@ -470,15 +484,14 @@ static void* watch_workers(void* varg) {
     return NULL;
 }
 
-static int worker_update_project(gbString path, gbString fs_path, gbString url,
+static int worker_update_project(char* fs_path, gbString url,
                                  const options* opts) {
-    assert(path != NULL);
     assert(fs_path != NULL);
     assert(url != NULL);
     assert(opts != NULL);
 
     if (chdir(fs_path) == -1) {
-        fprintf(stderr, "Failed to chdir(2): path=%s err=%s\n", fs_path,
+        fprintf(stderr, "Failed to chdir(2): fs_path=%s err=%s\n", fs_path,
                 strerror(errno));
         exit(errno);
     }
@@ -495,9 +508,8 @@ static int worker_update_project(gbString path, gbString fs_path, gbString url,
     return 0;
 }
 
-static int worker_clone_project(gbString path, gbString fs_path, gbString url,
+static int worker_clone_project(char* fs_path, gbString url,
                                 const options* opts) {
-    assert(path != NULL);
     assert(fs_path != NULL);
     assert(url != NULL);
     assert(opts != NULL);
@@ -559,8 +571,8 @@ static int record_process_finished_event(int queue, pid_t pid,
     return 0;
 }
 
-static int upsert_project(gbString path, char* url, const options* opts,
-                          int queue) {
+static int upsert_project(gbString path, char* url, char* fs_path,
+                          const options* opts, int queue) {
     assert(path != NULL);
     assert(url != NULL);
     assert(opts != NULL);
@@ -570,14 +582,10 @@ static int upsert_project(gbString path, char* url, const options* opts,
         fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
         return errno;
     } else if (pid == 0) {
-        gbString fs_path = gb_string_duplicate(gb_heap_allocator(), path);
-        for (int j = 0; j < gb_string_length(fs_path); j++) {
-            if (fs_path[j] == '/') fs_path[j] = '.';
-        }
         if (is_directory(fs_path)) {
-            worker_update_project(path, fs_path, url, opts);
+            worker_update_project(fs_path, url, opts);
         } else {
-            worker_clone_project(path, fs_path, url, opts);
+            worker_clone_project(fs_path, url, opts);
         }
         assert(0 && "Unreachable");
     } else {
