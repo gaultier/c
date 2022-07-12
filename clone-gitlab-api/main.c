@@ -44,7 +44,7 @@ static bool verbose = false;
 
 typedef struct {
     const int queue;
-} watch_project_cloning_arg;
+} watch_project_cloning_arg_t;
 
 typedef struct {
     CURL* http_handle;
@@ -458,7 +458,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
 
 static void* watch_workers(void* varg) {
     assert(varg != NULL);
-    watch_project_cloning_arg* arg = varg;
+    watch_project_cloning_arg_t* arg = varg;
 
     u64 finished = 0;
     struct kevent events[512] = {0};
@@ -684,7 +684,7 @@ int main(int argc, char* argv[]) {
 
     printf("Changed directory to: %s\n", options.root_directory);
 
-    watch_project_cloning_arg arg = {
+    watch_project_cloning_arg_t arg = {
         .queue = queue,
     };
 
