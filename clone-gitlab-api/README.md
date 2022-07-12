@@ -19,7 +19,8 @@ USAGE:
 	clone-gitlab-api [OPTIONS]
 
 OPTIONS:
-	-d, --root-directory <DIRECTORY>    The root directory to clone/update all the projects
+	-m, --clone-method=https|ssh        Clone over https or ssh. Defaults to ssh.
+	-d, --root-directory <DIRECTORY>    The root directory to clone/update all the projects. Required.
 	-u, --url <GITLAB URL>
 	-t, --api-token <API TOKEN>         The api token from gitlab to fetch private repositories
 	-h, --help
@@ -31,9 +32,11 @@ If some repositories fail, this command does not stop and tries to clone or upda
 
 EXAMPLES:
 
-	clone-gitlab-api -u gitlab.com -t abcdef123 -d /tmp/git/
+Clone/update all repositories from gitlab.com over https in the directory /tmp/git:
 
-Clone/update all repositories from gitlab.custom.com with the token 'abcdef123' in the directory /tmp/git verbosely:
+	clone-gitlab-api -u gitlab.com -d /tmp/git/ --clone-method=https
+
+Clone/update all repositories from gitlab.custom.com (over ssh which is the default) with the token 'abcdef123' in the directory /tmp/git verbosely:
 
 	clone-gitlab-api -u gitlab.custom.com -t abcdef123 -d /tmp/git/ -v
 
