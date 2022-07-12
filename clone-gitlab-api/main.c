@@ -275,9 +275,9 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
     while ((ch = getopt_long(argc, argv, "m:vhd:t:u:", longopts, NULL)) != -1) {
         switch (ch) {
             case 'm': {
-                if (strcmp(optarg, "https")) {
+                if (strcmp(optarg, "https") == 0) {
                     options->clone_method = GCM_HTTPS;
-                } else if (strcmp(optarg, "ssh")) {
+                } else if (strcmp(optarg, "ssh") == 0) {
                     options->clone_method = GCM_SSH;
                 } else {
                     fprintf(stderr,
@@ -418,8 +418,12 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
 
     const char key_path_with_namespace[] = "path_with_namespace";
     const usize key_path_with_namespace_len = sizeof("path_with_namespace") - 1;
-    const char key_git_url[] = "ssh_url_to_repo";
-    const usize key_git_url_len = sizeof("ssh_url_to_repo") - 1;
+    const char clone_method_fields[][20] = {
+        [GCM_SSH] = "ssh_url_to_repo",
+        [GCM_HTTPS] = "http_url_to_repo",
+    };
+    const char* key_git_url = clone_method_fields[options->clone_method];
+    const usize key_git_url_len = strlen(key_git_url);
 
     char* fs_path = NULL;
     gbString path_with_namespace = NULL;
