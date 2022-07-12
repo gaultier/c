@@ -179,8 +179,6 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
         val_len = end - start;
         val = start;
 
-        printf("[D003] Link: `%.*s`\n", (int)val_len, val);
-
         assert(api->url != NULL);
         gb_string_clear(api->url);
         api->url = gb_string_append_length(api->url, val, val_len);
