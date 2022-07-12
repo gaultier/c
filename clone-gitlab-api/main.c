@@ -35,10 +35,16 @@ static const char pg_colors[2][COL_COUNT][14] = {
 
 static struct timeval start;
 
+typedef enum {
+    GCM_SSH = 0,
+    GCM_HTTPS = 1,
+} git_clone_method_t;
+
 typedef struct {
     gbString root_directory;
     gbString api_token;
     gbString gitlab_domain;
+    git_clone_method_t clone_method;
 } options_t;
 static bool verbose = false;
 
@@ -62,9 +68,11 @@ static void print_usage(int argc, char* argv[]) {
         "USAGE:\n"
         "\t%s [OPTIONS]\n\n"
         "OPTIONS:\n"
+        "\t-m, --clone-method=https|ssh        Clone over https or ssh. "
+        "Defaults to ssh.\n"
         "\t-d, --root-directory <DIRECTORY>    The root directory to "
         "clone/update all "
-        "the projects\n"
+        "the projects. Required.\n"
         "\t-u, --url <GITLAB URL>\n"
         "\t-t, --api-token <API TOKEN>         The api token from gitlab to "
         "fetch "
@@ -254,14 +262,31 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
          .has_arg = required_argument,
          .flag = NULL,
          .val = 't'},
+        {.name = "clone-method",
+         .has_arg = required_argument,
+         .flag = NULL,
+         .val = 'm'},
         {.name = "url", .has_arg = required_argument, .flag = NULL, .val = 'u'},
         {.name = "help", .has_arg = no_argument, .flag = NULL, .val = 'h'},
         {.name = "verbose", .has_arg = no_argument, .flag = NULL, .val = 'v'},
     };
 
     int ch = 0;
-    while ((ch = getopt_long(argc, argv, "vhd:t:u:", longopts, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "m:vhd:t:u:", longopts, NULL)) != -1) {
         switch (ch) {
+            case 'm': {
+                if (strcmp(optarg, "https")) {
+                    options->clone_method = GCM_HTTPS;
+                } else if (strcmp(optarg, "ssh")) {
+                    options->clone_method = GCM_SSH;
+                } else {
+                    fprintf(stderr,
+                            "Invalid --clone-method argument: must be https or "
+                            "ssh\n");
+                    exit(EINVAL);
+                }
+                break;
+            }
             case 'd': {
                 options->root_directory = gb_string_make(allocator, optarg);
                 if (strlen(optarg) > MAXPATHLEN) {

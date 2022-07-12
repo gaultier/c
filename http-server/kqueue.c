@@ -27,7 +27,7 @@ typedef struct {
     u8 nprocs;
     u32 connection_max_duration_seconds;
     u16 port;
-} options;
+} options_t;
 static bool verbose = false;
 
 typedef struct {
@@ -92,7 +92,7 @@ typedef struct {
     struct kevent event_list[LISTEN_BACKLOG];
     latency_histogram hist;
     u64 requests_in_flight;
-    options opts;
+    options_t opts;
 } server;
 
 #define LOG(fmt, ...)                                     \
@@ -848,7 +848,7 @@ static int server_run(server* s) {
     return 0;
 }
 
-static void options_parse_from_cli(int argc, char* argv[], options* opts) {
+static void options_parse_from_cli(int argc, char* argv[], options_t* opts) {
     assert(argv != NULL);
     assert(opts != NULL);
 
@@ -920,7 +920,7 @@ static void options_parse_from_cli(int argc, char* argv[], options* opts) {
 }
 
 int main(int argc, char* argv[]) {
-    options opts = {0};
+    options_t opts = {0};
     options_parse_from_cli(argc, argv, &opts);
 
     int res = 0;
