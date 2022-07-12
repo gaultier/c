@@ -327,13 +327,9 @@ static int api_query_projects(gbAllocator allocator, api_t* api,
 static int upsert_project(gbString path, char* url, char* fs_path,
                           const options* opts, int queue);
 
-static int api_parse_and_upsert_projects(api_t* api,
-                                         gbArray(gbString) *
-                                             path_with_namespaces,
-                                         const options* opts, int queue) {
+static int api_parse_and_upsert_projects(api_t* api, const options* opts,
+                                         int queue) {
     assert(api != NULL);
-    assert(path_with_namespaces != NULL);
-    assert(*path_with_namespaces != NULL);
 
     jsmn_parser p;
 
@@ -372,6 +368,7 @@ static int api_parse_and_upsert_projects(api_t* api,
     const usize key_git_url_len = sizeof("ssh_url_to_repo") - 1;
 
     char* fs_path = NULL;
+    gbString path_with_namespace = NULL;
     char* url = NULL;
     u64 field_count = 0;
     for (int i = 1; i < gb_array_count(api->tokens); i++) {
@@ -387,9 +384,8 @@ static int api_parse_and_upsert_projects(api_t* api,
         if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
                       key_path_with_namespace_len)) {
             field_count++;
-            gbString s =
+            path_with_namespace =
                 gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
-            gb_array_append(*path_with_namespaces, s);
 
             // `execvp(2)` expects null terminated strings
             // This is safe to do because we override the terminating double
@@ -412,14 +408,11 @@ static int api_parse_and_upsert_projects(api_t* api,
             url[next_s_len] = 0;
 
             if (field_count > 0 && field_count % 2 == 0) {
-                assert(gb_array_count(*path_with_namespaces) > 0);
                 assert(fs_path != NULL);
+                assert(path_with_namespace != NULL);
 
-                const gbString path = (*path_with_namespaces)
-                    [gb_array_count(*path_with_namespaces) - 1];
-
-                if ((res = upsert_project(path, url, fs_path, opts, queue)) !=
-                    0)
+                if ((res = upsert_project(path_with_namespace, url, fs_path,
+                                          opts, queue)) != 0)
                     return res;
                 url = NULL;
             }
@@ -597,26 +590,15 @@ static int upsert_project(gbString path, char* url, char* fs_path,
 }
 
 static int api_fetch_projects(gbAllocator allocator, api_t* api,
-                              gbArray(gbString) * path_with_namespaces,
                               const options* opts, int queue) {
     assert(api != NULL);
-    assert(path_with_namespaces != NULL);
     assert(opts != NULL);
 
     int res = 0;
 
     if ((res = api_query_projects(allocator, api, opts->url)) != 0) goto end;
 
-    if (*path_with_namespaces == NULL) {
-        gb_array_init_reserve(*path_with_namespaces, allocator,
-                              api->pagination.total_items);
-    }
-
-    assert(*path_with_namespaces != NULL);
-
-    if ((res = api_parse_and_upsert_projects(api, path_with_namespaces, opts,
-                                             queue)) != 0)
-        goto end;
+    if ((res = api_parse_and_upsert_projects(api, opts, queue)) != 0) goto end;
 
 end:
     gb_string_clear(api->response_body);
@@ -661,9 +643,7 @@ int main(int argc, char* argv[]) {
 
     printf("Changed directory to: %s\n", opts.root_directory);
 
-    gbArray(gbString) path_with_namespaces = NULL;
-    if ((res = api_fetch_projects(allocator, &api, &path_with_namespaces, &opts,
-                                  queue)) != 0)
+    if ((res = api_fetch_projects(allocator, &api, &opts, queue)) != 0)
         goto end;
 
     assert(api.pagination.total_pages > 0);
@@ -686,16 +666,13 @@ int main(int argc, char* argv[]) {
     }
 
     while (api.pagination.current_page <= api.pagination.total_pages) {
-        if ((res = api_fetch_projects(allocator, &api, &path_with_namespaces,
-                                      &opts, queue)) != 0)
+        if ((res = api_fetch_projects(allocator, &api, &opts, queue)) != 0)
             goto end;
     }
 
 end:
     if ((res = change_directory(cwd)) != 0) return res;
     api_destroy(&api);
-
-    gb_array_free(path_with_namespaces);
 
     pthread_join(process_exit_watcher, NULL);
 }
