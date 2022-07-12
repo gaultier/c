@@ -323,16 +323,16 @@ static int api_query_projects(gbAllocator allocator, api_t* api,
     return res;
 }
 
-static int api_parse_projects(api_t* api,
-                              gbArray(gbString) * path_with_namespaces,
-                              gbArray(gbString) * git_urls) {
+static int upsert_project(gbString path, char* url, const options* opts,
+                          int queue);
+
+static int api_parse_and_upsert_projects(api_t* api,
+                                         gbArray(gbString) *
+                                             path_with_namespaces,
+                                         const options* opts, int queue) {
     assert(api != NULL);
     assert(path_with_namespaces != NULL);
-    assert(git_urls != NULL);
-    assert(path_with_namespaces != NULL);
-    assert(git_urls != NULL);
     assert(*path_with_namespaces != NULL);
-    assert(*git_urls != NULL);
 
     jsmn_parser p;
 
@@ -370,18 +370,21 @@ static int api_parse_projects(api_t* api,
     const char key_git_url[] = "ssh_url_to_repo";
     const usize key_git_url_len = sizeof("ssh_url_to_repo") - 1;
 
+    char* url = NULL;
+    u64 field_count = 0;
     for (int i = 1; i < gb_array_count(api->tokens); i++) {
         jsmntok_t* const cur = &api->tokens[i - 1];
         jsmntok_t* const next = &api->tokens[i];
         if (!(cur->type == JSMN_STRING && next->type == JSMN_STRING)) continue;
 
-        const char* cur_s = &api->response_body[cur->start];
+        char* const cur_s = &api->response_body[cur->start];
         const usize cur_s_len = cur->end - cur->start;
-        const char* next_s = &api->response_body[next->start];
+        char* const next_s = &api->response_body[next->start];
         const usize next_s_len = next->end - next->start;
 
         if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
                       key_path_with_namespace_len)) {
+            field_count++;
             gbString s =
                 gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
             gb_array_append(*path_with_namespaces, s);
@@ -389,14 +392,27 @@ static int api_parse_projects(api_t* api,
             continue;
         }
         if (str_equal(cur_s, cur_s_len, key_git_url, key_git_url_len)) {
-            gbString s =
-                gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
-            gb_array_append(*git_urls, s);
+            field_count++;
+            url = next_s;
+            // `execvp(2)` expects null terminated strings
+            // This is safe to do because we override the terminating double
+            // quote which no one cares about
+            url[next_s_len] = 0;
+
+            if (field_count > 0 && field_count % 2 == 0) {
+                assert(gb_array_count(*path_with_namespaces) > 0);
+
+                const gbString path = (*path_with_namespaces)
+                    [gb_array_count(*path_with_namespaces) - 1];
+                if ((res = upsert_project(path, url, opts, queue)) != 0)
+                    return res;
+                url = NULL;
+            }
+
             i++;
         }
     }
 
-    assert(gb_array_count(*path_with_namespaces) == gb_array_count(*git_urls));
     return res;
 }
 
@@ -542,73 +558,55 @@ static int record_process_finished_event(int queue, pid_t pid,
     return 0;
 }
 
-static int clone_projects_at(gbArray(gbString) path_with_namespaces,
-                             gbArray(gbString) git_urls, const options* opts,
-                             int queue, u64 project_offset) {
-    assert(path_with_namespaces != NULL);
-    assert(git_urls != NULL);
+static int upsert_project(gbString path, char* url, const options* opts,
+                          int queue) {
+    assert(path != NULL);
+    assert(url != NULL);
     assert(opts != NULL);
 
-    for (int i = project_offset; i < gb_array_count(path_with_namespaces);
-         i++) {
-        gbString path = path_with_namespaces[i];
-        gbString url = git_urls[i];
-        pid_t pid = fork();
-        if (pid == -1) {
-            fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
-            return errno;
-        } else if (pid == 0) {
-            gbString fs_path = gb_string_duplicate(gb_heap_allocator(), path);
-            for (int j = 0; j < gb_string_length(fs_path); j++) {
-                if (fs_path[j] == '/') fs_path[j] = '.';
-            }
-            if (is_directory(fs_path)) {
-                worker_update_project(path, fs_path, url, opts);
-            } else {
-                worker_clone_project(path, fs_path, url, opts);
-            }
-            assert(0 && "Unreachable");
-        } else {
-            gb_string_free(url);
-            int res = 0;
-            if ((res = record_process_finished_event(queue, pid, path)) != 0)
-                return res;
+    pid_t pid = fork();
+    if (pid == -1) {
+        fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
+        return errno;
+    } else if (pid == 0) {
+        gbString fs_path = gb_string_duplicate(gb_heap_allocator(), path);
+        for (int j = 0; j < gb_string_length(fs_path); j++) {
+            if (fs_path[j] == '/') fs_path[j] = '.';
         }
+        if (is_directory(fs_path)) {
+            worker_update_project(path, fs_path, url, opts);
+        } else {
+            worker_clone_project(path, fs_path, url, opts);
+        }
+        assert(0 && "Unreachable");
+    } else {
+        int res = 0;
+        if ((res = record_process_finished_event(queue, pid, path)) != 0)
+            return res;
     }
     return 0;
 }
 
 static int api_fetch_projects(gbAllocator allocator, api_t* api,
                               gbArray(gbString) * path_with_namespaces,
-                              gbArray(gbString) * git_urls, const options* opts,
-                              int queue) {
+                              const options* opts, int queue) {
     assert(api != NULL);
     assert(path_with_namespaces != NULL);
-    assert(git_urls != NULL);
     assert(opts != NULL);
 
     int res = 0;
-    const u64 last_projects_count = *path_with_namespaces == NULL
-                                        ? 0
-                                        : gb_array_count(*path_with_namespaces);
 
     if ((res = api_query_projects(allocator, api, opts->url)) != 0) goto end;
 
     if (*path_with_namespaces == NULL) {
         gb_array_init_reserve(*path_with_namespaces, allocator,
                               api->pagination.total_items);
-        gb_array_init_reserve(*git_urls, allocator,
-                              api->pagination.total_items);
     }
 
     assert(*path_with_namespaces != NULL);
-    assert(*git_urls != NULL);
 
-    if ((res = api_parse_projects(api, path_with_namespaces, git_urls)) != 0)
-        goto end;
-
-    if ((res = clone_projects_at(*path_with_namespaces, *git_urls, opts, queue,
-                                 last_projects_count)) != 0)
+    if ((res = api_parse_and_upsert_projects(api, path_with_namespaces, opts,
+                                             queue)) != 0)
         goto end;
 
 end:
@@ -618,6 +616,8 @@ end:
 }
 
 int main(int argc, char* argv[]) {
+    printf("[D006]%lu\n", sizeof(jsmntok_t));
+
     gettimeofday(&start, NULL);
     gbAllocator allocator = gb_heap_allocator();
     options opts = {0};
@@ -655,9 +655,8 @@ int main(int argc, char* argv[]) {
     printf("Changed directory to: %s\n", opts.root_directory);
 
     gbArray(gbString) path_with_namespaces = NULL;
-    gbArray(gbString) git_urls = NULL;
-    if ((res = api_fetch_projects(allocator, &api, &path_with_namespaces,
-                                  &git_urls, &opts, queue)) != 0)
+    if ((res = api_fetch_projects(allocator, &api, &path_with_namespaces, &opts,
+                                  queue)) != 0)
         goto end;
 
     assert(api.pagination.total_pages > 0);
@@ -681,7 +680,7 @@ int main(int argc, char* argv[]) {
 
     while (api.pagination.current_page <= api.pagination.total_pages) {
         if ((res = api_fetch_projects(allocator, &api, &path_with_namespaces,
-                                      &git_urls, &opts, queue)) != 0)
+                                      &opts, queue)) != 0)
             goto end;
     }
 
@@ -690,8 +689,6 @@ end:
     api_destroy(&api);
 
     gb_array_free(path_with_namespaces);
-
-    gb_array_free(git_urls);
 
     pthread_join(process_exit_watcher, NULL);
 }
