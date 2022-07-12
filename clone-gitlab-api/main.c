@@ -273,7 +273,12 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
                 break;
             }
             case 't': {
-                if (strlen(optarg) > 128) {
+                const u64 optarg_len = strlen(optarg);
+                if (optarg_len == 0) {
+                    fprintf(stderr, "Empty token\n");
+                    exit(EINVAL);
+                }
+                if (optarg_len > 128) {
                     fprintf(stderr,
                             "Token is too long: maximum 128 characters\n");
                     exit(EINVAL);
@@ -305,6 +310,15 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
                 print_usage(argc, argv);
                 exit(0);
         }
+    }
+
+    if (opts->root_directory == NULL) {
+        fprintf(stderr, "Missing required --root-directory CLI argument.\n");
+        exit(EINVAL);
+    }
+    if (opts->gitlab_domain == NULL) {
+        fprintf(stderr, "Missing required --url CLI argument.\n");
+        exit(EINVAL);
     }
 }
 
