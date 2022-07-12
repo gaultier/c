@@ -51,6 +51,7 @@ typedef struct {
     gbString response_body;
     gbString url;
     gbArray(jsmntok_t) tokens;
+    bool finished;
 } api_t;
 
 static gbAtomic64 projects_count = {0};
@@ -161,9 +162,9 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
         const u64 needle_len = sizeof(needle) - 1;
         char* end = memmem(val, val_len, needle, needle_len);
         if (end == NULL) {
-            fprintf(stderr, "Failed to parse HTTP header Link: %.*s\n",
-                    (int)val_len, val);
-            return 0;
+            // Finished - no more pages
+            api->finished = true;
+            return real_size;
         }
 
         char* start = end;
@@ -376,10 +377,6 @@ static int api_parse_and_upsert_projects(api_t* api, const options* opts,
             "Received unexpected JSON response: expected array, got: %.*s\n",
             (int)gb_string_length(api->response_body), api->response_body);
         return EINVAL;
-    }
-
-    if (api->tokens[0].size == 0) {
-        return -1;
     }
 
     const char key_path_with_namespace[] = "path_with_namespace";
@@ -627,17 +624,15 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
     assert(opts != NULL);
 
     int res = 0;
+    gb_string_clear(api->response_body);
 
-    if ((res = api_query_projects(allocator, api)) != 0) goto end;
+    if ((res = api_query_projects(allocator, api)) != 0) return res;
 
     if ((res = api_parse_and_upsert_projects(api, opts, queue,
                                              projects_handled)) != 0)
-        goto end;
+        return res;
 
-end:
-    gb_string_clear(api->response_body);
-
-    return res;
+    return 0;
 }
 
 int main(int argc, char* argv[]) {
@@ -694,7 +689,8 @@ int main(int argc, char* argv[]) {
     }
 
     uint64_t projects_handled = 0;
-    while ((res = api_fetch_projects(allocator, &api, &opts, queue,
+    while (!api.finished &&
+           (res = api_fetch_projects(allocator, &api, &opts, queue,
                                      &projects_handled)) == 0) {
     }
     gb_atomic64_compare_exchange(&projects_count, 0, projects_handled);
