@@ -44,13 +44,10 @@ static bool verbose = false;
 
 typedef struct {
     u64 current_page;
-    u64 total_pages;
-    u64 total_items;
 } pagination_t;
 
 typedef struct {
     const int queue;
-    const u64 project_count;
 } watch_project_cloning_arg;
 
 typedef struct {
@@ -60,6 +57,8 @@ typedef struct {
     pagination_t pagination;
     gbArray(jsmntok_t) tokens;
 } api_t;
+
+static gbAtomic64 projects_count = {0};
 
 static void print_usage(int argc, char* argv[]) {
     printf(
@@ -149,7 +148,7 @@ static usize on_http_response_body_chunk(void* contents, usize size,
 
 static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
     assert(buffer != NULL);
-    assert(userdata != NULL);
+    assert(userdata == NULL);
 
     const usize real_size = nitems * size;
     const char* val = memchr(buffer, ':', real_size);
@@ -159,20 +158,35 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
     assert(val < buffer + real_size);
     const usize key_len = val - buffer;
     val++;  // Skip `:`
-    const usize val_len = buffer + real_size - val;
+    usize val_len = buffer + real_size - val;
 
-    pagination_t* const pagination = userdata;
+    if (str_equal_c(buffer, key_len, "Link")) {
+        val = memchr(val, '<', val_len);
+        if (val == NULL) {
+            fprintf(stderr, "Failed to parse `Link` HTTP header: %.*s\n",
+                    (int)val_len, val);
+            return -1;
+        }
 
-    // Only set once
-    if (pagination->total_pages == 0 &&
-        str_equal_c(buffer, key_len, "X-Total-Pages")) {
-        pagination->total_pages = str_to_u64(val, val_len);
+        // Skip the first `>`
+        val++;
+        val_len--;
+
+        // Skip trailing characters until `>`
+        while (val_len > 0 && val[val_len - 1] != '>') val_len--;
+        if (val_len == 0) {
+            fprintf(stderr, "Failed to parse `Link` HTTP header: %.*s\n",
+                    (int)val_len, val);
+            return -1;
+        }
+        val_len--;  // Skip the final `>`
+        printf("[D003] Link: `%.*s`\n", (int)val_len, val);
     }
 
     // Only set once
-    if (pagination->total_items == 0 &&
-        str_equal_c(buffer, key_len, "X-Total")) {
-        pagination->total_items = str_to_u64(val, val_len);
+    if (str_equal_c(buffer, key_len, "X-Total")) {
+        const u64 total = str_to_u64(val, val_len);
+        gb_atomic64_compare_exchange(&projects_count, 0, total);
     }
 
     return nitems * size;
@@ -200,7 +214,6 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
                      on_http_response_body_chunk);
     curl_easy_setopt(api->http_handle, CURLOPT_WRITEDATA, &api->response_body);
     curl_easy_setopt(api->http_handle, CURLOPT_HEADERFUNCTION, on_header);
-    curl_easy_setopt(api->http_handle, CURLOPT_HEADERDATA, &api->pagination);
 
     if (opts->api_token != NULL) {
         struct curl_slist* list = NULL;
@@ -328,7 +341,8 @@ static int upsert_project(gbString path, char* url, char* fs_path,
                           const options* opts, int queue);
 
 static int api_parse_and_upsert_projects(api_t* api, const options* opts,
-                                         int queue) {
+                                         int queue,
+                                         uint64_t* projects_handled) {
     assert(api != NULL);
 
     jsmn_parser p;
@@ -415,6 +429,8 @@ static int api_parse_and_upsert_projects(api_t* api, const options* opts,
                                           opts, queue)) != 0)
                     return res;
                 url = NULL;
+
+                *projects_handled += 1;
             }
 
             i++;
@@ -450,25 +466,33 @@ static void* watch_workers(void* varg) {
                 char* const path_with_namespace = event->udata;
 
                 finished += 1;
+                const i64 count = gb_atomic64_load(&projects_count);
+                char s[26] = "";
+                if (count == 0) {
+                    memcpy(s, "?", 1);
+                } else {
+                    gb_i64_to_str(count, s, sizeof(s));
+                }
+
                 if (exit_status == 0) {
                     printf(
-                        "%s[%llu/%llu] ✓ "
+                        "%s[%llu/%s] ✓ "
                         "%s%s\n",
-                        pg_colors[is_tty][COL_GREEN], finished,
-                        arg->project_count, path_with_namespace,
-                        pg_colors[is_tty][COL_RESET]);
+                        pg_colors[is_tty][COL_GREEN], finished, s,
+                        path_with_namespace, pg_colors[is_tty][COL_RESET]);
                 } else {
                     printf(
-                        "%s[%llu/%llu] ❌ "
+                        "%s[%llu/%s] ❌ "
                         "%s (%d)%s\n",
-                        pg_colors[is_tty][COL_RED], finished,
-                        arg->project_count, path_with_namespace, exit_status,
+                        pg_colors[is_tty][COL_RED], finished, s,
+                        path_with_namespace, exit_status,
                         pg_colors[is_tty][COL_RESET]);
                 }
                 gb_string_free(path_with_namespace);
             }
         }
-    } while (finished < arg->project_count);
+    } while (gb_atomic64_load(&projects_count) == 0 ||
+             finished < gb_atomic64_load(&projects_count));
 
     struct timeval end = {0};
     gettimeofday(&end, NULL);
@@ -590,7 +614,8 @@ static int upsert_project(gbString path, char* url, char* fs_path,
 }
 
 static int api_fetch_projects(gbAllocator allocator, api_t* api,
-                              const options* opts, int queue) {
+                              const options* opts, int queue,
+                              uint64_t* projects_handled) {
     assert(api != NULL);
     assert(opts != NULL);
 
@@ -598,7 +623,9 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
 
     if ((res = api_query_projects(allocator, api, opts->url)) != 0) goto end;
 
-    if ((res = api_parse_and_upsert_projects(api, opts, queue)) != 0) goto end;
+    if ((res = api_parse_and_upsert_projects(api, opts, queue,
+                                             projects_handled)) != 0)
+        goto end;
 
 end:
     gb_string_clear(api->response_body);
@@ -643,14 +670,8 @@ int main(int argc, char* argv[]) {
 
     printf("Changed directory to: %s\n", opts.root_directory);
 
-    if ((res = api_fetch_projects(allocator, &api, &opts, queue)) != 0)
-        goto end;
-
-    assert(api.pagination.total_pages > 0);
-    assert(api.pagination.current_page == 2);
     watch_project_cloning_arg arg = {
         .queue = queue,
-        .project_count = api.pagination.total_items,
     };
 
     // Start process exit watcher thread, only after we know from the first API
@@ -665,10 +686,11 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    while (api.pagination.current_page <= api.pagination.total_pages) {
-        if ((res = api_fetch_projects(allocator, &api, &opts, queue)) != 0)
-            goto end;
+    uint64_t projects_handled = 0;
+    while ((res = api_fetch_projects(allocator, &api, &opts, queue,
+                                     &projects_handled)) == 0) {
     }
+    gb_atomic64_compare_exchange(&projects_count, 0, projects_handled);
 
 end:
     if ((res = change_directory(cwd)) != 0) return res;
