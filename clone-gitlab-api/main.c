@@ -186,7 +186,7 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
     api->pagination = (pagination_t){.current_page = 1};
     api->response_body = gb_string_make_reserve(allocator, 200 * 1024);
 
-    gb_array_init_reserve(api->tokens, gb_heap_allocator(), 100 * 1000);
+    gb_array_init_reserve(api->tokens, gb_heap_allocator(), 8 * 1000);
 
     api->http_handle = curl_easy_init();
     assert(api->http_handle != NULL);
@@ -341,7 +341,8 @@ static int api_parse_and_upsert_projects(api_t* api, const options* opts,
                          gb_string_length(api->response_body), api->tokens,
                          gb_array_capacity(api->tokens));
         if (res == JSMN_ERROR_NOMEM) {
-            gb_array_reserve(api->tokens, gb_array_capacity(api->tokens) * 2);
+            gb_array_reserve(api->tokens,
+                             gb_array_capacity(api->tokens) * 2 + 8);
             continue;
         }
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
@@ -359,7 +360,6 @@ static int api_parse_and_upsert_projects(api_t* api, const options* opts,
     } while (res == JSMN_ERROR_NOMEM);
 
     gb_array_resize(api->tokens, res);
-    gb_array_set_capacity(api->tokens, res);
     res = 0;
 
     const char key_path_with_namespace[] = "path_with_namespace";
