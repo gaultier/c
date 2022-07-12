@@ -168,14 +168,13 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
         val++;
         val_len--;
 
-        // Skip trailing characters until `>`
-        while (val_len > 0 && val[val_len - 1] != '>') val_len--;
-        if (val_len == 0) {
+        char* end = memchr(val, '>', val_len);
+        if (end == NULL) {
             fprintf(stderr, "Failed to parse `Link` HTTP header: %.*s\n",
                     (int)val_len, val);
             return -1;
         }
-        val_len--;  // Skip the final `>`
+        val_len = end - val;
         printf("[D003] Link: `%.*s`\n", (int)val_len, val);
 
         assert(api->url != NULL);
@@ -219,6 +218,7 @@ static void api_init(gbAllocator allocator, api_t* api, options* opts) {
                      on_http_response_body_chunk);
     curl_easy_setopt(api->http_handle, CURLOPT_WRITEDATA, &api->response_body);
     curl_easy_setopt(api->http_handle, CURLOPT_HEADERFUNCTION, on_header);
+    curl_easy_setopt(api->http_handle, CURLOPT_HEADERDATA, api);
 
     if (opts->api_token != NULL) {
         struct curl_slist* list = NULL;
