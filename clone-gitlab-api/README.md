@@ -10,7 +10,7 @@ Every project is cloned concurrently for maximum performance and the memory usag
 
 Usage:
 
-```shell
+```sh
 $ clone-gitlab-api --help
 
 Clone or update all git repositories from Gitlab.
