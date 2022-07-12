@@ -42,7 +42,7 @@ Clone/update all repositories from gitlab.example.com (over ssh which is the def
 
 ```
 
-Install:
+Install (make sure first that git submodules have been pulled with e.g. `git submodule update --init --recursive`):
 
 ```sh
 $ brew install curl git
