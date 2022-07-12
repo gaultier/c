@@ -617,8 +617,6 @@ end:
 }
 
 int main(int argc, char* argv[]) {
-    printf("[D006]%lu\n", sizeof(jsmntok_t));
-
     gettimeofday(&start, NULL);
     gbAllocator allocator = gb_heap_allocator();
     options opts = {0};

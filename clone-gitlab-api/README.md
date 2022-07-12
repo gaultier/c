@@ -11,32 +11,29 @@ Every project is cloned concurrently for maximum performance and the memory usag
 Usage:
 
 ```
-Clone all git repositories from Gitlab.
+Clone or update all git repositories from Gitlab.
 
 USAGE:
-	clone-gitlab-api [OPTIONS]
+        clone-gitlab-api [OPTIONS]
 
 OPTIONS:
-	-d, --root-directory <DIRECTORY>    The root directory to clone all the projects
-	-u, --url <GITLAB URL>
-	-t, --api-token <API TOKEN>         The api token from gitlab to fetch private repositories
-	-h, --help
-	-v, --verbose
+        -d, --root-directory <DIRECTORY>    The root directory to clone/update all the projects
+        -u, --url <GITLAB URL>
+        -t, --api-token <API TOKEN>         The api token from gitlab to fetch private repositories
+        -h, --help
+        -v, --verbose
 
 The repositories are cloned with git over ssh with a depth of 1, without tags, in a flat manner.
-If some repositories already exist in the root directory, they are updated instead of cloned.
+If some repositories already exist in the root directory, they are updated (with git pull) instead of cloned.
 If some repositories fail, this command does not stop and tries to clone or update the other repositories.
 
 EXAMPLES:
 
-Clone all repositories from gitlab.com with the token 'abcdef123' in the directory /tmp/git:
+        clone-gitlab-api -u gitlab.com -t abcdef123 -d /tmp/git/
 
-	clone-gitlab-api -u gitlab.com -t abcdef123 -d /tmp/git/
+Clone/update all repositories from gitlab.custom.com with the token 'abcdef123' in the directory /tmp/git verbosely:
 
-Clone all repositories from gitlab.custom.com with the token 'abcdef123' in the directory /tmp/git verbosely:
-
-	clone-gitlab-api -u gitlab.custom.com -t abcdef123 -d /tmp/git/ -v
-
+        clone-gitlab-api -u gitlab.custom.com -t abcdef123 -d /tmp/git/ -v
 ```
 
 Install:
