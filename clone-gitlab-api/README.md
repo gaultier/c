@@ -68,7 +68,7 @@ hello.world
 
 ## Roadmap
 
-- [ ] Retrying
+- [ ] Retrying HTTP requests
 - [ ] `--me` option to only clone my repositories
 - [ ] Max network rate CLI option
 - [ ] Git clone/pull options
