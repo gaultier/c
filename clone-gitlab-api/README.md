@@ -77,3 +77,14 @@ hello.world
 - [ ] Git clone/pull options
 - [ ] Linux support
 - [ ] Stderr of child process over pipe
+
+
+## Implementation
+
+This command is essentially a small git driver. It will fetch the list of projects from Gitlab's API, and for each project, issue a git command in a child process. If the directory already exists, it will be `git pull`, otherwise `git clone`.
+
+A background thread waits for those child processes to finish and prints whether the corresponding project succeeded or not.
+
+Note that git's stderr is not yet handled in any way so there might be some error messages being printed by git intermixed with the command's standard output (see the roadmap section).
+
+We make sure we use the least amount of memory and don't do anything we don't absolutely have to do (e.g. parsing all of the JSON fields returned by Gitlab's API when we only are interested in two of them).
