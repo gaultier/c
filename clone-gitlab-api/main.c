@@ -376,8 +376,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options* opts,
     }
 
     if (api->tokens[0].size == 0) {
-        // TODO: signal end
-        return 0;
+        return -1;
     }
 
     const char key_path_with_namespace[] = "path_with_namespace";
