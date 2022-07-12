@@ -552,6 +552,7 @@ static int clone_projects_at(gbArray(gbString) path_with_namespaces,
     for (int i = project_offset; i < gb_array_count(path_with_namespaces);
          i++) {
         gbString path = path_with_namespaces[i];
+        gbString url = git_urls[i];
         pid_t pid = fork();
         if (pid == -1) {
             fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
@@ -561,7 +562,6 @@ static int clone_projects_at(gbArray(gbString) path_with_namespaces,
             for (int j = 0; j < gb_string_length(fs_path); j++) {
                 if (fs_path[j] == '/') fs_path[j] = '.';
             }
-            gbString url = git_urls[i];
             if (is_directory(fs_path)) {
                 worker_update_project(path, fs_path, url, opts);
             } else {
@@ -569,6 +569,7 @@ static int clone_projects_at(gbArray(gbString) path_with_namespaces,
             }
             assert(0 && "Unreachable");
         } else {
+            gb_string_free(url);
             int res = 0;
             if ((res = record_process_finished_event(queue, pid, path)) != 0)
                 return res;
@@ -690,8 +691,6 @@ end:
 
     gb_array_free(path_with_namespaces);
 
-    for (int i = 0; i < gb_array_count(git_urls); i++)
-        gb_string_free(git_urls[i]);
     gb_array_free(git_urls);
 
     pthread_join(process_exit_watcher, NULL);
