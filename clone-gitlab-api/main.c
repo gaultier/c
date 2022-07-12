@@ -180,10 +180,7 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
         assert(api->url != NULL);
         gb_string_clear(api->url);
         api->url = gb_string_append_length(api->url, val, val_len);
-    }
-
-    // Only set once
-    if (str_equal_c(buffer, key_len, "X-Total")) {
+    } else if (str_equal_c(buffer, key_len, "X-Total")) {
         const u64 total = str_to_u64(val, val_len);
         gb_atomic64_compare_exchange(&projects_count, 0, total);
     }
@@ -479,7 +476,7 @@ static void* watch_workers(void* varg) {
                 if (count == 0) {
                     memcpy(s, "?", 1);
                 } else {
-                    gb_i64_to_str(count, s, sizeof(s));
+                    gb_i64_to_str(count, s, 10);
                 }
 
                 if (exit_status == 0) {
