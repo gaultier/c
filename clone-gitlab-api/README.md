@@ -74,3 +74,4 @@ hello.world
 - [ ] Git clone/pull options
 - [ ] Linux support
 - [ ] Stderr of child process over pipe
+- [ ] Clone over https
