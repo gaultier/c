@@ -157,24 +157,27 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
     usize val_len = buffer + real_size - val;
 
     if (str_equal_c(buffer, key_len, "Link")) {
-        val = memchr(val, '<', val_len);
-        if (val == NULL) {
-            fprintf(stderr, "Failed to parse `Link` HTTP header: %.*s\n",
-                    (int)val_len, val);
-            return -1;
-        }
-
-        // Skip the first `>`
-        val++;
-        val_len--;
-
-        char* end = memchr(val, '>', val_len);
+        const char needle[] = ">; rel=\"next\"";
+        const u64 needle_len = sizeof(needle) - 1;
+        char* end = memmem(val, val_len, needle, needle_len);
         if (end == NULL) {
-            fprintf(stderr, "Failed to parse `Link` HTTP header: %.*s\n",
+            fprintf(stderr, "Failed to parse HTTP header Link: %.*s\n",
                     (int)val_len, val);
-            return -1;
+            return 0;
         }
-        val_len = end - val;
+
+        char* start = end;
+        while (start > val && *start != '<') start--;
+        if (start == val) {
+            fprintf(stderr, "Failed to parse HTTP header Link: %.*s\n",
+                    (int)val_len, val);
+            return 0;
+        }
+
+        start++;  // Skip `<`
+        val_len = end - start;
+        val = start;
+
         printf("[D003] Link: `%.*s`\n", (int)val_len, val);
 
         assert(api->url != NULL);
