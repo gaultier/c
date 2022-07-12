@@ -29,11 +29,13 @@ If some repositories fail, this command does not stop and tries to clone or upda
 
 EXAMPLES:
 
-        clone-gitlab-api -u gitlab.com -t abcdef123 -d /tmp/git/
-
 Clone/update all repositories from gitlab.custom.com with the token 'abcdef123' in the directory /tmp/git verbosely:
 
         clone-gitlab-api -u gitlab.custom.com -t abcdef123 -d /tmp/git/ -v
+
+Clone/update all public repositories from gitlab.custom.com in the directory /tmp/git:
+
+        clone-gitlab-api -u gitlab.custom.com -d /tmp/git/
 ```
 
 Install:
