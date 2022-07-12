@@ -103,11 +103,22 @@ static bool str_equal(const char* a, usize a_len, const char* b, usize b_len) {
     return a_len == b_len && memcmp(a, b, a_len) == 0;
 }
 
-static bool str_equal_c(const char* a, usize a_len, const char* b0) {
+static bool str_iequal(const char* a, usize a_len, const char* b, usize b_len) {
+    assert(a != NULL);
+    assert(b != NULL);
+
+    if (a_len != b_len) return false;
+    for (int i = 0; i < a_len; i++) {
+        if (gb_char_to_lower(a[i]) != gb_char_to_lower(b[i])) return false;
+    }
+    return true;
+}
+
+static bool str_iequal_c(const char* a, usize a_len, const char* b0) {
     assert(a != NULL);
     assert(b0 != NULL);
 
-    return str_equal(a, a_len, b0, strlen(b0));
+    return str_iequal(a, a_len, b0, strlen(b0));
 }
 
 static bool is_directory(const char* path) {
@@ -165,7 +176,7 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
     val++;  // Skip `:`
     usize val_len = buffer + real_size - val;
 
-    if (str_equal_c(buffer, key_len, "Link")) {
+    if (str_iequal_c(buffer, key_len, "Link")) {
         const char needle[] = ">; rel=\"next\"";
         const u64 needle_len = sizeof(needle) - 1;
         char* end = memmem(val, val_len, needle, needle_len);
@@ -190,7 +201,7 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
         assert(api->url != NULL);
         gb_string_clear(api->url);
         api->url = gb_string_append_length(api->url, val, val_len);
-    } else if (str_equal_c(buffer, key_len, "X-Total")) {
+    } else if (str_iequal_c(buffer, key_len, "X-Total")) {
         const u64 total = str_to_u64(val, val_len);
         gb_atomic64_compare_exchange(&projects_count, 0, total);
     }
