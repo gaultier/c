@@ -359,7 +359,7 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
     }
 }
 
-static int api_query_projects(gbAllocator allocator, api_t* api) {
+static int api_query_projects(api_t* api) {
     assert(api != NULL);
     assert(api->url != NULL);
 
@@ -679,7 +679,7 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
     int res = 0;
     gb_string_clear(api->response_body);
 
-    if ((res = api_query_projects(allocator, api)) != 0) return res;
+    if ((res = api_query_projects(api)) != 0) return res;
 
     if ((res = api_parse_and_upsert_projects(api, options, queue,
                                              projects_handled)) != 0)
