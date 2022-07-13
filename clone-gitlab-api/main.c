@@ -199,6 +199,13 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
         val_len = end - start;
         val = start;
 
+        if (val_len > MAX_URL_LEN) {
+            fprintf(stderr,
+                    "Failed to parse HTTP header Link, too long: %.*s\n",
+                    (int)val_len, val);
+            return 0;
+        }
+
         assert(api->url != NULL);
         gb_string_clear(api->url);
         api->url = gb_string_append_length(api->url, val, val_len);
@@ -223,13 +230,13 @@ static void api_init(gbAllocator allocator, api_t* api, options_t* options) {
     assert(api->http_handle != NULL);
 
     api->url = gb_string_make_reserve(allocator, MAX_URL_LEN);
-    api->url = gb_string_append_fmt(
+    api->url = gb_string_append(api->url, options->gitlab_domain);
+    api->url = gb_string_appendc(
         api->url,
-        "%s/api/v4/"
+        "/api/v4/"
         "projects?statistics=false&top_level=&with_custom_"
         "attributes=false&simple=true&per_page=100&all_available="
-        "true&order_by=id&sort=asc",
-        options->gitlab_domain);
+        "true&order_by=id&sort=asc");
     curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose);
     curl_easy_setopt(api->http_handle, CURLOPT_FOLLOWLOCATION, true);
     curl_easy_setopt(api->http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
