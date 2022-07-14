@@ -58,6 +58,7 @@ typedef struct {
     gbString url;
     gbArray(jsmntok_t) tokens;
     bool finished;
+    struct curl_slist* curl_headers;
 } api_t;
 
 static gbAtomic64 projects_count = {0};
@@ -257,16 +258,14 @@ static void api_init(gbAllocator allocator, api_t* api, options_t* options) {
            CURLE_OK);
 
     if (options->api_token != NULL) {
-        struct curl_slist* list = NULL;
-        gbString token_header = gb_string_make_reserve(
-            allocator, 20 + gb_string_length(options->api_token));
-        token_header = gb_string_append_fmt(token_header, "PRIVATE-TOKEN: %s",
-                                            options->api_token);
-        list = curl_slist_append(list, token_header);
+        static char token_header[150] = "";
+        snprintf(token_header, sizeof(token_header) - 1, "PRIVATE-TOKEN: %s",
+                 options->api_token);
 
-        assert(curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list) ==
-               CURLE_OK);
-        gb_string_free(token_header);
+        api->curl_headers = curl_slist_append(NULL, token_header);
+        assert(api->curl_headers != NULL);
+        assert(curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER,
+                                api->curl_headers) == CURLE_OK);
     }
 }
 
@@ -276,6 +275,9 @@ static void api_destroy(api_t* api) {
     gb_string_free(api->url);
     gb_string_free(api->response_body);
     gb_array_free(api->tokens);
+
+    curl_slist_free_all(api->curl_headers);
+    curl_easy_cleanup(api->http_handle);
 }
 
 static void options_parse_from_cli(gbAllocator allocator, int argc,
