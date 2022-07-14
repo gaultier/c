@@ -239,6 +239,8 @@ static void api_init(gbAllocator allocator, api_t* api, options_t* options) {
         "true&order_by=id&sort=asc");
     assert(curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose) ==
            CURLE_OK);
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_MAXREDIRS, 5) ==
+           CURLE_OK);
     assert(curl_easy_setopt(api->http_handle, CURLOPT_TIMEOUT,
                             60 /* seconds */) == CURLE_OK);
     assert(curl_easy_setopt(api->http_handle, CURLOPT_FOLLOWLOCATION, true) ==
@@ -264,7 +266,7 @@ static void api_init(gbAllocator allocator, api_t* api, options_t* options) {
 
         assert(curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list) ==
                CURLE_OK);
-        // TODO: free token_header?
+        gb_string_free(token_header);
     }
 }
 
