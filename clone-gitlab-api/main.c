@@ -238,6 +238,7 @@ static void api_init(gbAllocator allocator, api_t* api, options_t* options) {
         "attributes=false&simple=true&per_page=100&all_available="
         "true&order_by=id&sort=asc");
     curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose);
+    curl_easy_setopt(api->http_handle, CURLOPT_TIMEOUT, 60);  // 60 s
     curl_easy_setopt(api->http_handle, CURLOPT_FOLLOWLOCATION, true);
     curl_easy_setopt(api->http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
     curl_easy_setopt(api->http_handle, CURLOPT_WRITEFUNCTION,
