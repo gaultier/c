@@ -237,15 +237,22 @@ static void api_init(gbAllocator allocator, api_t* api, options_t* options) {
         "projects?statistics=false&top_level=&with_custom_"
         "attributes=false&simple=true&per_page=100&all_available="
         "true&order_by=id&sort=asc");
-    curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose);
-    curl_easy_setopt(api->http_handle, CURLOPT_TIMEOUT, 60);  // 60 s
-    curl_easy_setopt(api->http_handle, CURLOPT_FOLLOWLOCATION, true);
-    curl_easy_setopt(api->http_handle, CURLOPT_REDIR_PROTOCOLS, "http,https");
-    curl_easy_setopt(api->http_handle, CURLOPT_WRITEFUNCTION,
-                     on_http_response_body_chunk);
-    curl_easy_setopt(api->http_handle, CURLOPT_WRITEDATA, &api->response_body);
-    curl_easy_setopt(api->http_handle, CURLOPT_HEADERFUNCTION, on_header);
-    curl_easy_setopt(api->http_handle, CURLOPT_HEADERDATA, api);
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose) ==
+           CURLE_OK);
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_TIMEOUT,
+                            60 /* seconds */) == CURLE_OK);
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_FOLLOWLOCATION, true) ==
+           CURLE_OK);
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_REDIR_PROTOCOLS,
+                            "http,https") == CURLE_OK);
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_WRITEFUNCTION,
+                            on_http_response_body_chunk) == CURLE_OK);
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_WRITEDATA,
+                            &api->response_body) == CURLE_OK);
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_HEADERFUNCTION,
+                            on_header) == CURLE_OK);
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_HEADERDATA, api) ==
+           CURLE_OK);
 
     if (options->api_token != NULL) {
         struct curl_slist* list = NULL;
@@ -255,7 +262,8 @@ static void api_init(gbAllocator allocator, api_t* api, options_t* options) {
                                             options->api_token);
         list = curl_slist_append(list, token_header);
 
-        curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list);
+        assert(curl_easy_setopt(api->http_handle, CURLOPT_HTTPHEADER, list) ==
+               CURLE_OK);
         // TODO: free token_header?
     }
 }
@@ -372,7 +380,8 @@ static int api_query_projects(api_t* api) {
     assert(api->url != NULL);
 
     int res = 0;
-    curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url);
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
+           CURLE_OK);
 
     if ((res = curl_easy_perform(api->http_handle)) != 0) {
         i32 error;
