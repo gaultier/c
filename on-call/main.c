@@ -21,22 +21,13 @@ typedef struct {
 } datetime_range_t;
 
 typedef struct {
-    int month, year;
+    int month, year;  // In ISO range
     u16 week_money, week_hours, week_end_money, week_end_hours, total_hours,
         total_money;
 } bill_summary_t;
 
 static bool datetime_is_week_end(const struct tm* d) {
     return d->tm_wday == 0 || d->tm_wday == 6;
-}
-
-static void datetime_add_hours(struct tm* d, u16 hours) {
-    struct tm cpy = *d;
-    cpy.tm_hour += hours;
-    time_t t = timelocal(&cpy);
-    struct tm res = {0};
-    assert(localtime_r(&t, &res) != NULL);
-    *d = res;
 }
 
 static bool datetime_is_working_hour(const struct tm* d) {
@@ -89,6 +80,7 @@ static void shift_bill_monthly(gbArray(bill_summary_t) summaries,
 
     time_t timestamp = timelocal(&shift->start);
     const time_t end_timestamp = timelocal(&shift->end);
+    assert(timestamp < end_timestamp);
     const time_t eom = datetime_end_of_month_timestamp(&shift->start);
 
     while (timestamp < MIN(end_timestamp, eom)) {
@@ -98,6 +90,7 @@ static void shift_bill_monthly(gbArray(bill_summary_t) summaries,
     if (shift->start.tm_mon == shift->end.tm_mon) return;
 
     // Shift spanning 2 months
+    assert(shift->start.tm_mon + 1 == shift->end.tm_mon);
     gb_array_append(summaries,
                     ((bill_summary_t){.month = shift->end.tm_mon + 1,
                                       .year = shift->end.tm_year + 1900}));
