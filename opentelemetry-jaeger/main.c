@@ -1,17 +1,15 @@
-#include <_types/_uint64_t.h>
+#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+#include <unistd.h>
 
 #define CJSON_HIDE_SYMBOLS
+#include "vendor/c-ringbuf/ringbuf.h"
 #include "vendor/cJSON/cJSON.h"
-
-#define GB_IMPLEMENTATION
-#define GB_STATIC
-#include "../vendor/gb/gb.h"
 
 typedef enum __attribute__((packed)) {
     OT_ST_Ok = 0,
@@ -70,7 +68,9 @@ typedef struct {
     char message[128];
 } ot_span_t;
 
-cJSON* ot_spans_to_json(gbArray(ot_span_t) spans) {
+static ringbuf_t spans;
+
+cJSON* ot_spans_to_json() {
     cJSON* root = cJSON_CreateObject();
 
     cJSON* resourceSpans = cJSON_AddArrayToObject(root, "resourceSpans");
@@ -97,37 +97,38 @@ cJSON* ot_spans_to_json(gbArray(ot_span_t) spans) {
     cJSON* j_spans =
         cJSON_AddArrayToObject(instrumentationLibrarySpan, "spans");
 
-    for (int i = 0; i < gb_array_count(spans); i++) {
-        ot_span_t* span = &spans[i];
+    while (!ringbuf_is_empty(spans)) {
+        ot_span_t span = {0};
+        ringbuf_memcpy_from(&span, spans, sizeof(span));
 
         cJSON* j_span = cJSON_CreateObject();
         cJSON_AddItemToArray(j_spans, j_span);
         cJSON_AddNumberToObject(j_span, "startTimeUnixNano",
-                                span->start_time_unix_nano);
+                                span.start_time_unix_nano);
         cJSON_AddNumberToObject(j_span, "endTimeUnixNano",
-                                span->end_time_unix_nano);
+                                span.end_time_unix_nano);
 
         char buf[64] = "";
-        u8 trace_id[16] = {};
-        memcpy(trace_id, &span->trace_id, sizeof(trace_id));
+        uint8_t trace_id[16] = {};
+        memcpy(trace_id, &span.trace_id, sizeof(trace_id));
         for (int i = 0; i < sizeof(trace_id); i++) {
             snprintf(&buf[i * 2], sizeof(buf), "%02x", trace_id[i]);
         }
         cJSON_AddStringToObject(j_span, "traceId", buf);
 
         memset(buf, 0, sizeof(buf));
-        u8 span_id[8] = {};
-        memcpy(span_id, &span->span_id, sizeof(span_id));
+        uint8_t span_id[8] = {};
+        memcpy(span_id, &span.span_id, sizeof(span_id));
         for (int i = 0; i < sizeof(span_id); i++) {
             snprintf(&buf[i * 2], sizeof(buf), "%02x", span_id[i]);
         }
         cJSON_AddStringToObject(j_span, "spanId", buf);
-        cJSON_AddNumberToObject(j_span, "kind", span->kind);
+        cJSON_AddNumberToObject(j_span, "kind", span.kind);
         cJSON* status = cJSON_AddObjectToObject(j_span, "status");
-        cJSON_AddNumberToObject(status, "code", span->status);
-        cJSON_AddStringToObject(status, "message", span->message);
+        cJSON_AddNumberToObject(status, "code", span.status);
+        cJSON_AddStringToObject(status, "message", span.message);
 
-        cJSON_AddStringToObject(j_span, "name", span->name);
+        cJSON_AddStringToObject(j_span, "name", span.name);
     }
 
     return root;
@@ -139,10 +140,10 @@ __uint128_t ot_generate_trace_id() {
     return trace_id;
 }
 
-ot_span_t* ot_span_create(gbArray(ot_span_t) spans, __uint128_t trace_id,
-                          char* name, u8 name_len, ot_span_kind_t kind,
-                          ot_span_status_t status, char* message,
-                          uint8_t message_len, uint64_t parent_span_id) {
+ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
+                          ot_span_kind_t kind, ot_span_status_t status,
+                          char* message, uint8_t message_len,
+                          uint64_t parent_span_id) {
     struct timeval now = {0};
     gettimeofday(&now, NULL);
 
@@ -162,9 +163,7 @@ ot_span_t* ot_span_create(gbArray(ot_span_t) spans, __uint128_t trace_id,
     assert(message_len <= sizeof(span.message));
     memcpy(span.message, message, message_len);
 
-    gb_array_append(spans, span);
-
-    return &spans[gb_array_count(spans) - 1];
+    return ringbuf_memcpy_into(spans, &span, sizeof(span));
 }
 
 void ot_span_end(ot_span_t* span) {
@@ -176,26 +175,24 @@ void ot_span_end(ot_span_t* span) {
 }
 
 int main() {
-    // TODO: use static ring buffer
-    gbArray(ot_span_t) spans = NULL;
-    gb_array_init_reserve(spans, gb_heap_allocator(), 100);
+    spans = ringbuf_new(100 * sizeof(ot_span_t));
 
     const __uint128_t trace_id = ot_generate_trace_id();
-    ot_span_t* span_a = ot_span_create(
-        spans, trace_id, "span-a", sizeof("span-a") - 1, OT_SK_CLIENT,
-        OT_ST_OUT_OF_RANGE, "this is the first span",
-        sizeof("this is the first span") - 1, 0);
+    ot_span_t* span_a =
+        ot_span_create(trace_id, "span-a", sizeof("span-a") - 1, OT_SK_CLIENT,
+                       OT_ST_OUT_OF_RANGE, "this is the first span",
+                       sizeof("this is the first span") - 1, 0);
 
-    ot_span_t* span_b = ot_span_create(
-        spans, trace_id, "span-b", sizeof("span-b") - 1, OT_SK_CLIENT,
-        OT_ST_OUT_OF_RANGE, "this is the second span",
-        sizeof("this is the second span") - 1, span_a->trace_id);
+    ot_span_t* span_b =
+        ot_span_create(trace_id, "span-b", sizeof("span-b") - 1, OT_SK_CLIENT,
+                       OT_ST_OUT_OF_RANGE, "this is the second span",
+                       sizeof("this is the second span") - 1, span_a->trace_id);
 
-    usleep(3);
+    usleep(10);
     ot_span_end(span_b);
     ot_span_end(span_a);
 
-    cJSON* root = ot_spans_to_json(spans);
+    cJSON* root = ot_spans_to_json();
 
     puts(cJSON_Print(root));
 }
