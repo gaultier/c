@@ -1,3 +1,5 @@
+#include <_types/_uint64_t.h>
+#include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,7 +9,67 @@
 #define CJSON_HIDE_SYMBOLS
 #include "vendor/cJSON/cJSON.h"
 
-int main() {
+#define GB_IMPLEMENTATION
+#define GB_STATIC
+#include "../vendor/gb/gb.h"
+
+typedef enum {
+    OT_ST_Ok = 0,
+    OT_ST_CANCELLED = 1,
+    OT_ST_UNKNOWN_ERROR = 2,
+    OT_ST_INVALIDARGUMENT = 3,
+    OT_ST_DEADLINE_EXCEEDED = 4,
+    OT_ST_NOT_FOUND = 5,
+    OT_ST_ALREADY_EXISTS = 6,
+    OT_ST_PERMISSION_DENIED = 7,
+    OT_ST_RESOURCE_EXHAUSTED = 8,
+    OT_ST_FAILED_PRECONDITION = 9,
+    OT_ST_ABORTED = 10,
+    OT_ST_OUT_OF_RANGE = 11,
+    OT_ST_UNIMPLEMENTED = 12,
+    OT_ST_INTERNAL_ERROR = 13,
+    OT_ST_UNAVAILABLE = 14,
+    OT_ST_DATALOSS = 15,
+    OT_ST_UNAUTHENTICATED = 16,
+} ot_span_status_t;
+
+typedef enum {
+    OT_SK_UNSPECIFIED = 0,
+    // Indicates that the span represents an internal operation within an
+    // application, as opposed to an operations happening at the boundaries.
+    // Default value.
+    OT_SK_INTERNAL = 1,
+
+    // Indicates that the span covers server-side handling of an RPC or other
+    // remote network request.
+    OT_SK_SERVER = 2,
+
+    // Indicates that the span describes a request to some remote service.
+    OT_SK_CLIENT = 3,
+
+    // Indicates that the span describes a producer sending a message to a
+    // broker. Unlike CLIENT and SERVER, there is often no direct critical path
+    // latency relationship between producer and consumer spans. A PRODUCER span
+    // ends when the message was accepted by the broker while the logical
+    // processing of the message might span a much longer time.
+    OT_SK_PRODUCER = 4,
+
+    // Indicates that the span describes consumer receiving a message from a
+    // broker. Like the PRODUCER kind, there is often no direct critical path
+    // latency relationship between producer and consumer spans.
+    OT_SK_CONSUMER = 5,
+} ot_span_kind_t;
+
+typedef struct {
+    uint64_t start_time_unix_nano, end_time_unix_nano;
+    uint64_t span_id, parent_span_id;
+    __uint128_t trace_id;
+    char name[128];
+    ot_span_kind_t kind;
+    ot_span_status_t status;
+} ot_span_t;
+
+cJSON* ot_spans_to_json(gbArray(ot_span_t) spans) {
     cJSON* root = cJSON_CreateObject();
 
     cJSON* resourceSpans = cJSON_AddArrayToObject(root, "resourceSpans");
@@ -31,81 +93,101 @@ int main() {
     cJSON_AddItemToArray(instrumentationLibrarySpans,
                          instrumentationLibrarySpan);
 
-    cJSON* spans = cJSON_AddArrayToObject(instrumentationLibrarySpan, "spans");
+    cJSON* j_spans =
+        cJSON_AddArrayToObject(instrumentationLibrarySpan, "spans");
 
-    struct timeval start = {0};
-    gettimeofday(&start, NULL);
+    for (int i = 0; i < gb_array_count(spans); i++) {
+        ot_span_t* span = &spans[i];
 
+        cJSON* j_span = cJSON_CreateObject();
+        cJSON_AddItemToArray(j_spans, j_span);
+        cJSON_AddNumberToObject(j_span, "startTimeUnixNano",
+                                span->start_time_unix_nano);
+        cJSON_AddNumberToObject(j_span, "endTimeUnixNano",
+                                span->end_time_unix_nano);
 
-    uint8_t traceId[16] = {};
-    arc4random_buf(traceId, sizeof(traceId));
+        char buf[64] = "";
+        u8 trace_id[16] = {};
+        memcpy(trace_id, &span->trace_id, sizeof(trace_id));
+        for (int i = 0; i < sizeof(trace_id); i++) {
+            snprintf(&buf[i * 2], sizeof(buf), "%02x", trace_id[i]);
+        }
+        cJSON_AddStringToObject(j_span, "traceId", buf);
 
-    uint8_t spanIdA[8] = {};
-    arc4random_buf(spanIdA, sizeof(spanIdA));
-    {
-    cJSON* spanA = cJSON_CreateObject();
-    cJSON_AddItemToArray(spans, spanA);
-    cJSON* start_ns = cJSON_CreateNumber(
-        (start.tv_sec - 3) * 1000 * 1000 * 1000 + start.tv_usec * 1000);
-    cJSON_AddItemToObject(spanA, "startTimeUnixNano", start_ns);
-    cJSON_AddNumberToObject(
-        spanA, "endTimeUnixNano",
-        (start.tv_sec - 1) * 1000 * 1000 * 1000 + start.tv_usec * 1000 );
+        memset(buf, 0, sizeof(buf));
+        u8 span_id[8] = {};
+        memcpy(span_id, &span->span_id, sizeof(span_id));
+        for (int i = 0; i < sizeof(span_id); i++) {
+            snprintf(&buf[i * 2], sizeof(buf), "%02x", span_id[i]);
+        }
+        cJSON_AddStringToObject(j_span, "spanId", buf);
+        cJSON_AddNumberToObject(j_span, "kind", span->kind);
+        cJSON* status = cJSON_AddObjectToObject(j_span, "status");
+        cJSON_AddNumberToObject(status, "code", span->status);
 
-    char buf[64] = "";
-    for (int i = 0; i < sizeof(traceId); i++) {
-        snprintf(&buf[i * 2], sizeof(buf), "%02x", traceId[i]);
+        cJSON_AddStringToObject(j_span, "name", span->name);
     }
-    cJSON_AddStringToObject(spanA, "traceId", buf);
 
-    memset(buf, 0, sizeof(buf));
-    for (int i = 0; i < sizeof(spanIdA); i++) {
-        snprintf(&buf[i * 2], sizeof(buf), "%02x", spanIdA[i]);
-    }
-    cJSON_AddStringToObject(spanA, "spanId", buf);
-    cJSON_AddNumberToObject(spanA, "kind", 1);
-    cJSON* status = cJSON_AddObjectToObject(spanA, "status");
-    cJSON_AddNumberToObject(status, "code", 9);
+    return root;
+}
 
-    cJSON_AddStringToObject(spanA, "name", "A");
-    }
-    {
-    cJSON* spanB = cJSON_CreateObject();
-    cJSON_AddItemToArray(spans, spanB);
-    cJSON* start_ns = cJSON_CreateNumber(
-        (start.tv_sec - 2) * 1000 * 1000 * 1000 + start.tv_usec * 1000 );
-    cJSON_AddItemToObject(spanB, "startTimeUnixNano", start_ns);
-    cJSON_AddNumberToObject(
-        spanB, "endTimeUnixNano",
-        (start.tv_sec - 1) * 1000 * 1000 * 1000 + start.tv_usec * 1000 + 1000);
+__uint128_t ot_generate_trace_id() {
+    __uint128_t trace_id = 0;
+    arc4random_buf(&trace_id, sizeof(trace_id));
+    return trace_id;
+}
 
-    uint8_t spanIdB[8] = {};
-    arc4random_buf(spanIdB, sizeof(spanIdB));
+ot_span_t* ot_span_create(gbArray(ot_span_t) spans, __uint128_t trace_id,
+                          char* name, u8 name_len, ot_span_kind_t kind,
+                          ot_span_status_t status, uint64_t parent_span_id) {
+    struct timeval now = {0};
+    gettimeofday(&now, NULL);
 
-    char buf[64] = "";
-    for (int i = 0; i < sizeof(traceId); i++) {
-        snprintf(&buf[i * 2], sizeof(buf), "%02x", traceId[i]);
-    }
-    cJSON_AddStringToObject(spanB, "traceId", buf);
+    ot_span_t span = {
+        .start_time_unix_nano =
+            now.tv_sec * 1000 * 1000 * 1000 + now.tv_usec * 1000 * 1000,
 
-    memset(buf, 0, sizeof(buf));
-    for (int i = 0; i < sizeof(spanIdB); i++) {
-        snprintf(&buf[i * 2], sizeof(buf), "%02x", spanIdB[i]);
-    }
-    cJSON_AddStringToObject(spanB, "spanId", buf);
+        .trace_id = trace_id,
+        .status = status,
+        .kind = kind,
+        .parent_span_id = parent_span_id,
+    };
 
-    memset(buf, 0, sizeof(buf));
-    for (int i = 0; i < sizeof(spanIdA); i++) {
-        snprintf(&buf[i * 2], sizeof(buf), "%02x", spanIdA[i]);
-    }
-    cJSON_AddStringToObject(spanB, "parentSpanId", buf);
+    arc4random_buf(&span.span_id, sizeof(span.span_id));
+    assert(name_len <= sizeof(span.name));
+    memcpy(span.name, name, name_len);
 
-    cJSON_AddNumberToObject(spanB, "kind", 1);
-    cJSON* status = cJSON_AddObjectToObject(spanB, "status");
-    cJSON_AddNumberToObject(status, "code", 8);
+    gb_array_append(spans, span);
 
-    cJSON_AddStringToObject(spanB, "name", "B");
-    }
+    return &spans[gb_array_count(spans) - 1];
+}
+
+void ot_span_end(ot_span_t* span) {
+    struct timeval now = {0};
+    gettimeofday(&now, NULL);
+
+    span->end_time_unix_nano =
+        now.tv_sec * 1000 * 1000 * 1000 + now.tv_usec * 1000 * 1000;
+}
+
+int main() {
+    gbArray(ot_span_t) spans = NULL;
+    gb_array_init_reserve(spans, gb_heap_allocator(), 100);
+
+    const __uint128_t trace_id = ot_generate_trace_id();
+    ot_span_t* span_a =
+        ot_span_create(spans, trace_id, "span-a", sizeof("span-a") - 1,
+                       OT_SK_CLIENT, OT_ST_OUT_OF_RANGE, 0);
+
+    ot_span_t* span_b =
+        ot_span_create(spans, trace_id, "span-b", sizeof("span-b") - 1,
+                       OT_SK_CLIENT, OT_ST_OUT_OF_RANGE, span_a->trace_id);
+
+    usleep(3);
+    ot_span_end(span_b);
+    ot_span_end(span_a);
+
+    cJSON* root = ot_spans_to_json(spans);
 
     puts(cJSON_Print(root));
 }

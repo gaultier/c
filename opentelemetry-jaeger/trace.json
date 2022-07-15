@@ -10,26 +10,25 @@
 			},
 			"instrumentationLibrarySpans":	[{
 					"spans":	[{
-							"startTimeUnixNano":	1657884083731746048,
-							"endTimeUnixNano":	1657884085731746048,
-							"traceId":	"831f2f6fc4c9ddd3900feb8f1cafebed",
-							"spanId":	"1b43fe7027f33bd3",
-							"kind":	1,
+							"startTimeUnixNano":	1657885923739896832,
+							"endTimeUnixNano":	1657885923757896704,
+							"traceId":	"97362e336729af12b433ab5fbb6d60b4",
+							"spanId":	"07305f465436759b",
+							"kind":	3,
 							"status":	{
-								"code":	9
+								"code":	11
 							},
-							"name":	"A"
+							"name":	"span-a"
 						}, {
-							"startTimeUnixNano":	1657884084731746048,
-							"endTimeUnixNano":	1657884085731747072,
-							"traceId":	"831f2f6fc4c9ddd3900feb8f1cafebed",
-							"spanId":	"ef965e156fc1cfe6",
-							"parentSpanId":	"1b43fe7027f33bd3",
-							"kind":	1,
+							"startTimeUnixNano":	1657885923743896832,
+							"endTimeUnixNano":	1657885923757896704,
+							"traceId":	"97362e336729af12b433ab5fbb6d60b4",
+							"spanId":	"b1a37835677feed8",
+							"kind":	3,
 							"status":	{
-								"code":	8
+								"code":	11
 							},
-							"name":	"B"
+							"name":	"span-b"
 						}]
 				}]
 		}]
