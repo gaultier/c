@@ -13,7 +13,7 @@
 #define GB_STATIC
 #include "../vendor/gb/gb.h"
 
-typedef enum {
+typedef enum __attribute__((packed)) {
     OT_ST_Ok = 0,
     OT_ST_CANCELLED = 1,
     OT_ST_UNKNOWN_ERROR = 2,
@@ -33,7 +33,7 @@ typedef enum {
     OT_ST_UNAUTHENTICATED = 16,
 } ot_span_status_t;
 
-typedef enum {
+typedef enum __attribute__((packed)) {
     OT_SK_UNSPECIFIED = 0,
     // Indicates that the span represents an internal operation within an
     // application, as opposed to an operations happening at the boundaries.
@@ -64,9 +64,10 @@ typedef struct {
     uint64_t start_time_unix_nano, end_time_unix_nano;
     uint64_t span_id, parent_span_id;
     __uint128_t trace_id;
-    char name[128];
     ot_span_kind_t kind;
     ot_span_status_t status;
+    char name[128];
+    char message[128];
 } ot_span_t;
 
 cJSON* ot_spans_to_json(gbArray(ot_span_t) spans) {
@@ -124,6 +125,7 @@ cJSON* ot_spans_to_json(gbArray(ot_span_t) spans) {
         cJSON_AddNumberToObject(j_span, "kind", span->kind);
         cJSON* status = cJSON_AddObjectToObject(j_span, "status");
         cJSON_AddNumberToObject(status, "code", span->status);
+        cJSON_AddStringToObject(status, "message", span->message);
 
         cJSON_AddStringToObject(j_span, "name", span->name);
     }
@@ -139,7 +141,8 @@ __uint128_t ot_generate_trace_id() {
 
 ot_span_t* ot_span_create(gbArray(ot_span_t) spans, __uint128_t trace_id,
                           char* name, u8 name_len, ot_span_kind_t kind,
-                          ot_span_status_t status, uint64_t parent_span_id) {
+                          ot_span_status_t status, char* message,
+                          uint8_t message_len, uint64_t parent_span_id) {
     struct timeval now = {0};
     gettimeofday(&now, NULL);
 
@@ -156,6 +159,7 @@ ot_span_t* ot_span_create(gbArray(ot_span_t) spans, __uint128_t trace_id,
     arc4random_buf(&span.span_id, sizeof(span.span_id));
     assert(name_len <= sizeof(span.name));
     memcpy(span.name, name, name_len);
+    memcpy(span.message, message, message_len);
 
     gb_array_append(spans, span);
 
@@ -171,17 +175,20 @@ void ot_span_end(ot_span_t* span) {
 }
 
 int main() {
+    // TODO: use static ring buffer
     gbArray(ot_span_t) spans = NULL;
     gb_array_init_reserve(spans, gb_heap_allocator(), 100);
 
     const __uint128_t trace_id = ot_generate_trace_id();
-    ot_span_t* span_a =
-        ot_span_create(spans, trace_id, "span-a", sizeof("span-a") - 1,
-                       OT_SK_CLIENT, OT_ST_OUT_OF_RANGE, 0);
+    ot_span_t* span_a = ot_span_create(
+        spans, trace_id, "span-a", sizeof("span-a") - 1, OT_SK_CLIENT,
+        OT_ST_OUT_OF_RANGE, "this is the first span",
+        sizeof("this is the first span") - 1, 0);
 
-    ot_span_t* span_b =
-        ot_span_create(spans, trace_id, "span-b", sizeof("span-b") - 1,
-                       OT_SK_CLIENT, OT_ST_OUT_OF_RANGE, span_a->trace_id);
+    ot_span_t* span_b = ot_span_create(
+        spans, trace_id, "span-b", sizeof("span-b") - 1, OT_SK_CLIENT,
+        OT_ST_OUT_OF_RANGE, "this is the second span",
+        sizeof("this is the second span") - 1, span_a->trace_id);
 
     usleep(3);
     ot_span_end(span_b);
