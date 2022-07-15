@@ -1,0 +1,36 @@
+{
+	"resourceSpans":	[{
+			"resource":	{
+				"attributes":	[{
+						"key":	"service.name",
+						"value":	{
+							"stringValue":	"main.c"
+						}
+					}]
+			},
+			"instrumentationLibrarySpans":	[{
+					"spans":	[{
+							"startTimeUnixNano":	1657884083731746048,
+							"endTimeUnixNano":	1657884085731746048,
+							"traceId":	"831f2f6fc4c9ddd3900feb8f1cafebed",
+							"spanId":	"1b43fe7027f33bd3",
+							"kind":	1,
+							"status":	{
+								"code":	9
+							},
+							"name":	"A"
+						}, {
+							"startTimeUnixNano":	1657884084731746048,
+							"endTimeUnixNano":	1657884085731747072,
+							"traceId":	"831f2f6fc4c9ddd3900feb8f1cafebed",
+							"spanId":	"ef965e156fc1cfe6",
+							"parentSpanId":	"1b43fe7027f33bd3",
+							"kind":	1,
+							"status":	{
+								"code":	8
+							},
+							"name":	"B"
+						}]
+				}]
+		}]
+}

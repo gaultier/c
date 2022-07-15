@@ -7,3 +7,6 @@
 [submodule "clone-gitlab-api/vendor/jsmn"]
 	path = clone-gitlab-api/vendor/jsmn
 	url = https://github.com/zserge/jsmn.git
+[submodule "opentelemetry-jaeger/vendor/cJSON"]
+	path = opentelemetry-jaeger/vendor/cJSON
+	url = https://github.com/DaveGamble/cJSON.git
