@@ -1,6 +1,7 @@
-#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <inttypes.h>
+#include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,7 +9,6 @@
 #include <unistd.h>
 
 #define CJSON_HIDE_SYMBOLS
-#include "vendor/c-ringbuf/ringbuf.h"
 #include "vendor/cJSON/cJSON.h"
 
 typedef enum __attribute__((packed)) {
@@ -58,7 +58,7 @@ typedef enum __attribute__((packed)) {
     OT_SK_CONSUMER = 5,
 } ot_span_kind_t;
 
-typedef struct {
+struct ot_span_t {
     uint64_t start_time_unix_nano, end_time_unix_nano;
     uint64_t span_id, parent_span_id;
     __uint128_t trace_id;
@@ -66,73 +66,79 @@ typedef struct {
     ot_span_status_t status;
     char name[128];
     char message[128];
-} ot_span_t;
+    struct ot_span_t* next;
+};
+typedef struct ot_span_t ot_span_t;
 
-static ringbuf_t spans;
+static ot_span_t* spans = NULL;
+static pthread_cond_t ot_spans_to_export;
+static pthread_mutex_t ot_spans_mtx;
+static bool ot_finished;
 
-cJSON* ot_spans_to_json() {
-    cJSON* root = cJSON_CreateObject();
+/* cJSON* ot_spans_to_json() { */
+/*     cJSON* root = cJSON_CreateObject(); */
 
-    cJSON* resourceSpans = cJSON_AddArrayToObject(root, "resourceSpans");
+/*     cJSON* resourceSpans = cJSON_AddArrayToObject(root, "resourceSpans"); */
 
-    cJSON* resourceSpan = cJSON_CreateObject();
-    cJSON_AddItemToArray(resourceSpans, resourceSpan);
+/*     cJSON* resourceSpan = cJSON_CreateObject(); */
+/*     cJSON_AddItemToArray(resourceSpans, resourceSpan); */
 
-    cJSON* resource = cJSON_AddObjectToObject(resourceSpan, "resource");
+/*     cJSON* resource = cJSON_AddObjectToObject(resourceSpan, "resource"); */
 
-    cJSON* attributes = cJSON_AddArrayToObject(resource, "attributes");
-    cJSON* attribute = cJSON_CreateObject();
-    cJSON_AddItemToArray(attributes, attribute);
-    cJSON_AddStringToObject(attribute, "key", "service.name");
-    cJSON* value = cJSON_CreateObject();
-    cJSON_AddItemToObject(attribute, "value", value);
-    cJSON_AddStringToObject(value, "stringValue", "main.c");
+/*     cJSON* attributes = cJSON_AddArrayToObject(resource, "attributes"); */
+/*     cJSON* attribute = cJSON_CreateObject(); */
+/*     cJSON_AddItemToArray(attributes, attribute); */
+/*     cJSON_AddStringToObject(attribute, "key", "service.name"); */
+/*     cJSON* value = cJSON_CreateObject(); */
+/*     cJSON_AddItemToObject(attribute, "value", value); */
+/*     cJSON_AddStringToObject(value, "stringValue", "main.c"); */
 
-    cJSON* instrumentationLibrarySpans =
-        cJSON_AddArrayToObject(resourceSpan, "instrumentationLibrarySpans");
-    cJSON* instrumentationLibrarySpan = cJSON_CreateObject();
-    cJSON_AddItemToArray(instrumentationLibrarySpans,
-                         instrumentationLibrarySpan);
+/*     cJSON* instrumentationLibrarySpans = */
+/*         cJSON_AddArrayToObject(resourceSpan, "instrumentationLibrarySpans");
+ */
+/*     cJSON* instrumentationLibrarySpan = cJSON_CreateObject(); */
+/*     cJSON_AddItemToArray(instrumentationLibrarySpans, */
+/*                          instrumentationLibrarySpan); */
 
-    cJSON* j_spans =
-        cJSON_AddArrayToObject(instrumentationLibrarySpan, "spans");
+/*     cJSON* j_spans = */
+/*         cJSON_AddArrayToObject(instrumentationLibrarySpan, "spans"); */
 
-    while (!ringbuf_is_empty(spans)) {
-        ot_span_t span = {0};
-        ringbuf_memcpy_from(&span, spans, sizeof(span));
+/*     while (!ringbuf_is_empty(ot_spans)) { */
+/*         ot_span_t span = {0}; */
+/*         ringbuf_memcpy_from(&span, ot_spans, sizeof(span)); */
 
-        cJSON* j_span = cJSON_CreateObject();
-        cJSON_AddItemToArray(j_spans, j_span);
-        cJSON_AddNumberToObject(j_span, "startTimeUnixNano",
-                                span.start_time_unix_nano);
-        cJSON_AddNumberToObject(j_span, "endTimeUnixNano",
-                                span.end_time_unix_nano);
+/*         cJSON* j_span = cJSON_CreateObject(); */
+/*         cJSON_AddItemToArray(j_spans, j_span); */
+/*         cJSON_AddNumberToObject(j_span, "startTimeUnixNano", */
+/*                                 span.start_time_unix_nano); */
+/*         cJSON_AddNumberToObject(j_span, "endTimeUnixNano", */
+/*                                 span.end_time_unix_nano); */
 
-        char buf[64] = "";
-        uint8_t trace_id[16] = {};
-        memcpy(trace_id, &span.trace_id, sizeof(trace_id));
-        for (int i = 0; i < sizeof(trace_id); i++) {
-            snprintf(&buf[i * 2], sizeof(buf), "%02x", trace_id[i]);
-        }
-        cJSON_AddStringToObject(j_span, "traceId", buf);
+/*         char buf[64] = ""; */
+/*         uint8_t trace_id[16] = {}; */
+/*         memcpy(trace_id, &span.trace_id, sizeof(trace_id)); */
+/*         for (int i = 0; i < sizeof(trace_id); i++) { */
+/*             snprintf(&buf[i * 2], sizeof(buf), "%02x", trace_id[i]); */
+/*         } */
+/*         cJSON_AddStringToObject(j_span, "traceId", buf); */
 
-        memset(buf, 0, sizeof(buf));
-        uint8_t span_id[8] = {};
-        memcpy(span_id, &span.span_id, sizeof(span_id));
-        for (int i = 0; i < sizeof(span_id); i++) {
-            snprintf(&buf[i * 2], sizeof(buf), "%02x", span_id[i]);
-        }
-        cJSON_AddStringToObject(j_span, "spanId", buf);
-        cJSON_AddNumberToObject(j_span, "kind", span.kind);
-        cJSON* status = cJSON_AddObjectToObject(j_span, "status");
-        cJSON_AddNumberToObject(status, "code", span.status);
-        cJSON_AddStringToObject(status, "message", span.message);
+/*         memset(buf, 0, sizeof(buf)); */
+/*         uint8_t span_id[8] = {}; */
+/*         memcpy(span_id, &span.span_id, sizeof(span_id)); */
+/*         for (int i = 0; i < sizeof(span_id); i++) { */
+/*             snprintf(&buf[i * 2], sizeof(buf), "%02x", span_id[i]); */
+/*         } */
+/*         cJSON_AddStringToObject(j_span, "spanId", buf); */
+/*         cJSON_AddNumberToObject(j_span, "kind", span.kind); */
+/*         cJSON* status = cJSON_AddObjectToObject(j_span, "status"); */
+/*         cJSON_AddNumberToObject(status, "code", span.status); */
+/*         cJSON_AddStringToObject(status, "message", span.message); */
 
-        cJSON_AddStringToObject(j_span, "name", span.name);
-    }
+/*         cJSON_AddStringToObject(j_span, "name", span.name); */
+/*     } */
 
-    return root;
-}
+/*     return root; */
+/* } */
 
 __uint128_t ot_generate_trace_id() {
     __uint128_t trace_id = 0;
@@ -147,23 +153,21 @@ ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
     struct timeval now = {0};
     gettimeofday(&now, NULL);
 
-    ot_span_t span = {
-        .start_time_unix_nano =
-            now.tv_sec * 1000 * 1000 * 1000 + now.tv_usec * 1000 * 1000,
+    ot_span_t* span = calloc(1, sizeof(ot_span_t));
+    span->start_time_unix_nano =
+        now.tv_sec * 1000 * 1000 * 1000 + now.tv_usec * 1000 * 1000;
+    span->trace_id = trace_id;
+    span->status = status;
+    span->kind = kind;
+    span->parent_span_id = parent_span_id;
 
-        .trace_id = trace_id,
-        .status = status,
-        .kind = kind,
-        .parent_span_id = parent_span_id,
-    };
+    arc4random_buf(&span->span_id, sizeof(span->span_id));
+    assert(name_len <= sizeof(span->name));
+    memcpy(span->name, name, name_len);
+    assert(message_len <= sizeof(span->message));
+    memcpy(span->message, message, message_len);
 
-    arc4random_buf(&span.span_id, sizeof(span.span_id));
-    assert(name_len <= sizeof(span.name));
-    memcpy(span.name, name, name_len);
-    assert(message_len <= sizeof(span.message));
-    memcpy(span.message, message, message_len);
-
-    return ringbuf_memcpy_into(spans, &span, sizeof(span));
+    return span;
 }
 
 void ot_span_end(ot_span_t* span) {
@@ -172,10 +176,41 @@ void ot_span_end(ot_span_t* span) {
 
     span->end_time_unix_nano =
         now.tv_sec * 1000 * 1000 * 1000 + now.tv_usec * 1000 * 1000;
+
+    pthread_mutex_lock(&ot_spans_mtx);
+    span->next = spans;
+    spans = span;
+    pthread_cond_signal(&ot_spans_to_export);
+    printf("span_end: name=%s\n", span->name);
+    fflush(stdout);
+    pthread_mutex_unlock(&ot_spans_mtx);
+}
+
+void* ot_export(void* varg) {
+    while (true) {
+        pthread_mutex_lock(&ot_spans_mtx);
+        while (spans == NULL) {
+            if (ot_finished) {
+                pthread_mutex_unlock(&ot_spans_mtx);
+                pthread_exit(NULL);
+            }
+            pthread_cond_wait(&ot_spans_to_export, &ot_spans_mtx);
+        }
+        ot_span_t* span = spans;
+        spans = spans->next;
+        printf("span would be exported: span_id=%02llx\n", span->span_id);
+        fflush(stdout);
+        pthread_mutex_unlock(&ot_spans_mtx);
+    }
+
+    return NULL;
 }
 
 int main() {
-    spans = ringbuf_new(100 * sizeof(ot_span_t));
+    pthread_mutex_init(&ot_spans_mtx, NULL);
+    pthread_cond_init(&ot_spans_to_export, NULL);
+    pthread_t ot_exporter = NULL;
+    pthread_create(&ot_exporter, NULL, ot_export, NULL);
 
     const __uint128_t trace_id = ot_generate_trace_id();
     ot_span_t* span_a =
@@ -190,9 +225,16 @@ int main() {
 
     usleep(10);
     ot_span_end(span_b);
+    usleep(10);
     ot_span_end(span_a);
 
-    cJSON* root = ot_spans_to_json();
+    /* cJSON* root = ot_spans_to_json(); */
 
-    puts(cJSON_Print(root));
+    /* puts(cJSON_Print(root)); */
+
+    pthread_mutex_lock(&ot_spans_mtx);
+    ot_finished = true;
+    pthread_cond_broadcast(&ot_spans_to_export);
+    pthread_mutex_unlock(&ot_spans_mtx);
+    pthread_join(ot_exporter, NULL);
 }
