@@ -1,6 +1,5 @@
 #include <assert.h>
 #include <stdio.h>
-#include <sys/_types/_time_t.h>
 #include <time.h>
 
 #define GB_IMPLEMENTATION
