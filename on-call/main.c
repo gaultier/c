@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdio.h>
+#include <sys/_types/_time_t.h>
 #include <time.h>
 
 #define GB_IMPLEMENTATION
@@ -38,15 +39,12 @@ static void datetime_add_hours(struct tm* d, u16 hours) {
     *d = res;
 }
 
-static bool datetime_is_non_working_hour(const struct tm* d) {
-    return !datetime_is_week_end(d) && d->tm_hour < 9 && d->tm_hour >= 18;
-}
-
 static bool datetime_is_working_hour(const struct tm* d) {
     return !datetime_is_week_end(d) && 9 <= d->tm_hour && d->tm_hour < 18;
 }
 
-static void shift_bill_hour(bill_summary_t* summary, const struct tm* hour) {
+static void shift_bill_hour(bill_summary_t* summary, time_t timestamp) {
+    struct tm* hour = localtime(&timestamp);
     if (datetime_is_working_hour(hour)) return;
 
     summary->total_hours += 1;
@@ -61,29 +59,6 @@ static void shift_bill_hour(bill_summary_t* summary, const struct tm* hour) {
     }
 }
 
-static void shift_bill_monthly(bill_summary_t* summary, struct tm* start,
-                               struct tm* end) {
-    struct tm i = *start;
-    const time_t end_timestamp = timelocal(end);
-    while (timelocal(&i) < end_timestamp) {
-        shift_bill_hour(summary, &i);
-        /* __builtin_dump_struct(&i, &printf); */
-        /* __builtin_dump_struct(summary, &printf); */
-        datetime_add_hours(&i, 1);
-    }
-}
-static void shift_bill_datetime_range(bill_summary_t* summary, struct tm* start,
-                                      struct tm* end) {
-    struct tm i = *start;
-    const time_t end_timestamp = timelocal(end);
-    while (timelocal(&i) < end_timestamp) {
-        shift_bill_hour(summary, &i);
-        /* __builtin_dump_struct(&i, &printf); */
-        /* __builtin_dump_struct(summary, &printf); */
-        datetime_add_hours(&i, 1);
-    }
-}
-
 static time_t datetime_end_of_month_timestamp(const struct tm* d) {
     struct tm tmp = *d;
     tmp.tm_mday = 1;
@@ -92,33 +67,65 @@ static time_t datetime_end_of_month_timestamp(const struct tm* d) {
     return timelocal(&tmp);
 }
 
+static void shift_bill_monthly(gbArray(bill_summary_t) summaries,
+                               datetime_range_t* shift) {
+    time_t timestamp = timelocal(&shift->start);
+    const time_t end_timestamp = timelocal(&shift->end);
+    const time_t eom = datetime_end_of_month_timestamp(&shift->start);
+
+    const bill_summary_t default_summary = {
+        .month = shift->start.tm_mon + 1, .year = shift->start.tm_year + 1900};
+    bill_summary_t* summary = NULL;
+
+    const u64 summaries_len = gb_array_count(summaries);
+    if (summaries_len > 0 &&
+        summaries[summaries_len - 1].month == shift->start.tm_mon &&
+        summaries[summaries_len - 1].year == shift->start.tm_year) {
+        summary = &summaries[summaries_len - 1];
+    } else {
+        gb_array_append(summaries, default_summary);
+        summary = &summaries[gb_array_count(summaries) - 1];
+    }
+
+    while (timestamp < eom) {
+        shift_bill_hour(summary, timestamp);
+        timestamp += 3600;
+    }
+    if (timestamp >= end_timestamp) return;
+
+    gb_array_append(summaries, default_summary);
+    summary = &summaries[gb_array_count(summaries) - 1];
+    while (timestamp < end_timestamp) {
+        shift_bill_hour(summary, timestamp);
+        timestamp += 3600;
+    }
+}
+
+/* static void shift_bill_datetime_range(bill_summary_t* summary, struct tm*
+ * start, */
+/*                                       struct tm* end) { */
+/*     struct tm i = *start; */
+/*     const time_t end_timestamp = timelocal(end); */
+/*     while (timelocal(&i) < end_timestamp) { */
+/*         shift_bill_hour(summary, &i); */
+/*         /1* __builtin_dump_struct(&i, &printf); *1/ */
+/*         /1* __builtin_dump_struct(summary, &printf); *1/ */
+/*         datetime_add_hours(&i, 1); */
+/*     } */
+/* } */
+
 static void bill(datetime_range_t* work, u64 work_len) {
     assert(work != NULL);
     assert(work_len > 0);
 
-    bill_summary_t summary = {0};
+    gbArray(bill_summary_t) summaries = NULL;
+    gb_array_init_reserve(summaries, gb_heap_allocator(), 100);
+    for (int i = 0; i < work_len; i++) {
+        shift_bill_monthly(summaries, &work[i]);
+    }
 
-    time_t work_start = timelocal(&work[0].start);
-    time_t work_end = timelocal(&work[work_len - 1].end);
-    time_t timestamp = work_start;
-
-    int work_j = 0;
-    datetime_range_t* shift = &work[work_j];
-    while (timestamp < work_end) {
-        int month = shift->start.tm_mon;
-        int year = shift->start.tm_year;
-        shift_bill_datetime_range(&summary, &shift->start, &shift->end);
-
-        work_j++;
-        if (work_j == work_len) return;
-        timestamp = timelocal(&work[work_j].start);
-        shift = &work[work_j];
-        if (month != shift->start.tm_mon) {
-            printf("%d-%d\n", year + 1900, month + 1);
-            __builtin_dump_struct(&summary, &printf);
-            puts("");
-            summary = (bill_summary_t){0};
-        }
+    for (int i = 0; i < gb_array_count(summaries); i++) {
+        __builtin_dump_struct(&summaries[i], &printf);
     }
 }
 
