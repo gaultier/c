@@ -134,6 +134,11 @@ int main() {
         {DATE_TIME(2022, 4, 1, 18), DATE_TIME(2022, 4, 6, 18)},
         {DATE_TIME(2022, 4, 7, 18), DATE_TIME(2022, 4, 11, 9)},
         {DATE_TIME(2022, 5, 2, 18), DATE_TIME(2022, 5, 9, 9)},
+        {DATE_TIME(2022, 6, 11, 9), DATE_TIME(2022, 6, 17, 9)},
+        {DATE_TIME(2022, 7, 3, 9), DATE_TIME(2022, 7, 4, 9)},
+        {DATE_TIME(2022, 7, 6, 18), DATE_TIME(2022, 7, 9, 0)},
+        {DATE_TIME(2022, 7, 10, 0), DATE_TIME(2022, 7, 11, 9)},
+        {DATE_TIME(2022, 7, 20, 18), DATE_TIME(2022, 7, 22, 9)},
     };
     bill(work, sizeof(work) / sizeof(work[0]));
 }
