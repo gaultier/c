@@ -9,9 +9,9 @@
 static const u16 hourly_week_end_rate = 15;
 static const u16 hourly_week_rate = 10;
 
-#define DATETIME(year, month, day, hour)                             \
+#define DATE_TIME(year, month, day, hour)                            \
     (struct tm) {                                                    \
-        .tm_year = year - 1970, .tm_mon = month - 1, .tm_wday = day, \
+        .tm_year = year - 1900, .tm_mon = month - 1, .tm_mday = day, \
         .tm_hour = hour,                                             \
     }
 
@@ -33,17 +33,6 @@ static void datetime_add_hours(struct tm* d, u16 hours) {
     *d = res;
 }
 
-static bool datetime_is_before(const struct tm* a, const struct tm* b) {
-    assert(a != NULL);
-    assert(b != NULL);
-    assert(a->tm_sec == 0);
-    assert(a->tm_min == 0);
-    assert(b->tm_sec == 0);
-    assert(b->tm_min == 0);
-
-    return timelocal((struct tm*)a) < timelocal((struct tm*)b);
-}
-
 static bool datetime_is_non_working_hour(const struct tm* d) {
     return !datetime_is_week_end(d) && d->tm_hour < 9 && d->tm_hour >= 18;
 }
@@ -58,27 +47,34 @@ static void shift_bill_hour(bill_summary_t* summary, const struct tm* hour) {
     summary->total_hours += 1;
     if (datetime_is_week_end(hour)) {
         summary->week_end_hours += 1;
+        summary->week_end_money += hourly_week_end_rate;
         summary->total_money += hourly_week_end_rate;
     } else {
         summary->week_hours += 1;
+        summary->week_money += hourly_week_rate;
         summary->total_money += hourly_week_rate;
     }
 }
 
-static void shift_bill_datetime_range(bill_summary_t* summary,
-                                      const struct tm* start,
-                                      const struct tm* end) {
+static void shift_bill_datetime_range(bill_summary_t* summary, struct tm* start,
+                                      struct tm* end) {
     struct tm i = *start;
-    while (datetime_is_before(&i, end)) {
+    const time_t end_timestamp = timelocal(end);
+    while (timelocal(&i) < end_timestamp) {
         shift_bill_hour(summary, &i);
-        datetime_add_hours(&i, 1);
         __builtin_dump_struct(&i, &printf);
+        __builtin_dump_struct(summary, &printf);
+        datetime_add_hours(&i, 1);
     }
+    __builtin_dump_struct(summary, &printf);
 }
 
 int main() {
     bill_summary_t summary = {0};
-    struct tm start = DATETIME(2021, 9, 18, 9);
-    struct tm end = DATETIME(2021, 9, 24, 9);
+    struct tm start = DATE_TIME(2021, 9, 18, 9);
+    struct tm end = DATE_TIME(2021, 9, 24, 9);
+
+    /* struct tm start = DATE_TIME(2021, 9, 17, 0); */
+    /* struct tm end = DATE_TIME(2021, 9, 17, 9); */
     shift_bill_datetime_range(&summary, &start, &end);
 }
