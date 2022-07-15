@@ -159,6 +159,7 @@ ot_span_t* ot_span_create(gbArray(ot_span_t) spans, __uint128_t trace_id,
     arc4random_buf(&span.span_id, sizeof(span.span_id));
     assert(name_len <= sizeof(span.name));
     memcpy(span.name, name, name_len);
+    assert(message_len <= sizeof(span.message));
     memcpy(span.message, message, message_len);
 
     gb_array_append(spans, span);
