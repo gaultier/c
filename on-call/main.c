@@ -69,50 +69,44 @@ static time_t datetime_end_of_month_timestamp(const struct tm* d) {
 
 static void shift_bill_monthly(gbArray(bill_summary_t) summaries,
                                datetime_range_t* shift) {
+    bill_summary_t* summary = NULL;
+    // Upsert
+    {
+        const u64 summaries_len = gb_array_count(summaries);
+        if (summaries_len > 0 &&
+            (summaries[summaries_len - 1].month - 1) == shift->start.tm_mon &&
+            (summaries[summaries_len - 1].year - 1900) ==
+                shift->start.tm_year) {
+            summary = &summaries[summaries_len - 1];
+        } else {
+            gb_array_append(
+                summaries,
+                ((bill_summary_t){.month = shift->start.tm_mon + 1,
+                                  .year = shift->start.tm_year + 1900}));
+            summary = &summaries[gb_array_count(summaries) - 1];
+        }
+    }
+
     time_t timestamp = timelocal(&shift->start);
     const time_t end_timestamp = timelocal(&shift->end);
     const time_t eom = datetime_end_of_month_timestamp(&shift->start);
 
-    const bill_summary_t default_summary = {
-        .month = shift->start.tm_mon + 1, .year = shift->start.tm_year + 1900};
-    bill_summary_t* summary = NULL;
-
-    const u64 summaries_len = gb_array_count(summaries);
-    if (summaries_len > 0 &&
-        summaries[summaries_len - 1].month == shift->start.tm_mon &&
-        summaries[summaries_len - 1].year == shift->start.tm_year) {
-        summary = &summaries[summaries_len - 1];
-    } else {
-        gb_array_append(summaries, default_summary);
-        summary = &summaries[gb_array_count(summaries) - 1];
-    }
-
-    while (timestamp < eom) {
+    while (timestamp < MIN(end_timestamp, eom)) {
         shift_bill_hour(summary, timestamp);
         timestamp += 3600;
     }
-    if (timestamp >= end_timestamp) return;
+    if (shift->start.tm_mon == shift->end.tm_mon) return;
 
-    gb_array_append(summaries, default_summary);
+    // Shift spanning 2 months
+    gb_array_append(summaries,
+                    ((bill_summary_t){.month = shift->end.tm_mon + 1,
+                                      .year = shift->end.tm_year + 1900}));
     summary = &summaries[gb_array_count(summaries) - 1];
     while (timestamp < end_timestamp) {
         shift_bill_hour(summary, timestamp);
         timestamp += 3600;
     }
 }
-
-/* static void shift_bill_datetime_range(bill_summary_t* summary, struct tm*
- * start, */
-/*                                       struct tm* end) { */
-/*     struct tm i = *start; */
-/*     const time_t end_timestamp = timelocal(end); */
-/*     while (timelocal(&i) < end_timestamp) { */
-/*         shift_bill_hour(summary, &i); */
-/*         /1* __builtin_dump_struct(&i, &printf); *1/ */
-/*         /1* __builtin_dump_struct(summary, &printf); *1/ */
-/*         datetime_add_hours(&i, 1); */
-/*     } */
-/* } */
 
 static void bill(datetime_range_t* work, u64 work_len) {
     assert(work != NULL);
@@ -137,37 +131,9 @@ int main() {
         {DATE_TIME(2021, 12, 20, 18), DATE_TIME(2021, 12, 26, 9)},
         {DATE_TIME(2022, 2, 26, 18), DATE_TIME(2022, 3, 7, 9)},
         {DATE_TIME(2022, 3, 25, 18), DATE_TIME(2022, 3, 28, 9)},
+        {DATE_TIME(2022, 4, 1, 18), DATE_TIME(2022, 4, 6, 18)},
+        {DATE_TIME(2022, 4, 7, 18), DATE_TIME(2022, 4, 11, 9)},
+        {DATE_TIME(2022, 5, 2, 18), DATE_TIME(2022, 5, 9, 9)},
     };
     bill(work, sizeof(work) / sizeof(work[0]));
-
-    /* { */
-    /*     bill_summary_t summary = {0}; */
-    /*     struct tm start = DATE_TIME(2021, 9, 18, 9); */
-    /*     struct tm end = DATE_TIME(2021, 9, 24, 9); */
-    /*     shift_bill_datetime_range(&summary, &start, &end); */
-    /* } */
-    /* { */
-    /*     bill_summary_t summary = {0}; */
-    /*     struct tm start = DATE_TIME(2021, 10, 1, 18); */
-    /*     struct tm end = DATE_TIME(2021, 10, 7, 9); */
-    /*     shift_bill_datetime_range(&summary, &start, &end); */
-    /* } */
-    /* { */
-    /*     bill_summary_t summary = {0}; */
-    /*     struct tm start = DATE_TIME(2021, 11, 21, 9); */
-    /*     struct tm end = DATE_TIME(2021, 11, 26, 9); */
-    /*     shift_bill_datetime_range(&summary, &start, &end); */
-    /* } */
-    /* { */
-    /*     bill_summary_t summary = {0}; */
-    /*     struct tm start = DATE_TIME(2021, 12, 20, 18); */
-    /*     struct tm end = DATE_TIME(2021, 12, 26, 9); */
-    /*     shift_bill_datetime_range(&summary, &start, &end); */
-    /* } */
-    /* { */
-    /*     bill_summary_t summary = {0}; */
-    /*     struct tm start = DATE_TIME(2022, 2, 26, 18); */
-    /*     struct tm end = DATE_TIME(2022, 3, 1, 0); */
-    /*     shift_bill_datetime_range(&summary, &start, &end); */
-    /* } */
 }
