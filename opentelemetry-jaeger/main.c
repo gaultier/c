@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <curl/curl.h>
+#include <curl/easy.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -184,12 +185,19 @@ void ot_span_end(ot_span_t* span) {
 }
 
 void* ot_export(void* varg) {
+    CURL* http_handle = curl_easy_init();
+    assert(http_handle != NULL);
+
+    assert(curl_easy_setopt(http_handle, CURLOPT_URL,
+                            "localhost:4318/v1/traces/") == CURLE_OK);
+
     // TODO: batching
     while (true) {
         pthread_mutex_lock(&ot_spans_mtx);
         while (spans == NULL) {
             if (ot_finished) {
                 pthread_mutex_unlock(&ot_spans_mtx);
+                curl_easy_cleanup(http_handle);
                 pthread_exit(NULL);
             }
             pthread_cond_wait(&ot_spans_to_export, &ot_spans_mtx);
