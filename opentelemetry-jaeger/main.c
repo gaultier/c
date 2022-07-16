@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <curl/curl.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -10,6 +11,9 @@
 
 #define CJSON_HIDE_SYMBOLS
 #include "vendor/cJSON/cJSON.h"
+#define GB_IMPLEMENTATION
+#define GB_STATIC
+#include "../vendor/gb/gb.h"
 
 typedef enum __attribute__((packed)) {
     OT_ST_Ok = 0,
@@ -74,71 +78,68 @@ static ot_span_t* spans = NULL;
 static pthread_cond_t ot_spans_to_export;
 static pthread_mutex_t ot_spans_mtx;
 static bool ot_finished;
+static gbPool span_pool = {0};
+static gbAllocator pool_allocator = {0};
 
-/* cJSON* ot_spans_to_json() { */
-/*     cJSON* root = cJSON_CreateObject(); */
+cJSON* ot_spans_to_json(const ot_span_t* span) {
+    cJSON* root = cJSON_CreateObject();
 
-/*     cJSON* resourceSpans = cJSON_AddArrayToObject(root, "resourceSpans"); */
+    cJSON* resourceSpans = cJSON_AddArrayToObject(root, "resourceSpans");
 
-/*     cJSON* resourceSpan = cJSON_CreateObject(); */
-/*     cJSON_AddItemToArray(resourceSpans, resourceSpan); */
+    cJSON* resourceSpan = cJSON_CreateObject();
+    cJSON_AddItemToArray(resourceSpans, resourceSpan);
 
-/*     cJSON* resource = cJSON_AddObjectToObject(resourceSpan, "resource"); */
+    cJSON* resource = cJSON_AddObjectToObject(resourceSpan, "resource");
 
-/*     cJSON* attributes = cJSON_AddArrayToObject(resource, "attributes"); */
-/*     cJSON* attribute = cJSON_CreateObject(); */
-/*     cJSON_AddItemToArray(attributes, attribute); */
-/*     cJSON_AddStringToObject(attribute, "key", "service.name"); */
-/*     cJSON* value = cJSON_CreateObject(); */
-/*     cJSON_AddItemToObject(attribute, "value", value); */
-/*     cJSON_AddStringToObject(value, "stringValue", "main.c"); */
+    cJSON* attributes = cJSON_AddArrayToObject(resource, "attributes");
+    cJSON* attribute = cJSON_CreateObject();
+    cJSON_AddItemToArray(attributes, attribute);
+    cJSON_AddStringToObject(attribute, "key", "service.name");
+    cJSON* value = cJSON_CreateObject();
+    cJSON_AddItemToObject(attribute, "value", value);
+    cJSON_AddStringToObject(value, "stringValue", "main.c");
 
-/*     cJSON* instrumentationLibrarySpans = */
-/*         cJSON_AddArrayToObject(resourceSpan, "instrumentationLibrarySpans");
- */
-/*     cJSON* instrumentationLibrarySpan = cJSON_CreateObject(); */
-/*     cJSON_AddItemToArray(instrumentationLibrarySpans, */
-/*                          instrumentationLibrarySpan); */
+    cJSON* instrumentationLibrarySpans =
+        cJSON_AddArrayToObject(resourceSpan, "instrumentationLibrarySpans");
 
-/*     cJSON* j_spans = */
-/*         cJSON_AddArrayToObject(instrumentationLibrarySpan, "spans"); */
+    cJSON* instrumentationLibrarySpan = cJSON_CreateObject();
+    cJSON_AddItemToArray(instrumentationLibrarySpans,
+                         instrumentationLibrarySpan);
 
-/*     while (!ringbuf_is_empty(ot_spans)) { */
-/*         ot_span_t span = {0}; */
-/*         ringbuf_memcpy_from(&span, ot_spans, sizeof(span)); */
+    cJSON* j_spans =
+        cJSON_AddArrayToObject(instrumentationLibrarySpan, "spans");
 
-/*         cJSON* j_span = cJSON_CreateObject(); */
-/*         cJSON_AddItemToArray(j_spans, j_span); */
-/*         cJSON_AddNumberToObject(j_span, "startTimeUnixNano", */
-/*                                 span.start_time_unix_nano); */
-/*         cJSON_AddNumberToObject(j_span, "endTimeUnixNano", */
-/*                                 span.end_time_unix_nano); */
+    cJSON* j_span = cJSON_CreateObject();
+    cJSON_AddItemToArray(j_spans, j_span);
+    cJSON_AddNumberToObject(j_span, "startTimeUnixNano",
+                            span->start_time_unix_nano);
+    cJSON_AddNumberToObject(j_span, "endTimeUnixNano",
+                            span->end_time_unix_nano);
 
-/*         char buf[64] = ""; */
-/*         uint8_t trace_id[16] = {}; */
-/*         memcpy(trace_id, &span.trace_id, sizeof(trace_id)); */
-/*         for (int i = 0; i < sizeof(trace_id); i++) { */
-/*             snprintf(&buf[i * 2], sizeof(buf), "%02x", trace_id[i]); */
-/*         } */
-/*         cJSON_AddStringToObject(j_span, "traceId", buf); */
+    char buf[64] = "";
+    uint8_t trace_id[16] = {};
+    memcpy(trace_id, &span->trace_id, sizeof(trace_id));
+    for (int i = 0; i < sizeof(trace_id); i++) {
+        snprintf(&buf[i * 2], sizeof(buf), "%02x", trace_id[i]);
+    }
+    cJSON_AddStringToObject(j_span, "traceId", buf);
 
-/*         memset(buf, 0, sizeof(buf)); */
-/*         uint8_t span_id[8] = {}; */
-/*         memcpy(span_id, &span.span_id, sizeof(span_id)); */
-/*         for (int i = 0; i < sizeof(span_id); i++) { */
-/*             snprintf(&buf[i * 2], sizeof(buf), "%02x", span_id[i]); */
-/*         } */
-/*         cJSON_AddStringToObject(j_span, "spanId", buf); */
-/*         cJSON_AddNumberToObject(j_span, "kind", span.kind); */
-/*         cJSON* status = cJSON_AddObjectToObject(j_span, "status"); */
-/*         cJSON_AddNumberToObject(status, "code", span.status); */
-/*         cJSON_AddStringToObject(status, "message", span.message); */
+    memset(buf, 0, sizeof(buf));
+    uint8_t span_id[8] = {};
+    memcpy(span_id, &span->span_id, sizeof(span_id));
+    for (int i = 0; i < sizeof(span_id); i++) {
+        snprintf(&buf[i * 2], sizeof(buf), "%02x", span_id[i]);
+    }
+    cJSON_AddStringToObject(j_span, "spanId", buf);
+    cJSON_AddNumberToObject(j_span, "kind", span->kind);
+    cJSON* status = cJSON_AddObjectToObject(j_span, "status");
+    cJSON_AddNumberToObject(status, "code", span->status);
+    cJSON_AddStringToObject(status, "message", span->message);
 
-/*         cJSON_AddStringToObject(j_span, "name", span.name); */
-/*     } */
+    cJSON_AddStringToObject(j_span, "name", span->name);
 
-/*     return root; */
-/* } */
+    return root;
+}
 
 __uint128_t ot_generate_trace_id() {
     __uint128_t trace_id = 0;
@@ -146,14 +147,15 @@ __uint128_t ot_generate_trace_id() {
     return trace_id;
 }
 
-ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
-                          ot_span_kind_t kind, ot_span_status_t status,
-                          char* message, uint8_t message_len,
-                          uint64_t parent_span_id) {
+ot_span_t* ot_span_create(gbAllocator allocator, __uint128_t trace_id,
+                          char* name, uint8_t name_len, ot_span_kind_t kind,
+                          ot_span_status_t status, char* message,
+                          uint8_t message_len, uint64_t parent_span_id) {
     struct timeval now = {0};
     gettimeofday(&now, NULL);
 
-    ot_span_t* span = calloc(1, sizeof(ot_span_t));
+    ot_span_t* span = gb_alloc_item(allocator, ot_span_t);
+
     span->start_time_unix_nano =
         now.tv_sec * 1000 * 1000 * 1000 + now.tv_usec * 1000 * 1000;
     span->trace_id = trace_id;
@@ -187,6 +189,7 @@ void ot_span_end(ot_span_t* span) {
 }
 
 void* ot_export(void* varg) {
+    // TODO: batching
     while (true) {
         pthread_mutex_lock(&ot_spans_mtx);
         while (spans == NULL) {
@@ -199,7 +202,12 @@ void* ot_export(void* varg) {
         ot_span_t* span = spans;
         spans = spans->next;
         printf("span would be exported: span_id=%02llx\n", span->span_id);
+        cJSON* root = ot_spans_to_json(span);
+        puts(cJSON_Print(root));
+        cJSON_free(root);
+        gb_free(pool_allocator, span);
         fflush(stdout);
+
         pthread_mutex_unlock(&ot_spans_mtx);
     }
 
@@ -213,24 +221,23 @@ int main() {
     pthread_create(&ot_exporter, NULL, ot_export, NULL);
 
     const __uint128_t trace_id = ot_generate_trace_id();
-    ot_span_t* span_a =
-        ot_span_create(trace_id, "span-a", sizeof("span-a") - 1, OT_SK_CLIENT,
-                       OT_ST_OUT_OF_RANGE, "this is the first span",
-                       sizeof("this is the first span") - 1, 0);
 
-    ot_span_t* span_b =
-        ot_span_create(trace_id, "span-b", sizeof("span-b") - 1, OT_SK_CLIENT,
-                       OT_ST_OUT_OF_RANGE, "this is the second span",
-                       sizeof("this is the second span") - 1, span_a->trace_id);
+    gb_pool_init(&span_pool, gb_heap_allocator(), 100, sizeof(ot_span_t));
+    pool_allocator = gb_pool_allocator(&span_pool);
+    ot_span_t* span_a = ot_span_create(
+        pool_allocator, trace_id, "span-a", sizeof("span-a") - 1, OT_SK_CLIENT,
+        OT_ST_OUT_OF_RANGE, "this is the first span",
+        sizeof("this is the first span") - 1, 0);
+
+    ot_span_t* span_b = ot_span_create(
+        pool_allocator, trace_id, "span-b", sizeof("span-b") - 1, OT_SK_CLIENT,
+        OT_ST_OUT_OF_RANGE, "this is the second span",
+        sizeof("this is the second span") - 1, span_a->trace_id);
 
     usleep(10);
     ot_span_end(span_b);
     usleep(10);
     ot_span_end(span_a);
-
-    /* cJSON* root = ot_spans_to_json(); */
-
-    /* puts(cJSON_Print(root)); */
 
     pthread_mutex_lock(&ot_spans_mtx);
     ot_finished = true;
