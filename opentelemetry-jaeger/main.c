@@ -11,9 +11,6 @@
 
 #define CJSON_HIDE_SYMBOLS
 #include "vendor/cJSON/cJSON.h"
-#define GB_IMPLEMENTATION
-#define GB_STATIC
-#include "../vendor/gb/gb.h"
 
 typedef enum __attribute__((packed)) {
     OT_ST_Ok = 0,
@@ -78,8 +75,6 @@ static ot_span_t* spans = NULL;
 static pthread_cond_t ot_spans_to_export;
 static pthread_mutex_t ot_spans_mtx;
 static bool ot_finished;
-static gbPool span_pool = {0};
-static gbAllocator pool_allocator = {0};
 
 cJSON* ot_spans_to_json(const ot_span_t* span) {
     cJSON* root = cJSON_CreateObject();
@@ -147,14 +142,14 @@ __uint128_t ot_generate_trace_id() {
     return trace_id;
 }
 
-ot_span_t* ot_span_create(gbAllocator allocator, __uint128_t trace_id,
-                          char* name, uint8_t name_len, ot_span_kind_t kind,
-                          ot_span_status_t status, char* message,
-                          uint8_t message_len, uint64_t parent_span_id) {
+ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
+                          ot_span_kind_t kind, ot_span_status_t status,
+                          char* message, uint8_t message_len,
+                          uint64_t parent_span_id) {
     struct timeval now = {0};
     gettimeofday(&now, NULL);
 
-    ot_span_t* span = gb_alloc_item(allocator, ot_span_t);
+    ot_span_t* span = calloc(1, sizeof(ot_span_t));
 
     span->start_time_unix_nano =
         now.tv_sec * 1000 * 1000 * 1000 + now.tv_usec * 1000 * 1000;
@@ -205,7 +200,7 @@ void* ot_export(void* varg) {
         cJSON* root = ot_spans_to_json(span);
         puts(cJSON_Print(root));
         cJSON_free(root);
-        gb_free(pool_allocator, span);
+        free(span);
         fflush(stdout);
 
         pthread_mutex_unlock(&ot_spans_mtx);
@@ -222,21 +217,25 @@ int main() {
 
     const __uint128_t trace_id = ot_generate_trace_id();
 
-    gb_pool_init(&span_pool, gb_heap_allocator(), 100, sizeof(ot_span_t));
-    pool_allocator = gb_pool_allocator(&span_pool);
-    ot_span_t* span_a = ot_span_create(
-        pool_allocator, trace_id, "span-a", sizeof("span-a") - 1, OT_SK_CLIENT,
-        OT_ST_OUT_OF_RANGE, "this is the first span",
-        sizeof("this is the first span") - 1, 0);
+    ot_span_t* span_a =
+        ot_span_create(trace_id, "span-a", sizeof("span-a") - 1, OT_SK_CLIENT,
+                       OT_ST_OUT_OF_RANGE, "this is the first span",
+                       sizeof("this is the first span") - 1, 0);
 
-    ot_span_t* span_b = ot_span_create(
-        pool_allocator, trace_id, "span-b", sizeof("span-b") - 1, OT_SK_CLIENT,
-        OT_ST_OUT_OF_RANGE, "this is the second span",
-        sizeof("this is the second span") - 1, span_a->trace_id);
+    ot_span_t* span_b =
+        ot_span_create(trace_id, "span-b", sizeof("span-b") - 1, OT_SK_CLIENT,
+                       OT_ST_OUT_OF_RANGE, "this is the second span",
+                       sizeof("this is the second span") - 1, span_a->trace_id);
 
-    usleep(10);
+    usleep(8);
     ot_span_end(span_b);
+    ot_span_t* span_c =
+        ot_span_create(trace_id, "span-c", sizeof("span-c") - 1, OT_SK_SERVER,
+                       OT_ST_FAILED_PRECONDITION, "this is the third span",
+                       sizeof("this is the third span") - 1, span_a->trace_id);
     usleep(10);
+    ot_span_end(span_c);
+    usleep(5);
     ot_span_end(span_a);
 
     pthread_mutex_lock(&ot_spans_mtx);
