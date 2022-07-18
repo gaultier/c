@@ -168,6 +168,13 @@ ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
     return span;
 }
 
+ot_span_t* ot_span_create_c(__uint128_t trace_id, char* name0,
+                            ot_span_kind_t kind, ot_span_status_t status,
+                            char* message0, uint64_t parent_span_id) {
+    return ot_span_create(trace_id, name0, strlen(name0), kind, status,
+                          message0, strlen(message0), parent_span_id);
+}
+
 void ot_span_end(ot_span_t* span) {
     struct timeval now = {0};
     gettimeofday(&now, NULL);
@@ -261,21 +268,18 @@ int main() {
     const __uint128_t trace_id = ot_generate_trace_id();
 
     ot_span_t* span_a =
-        ot_span_create(trace_id, "span-a", sizeof("span-a") - 1, OT_SK_CLIENT,
-                       OT_ST_OUT_OF_RANGE, "this is the first span",
-                       sizeof("this is the first span") - 1, 0);
+        ot_span_create_c(trace_id, "span-a", OT_SK_CLIENT, OT_ST_OUT_OF_RANGE,
+                         "this is the first span", 0);
 
     ot_span_t* span_b =
-        ot_span_create(trace_id, "span-b", sizeof("span-b") - 1, OT_SK_CLIENT,
-                       OT_ST_OUT_OF_RANGE, "this is the second span",
-                       sizeof("this is the second span") - 1, span_a->trace_id);
+        ot_span_create_c(trace_id, "span-b", OT_SK_CLIENT, OT_ST_OUT_OF_RANGE,
+                         "this is the second span", span_a->trace_id);
 
     usleep(8);
     ot_span_end(span_b);
-    ot_span_t* span_c =
-        ot_span_create(trace_id, "span-c", sizeof("span-c") - 1, OT_SK_SERVER,
-                       OT_ST_FAILED_PRECONDITION, "this is the third span",
-                       sizeof("this is the third span") - 1, span_a->trace_id);
+    ot_span_t* span_c = ot_span_create_c(
+        trace_id, "span-c", OT_SK_SERVER, OT_ST_FAILED_PRECONDITION,
+        "this is the third span", span_a->trace_id);
     usleep(10);
     ot_span_end(span_c);
     usleep(5);
