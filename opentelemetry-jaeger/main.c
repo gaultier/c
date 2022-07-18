@@ -257,6 +257,7 @@ void* ot_export(void* varg) {
                     "Failed to post traces : url=%s res=%d err=%s "
                     "errno=%d\n",
                     url, res, curl_easy_strerror(res), res);
+            // TODO: retry?
         } else {
             printf("Exported span: span_id=%02llx\n", span->span_id);
         }
