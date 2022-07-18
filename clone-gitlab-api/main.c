@@ -422,6 +422,8 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
 
     gb_array_clear(api->tokens);
     int res = 0;
+    ot_span_t* json_span = ot_span_create_c(
+        trace_id, "parse json", OT_SK_CLIENT, OT_ST_Ok, "parse json", 0);
     do {
         jsmn_init(&p);
         res = jsmn_parse(&p, api->response_body,
@@ -435,16 +437,19 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
             fprintf(stderr, "Failed to parse JSON: body=%s res=%d\n",
                     api->response_body, res);
+            ot_span_end(json_span);
             return res;
         }
         if (res == 0) {
             fprintf(stderr,
                     "Failed to parse JSON (is it empty?): body=%s res=%d\n",
                     api->response_body, res);
+            ot_span_end(json_span);
             return res;
         }
     } while (res == JSMN_ERROR_NOMEM);
 
+    ot_span_end(json_span);
     gb_array_resize(api->tokens, res);
     res = 0;
 
