@@ -1,10 +1,10 @@
-#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <curl/easy.h>
 #include <inttypes.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -118,19 +118,24 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
     cJSON_AddNumberToObject(j_span, "endTimeUnixNano",
                             span->end_time_unix_nano);
 
-    char buf[33] = "";
-    for (int i = 0; i < 16; i++) {
-        snprintf(&buf[i * 2], sizeof(buf), "%02x",
-                 (uint8_t)((span->trace_id >> 8 * i) & 0xff));
+    {
+        char buf[33] = "";
+        for (int i = 0; i < 16; i++) {
+            snprintf(&buf[i * 2], 3, "%02x",
+                     (uint8_t)((span->trace_id >> (8 * i)) & 0xff));
+        }
+        cJSON_AddStringToObject(j_span, "traceId", buf);
     }
-    cJSON_AddStringToObject(j_span, "traceId", buf);
 
-    memset(buf, 0, sizeof(buf));
-    for (int i = 0; i < 8; i++) {
-        snprintf(&buf[i * 2], sizeof(buf), "%02x",
-                 (uint8_t)((span->span_id >> 8 * i) & 0xff));
+    {
+        char buf[17] = "";
+        for (int i = 0; i < 8; i++) {
+            snprintf(&buf[i * 2], 3, "%02x",
+                     (uint8_t)((span->span_id >> (8 * i)) & 0xff));
+        }
+        cJSON_AddStringToObject(j_span, "spanId", buf);
     }
-    cJSON_AddStringToObject(j_span, "spanId", buf);
+
     cJSON_AddNumberToObject(j_span, "kind", span->kind);
     cJSON* status = cJSON_AddObjectToObject(j_span, "status");
     cJSON_AddNumberToObject(status, "code", span->status);
@@ -236,7 +241,9 @@ void* ot_export(void* varg) {
         ot_span_t* span = ot.spans;
         ot.spans = ot.spans->next;
         cJSON* root = ot_spans_to_json(span);
-        printf("Exporting span: span_id=%02llx\n", span->span_id);
+        printf("Exporting span: trace_id=%02llx%02llx span_id=%02llx\n",
+               (uint64_t)(span->trace_id & UINT64_MAX),
+               (uint64_t)(span->trace_id >> 64), span->span_id);
         assert(cJSON_PrintPreallocated(root, post_data, OT_POST_DATA_LEN, 0) ==
                1);
 
