@@ -15,7 +15,7 @@
 #include "../vendor/cJSON/cJSON.c"
 
 typedef enum __attribute__((packed)) {
-    OT_ST_Ok = 0,
+    OT_ST_OK = 0,
     OT_ST_CANCELLED = 1,
     OT_ST_UNKNOWN_ERROR = 2,
     OT_ST_INVALIDARGUMENT = 3,
