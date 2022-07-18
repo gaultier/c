@@ -11,6 +11,7 @@ int main() {
     ot_span_t* span_b =
         ot_span_create(trace_id, "span-b", OT_SK_CLIENT,
                        "this is the second span", span_a->trace_id);
+    ot_span_add_attribute(span_b, "service.name", "clone-gitlab-api");
 
     usleep(8);
     ot_span_end(span_b);

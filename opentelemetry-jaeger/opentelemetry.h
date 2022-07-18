@@ -120,7 +120,7 @@ bool ot_trace_add_attribute(ot_trace_t* trace, char* key, char* value) {
     return true;
 }
 
-bool ot_span_add_attribute(ot_trace_t* span, char* key, char* value) {
+bool ot_span_add_attribute(ot_span_t* span, char* key, char* value) {
     if (span->attributes_len ==
         sizeof(span->attributes) / sizeof(ot_attribute_t)) {
         return false;
@@ -137,16 +137,6 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
 
     cJSON* resourceSpan = cJSON_CreateObject();
     cJSON_AddItemToArray(resourceSpans, resourceSpan);
-
-    cJSON* resource = cJSON_AddObjectToObject(resourceSpan, "resource");
-
-    cJSON* attributes = cJSON_AddArrayToObject(resource, "attributes");
-    cJSON* attribute = cJSON_CreateObject();
-    cJSON_AddItemToArray(attributes, attribute);
-    cJSON_AddStringToObject(attribute, "key", "service.name");
-    cJSON* value = cJSON_CreateObject();
-    cJSON_AddItemToObject(attribute, "value", value);
-    cJSON_AddStringToObject(value, "stringValue", "main.c");
 
     cJSON* instrumentationLibrarySpans =
         cJSON_AddArrayToObject(resourceSpan, "instrumentationLibrarySpans");
@@ -198,6 +188,19 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
 
     cJSON_AddStringToObject(j_span, "name", span->name);
 
+    if (span->attributes_len > 0) {
+        cJSON* attributes = cJSON_AddArrayToObject(j_span, "attributes");
+        cJSON* attribute = cJSON_CreateObject();
+
+        for (int i = 0; i < span->attributes_len; i++) {
+            cJSON_AddItemToArray(attributes, attribute);
+            cJSON_AddStringToObject(attribute, "key", span->attributes[i].key);
+            cJSON* value = cJSON_CreateObject();
+            cJSON_AddItemToObject(attribute, "value", value);
+            cJSON_AddStringToObject(value, "stringValue",
+                                    span->attributes[i].key);
+        }
+    }
     return root;
 }
 
@@ -246,7 +249,7 @@ static uint64_t noop(void* contents, uint64_t size, uint64_t nmemb,
 void* ot_export(void* varg) {
     (void)varg;
 
-#define OT_POST_DATA_LEN 4096
+#define OT_POST_DATA_LEN 16384
     static char post_data[OT_POST_DATA_LEN] = "";
     memset(post_data, 0, OT_POST_DATA_LEN);
 
@@ -291,6 +294,7 @@ void* ot_export(void* varg) {
          * json=`%s`\n", */
         /*     (uint64_t)(span->trace_id & UINT64_MAX), */
         /*     (uint64_t)(span->trace_id >> 64), span->span_id, post_data); */
+        puts(cJSON_Print(root));
         assert(cJSON_PrintPreallocated(root, post_data, OT_POST_DATA_LEN, 0) ==
                1);
 
