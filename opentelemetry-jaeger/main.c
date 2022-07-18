@@ -185,11 +185,28 @@ void ot_span_end(ot_span_t* span) {
 }
 
 void* ot_export(void* varg) {
+#define POST_DATA_LEN 4096
+    static char post_data[POST_DATA_LEN] = {};
+    memset(post_data, 0, POST_DATA_LEN);
+
     CURL* http_handle = curl_easy_init();
     assert(http_handle != NULL);
 
-    assert(curl_easy_setopt(http_handle, CURLOPT_URL,
-                            "localhost:4318/v1/traces/") == CURLE_OK);
+    const char url[] = "localhost:4318/v1/traces";
+    assert(curl_easy_setopt(http_handle, CURLOPT_URL, url) == CURLE_OK);
+    assert(curl_easy_setopt(http_handle, CURLOPT_MAXREDIRS, 5) == CURLE_OK);
+    assert(curl_easy_setopt(http_handle, CURLOPT_TIMEOUT, 60 /* seconds */) ==
+           CURLE_OK);
+    assert(curl_easy_setopt(http_handle, CURLOPT_FOLLOWLOCATION, true) ==
+           CURLE_OK);
+    assert(curl_easy_setopt(http_handle, CURLOPT_REDIR_PROTOCOLS,
+                            "http,https") == CURLE_OK);
+    struct curl_slist* slist = NULL;
+    slist = curl_slist_append(slist, "Content-Type: application/json");
+    assert(slist != NULL);
+    assert(curl_easy_setopt(http_handle, CURLOPT_HTTPHEADER, slist) ==
+           CURLE_OK);
+    assert(curl_easy_setopt(http_handle, CURLOPT_VERBOSE, 0) == CURLE_OK);
 
     // TODO: batching
     while (true) {
@@ -197,6 +214,7 @@ void* ot_export(void* varg) {
         while (spans == NULL) {
             if (ot_finished) {
                 pthread_mutex_unlock(&ot_spans_mtx);
+                curl_slist_free_all(slist);
                 curl_easy_cleanup(http_handle);
                 pthread_exit(NULL);
             }
@@ -204,9 +222,24 @@ void* ot_export(void* varg) {
         }
         ot_span_t* span = spans;
         spans = spans->next;
-        printf("span would be exported: span_id=%02llx\n", span->span_id);
         cJSON* root = ot_spans_to_json(span);
-        puts(cJSON_Print(root));
+        printf("Exporting span: span_id=%02llx\n", span->span_id);
+        assert(cJSON_PrintPreallocated(root, post_data, POST_DATA_LEN, 0) == 1);
+
+        assert(curl_easy_setopt(http_handle, CURLOPT_POSTFIELDS, post_data) ==
+               CURLE_OK);
+        CURLcode res = curl_easy_perform(http_handle);
+        if (res != CURLE_OK) {
+            int64_t error = 0;
+            curl_easy_getinfo(http_handle, CURLINFO_OS_ERRNO, &error);
+            fprintf(stderr,
+                    "Failed to post traces : url=%s res=%d err=%s "
+                    "errno=%d\n",
+                    url, res, curl_easy_strerror(res), res);
+        } else {
+            printf("Exported span: span_id=%02llx\n", span->span_id);
+        }
+
         cJSON_free(root);
         free(span);
         fflush(stdout);
