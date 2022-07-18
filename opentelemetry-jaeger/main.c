@@ -1,3 +1,4 @@
+#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <curl/easy.h>
@@ -83,7 +84,7 @@ typedef struct {
 
 static ot_t ot;
 
-static void b64_encode(char* in, uint64_t in_len, char* out,
+static void b64_encode(uint8_t* in, uint64_t in_len, char* out,
                        uint64_t* out_len) {
     const static char table[64] = {
         [0] = 'A',  [1] = 'B',  [2] = 'C',  [3] = 'D',  [4] = 'E',  [5] = 'F',
@@ -116,16 +117,24 @@ static void b64_encode(char* in, uint64_t in_len, char* out,
         *out_len += 3;
         return;
     }
-    for (int i = 3; i <= in_len; i += 3) {
-        out[*out_len] = table[in[i - 3] >> 2];
 
-        out[*out_len + 1] =
-            table[(((in[i - 3] & 3) << 4)) | (in[i - 3 + 1] >> 4)];
+#define CHECK(v,in_val) do { if (v>63) {fprintf(stderr,"v=%u i=%d in_val=%u\n", v, i,in_val);assert(0);}} while(0)
+    for (uint64_t i = 3; i <= in_len; i += 3) {
+        const uint8_t a = in[i - 3] >> 2;
+        CHECK(a, in[i-3]);
+        out[*out_len] = table[a];
 
-        out[*out_len + 2] =
-            table[((in[i - 3 + 1] & 15) << 2) | (in[i - 3 + 2] >> 6)];
+        const uint8_t b = (((in[i - 3] & 3) << 4)) | (in[i - 2] >> 4);
+        CHECK(b, in[i-2]);
+        out[*out_len + 1] = table[b];
 
-        out[*out_len + 3] = table[in[i - 3 + 2] & 63];
+        const uint8_t c = ((in[i - 2] & 15) << 2) | (in[i - 1] >> 6);
+        CHECK(c, in[i-1]);
+        out[*out_len + 2] = table[c];
+
+        const uint8_t d = in[i - 1] & 63;
+        CHECK(d, in[i-1]);
+        out[*out_len + 3] = table[d];
 
         *out_len += 4;
     }
@@ -167,20 +176,18 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
                             span->end_time_unix_nano);
 
     {
-        char buf[33] = "";
-        for (int i = 0; i < 16; i++) {
-            snprintf(&buf[i * 2], 3, "%02x",
-                     (uint8_t)((span->trace_id >> (8 * i)) & 0xff));
-        }
+        char buf[100] = "";
+        uint64_t buf_len=0;
+        b64_encode((void*)&span->trace_id, sizeof(span->trace_id), buf, &buf_len);
+        fprintf(stderr, "[D011] %s\n", buf);
         cJSON_AddStringToObject(j_span, "traceId", buf);
     }
 
     {
-        char buf[17] = "";
-        for (int i = 0; i < 8; i++) {
-            snprintf(&buf[i * 2], 3, "%02x",
-                     (uint8_t)((span->span_id >> (8 * i)) & 0xff));
-        }
+        char buf[100] = "";
+        uint64_t buf_len=0;
+        b64_encode((void*)&span->span_id, sizeof(span->span_id), buf, &buf_len);
+        fprintf(stderr, "[D012] %s\n", buf);
         cJSON_AddStringToObject(j_span, "spanId", buf);
     }
 
@@ -336,36 +343,6 @@ void ot_end() {
 
 #ifdef OT_MAIN
 int main() {
-    {
-        char in[] = "M";
-        char out[100] = "";
-        uint64_t out_len = 0;
-        b64_encode(in, sizeof(in) - 1, out, &out_len);
-        printf("[D001] out=%s out_len=%llu\n", out, out_len);
-    }
-    {
-        char in[] = "Ma";
-        char out[100] = "";
-        uint64_t out_len = 0;
-        b64_encode(in, sizeof(in) - 1, out, &out_len);
-        printf("[D002] out=%s out_len=%llu\n", out, out_len);
-    }
-    {
-        char in[] = "rk.";
-        char out[100] = "";
-        uint64_t out_len = 0;
-        b64_encode(in, sizeof(in) - 1, out, &out_len);
-        printf("[D003] out=%s out_len=%llu\n", out, out_len);
-    }
-    {
-        char in[] = "Many hands make light work.";
-        char out[100] = "";
-        uint64_t out_len = 0;
-        b64_encode(in, sizeof(in) - 1, out, &out_len);
-        printf("[D004] out=%s out_len=%llu\n", out, out_len);
-    }
-    exit(0);
-
     ot_start();
 
     const __uint128_t trace_id = ot_generate_trace_id();
