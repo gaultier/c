@@ -196,7 +196,6 @@ void ot_span_end(ot_span_t* span) {
     span->next = ot.spans;
     ot.spans = span;
     pthread_cond_signal(&ot.spans_to_export);
-    printf("span_end: name=%s\n", span->name);
     fflush(stdout);
     pthread_mutex_unlock(&ot.spans_mtx);
 }
