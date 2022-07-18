@@ -703,9 +703,9 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
                        "clone or update", parent_span->id);
     ot_span_add_attribute(project_span, "service.name", "clone-gitlab-api");
     // FIXME: free
-    /* ot_span_add_attribute(project_span, "git_url", strdup(git_url)); */
-    /* ot_span_add_attribute(project_span, "fs_path", strdup(fs_path)); */
-    /* ot_span_add_attribute(project_span, "path", strdup(path)); */
+    ot_span_add_attribute(project_span, "git_url", strdup(git_url));
+    ot_span_add_attribute(project_span, "fs_path", strdup(fs_path));
+    ot_span_add_attribute(project_span, "path", strdup(path));
 
     project_span->udata = path;
     pid_t pid = fork();
