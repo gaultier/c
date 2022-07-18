@@ -83,6 +83,54 @@ typedef struct {
 
 static ot_t ot;
 
+static void b64_encode(char* in, uint64_t in_len, char* out,
+                       uint64_t* out_len) {
+    const static char table[64] = {
+        [0] = 'A',  [1] = 'B',  [2] = 'C',  [3] = 'D',  [4] = 'E',  [5] = 'F',
+        [6] = 'G',  [7] = 'H',  [8] = 'I',  [9] = 'J',  [10] = 'K', [11] = 'L',
+        [12] = 'M', [13] = 'N', [14] = 'O', [15] = 'P', [16] = 'Q', [17] = 'R',
+        [18] = 'S', [19] = 'T', [20] = 'U', [21] = 'V', [22] = 'W', [23] = 'X',
+        [24] = 'Y', [25] = 'Z', [26] = 'a', [27] = 'b', [28] = 'c', [29] = 'd',
+        [30] = 'e', [31] = 'f', [32] = 'g', [33] = 'h', [34] = 'i', [35] = 'j',
+        [36] = 'k', [37] = 'l', [38] = 'm', [39] = 'n', [40] = 'o', [41] = 'p',
+        [42] = 'q', [43] = 'r', [44] = 's', [45] = 't', [46] = 'u', [47] = 'v',
+        [48] = 'w', [49] = 'x', [50] = 'y', [51] = 'z', [52] = '0', [53] = '1',
+        [54] = '2', [55] = '3', [56] = '4', [57] = '5', [58] = '6', [59] = '7',
+        [60] = '8', [61] = '9', [62] = '-', [63] = '_',
+    };
+    *out_len = 0;
+    if (in_len == 0) return;
+    if (in_len == 1) {
+        out[*out_len] = table[in[0] >> 2];
+        out[*out_len + 1] = table[(((in[0] & 3) << 4))];
+        *out_len += 2;
+        return;
+    }
+    if (in_len == 2) {
+        out[*out_len] = table[in[0] >> 2];
+
+        out[*out_len + 1] = table[(((in[0] & 3) << 4)) | (in[1] >> 4)];
+
+        out[*out_len + 2] = table[((in[1] & 15) << 2)];
+
+        *out_len += 3;
+        return;
+    }
+    for (int i = 3; i <= in_len; i += 3) {
+        out[*out_len] = table[in[i - 3] >> 2];
+
+        out[*out_len + 1] =
+            table[(((in[i - 3] & 3) << 4)) | (in[i - 3 + 1] >> 4)];
+
+        out[*out_len + 2] =
+            table[((in[i - 3 + 1] & 15) << 2) | (in[i - 3 + 2] >> 6)];
+
+        out[*out_len + 3] = table[in[i - 3 + 2] & 63];
+
+        *out_len += 4;
+    }
+}
+
 static cJSON* ot_spans_to_json(const ot_span_t* span) {
     cJSON* root = cJSON_CreateObject();
 
@@ -288,6 +336,36 @@ void ot_end() {
 
 #ifdef OT_MAIN
 int main() {
+    {
+        char in[] = "M";
+        char out[100] = "";
+        uint64_t out_len = 0;
+        b64_encode(in, sizeof(in) - 1, out, &out_len);
+        printf("[D001] out=%s out_len=%llu\n", out, out_len);
+    }
+    {
+        char in[] = "Ma";
+        char out[100] = "";
+        uint64_t out_len = 0;
+        b64_encode(in, sizeof(in) - 1, out, &out_len);
+        printf("[D002] out=%s out_len=%llu\n", out, out_len);
+    }
+    {
+        char in[] = "rk.";
+        char out[100] = "";
+        uint64_t out_len = 0;
+        b64_encode(in, sizeof(in) - 1, out, &out_len);
+        printf("[D003] out=%s out_len=%llu\n", out, out_len);
+    }
+    {
+        char in[] = "Many hands make light work.";
+        char out[100] = "";
+        uint64_t out_len = 0;
+        b64_encode(in, sizeof(in) - 1, out, &out_len);
+        printf("[D004] out=%s out_len=%llu\n", out, out_len);
+    }
+    exit(0);
+
     ot_start();
 
     const __uint128_t trace_id = ot_generate_trace_id();
