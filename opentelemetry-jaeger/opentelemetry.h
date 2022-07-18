@@ -138,6 +138,23 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
     cJSON* j_resource_span = cJSON_CreateObject();
     cJSON_AddItemToArray(j_resource_spans, j_resource_span);
 
+    cJSON* j_resource = cJSON_AddObjectToObject(j_resource_span, "resource");
+
+    if (span->attributes_len > 0) {
+        cJSON* j_attributes = cJSON_AddArrayToObject(j_resource, "attributes");
+
+        for (int i = 0; i < span->attributes_len; i++) {
+            cJSON* j_attribute = cJSON_CreateObject();
+            cJSON_AddItemToArray(j_attributes, j_attribute);
+            cJSON_AddStringToObject(j_attribute, "key",
+                                    span->attributes[i].key);
+
+            cJSON* j_value = cJSON_AddObjectToObject(j_attribute, "value");
+            cJSON_AddStringToObject(j_value, "stringValue",
+                                    span->attributes[i].value);
+        }
+    }
+
     cJSON* j_instrumentation_library_spans =
         cJSON_AddArrayToObject(j_resource_span, "instrumentationLibrarySpans");
 
@@ -188,20 +205,6 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
 
     cJSON_AddStringToObject(j_span, "name", span->name);
 
-    if (span->attributes_len > 0) {
-        cJSON* j_attributes = cJSON_AddArrayToObject(j_span, "attributes");
-
-        for (int i = 0; i < span->attributes_len; i++) {
-            cJSON* j_attribute = cJSON_CreateObject();
-            cJSON_AddItemToArray(j_attributes, j_attribute);
-            cJSON_AddStringToObject(j_attribute, "key",
-                                    span->attributes[i].key);
-
-            cJSON* j_value = cJSON_AddObjectToObject(j_attribute, "value");
-            cJSON_AddStringToObject(j_value, "stringValue",
-                                    span->attributes[i].value);
-        }
-    }
     return j_root;
 }
 
@@ -290,13 +293,13 @@ void* ot_export(void* varg) {
         ot_span_t* span = ot.spans;
         ot.spans = ot.spans->next;
         cJSON* root = ot_spans_to_json(span);
-        /* printf( */
-        /*     "Exporting span: trace_id=%02llx%02llx span_id=%02llx
-         * json=`%s`\n", */
-        /*     (uint64_t)(span->trace_id & UINT64_MAX), */
-        /*     (uint64_t)(span->trace_id >> 64), span->span_id, post_data); */
         assert(cJSON_PrintPreallocated(root, post_data, OT_POST_DATA_LEN, 0) ==
                1);
+        printf(
+            "Exporting span: trace_id=%02llx%02llx span_id=%02llx json "
+            "=`%s`\n ",
+            (uint64_t)(span->trace_id & UINT64_MAX),
+            (uint64_t)(span->trace_id >> 64), span->id, post_data);
 
         assert(curl_easy_setopt(http_handle, CURLOPT_POSTFIELDS, post_data) ==
                CURLE_OK);
@@ -310,7 +313,7 @@ void* ot_export(void* varg) {
                     url, res, curl_easy_strerror(res), res);
             // TODO: retry?
         } else {
-            /* printf("Exported span: span_id=%02llx\n", span->span_id); */
+            printf("Exported span: span_id=%02llx\n", span->id);
         }
 
         cJSON_Delete(root);
