@@ -200,6 +200,13 @@ void ot_span_end(ot_span_t* span) {
     pthread_mutex_unlock(&ot.spans_mtx);
 }
 
+static uint64_t noop(void* contents, uint64_t size, uint64_t nmemb,
+                     void* userp) {
+    (void)contents;
+    (void)userp;
+    return size * nmemb;
+}
+
 void* ot_export(void* varg) {
     (void)varg;
 
@@ -212,6 +219,8 @@ void* ot_export(void* varg) {
 
     const char url[] = "localhost:4318/v1/traces";
     assert(curl_easy_setopt(http_handle, CURLOPT_URL, url) == CURLE_OK);
+    assert(curl_easy_setopt(http_handle, CURLOPT_WRITEFUNCTION, noop) ==
+           CURLE_OK);
     assert(curl_easy_setopt(http_handle, CURLOPT_MAXREDIRS, 5) == CURLE_OK);
     assert(curl_easy_setopt(http_handle, CURLOPT_TIMEOUT, 60 /* seconds */) ==
            CURLE_OK);
