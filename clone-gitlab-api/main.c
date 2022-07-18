@@ -382,10 +382,13 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
     }
 }
 
-static int api_query_projects(api_t* api) {
+static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
     assert(api != NULL);
     assert(api->url != NULL);
 
+    ot_span_t* span =
+        ot_span_create_c(trace_id, "api_query_projects", OT_SK_CLIENT, OT_ST_Ok,
+                         "api_query_projects", 0);
     int res = 0;
     assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
            CURLE_OK);
@@ -398,9 +401,11 @@ static int api_query_projects(api_t* api) {
                 "errno=%d\n",
                 api->url, api->response_body, res, curl_easy_strerror(res),
                 error);
-        return res;
+        goto end;
     }
 
+end:
+    ot_span_end(span);
     return res;
 }
 
@@ -547,7 +552,6 @@ static void* watch_workers(void* varg) {
                 const int exit_status = (event->data >> 8);
                 ot_span_t* project_span = event->udata;
                 assert(project_span != NULL);
-                ot_span_end(project_span);
                 char* const path_with_namespace = project_span->udata;
 
                 finished += 1;
@@ -566,6 +570,7 @@ static void* watch_workers(void* varg) {
                         pg_colors[is_tty][COL_GREEN], finished, s,
                         path_with_namespace, pg_colors[is_tty][COL_RESET]);
                 } else {
+                    project_span->status = OT_ST_INTERNAL_ERROR;
                     printf(
                         "%s[%llu/%s] ❌ "
                         "%s (%d)%s\n",
@@ -573,6 +578,7 @@ static void* watch_workers(void* varg) {
                         path_with_namespace, exit_status,
                         pg_colors[is_tty][COL_RESET]);
                 }
+                ot_span_end(project_span);
                 gb_string_free(path_with_namespace);
             }
         }
@@ -682,7 +688,7 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
 
     ot_span_t* project_span =
         ot_span_create_c(trace_id, "upsert_project", OT_SK_CLIENT, OT_ST_Ok,
-                         "upsert_project", parent_span->span_id);
+                         path, parent_span->span_id);
     project_span->udata = path;
     pid_t pid = fork();
     if (pid == -1) {
@@ -717,7 +723,7 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
     int res = 0;
     gb_string_clear(api->response_body);
 
-    if ((res = api_query_projects(api)) != 0) {
+    if ((res = api_query_projects(api, span_fetch_projects)) != 0) {
         span_fetch_projects->status = OT_ST_UNKNOWN_ERROR;
         goto end;
     }
