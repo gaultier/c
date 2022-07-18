@@ -390,7 +390,9 @@ static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
         ot_span_create(trace_id, "api_query_projects", OT_SK_CLIENT,
                        "api_query_projects", parent_span->id);
     ot_span_add_attribute(span, "service.name", "clone-gitlab-api");
-    ot_span_add_attribute(span, "url", strdup(api->url));  // FIXME: free
+    ot_span_add_attribute(
+        span, "url",
+        strndup(api->url, gb_string_length(api->url)));  // FIXME: free
 
     int res = 0;
     assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
@@ -701,9 +703,9 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
                        "clone or update", parent_span->id);
     ot_span_add_attribute(project_span, "service.name", "clone-gitlab-api");
     // FIXME: free
-    ot_span_add_attribute(project_span, "git_url", strdup(git_url));
-    ot_span_add_attribute(project_span, "fs_path", strdup(fs_path));
-    ot_span_add_attribute(project_span, "path", strdup(path));
+    /* ot_span_add_attribute(project_span, "git_url", strdup(git_url)); */
+    /* ot_span_add_attribute(project_span, "fs_path", strdup(fs_path)); */
+    /* ot_span_add_attribute(project_span, "path", strdup(path)); */
 
     project_span->udata = path;
     pid_t pid = fork();

@@ -131,22 +131,22 @@ bool ot_span_add_attribute(ot_span_t* span, char* key, char* value) {
 }
 
 static cJSON* ot_spans_to_json(const ot_span_t* span) {
-    cJSON* root = cJSON_CreateObject();
+    cJSON* j_root = cJSON_CreateObject();
 
-    cJSON* resourceSpans = cJSON_AddArrayToObject(root, "resourceSpans");
+    cJSON* j_resource_spans = cJSON_AddArrayToObject(j_root, "resourceSpans");
 
-    cJSON* resourceSpan = cJSON_CreateObject();
-    cJSON_AddItemToArray(resourceSpans, resourceSpan);
+    cJSON* j_resource_span = cJSON_CreateObject();
+    cJSON_AddItemToArray(j_resource_spans, j_resource_span);
 
-    cJSON* instrumentationLibrarySpans =
-        cJSON_AddArrayToObject(resourceSpan, "instrumentationLibrarySpans");
+    cJSON* j_instrumentation_library_spans =
+        cJSON_AddArrayToObject(j_resource_span, "instrumentationLibrarySpans");
 
-    cJSON* instrumentationLibrarySpan = cJSON_CreateObject();
-    cJSON_AddItemToArray(instrumentationLibrarySpans,
-                         instrumentationLibrarySpan);
+    cJSON* j_instrumentation_library_span = cJSON_CreateObject();
+    cJSON_AddItemToArray(j_instrumentation_library_spans,
+                         j_instrumentation_library_span);
 
     cJSON* j_spans =
-        cJSON_AddArrayToObject(instrumentationLibrarySpan, "spans");
+        cJSON_AddArrayToObject(j_instrumentation_library_span, "spans");
 
     cJSON* j_span = cJSON_CreateObject();
     cJSON_AddItemToArray(j_spans, j_span);
@@ -189,19 +189,20 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
     cJSON_AddStringToObject(j_span, "name", span->name);
 
     if (span->attributes_len > 0) {
-        cJSON* attributes = cJSON_AddArrayToObject(j_span, "attributes");
-        cJSON* attribute = cJSON_CreateObject();
+        cJSON* j_attributes = cJSON_AddArrayToObject(j_span, "attributes");
+        cJSON* j_attribute = cJSON_CreateObject();
 
         for (int i = 0; i < span->attributes_len; i++) {
-            cJSON_AddItemToArray(attributes, attribute);
-            cJSON_AddStringToObject(attribute, "key", span->attributes[i].key);
-            cJSON* value = cJSON_CreateObject();
-            cJSON_AddItemToObject(attribute, "value", value);
-            cJSON_AddStringToObject(value, "stringValue",
+            cJSON_AddItemToArray(j_attributes, j_attribute);
+            cJSON_AddStringToObject(j_attribute, "key",
+                                    span->attributes[i].key);
+
+            cJSON* j_value = cJSON_AddObjectToObject(j_attribute, "value");
+            cJSON_AddStringToObject(j_value, "stringValue",
                                     span->attributes[i].key);
         }
     }
-    return root;
+    return j_root;
 }
 
 ot_span_t* ot_span_create(__uint128_t trace_id, char* name, ot_span_kind_t kind,
