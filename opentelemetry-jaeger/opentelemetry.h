@@ -12,7 +12,7 @@
 #include <unistd.h>
 
 #define CJSON_HIDE_SYMBOLS
-#include "vendor/cJSON/cJSON.c"
+#include "../vendor/cJSON/cJSON.c"
 
 typedef enum __attribute__((packed)) {
     OT_ST_Ok = 0,
