@@ -82,7 +82,7 @@ typedef struct {
 
 static ot_t ot;
 
-cJSON* ot_spans_to_json(const ot_span_t* span) {
+static cJSON* ot_spans_to_json(const ot_span_t* span) {
     cJSON* root = cJSON_CreateObject();
 
     cJSON* resourceSpans = cJSON_AddArrayToObject(root, "resourceSpans");
@@ -199,9 +199,9 @@ void ot_span_end(ot_span_t* span) {
 void* ot_export(void* varg) {
     (void)varg;
 
-#define POST_DATA_LEN 4096
-    static char post_data[POST_DATA_LEN] = {};
-    memset(post_data, 0, POST_DATA_LEN);
+#define OT_POST_DATA_LEN 4096
+    static char post_data[OT_POST_DATA_LEN] = {};
+    memset(post_data, 0, OT_POST_DATA_LEN);
 
     CURL* http_handle = curl_easy_init();
     assert(http_handle != NULL);
@@ -238,7 +238,8 @@ void* ot_export(void* varg) {
         ot.spans = ot.spans->next;
         cJSON* root = ot_spans_to_json(span);
         printf("Exporting span: span_id=%02llx\n", span->span_id);
-        assert(cJSON_PrintPreallocated(root, post_data, POST_DATA_LEN, 0) == 1);
+        assert(cJSON_PrintPreallocated(root, post_data, OT_POST_DATA_LEN, 0) ==
+               1);
 
         assert(curl_easy_setopt(http_handle, CURLOPT_POSTFIELDS, post_data) ==
                CURLE_OK);
@@ -278,6 +279,7 @@ void ot_end() {
     pthread_join(ot.exporter, NULL);
 }
 
+#ifdef OT_MAIN
 int main() {
     ot_start();
 
@@ -303,3 +305,4 @@ int main() {
 
     ot_end();
 }
+#endif
