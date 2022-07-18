@@ -1,3 +1,4 @@
+#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <curl/easy.h>
@@ -117,19 +118,17 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
     cJSON_AddNumberToObject(j_span, "endTimeUnixNano",
                             span->end_time_unix_nano);
 
-    char buf[64] = "";
-    uint8_t trace_id[16] = {};
-    memcpy(trace_id, &span->trace_id, sizeof(trace_id));
-    for (int i = 0; i < sizeof(trace_id); i++) {
-        snprintf(&buf[i * 2], sizeof(buf), "%02x", trace_id[i]);
+    char buf[33] = "";
+    for (int i = 0; i < 16; i++) {
+        snprintf(&buf[i * 2], sizeof(buf), "%02x",
+                 (uint8_t)((span->trace_id >> 8 * i) & 0xff));
     }
     cJSON_AddStringToObject(j_span, "traceId", buf);
 
     memset(buf, 0, sizeof(buf));
-    uint8_t span_id[8] = {};
-    memcpy(span_id, &span->span_id, sizeof(span_id));
-    for (int i = 0; i < sizeof(span_id); i++) {
-        snprintf(&buf[i * 2], sizeof(buf), "%02x", span_id[i]);
+    for (int i = 0; i < 8; i++) {
+        snprintf(&buf[i * 2], sizeof(buf), "%02x",
+                 (uint8_t)((span->span_id >> 8 * i) & 0xff));
     }
     cJSON_AddStringToObject(j_span, "spanId", buf);
     cJSON_AddNumberToObject(j_span, "kind", span->kind);
@@ -200,7 +199,7 @@ void* ot_export(void* varg) {
     (void)varg;
 
 #define OT_POST_DATA_LEN 4096
-    static char post_data[OT_POST_DATA_LEN] = {};
+    static char post_data[OT_POST_DATA_LEN] = "";
     memset(post_data, 0, OT_POST_DATA_LEN);
 
     CURL* http_handle = curl_easy_init();
