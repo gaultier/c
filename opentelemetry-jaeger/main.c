@@ -185,6 +185,8 @@ void ot_span_end(ot_span_t* span) {
 }
 
 void* ot_export(void* varg) {
+    (void)varg;
+
 #define POST_DATA_LEN 4096
     static char post_data[POST_DATA_LEN] = {};
     memset(post_data, 0, POST_DATA_LEN);
