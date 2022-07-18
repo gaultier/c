@@ -387,7 +387,7 @@ static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
     assert(api->url != NULL);
 
     ot_span_t* span =
-        ot_span_create_c(trace_id, "api_query_projects", OT_SK_CLIENT, OT_ST_OK,
+        ot_span_create_c(trace_id, "api_query_projects", OT_SK_CLIENT,
                          "api_query_projects", parent_span->span_id);
     int res = 0;
     assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
@@ -423,8 +423,8 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     gb_array_clear(api->tokens);
     int res = 0;
     ot_span_t* json_span =
-        ot_span_create_c(trace_id, "parse json", OT_SK_CLIENT, OT_ST_OK,
-                         "parse json", parent_span->span_id);
+        ot_span_create_c(trace_id, "parse json", OT_SK_CLIENT, "parse json",
+                         parent_span->span_id);
     do {
         jsmn_init(&p);
         res = jsmn_parse(&p, api->response_body,
@@ -692,9 +692,8 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
     assert(git_url != NULL);
     assert(options != NULL);
 
-    ot_span_t* project_span =
-        ot_span_create_c(trace_id, "upsert_project", OT_SK_CLIENT, OT_ST_OK,
-                         path, parent_span->span_id);
+    ot_span_t* project_span = ot_span_create_c(
+        trace_id, "upsert_project", OT_SK_CLIENT, path, parent_span->span_id);
     project_span->udata = path;
     pid_t pid = fork();
     if (pid == -1) {
@@ -722,9 +721,8 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
     assert(api != NULL);
     assert(options != NULL);
 
-    ot_span_t* span_fetch_projects =
-        ot_span_create_c(trace_id, "api_fetch_projects", OT_SK_CLIENT, OT_ST_OK,
-                         "api_fetch_projects", 0);
+    ot_span_t* span_fetch_projects = ot_span_create_c(
+        trace_id, "api_fetch_projects", OT_SK_CLIENT, "api_fetch_projects", 0);
 
     int res = 0;
     gb_string_clear(api->response_body);

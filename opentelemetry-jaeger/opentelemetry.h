@@ -162,9 +162,8 @@ __uint128_t ot_generate_trace_id() {
 }
 
 ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
-                          ot_span_kind_t kind, ot_span_status_t status,
-                          char* message, uint8_t message_len,
-                          uint64_t parent_span_id) {
+                          ot_span_kind_t kind, char* message,
+                          uint8_t message_len, uint64_t parent_span_id) {
     struct timespec tp = {0};
     clock_gettime(CLOCK_REALTIME, &tp);
 
@@ -172,7 +171,6 @@ ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
 
     span->start_time_unix_nano = tp.tv_sec * 1000 * 1000 * 1000 + tp.tv_nsec;
     span->trace_id = trace_id;
-    span->status = status;
     span->kind = kind;
     span->parent_span_id = parent_span_id;
 
@@ -186,10 +184,10 @@ ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
 }
 
 ot_span_t* ot_span_create_c(__uint128_t trace_id, char* name0,
-                            ot_span_kind_t kind, ot_span_status_t status,
-                            char* message0, uint64_t parent_span_id) {
-    return ot_span_create(trace_id, name0, strlen(name0), kind, status,
-                          message0, strlen(message0), parent_span_id);
+                            ot_span_kind_t kind, char* message0,
+                            uint64_t parent_span_id) {
+    return ot_span_create(trace_id, name0, strlen(name0), kind, message0,
+                          strlen(message0), parent_span_id);
 }
 
 void ot_span_end(ot_span_t* span) {
