@@ -61,16 +61,28 @@ typedef enum __attribute__((packed)) {
     OT_SK_CONSUMER = 5,
 } ot_span_kind_t;
 
+typedef struct {
+    char *key, *value;
+} ot_attribute_t;
+
+typedef struct {
+    __uint128_t id;
+    ot_attribute_t attributes[64];
+    uint8_t attributes_len;
+} ot_trace_t;
+
 struct ot_span_t {
     uint64_t start_time_unix_nano, end_time_unix_nano;
-    uint64_t span_id, parent_span_id;
+    uint64_t id, parent_span_id;
     __uint128_t trace_id;
     ot_span_kind_t kind;
     ot_span_status_t status;
-    char name[128];
-    char message[128];
+    char* name;
+    char* message;
     struct ot_span_t* next;
     void* udata;
+    ot_attribute_t attributes[64];
+    uint8_t attributes_len;
 };
 typedef struct ot_span_t ot_span_t;
 
@@ -83,6 +95,38 @@ typedef struct {
 } ot_t;
 
 static ot_t ot;
+
+__uint128_t ot_generate_trace_id() {
+    __uint128_t trace_id = 0;
+    arc4random_buf(&trace_id, sizeof(trace_id));
+    return trace_id;
+}
+
+ot_trace_t* ot_trace_create() {
+    ot_trace_t* trace = calloc(1, sizeof(ot_trace_t));
+    trace->id = ot_generate_trace_id();
+    return trace;
+}
+
+bool ot_trace_add_attribute(ot_trace_t* trace, char* key, char* value) {
+    if (trace->attributes_len ==
+        sizeof(trace->attributes) / sizeof(ot_attribute_t)) {
+        return false;
+    }
+    trace->attributes[trace->attributes_len++] =
+        (ot_attribute_t){.key = key, .value = value};
+    return true;
+}
+
+bool ot_span_add_attribute(ot_trace_t* span, char* key, char* value) {
+    if (span->attributes_len ==
+        sizeof(span->attributes) / sizeof(ot_attribute_t)) {
+        return false;
+    }
+    span->attributes[span->attributes_len++] =
+        (ot_attribute_t){.key = key, .value = value};
+    return true;
+}
 
 static cJSON* ot_spans_to_json(const ot_span_t* span) {
     cJSON* root = cJSON_CreateObject();
@@ -132,7 +176,7 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
         char buf[17] = "";
         for (int i = 0; i < 8; i++) {
             snprintf(&buf[i * 2], 3, "%02x",
-                     (uint8_t)((span->span_id >> (8 * i)) & 0xff));
+                     (uint8_t)((span->id >> (8 * i)) & 0xff));
         }
         cJSON_AddStringToObject(j_span, "spanId", buf);
     }
@@ -155,15 +199,8 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
     return root;
 }
 
-__uint128_t ot_generate_trace_id() {
-    __uint128_t trace_id = 0;
-    arc4random_buf(&trace_id, sizeof(trace_id));
-    return trace_id;
-}
-
-ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
-                          ot_span_kind_t kind, char* message,
-                          uint8_t message_len, uint64_t parent_span_id) {
+ot_span_t* ot_span_create(__uint128_t trace_id, char* name, ot_span_kind_t kind,
+                          char* message, uint64_t parent_span_id) {
     struct timespec tp = {0};
     clock_gettime(CLOCK_REALTIME, &tp);
 
@@ -174,20 +211,11 @@ ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
     span->kind = kind;
     span->parent_span_id = parent_span_id;
 
-    arc4random_buf(&span->span_id, sizeof(span->span_id));
-    assert(name_len <= sizeof(span->name));
-    memcpy(span->name, name, name_len);
-    assert(message_len <= sizeof(span->message));
-    memcpy(span->message, message, message_len);
+    arc4random_buf(&span->id, sizeof(span->id));
+    span->name = name;
+    span->message = message;
 
     return span;
-}
-
-ot_span_t* ot_span_create_c(__uint128_t trace_id, char* name0,
-                            ot_span_kind_t kind, char* message0,
-                            uint64_t parent_span_id) {
-    return ot_span_create(trace_id, name0, strlen(name0), kind, message0,
-                          strlen(message0), parent_span_id);
 }
 
 void ot_span_end(ot_span_t* span) {
