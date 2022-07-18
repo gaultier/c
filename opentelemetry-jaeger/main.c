@@ -72,10 +72,15 @@ struct ot_span_t {
 };
 typedef struct ot_span_t ot_span_t;
 
-static ot_span_t* spans = NULL;
-static pthread_cond_t ot_spans_to_export;
-static pthread_mutex_t ot_spans_mtx;
-static bool ot_finished;
+typedef struct {
+    ot_span_t* spans;
+    pthread_cond_t spans_to_export;
+    pthread_mutex_t spans_mtx;
+    bool finished;
+    pthread_t exporter;
+} ot_t;
+
+static ot_t ot;
 
 cJSON* ot_spans_to_json(const ot_span_t* span) {
     cJSON* root = cJSON_CreateObject();
@@ -182,13 +187,13 @@ void ot_span_end(ot_span_t* span) {
     span->end_time_unix_nano =
         now.tv_sec * 1000 * 1000 * 1000 + now.tv_usec * 1000 * 1000;
 
-    pthread_mutex_lock(&ot_spans_mtx);
-    span->next = spans;
-    spans = span;
-    pthread_cond_signal(&ot_spans_to_export);
+    pthread_mutex_lock(&ot.spans_mtx);
+    span->next = ot.spans;
+    ot.spans = span;
+    pthread_cond_signal(&ot.spans_to_export);
     printf("span_end: name=%s\n", span->name);
     fflush(stdout);
-    pthread_mutex_unlock(&ot_spans_mtx);
+    pthread_mutex_unlock(&ot.spans_mtx);
 }
 
 void* ot_export(void* varg) {
@@ -219,18 +224,18 @@ void* ot_export(void* varg) {
 
     // TODO: batching
     while (true) {
-        pthread_mutex_lock(&ot_spans_mtx);
-        while (spans == NULL) {
-            if (ot_finished) {
-                pthread_mutex_unlock(&ot_spans_mtx);
+        pthread_mutex_lock(&ot.spans_mtx);
+        while (ot.spans == NULL) {
+            if (ot.finished) {
+                pthread_mutex_unlock(&ot.spans_mtx);
                 curl_slist_free_all(slist);
                 curl_easy_cleanup(http_handle);
                 pthread_exit(NULL);
             }
-            pthread_cond_wait(&ot_spans_to_export, &ot_spans_mtx);
+            pthread_cond_wait(&ot.spans_to_export, &ot.spans_mtx);
         }
-        ot_span_t* span = spans;
-        spans = spans->next;
+        ot_span_t* span = ot.spans;
+        ot.spans = ot.spans->next;
         cJSON* root = ot_spans_to_json(span);
         printf("Exporting span: span_id=%02llx\n", span->span_id);
         assert(cJSON_PrintPreallocated(root, post_data, POST_DATA_LEN, 0) == 1);
@@ -253,17 +258,28 @@ void* ot_export(void* varg) {
         free(span);
         fflush(stdout);
 
-        pthread_mutex_unlock(&ot_spans_mtx);
+        pthread_mutex_unlock(&ot.spans_mtx);
     }
 
     return NULL;
 }
 
+void ot_start() {
+    pthread_mutex_init(&ot.spans_mtx, NULL);
+    pthread_cond_init(&ot.spans_to_export, NULL);
+    pthread_create(&ot.exporter, NULL, ot_export, NULL);
+}
+
+void ot_end() {
+    pthread_mutex_lock(&ot.spans_mtx);
+    ot.finished = true;
+    pthread_cond_broadcast(&ot.spans_to_export);
+    pthread_mutex_unlock(&ot.spans_mtx);
+    pthread_join(ot.exporter, NULL);
+}
+
 int main() {
-    pthread_mutex_init(&ot_spans_mtx, NULL);
-    pthread_cond_init(&ot_spans_to_export, NULL);
-    pthread_t ot_exporter = NULL;
-    pthread_create(&ot_exporter, NULL, ot_export, NULL);
+    ot_start();
 
     const __uint128_t trace_id = ot_generate_trace_id();
 
@@ -285,9 +301,5 @@ int main() {
     usleep(5);
     ot_span_end(span_a);
 
-    pthread_mutex_lock(&ot_spans_mtx);
-    ot_finished = true;
-    pthread_cond_broadcast(&ot_spans_to_export);
-    pthread_mutex_unlock(&ot_spans_mtx);
-    pthread_join(ot_exporter, NULL);
+    ot_end();
 }
