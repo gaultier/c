@@ -261,7 +261,7 @@ void* ot_export(void* varg) {
             printf("Exported span: span_id=%02llx\n", span->span_id);
         }
 
-        cJSON_free(root);
+        cJSON_Delete(root);
         free(span);
         fflush(stdout);
 
