@@ -388,7 +388,7 @@ static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
 
     ot_span_t* span =
         ot_span_create_c(trace_id, "api_query_projects", OT_SK_CLIENT, OT_ST_Ok,
-                         "api_query_projects", 0);
+                         "api_query_projects", parent_span->span_id);
     int res = 0;
     assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
            CURLE_OK);
@@ -422,8 +422,9 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
 
     gb_array_clear(api->tokens);
     int res = 0;
-    ot_span_t* json_span = ot_span_create_c(
-        trace_id, "parse json", OT_SK_CLIENT, OT_ST_Ok, "parse json", 0);
+    ot_span_t* json_span =
+        ot_span_create_c(trace_id, "parse json", OT_SK_CLIENT, OT_ST_Ok,
+                         "parse json", parent_span->span_id);
     do {
         jsmn_init(&p);
         res = jsmn_parse(&p, api->response_body,
