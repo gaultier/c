@@ -190,16 +190,16 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
 
     if (span->attributes_len > 0) {
         cJSON* j_attributes = cJSON_AddArrayToObject(j_span, "attributes");
-        cJSON* j_attribute = cJSON_CreateObject();
 
         for (int i = 0; i < span->attributes_len; i++) {
+            cJSON* j_attribute = cJSON_CreateObject();
             cJSON_AddItemToArray(j_attributes, j_attribute);
             cJSON_AddStringToObject(j_attribute, "key",
                                     span->attributes[i].key);
 
             cJSON* j_value = cJSON_AddObjectToObject(j_attribute, "value");
             cJSON_AddStringToObject(j_value, "stringValue",
-                                    span->attributes[i].key);
+                                    span->attributes[i].value);
         }
     }
     return j_root;
@@ -295,7 +295,6 @@ void* ot_export(void* varg) {
          * json=`%s`\n", */
         /*     (uint64_t)(span->trace_id & UINT64_MAX), */
         /*     (uint64_t)(span->trace_id >> 64), span->span_id, post_data); */
-        puts(cJSON_Print(root));
         assert(cJSON_PrintPreallocated(root, post_data, OT_POST_DATA_LEN, 0) ==
                1);
 
