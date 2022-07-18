@@ -136,6 +136,14 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
         }
         cJSON_AddStringToObject(j_span, "spanId", buf);
     }
+    if (span->parent_span_id != 0) {
+        char buf[17] = "";
+        for (int i = 0; i < 8; i++) {
+            snprintf(&buf[i * 2], 3, "%02x",
+                     (uint8_t)((span->parent_span_id >> (8 * i)) & 0xff));
+        }
+        cJSON_AddStringToObject(j_span, "parentSpanId", buf);
+    }
 
     cJSON_AddNumberToObject(j_span, "kind", span->kind);
     cJSON* status = cJSON_AddObjectToObject(j_span, "status");
