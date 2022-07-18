@@ -242,10 +242,11 @@ void* ot_export(void* varg) {
         ot_span_t* span = ot.spans;
         ot.spans = ot.spans->next;
         cJSON* root = ot_spans_to_json(span);
-        printf(
-            "Exporting span: trace_id=%02llx%02llx span_id=%02llx json=`%s`\n",
-            (uint64_t)(span->trace_id & UINT64_MAX),
-            (uint64_t)(span->trace_id >> 64), span->span_id, post_data);
+        /* printf( */
+        /*     "Exporting span: trace_id=%02llx%02llx span_id=%02llx
+         * json=`%s`\n", */
+        /*     (uint64_t)(span->trace_id & UINT64_MAX), */
+        /*     (uint64_t)(span->trace_id >> 64), span->span_id, post_data); */
         assert(cJSON_PrintPreallocated(root, post_data, OT_POST_DATA_LEN, 0) ==
                1);
 
@@ -261,7 +262,7 @@ void* ot_export(void* varg) {
                     url, res, curl_easy_strerror(res), res);
             // TODO: retry?
         } else {
-            printf("Exported span: span_id=%02llx\n", span->span_id);
+            /* printf("Exported span: span_id=%02llx\n", span->span_id); */
         }
 
         cJSON_Delete(root);
