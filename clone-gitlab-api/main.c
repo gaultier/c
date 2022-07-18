@@ -16,9 +16,12 @@
 #include "../vendor/gb/gb.h"
 
 #define JSMN_STATIC
+#include "../opentelemetry-jaeger/opentelemetry.h"
 #include "vendor/jsmn/jsmn.h"
 
 #define MAX_URL_LEN 4096
+
+static __uint128_t trace_id = 0;
 
 typedef enum {
     COL_RESET,
@@ -402,11 +405,12 @@ static int api_query_projects(api_t* api) {
 }
 
 static int upsert_project(gbString path, char* git_url, char* fs_path,
-                          const options_t* options, int queue);
+                          const options_t* options, int queue,
+                          const ot_span_t* parent_span);
 
 static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
-                                         int queue,
-                                         uint64_t* projects_handled) {
+                                         int queue, uint64_t* projects_handled,
+                                         const ot_span_t* parent_span) {
     assert(api != NULL);
 
     jsmn_parser p;
@@ -504,7 +508,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
                 assert(path_with_namespace != NULL);
 
                 if ((res = upsert_project(path_with_namespace, git_url, fs_path,
-                                          options, queue)) != 0)
+                                          options, queue, parent_span)) != 0)
                     return res;
                 git_url = NULL;
 
@@ -541,7 +545,10 @@ static void* watch_workers(void* varg) {
             if ((event->filter == EVFILT_PROC) &&
                 (event->fflags & NOTE_EXITSTATUS)) {
                 const int exit_status = (event->data >> 8);
-                char* const path_with_namespace = event->udata;
+                ot_span_t* project_span = event->udata;
+                assert(project_span != NULL);
+                ot_span_end(project_span);
+                char* const path_with_namespace = project_span->udata;
 
                 finished += 1;
                 const i64 count = gb_atomic64_load(&projects_count);
@@ -647,15 +654,15 @@ static int change_directory(char* path) {
 }
 
 static int record_process_finished_event(int queue, pid_t pid,
-                                         char* path_with_namespace) {
-    assert(path_with_namespace != NULL);
+                                         ot_span_t* project_span) {
+    assert(project_span != NULL);
 
     struct kevent event = {
         .filter = EVFILT_PROC,
         .ident = pid,
         .flags = EV_ADD | EV_ONESHOT,
         .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
-        .udata = path_with_namespace,
+        .udata = project_span,
     };
     if (kevent(queue, &event, 1, NULL, 0, 0) == -1) {
         fprintf(stderr,
@@ -667,11 +674,16 @@ static int record_process_finished_event(int queue, pid_t pid,
 }
 
 static int upsert_project(gbString path, char* git_url, char* fs_path,
-                          const options_t* options, int queue) {
+                          const options_t* options, int queue,
+                          const ot_span_t* parent_span) {
     assert(path != NULL);
     assert(git_url != NULL);
     assert(options != NULL);
 
+    ot_span_t* project_span =
+        ot_span_create_c(trace_id, "upsert_project", OT_SK_CLIENT, OT_ST_Ok,
+                         "upsert_project", parent_span->span_id);
+    project_span->udata = path;
     pid_t pid = fork();
     if (pid == -1) {
         fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
@@ -685,7 +697,8 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
         assert(0 && "Unreachable");
     } else {
         int res = 0;
-        if ((res = record_process_finished_event(queue, pid, path)) != 0)
+        if ((res = record_process_finished_event(queue, pid, project_span)) !=
+            0)
             return res;
     }
     return 0;
@@ -697,19 +710,34 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
     assert(api != NULL);
     assert(options != NULL);
 
+    ot_span_t* span_fetch_projects =
+        ot_span_create_c(trace_id, "api_fetch_projects", OT_SK_CLIENT, OT_ST_Ok,
+                         "api_fetch_projects", 0);
+
     int res = 0;
     gb_string_clear(api->response_body);
 
-    if ((res = api_query_projects(api)) != 0) return res;
+    if ((res = api_query_projects(api)) != 0) {
+        span_fetch_projects->status = OT_ST_UNKNOWN_ERROR;
+        goto end;
+    }
 
-    if ((res = api_parse_and_upsert_projects(api, options, queue,
-                                             projects_handled)) != 0)
-        return res;
+    if ((res = api_parse_and_upsert_projects(
+             api, options, queue, projects_handled, span_fetch_projects)) !=
+        0) {
+        span_fetch_projects->status = OT_ST_INTERNAL_ERROR;
+        goto end;
+    }
 
+end:
+    ot_span_end(span_fetch_projects);
     return 0;
 }
 
 int main(int argc, char* argv[]) {
+    ot_start();
+    trace_id = ot_generate_trace_id();
+
     gettimeofday(&start, NULL);
     gbAllocator allocator = gb_heap_allocator();
     options_t options = {0};
@@ -774,4 +802,6 @@ end:
     api_destroy(&api);
 
     pthread_join(process_exit_watcher, NULL);
+
+    ot_end();
 }

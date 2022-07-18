@@ -70,6 +70,7 @@ struct ot_span_t {
     char name[128];
     char message[128];
     struct ot_span_t* next;
+    void* udata;
 };
 typedef struct ot_span_t ot_span_t;
 
@@ -156,13 +157,12 @@ ot_span_t* ot_span_create(__uint128_t trace_id, char* name, uint8_t name_len,
                           ot_span_kind_t kind, ot_span_status_t status,
                           char* message, uint8_t message_len,
                           uint64_t parent_span_id) {
-    struct timeval now = {0};
-    gettimeofday(&now, NULL);
+    struct timespec tp = {0};
+    clock_gettime(CLOCK_REALTIME, &tp);
 
     ot_span_t* span = calloc(1, sizeof(ot_span_t));
 
-    span->start_time_unix_nano =
-        now.tv_sec * 1000 * 1000 * 1000 + now.tv_usec * 1000 * 1000;
+    span->start_time_unix_nano = tp.tv_sec * 1000 * 1000 * 1000 + tp.tv_nsec;
     span->trace_id = trace_id;
     span->status = status;
     span->kind = kind;
@@ -185,11 +185,12 @@ ot_span_t* ot_span_create_c(__uint128_t trace_id, char* name0,
 }
 
 void ot_span_end(ot_span_t* span) {
-    struct timeval now = {0};
-    gettimeofday(&now, NULL);
+    struct timespec tp = {0};
+    clock_gettime(CLOCK_REALTIME, &tp);
 
-    span->end_time_unix_nano =
-        now.tv_sec * 1000 * 1000 * 1000 + now.tv_usec * 1000 * 1000;
+    span->end_time_unix_nano = tp.tv_sec * 1000 * 1000 * 1000 + tp.tv_nsec;
+    if (span->end_time_unix_nano < span->start_time_unix_nano)
+        span->end_time_unix_nano = span->start_time_unix_nano;
 
     pthread_mutex_lock(&ot.spans_mtx);
     span->next = ot.spans;
@@ -241,9 +242,10 @@ void* ot_export(void* varg) {
         ot_span_t* span = ot.spans;
         ot.spans = ot.spans->next;
         cJSON* root = ot_spans_to_json(span);
-        printf("Exporting span: trace_id=%02llx%02llx span_id=%02llx\n",
-               (uint64_t)(span->trace_id & UINT64_MAX),
-               (uint64_t)(span->trace_id >> 64), span->span_id);
+        printf(
+            "Exporting span: trace_id=%02llx%02llx span_id=%02llx json=`%s`\n",
+            (uint64_t)(span->trace_id & UINT64_MAX),
+            (uint64_t)(span->trace_id >> 64), span->span_id, post_data);
         assert(cJSON_PrintPreallocated(root, post_data, OT_POST_DATA_LEN, 0) ==
                1);
 
