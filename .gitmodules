@@ -10,6 +10,3 @@
 [submodule "opentelemetry-jaeger/vendor/cJSON"]
 	path = opentelemetry-jaeger/vendor/cJSON
 	url = https://github.com/DaveGamble/cJSON.git
-[submodule "opentelemetry-jaeger/vendor/c-ringbuf"]
-	path = opentelemetry-jaeger/vendor/c-ringbuf
-	url = https://github.com/dhess/c-ringbuf.git
