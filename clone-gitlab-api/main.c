@@ -45,9 +45,6 @@ struct process_t {
 };
 typedef struct process_t process_t;
 
-static pthread_mutex_t processes_mtx;
-static process_t* processes;
-
 typedef enum {
     GCM_SSH = 0,
     GCM_HTTPS = 1,
@@ -576,30 +573,16 @@ static void* watch_workers(void* varg) {
             const struct kevent* const event = &events[i];
 
             if (event->filter == EVFILT_READ) {
-                process_t* process = NULL;
-                {
-                    pthread_mutex_lock(&processes_mtx);
-                    process_t** it = &processes;
-                    pthread_mutex_unlock(&processes_mtx);
-                    while (it != NULL && *it != NULL &&
-                           (*it)->stderr_fd != event->ident) {
-                        it = &(*it)->next;
-                    }
-                    assert(it != NULL);
-                    assert(*it != NULL);
-                    process = *it;
-                }
+                process_t* process = event->udata;
                 assert(process != NULL);
 
-                gb_array_init_reserve(process->err, gb_heap_allocator(), 512);
-                int res = read(process->stderr_fd, process->err,
-                               gb_array_capacity(process->err));
+                gb_array_set_capacity(process->err, event->data);
+                int res = read(process->stderr_fd, process->err, event->data);
                 if (res == -1) {
                     fprintf(stderr, "Failed to read(2): err=%s\n",
                             strerror(errno));
                 }
                 gb_array_resize(process->err, res);
-                gb_array_set_capacity(process->err, res);
             } else if ((event->filter == EVFILT_PROC) &&
                        (event->fflags & NOTE_EXITSTATUS)) {
                 const int exit_status = (event->data >> 8);
@@ -628,32 +611,17 @@ static void* watch_workers(void* varg) {
 
                     printf(
                         "%s[%llu/%s] ❌ "
-                        "%s (%d): %s %s\n",
+                        "%s (%d): %.*s%s\n",
                         pg_colors[is_tty][COL_RED], finished, s,
                         process->path_with_namespace, exit_status,
-                        process->err != NULL ? process->err : "<unknown>",
+                        (int)gb_array_count(process->err), process->err,
                         pg_colors[is_tty][COL_RESET]);
                 }
                 ot_span_end(process->project_span);
                 gb_string_free(process->path_with_namespace);
-                if (process->err != NULL) gb_array_free(process->err);
+                gb_array_free(process->err);
                 close(process->stderr_fd);
-                // Rm
-                {
-                    pthread_mutex_lock(&processes_mtx);
-                    process_t** it = &processes;
-                    while (it != NULL && *it != NULL &&
-                           (*it)->pid != event->ident) {
-                        it = &(*it)->next;
-                    }
-                    assert(it != NULL);
-                    assert(*it != NULL);
-                    process = *it;
-                    *it = process->next;
-                    free(process);
-
-                    pthread_mutex_unlock(&processes_mtx);
-                }
+                free(process);
             }
         }
     } while (gb_atomic64_load(&projects_count) == 0 ||
@@ -744,6 +712,12 @@ static int record_process_finished_event(int queue, process_t* process) {
             .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
             .udata = process,
         },
+        {
+            .filter = EVFILT_READ,
+            .ident = process->stderr_fd,
+            .flags = EV_ADD | EV_ONESHOT,
+            .udata = process,
+        },
     };
     if (kevent(queue, events, sizeof(events) / sizeof(events[0]), NULL, 0, 0) ==
         -1) {
@@ -799,12 +773,9 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
         process_t* process = calloc(1, sizeof(process_t));
         process->pid = pid;
         process->project_span = project_span;
+        process->stderr_fd = fds[0];
         process->path_with_namespace = path;
-
-        pthread_mutex_lock(&processes_mtx);
-        process->next = processes;
-        processes = process;
-        pthread_mutex_unlock(&processes_mtx);
+        gb_array_init(process->err, gb_heap_allocator());
         int res = 0;
         if ((res = record_process_finished_event(queue, process)) != 0)
             return res;
@@ -844,8 +815,6 @@ end:
 }
 
 int main(int argc, char* argv[]) {
-    pthread_mutex_init(&processes_mtx, NULL);
-
     gettimeofday(&start, NULL);
     gbAllocator allocator = gb_heap_allocator();
     options_t options = {0};
