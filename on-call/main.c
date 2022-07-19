@@ -121,12 +121,12 @@ static void bill_shifts(datetime_range_t* shifts, u64 shifts_len) {
 
     uint64_t total_money = 0;
     // clang-format off
-    printf("┌──────────┬──────────────┬──────────┬────────────────┬──────────────┬─────────────┬─────────┐\n");
-    printf("│ Month    │  Week hours  │  Week €  │ Week-end hours │  Week-end €  │ Total hours │ Total € │\n");
-    printf("├──────────┼──────────────┼──────────┼────────────────┼──────────────┼─────────────┼─────────┤\n"); 
+    printf("┌──────────┬────────────┬──────────┬────────────────┬────────────┬─────────────┬─────────┐\n");
+    printf("│   Month  │ Week hours │  Week €  │ Week-end hours │ Week-end € │ Total hours │ Total € │\n");
+    printf("├──────────┼────────────┼──────────┼────────────────┼────────────┼─────────────┼─────────┤\n"); 
     for (int i = 0; i < gb_array_count(monthly_bills); i++) {
         const monthly_bill_t* const bill = &monthly_bills[i];
-        printf("│ %4d-%02d  │    %4d      │   %4d   │     %4d       │     %4d     │     %4d    │   %4d  │\n", 
+        printf("│ %4d-%02d  │   %4d     │   %4d   │     %4d       │    %4d    │     %4d    │   %4d  │\n", 
             bill->year, bill->month, bill->week_hours, bill->week_money,
             bill->week_end_hours, bill->week_end_money, bill->total_hours,
             bill->total_money);
@@ -134,9 +134,9 @@ static void bill_shifts(datetime_range_t* shifts, u64 shifts_len) {
         total_money += bill->total_money;
     }
 
-    printf("├──────────┴──────────────┴──────────┴────────────────┴──────────────┴─────────────┴─────────┤\n"); 
-    printf("│ Sum                                                                                 %4llu  │\n", total_money);
-    printf("└────────────────────────────────────────────────────────────────────────────────────────────┘\n");
+    printf("├──────────┴────────────┴──────────┴────────────────┴────────────┴─────────────┴─────────┤\n"); 
+    printf("│ Sum                                                                             %4llu  │\n", total_money);
+    printf("└────────────────────────────────────────────────────────────────────────────────────────┘\n");
     // clang-format on
 }
 
