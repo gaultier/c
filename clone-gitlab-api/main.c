@@ -47,6 +47,7 @@ typedef struct {
     gbString api_token;
     gbString gitlab_domain;
     git_clone_method_t clone_method;
+    bool observability;
 } options_t;
 static bool verbose = false;
 
@@ -302,6 +303,10 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
          .val = 'm'},
         {.name = "url", .has_arg = required_argument, .flag = NULL, .val = 'u'},
         {.name = "help", .has_arg = no_argument, .flag = NULL, .val = 'h'},
+        {.name = "observability",
+         .has_arg = no_argument,
+         .flag = NULL,
+         .val = 'o'},
         {.name = "verbose", .has_arg = no_argument, .flag = NULL, .val = 'v'},
     };
 
@@ -365,6 +370,9 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
             case 'v':
                 verbose = true;
                 break;
+            case 'o':
+                options->observability = true;
+                break;
             default:
                 print_usage(argc, argv);
                 exit(0);
@@ -386,10 +394,10 @@ static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
     assert(api->url != NULL);
 
     ot_span_t* span =
-        ot_span_create(trace_id, "api_query_projects", OT_SK_CLIENT,
-                       "api_query_projects", parent_span->id);
-    ot_span_add_attribute(span, "service.name", "clone-gitlab-api");
-    ot_span_add_attribute(
+        ot.span_create_child_of(trace_id, "api_query_projects", OT_SK_CLIENT,
+                                "api_query_projects", parent_span);
+    ot.span_add_attribute(span, "service.name", "clone-gitlab-api");
+    ot.span_add_attribute(
         span, "url",
         strndup(api->url, gb_string_length(api->url)));  // FIXME: free
 
@@ -409,7 +417,7 @@ static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
     }
 
 end:
-    ot_span_end(span);
+    ot.span_end(span);
     return res;
 }
 
@@ -426,9 +434,9 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
 
     gb_array_clear(api->tokens);
     int res = 0;
-    ot_span_t* json_span = ot_span_create(trace_id, "parse json", OT_SK_CLIENT,
-                                          "parse json", parent_span->id);
-    ot_span_add_attribute(json_span, "service.name", "clone-gitlab-api");
+    ot_span_t* json_span = ot.span_create_child_of(
+        trace_id, "parse json", OT_SK_CLIENT, "parse json", parent_span);
+    ot.span_add_attribute(json_span, "service.name", "clone-gitlab-api");
 
     do {
         jsmn_init(&p);
@@ -443,19 +451,19 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
             fprintf(stderr, "Failed to parse JSON: body=%s res=%d\n",
                     api->response_body, res);
-            ot_span_end(json_span);
+            ot.span_end(json_span);
             return res;
         }
         if (res == 0) {
             fprintf(stderr,
                     "Failed to parse JSON (is it empty?): body=%s res=%d\n",
                     api->response_body, res);
-            ot_span_end(json_span);
+            ot.span_end(json_span);
             return res;
         }
     } while (res == JSMN_ERROR_NOMEM);
 
-    ot_span_end(json_span);
+    ot.span_end(json_span);
     gb_array_resize(api->tokens, res);
     res = 0;
 
@@ -589,7 +597,7 @@ static void* watch_workers(void* varg) {
                         path_with_namespace, exit_status,
                         pg_colors[is_tty][COL_RESET]);
                 }
-                ot_span_end(project_span);
+                ot.span_end(project_span);
                 gb_string_free(path_with_namespace);
             }
         }
@@ -698,13 +706,13 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
     assert(options != NULL);
 
     ot_span_t* project_span =
-        ot_span_create(trace_id, "upsert_project", OT_SK_CLIENT,
-                       "clone or update", parent_span->id);
-    ot_span_add_attribute(project_span, "service.name", "clone-gitlab-api");
+        ot.span_create_child_of(trace_id, "upsert_project", OT_SK_CLIENT,
+                                "clone or update", parent_span);
+    ot.span_add_attribute(project_span, "service.name", "clone-gitlab-api");
     // FIXME: free
-    ot_span_add_attribute(project_span, "git_url", strdup(git_url));
-    ot_span_add_attribute(project_span, "fs_path", strdup(fs_path));
-    ot_span_add_attribute(project_span, "path", strdup(path));
+    ot.span_add_attribute(project_span, "git_url", strdup(git_url));
+    ot.span_add_attribute(project_span, "fs_path", strdup(fs_path));
+    ot.span_add_attribute(project_span, "path", strdup(path));
 
     project_span->udata = path;
     pid_t pid = fork();
@@ -733,9 +741,9 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
     assert(api != NULL);
     assert(options != NULL);
 
-    ot_span_t* span_fetch_projects = ot_span_create(
-        trace_id, "api_fetch_projects", OT_SK_CLIENT, "api_fetch_projects", 0);
-    ot_span_add_attribute(span_fetch_projects, "service.name",
+    ot_span_t* span_fetch_projects = ot.span_create_root(
+        trace_id, "api_fetch_projects", OT_SK_CLIENT, "api_fetch_projects");
+    ot.span_add_attribute(span_fetch_projects, "service.name",
                           "clone-gitlab-api");
 
     int res = 0;
@@ -754,18 +762,18 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
     }
 
 end:
-    ot_span_end(span_fetch_projects);
+    ot.span_end(span_fetch_projects);
     return 0;
 }
 
 int main(int argc, char* argv[]) {
-    ot_start();
-    trace_id = ot_generate_trace_id();
-
     gettimeofday(&start, NULL);
     gbAllocator allocator = gb_heap_allocator();
     options_t options = {0};
     options_parse_from_cli(allocator, argc, argv, &options);
+
+    options.observability ? ot_start() : ot_start_noop();
+    trace_id = ot_generate_trace_id();
 
     int res = 0;
     // Do not require wait(2) on child processes
@@ -827,5 +835,5 @@ end:
 
     pthread_join(process_exit_watcher, NULL);
 
-    ot_end();
+    ot.end();
 }
