@@ -394,10 +394,10 @@ static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
     assert(api->url != NULL);
 
     ot_span_t* span =
-        ot.span_create_child_of(trace_id, "api_query_projects", OT_SK_CLIENT,
+        ot_span_create_child_of(trace_id, "api_query_projects", OT_SK_CLIENT,
                                 "api_query_projects", parent_span);
-    ot.span_add_attribute(span, "service.name", "clone-gitlab-api");
-    ot.span_add_attribute(
+    ot_span_add_attribute(span, "service.name", "clone-gitlab-api");
+    ot_span_add_attribute(
         span, "url",
         strndup(api->url, gb_string_length(api->url)));  // FIXME: free
 
@@ -417,7 +417,7 @@ static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
     }
 
 end:
-    ot.span_end(span);
+    ot_span_end(span);
     return res;
 }
 
@@ -434,9 +434,9 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
 
     gb_array_clear(api->tokens);
     int res = 0;
-    ot_span_t* json_span = ot.span_create_child_of(
+    ot_span_t* json_span = ot_span_create_child_of(
         trace_id, "parse json", OT_SK_CLIENT, "parse json", parent_span);
-    ot.span_add_attribute(json_span, "service.name", "clone-gitlab-api");
+    ot_span_add_attribute(json_span, "service.name", "clone-gitlab-api");
 
     do {
         jsmn_init(&p);
@@ -451,19 +451,19 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
             fprintf(stderr, "Failed to parse JSON: body=%s res=%d\n",
                     api->response_body, res);
-            ot.span_end(json_span);
+            ot_span_end(json_span);
             return res;
         }
         if (res == 0) {
             fprintf(stderr,
                     "Failed to parse JSON (is it empty?): body=%s res=%d\n",
                     api->response_body, res);
-            ot.span_end(json_span);
+            ot_span_end(json_span);
             return res;
         }
     } while (res == JSMN_ERROR_NOMEM);
 
-    ot.span_end(json_span);
+    ot_span_end(json_span);
     gb_array_resize(api->tokens, res);
     res = 0;
 
@@ -589,7 +589,7 @@ static void* watch_workers(void* varg) {
                         pg_colors[is_tty][COL_GREEN], finished, s,
                         path_with_namespace, pg_colors[is_tty][COL_RESET]);
                 } else {
-                    project_span->status = OT_ST_INTERNAL_ERROR;
+                    ot_span_set_status(project_span, OT_ST_INTERNAL_ERROR);
                     printf(
                         "%s[%llu/%s] ❌ "
                         "%s (%d)%s\n",
@@ -597,7 +597,7 @@ static void* watch_workers(void* varg) {
                         path_with_namespace, exit_status,
                         pg_colors[is_tty][COL_RESET]);
                 }
-                ot.span_end(project_span);
+                ot_span_end(project_span);
                 gb_string_free(path_with_namespace);
             }
         }
@@ -706,13 +706,13 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
     assert(options != NULL);
 
     ot_span_t* project_span =
-        ot.span_create_child_of(trace_id, "upsert_project", OT_SK_CLIENT,
+        ot_span_create_child_of(trace_id, "upsert_project", OT_SK_CLIENT,
                                 "clone or update", parent_span);
-    ot.span_add_attribute(project_span, "service.name", "clone-gitlab-api");
+    ot_span_add_attribute(project_span, "service.name", "clone-gitlab-api");
     // FIXME: free
-    ot.span_add_attribute(project_span, "git_url", strdup(git_url));
-    ot.span_add_attribute(project_span, "fs_path", strdup(fs_path));
-    ot.span_add_attribute(project_span, "path", strdup(path));
+    ot_span_add_attribute(project_span, "git_url", strdup(git_url));
+    ot_span_add_attribute(project_span, "fs_path", strdup(fs_path));
+    ot_span_add_attribute(project_span, "path", strdup(path));
 
     project_span->udata = path;
     pid_t pid = fork();
@@ -741,28 +741,28 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
     assert(api != NULL);
     assert(options != NULL);
 
-    ot_span_t* span_fetch_projects = ot.span_create_root(
+    ot_span_t* span_fetch_projects = ot_span_create_root(
         trace_id, "api_fetch_projects", OT_SK_CLIENT, "api_fetch_projects");
-    ot.span_add_attribute(span_fetch_projects, "service.name",
+    ot_span_add_attribute(span_fetch_projects, "service.name",
                           "clone-gitlab-api");
 
     int res = 0;
     gb_string_clear(api->response_body);
 
     if ((res = api_query_projects(api, span_fetch_projects)) != 0) {
-        span_fetch_projects->status = OT_ST_UNKNOWN_ERROR;
+        ot_span_set_status(span_fetch_projects, OT_ST_UNKNOWN_ERROR);
         goto end;
     }
 
     if ((res = api_parse_and_upsert_projects(
              api, options, queue, projects_handled, span_fetch_projects)) !=
         0) {
-        span_fetch_projects->status = OT_ST_INTERNAL_ERROR;
+        ot_span_set_status(span_fetch_projects, OT_ST_INTERNAL_ERROR);
         goto end;
     }
 
 end:
-    ot.span_end(span_fetch_projects);
+    ot_span_end(span_fetch_projects);
     return 0;
 }
 
@@ -835,5 +835,5 @@ end:
 
     pthread_join(process_exit_watcher, NULL);
 
-    ot.end();
+    ot_end();
 }
