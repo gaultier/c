@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <curl/easy.h>
@@ -67,12 +68,6 @@ typedef struct {
     char *key, *value;
 } ot_attribute_t;
 
-typedef struct {
-    __uint128_t id;
-    ot_attribute_t attributes[64];
-    uint8_t attributes_len;
-} ot_trace_t;
-
 struct ot_span_t {
     uint64_t start_time_unix_nano, end_time_unix_nano;
     uint64_t id, parent_span_id;
@@ -88,12 +83,27 @@ struct ot_span_t {
 };
 typedef struct ot_span_t ot_span_t;
 
+typedef ot_span_t*(ot_span_create_root_fn_t(__uint128_t, char*, ot_span_kind_t,
+                                            char*));
+typedef ot_span_t*(ot_span_create_child_of_fn_t(__uint128_t, char*,
+                                                ot_span_kind_t, char*,
+                                                const ot_span_t*));
+typedef void(ot_span_end_fn_t(ot_span_t*));
+typedef bool(ot_span_add_attribute_fn_t(ot_span_t*, char*, char*));
+typedef __uint128_t(ot_span_trace_id_fn_t());
+typedef void(ot_end_fn_t());
+
 typedef struct {
     ot_span_t* spans;
     pthread_cond_t spans_to_export;
     pthread_mutex_t spans_mtx;
     bool finished;
     pthread_t exporter;
+    ot_span_create_root_fn_t* span_create_root;
+    ot_span_create_child_of_fn_t* span_create_child_of;
+    ot_span_end_fn_t* span_end;
+    ot_span_add_attribute_fn_t* span_add_attribute;
+    ot_end_fn_t* end;
 } ot_t;
 
 static ot_t ot;
@@ -104,23 +114,36 @@ __uint128_t ot_generate_trace_id() {
     return trace_id;
 }
 
-ot_trace_t* ot_trace_create() {
-    ot_trace_t* trace = calloc(1, sizeof(ot_trace_t));
-    trace->id = ot_generate_trace_id();
-    return trace;
+static ot_span_t* ot_span_create_root_noop(__uint128_t trace_id, char* name,
+                                           ot_span_kind_t kind, char* message) {
+    (void)trace_id;
+    (void)name;
+    (void)kind;
+    (void)message;
+    return NULL;
 }
 
-bool ot_trace_add_attribute(ot_trace_t* trace, char* key, char* value) {
-    if (trace->attributes_len ==
-        sizeof(trace->attributes) / sizeof(ot_attribute_t)) {
-        return false;
-    }
-    trace->attributes[trace->attributes_len++] =
-        (ot_attribute_t){.key = key, .value = value};
+static ot_span_t* ot_span_create_child_of_noop(__uint128_t trace_id, char* name,
+                                               ot_span_kind_t kind,
+                                               char* message,
+                                               const ot_span_t* parent) {
+    (void)trace_id;
+    (void)name;
+    (void)kind;
+    (void)message;
+    (void)parent;
+    return NULL;
+}
+
+static bool ot_span_add_attribute_noop(ot_span_t* span, char* key,
+                                       char* value) {
+    (void)span;
+    (void)key;
+    (void)value;
     return true;
 }
 
-bool ot_span_add_attribute(ot_span_t* span, char* key, char* value) {
+static bool ot_span_add_attribute(ot_span_t* span, char* key, char* value) {
     if (span->attributes_len ==
         sizeof(span->attributes) / sizeof(ot_attribute_t)) {
         return false;
@@ -208,8 +231,9 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
     return j_root;
 }
 
-ot_span_t* ot_span_create(__uint128_t trace_id, char* name, ot_span_kind_t kind,
-                          char* message, uint64_t parent_span_id) {
+static ot_span_t* ot_span_create_child_of(__uint128_t trace_id, char* name,
+                                          ot_span_kind_t kind, char* message,
+                                          const ot_span_t* parent) {
     struct timespec tp = {0};
     clock_gettime(CLOCK_REALTIME, &tp);
 
@@ -218,7 +242,7 @@ ot_span_t* ot_span_create(__uint128_t trace_id, char* name, ot_span_kind_t kind,
     span->start_time_unix_nano = tp.tv_sec * 1000 * 1000 * 1000 + tp.tv_nsec;
     span->trace_id = trace_id;
     span->kind = kind;
-    span->parent_span_id = parent_span_id;
+    if (parent != NULL) span->parent_span_id = parent->id;
 
     arc4random_buf(&span->id, sizeof(span->id));
     span->name = name;
@@ -227,7 +251,14 @@ ot_span_t* ot_span_create(__uint128_t trace_id, char* name, ot_span_kind_t kind,
     return span;
 }
 
-void ot_span_end(ot_span_t* span) {
+static ot_span_t* ot_span_create_root(__uint128_t trace_id, char* name,
+                                      ot_span_kind_t kind, char* message) {
+    return ot_span_create_child_of(trace_id, name, kind, message, NULL);
+}
+
+static void ot_span_end_noop(ot_span_t* span) { (void)span; }
+
+static void ot_span_end(ot_span_t* span) {
     struct timespec tp = {0};
     clock_gettime(CLOCK_REALTIME, &tp);
 
@@ -243,14 +274,14 @@ void ot_span_end(ot_span_t* span) {
     pthread_mutex_unlock(&ot.spans_mtx);
 }
 
-static uint64_t noop(void* contents, uint64_t size, uint64_t nmemb,
-                     void* userp) {
+static uint64_t on_http_body_chunk_noop(void* contents, uint64_t size,
+                                        uint64_t nmemb, void* userp) {
     (void)contents;
     (void)userp;
     return size * nmemb;
 }
 
-void* ot_export(void* varg) {
+static void* ot_export(void* varg) {
     (void)varg;
 
 #define OT_POST_DATA_LEN 16384
@@ -262,8 +293,8 @@ void* ot_export(void* varg) {
 
     const char url[] = "localhost:4318/v1/traces";
     assert(curl_easy_setopt(http_handle, CURLOPT_URL, url) == CURLE_OK);
-    assert(curl_easy_setopt(http_handle, CURLOPT_WRITEFUNCTION, noop) ==
-           CURLE_OK);
+    assert(curl_easy_setopt(http_handle, CURLOPT_WRITEFUNCTION,
+                            on_http_body_chunk_noop) == CURLE_OK);
     assert(curl_easy_setopt(http_handle, CURLOPT_MAXREDIRS, 5) == CURLE_OK);
     assert(curl_easy_setopt(http_handle, CURLOPT_TIMEOUT, 60 /* seconds */) ==
            CURLE_OK);
@@ -326,16 +357,32 @@ void* ot_export(void* varg) {
     return NULL;
 }
 
-void ot_start() {
-    pthread_mutex_init(&ot.spans_mtx, NULL);
-    pthread_cond_init(&ot.spans_to_export, NULL);
-    pthread_create(&ot.exporter, NULL, ot_export, NULL);
-}
+static void ot_end_noop() {}
 
-void ot_end() {
+static void ot_end() {
     pthread_mutex_lock(&ot.spans_mtx);
     ot.finished = true;
     pthread_cond_broadcast(&ot.spans_to_export);
     pthread_mutex_unlock(&ot.spans_mtx);
     pthread_join(ot.exporter, NULL);
 }
+
+void ot_start_noop() {
+    ot.span_create_root = ot_span_create_root_noop;
+    ot.span_create_child_of = ot_span_create_child_of_noop;
+    ot.span_end = ot_span_end_noop;
+    ot.span_add_attribute = ot_span_add_attribute_noop;
+    ot.end = ot_end_noop;
+}
+
+void ot_start() {
+    pthread_mutex_init(&ot.spans_mtx, NULL);
+    pthread_cond_init(&ot.spans_to_export, NULL);
+    pthread_create(&ot.exporter, NULL, ot_export, NULL);
+    ot.span_create_root = ot_span_create_root;
+    ot.span_create_child_of = ot_span_create_child_of;
+    ot.span_end = ot_span_end;
+    ot.span_add_attribute = ot_span_add_attribute;
+    ot.end = ot_end;
+}
+
