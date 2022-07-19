@@ -9,7 +9,6 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/time.h>
-#include <sys/wait.h>
 #include <unistd.h>
 
 #include "../opentelemetry-jaeger/opentelemetry.h"
@@ -36,18 +35,6 @@ static const char pg_colors[2][COL_COUNT][14] = {
 
 static struct timeval start;
 
-struct process_t {
-    ot_span_t* project_span;
-    gbString path_with_namespace;
-    int stderr_fd;
-    pid_t pid;
-    struct process_t* next;  // TODO: improve
-};
-typedef struct process_t process_t;
-
-static pthread_mutex_t processes_mtx;
-static process_t* processes;
-
 typedef enum {
     GCM_SSH = 0,
     GCM_HTTPS = 1,
@@ -61,6 +48,10 @@ typedef struct {
     bool observability;
 } options_t;
 static bool verbose = false;
+
+typedef struct {
+    const int queue;
+} watch_project_cloning_arg_t;
 
 typedef struct {
     CURL* http_handle;
@@ -427,11 +418,11 @@ end:
 }
 
 static int upsert_project(gbString path, char* git_url, char* fs_path,
-                          const options_t* options,
+                          const options_t* options, int queue,
                           const ot_span_t* parent_span);
 
 static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
-                                         uint64_t* projects_handled,
+                                         int queue, uint64_t* projects_handled,
                                          const ot_span_t* parent_span) {
     assert(api != NULL);
 
@@ -537,7 +528,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
                 assert(path_with_namespace != NULL);
 
                 if ((res = upsert_project(path_with_namespace, git_url, fs_path,
-                                          options, parent_span)) != 0)
+                                          options, queue, parent_span)) != 0)
                     return res;
                 git_url = NULL;
 
@@ -552,70 +543,61 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
 }
 
 static void* watch_workers(void* varg) {
-    (void)varg;
+    assert(varg != NULL);
+    watch_project_cloning_arg_t* arg = varg;
 
     u64 finished = 0;
+    struct kevent events[512] = {0};
+
     const bool is_tty = isatty(fileno(stdout));
 
     do {
-        int stat_loc = 0;
-        const pid_t pid = wait(&stat_loc);
-        if (pid == -1) {
-            usleep(500 * 1000);
-            continue;
+        int event_count = kevent(arg->queue, NULL, 0, events, 512, 0);
+        if (event_count == -1) {
+            fprintf(stderr, "Failed to kevent(2) to query events: err=%s\n",
+                    strerror(errno));
+            return NULL;
         }
-        const int exit_status = WEXITSTATUS(stat_loc);
 
-        process_t* process = NULL;
-        {
-            pthread_mutex_lock(&processes_mtx);
-            process_t** it = &processes;
-            while (it != NULL && *it != NULL && (*it)->pid == pid) {
-                it = &(*it)->next;
+        for (int i = 0; i < event_count; i++) {
+            const struct kevent* const event = &events[i];
+
+            if ((event->filter == EVFILT_PROC) &&
+                (event->fflags & NOTE_EXITSTATUS)) {
+                const int exit_status = (event->data >> 8);
+                ot_span_t* project_span = event->udata;
+                assert(project_span != NULL);
+                char* const path_with_namespace =
+                    ot_span_get_udata(project_span);
+
+                finished += 1;
+                const i64 count = gb_atomic64_load(&projects_count);
+                char s[26] = "";
+                if (count == 0) {
+                    memcpy(s, "?", 1);
+                } else {
+                    gb_i64_to_str(count, s, 10);
+                }
+
+                if (exit_status == 0) {
+                    printf(
+                        "%s[%llu/%s] ✓ "
+                        "%s%s\n",
+                        pg_colors[is_tty][COL_GREEN], finished, s,
+                        path_with_namespace, pg_colors[is_tty][COL_RESET]);
+                } else {
+                    ot_span_set_status(project_span, OT_ST_INTERNAL_ERROR);
+                    printf(
+                        "%s[%llu/%s] ❌ "
+                        "%s (%d)%s\n",
+                        pg_colors[is_tty][COL_RED], finished, s,
+                        path_with_namespace, exit_status,
+                        pg_colors[is_tty][COL_RESET]);
+                }
+                ot_span_end(project_span);
+                gb_string_free(path_with_namespace);
             }
-            assert(it != NULL);
-            assert(*it != NULL);
-            process = *it;
-            *it = process->next;
-            pthread_mutex_unlock(&processes_mtx);
         }
-        assert(process != NULL);
-
-        finished += 1;
-        const i64 count = gb_atomic64_load(&projects_count);
-        char s[26] = "";
-        if (count == 0) {
-            memcpy(s, "?", 1);
-        } else {
-            gb_i64_to_str(count, s, 10);
-        }
-
-        if (exit_status == 0) {
-            printf(
-                "%s[%llu/%s] ✓ "
-                "%s%s\n",
-                pg_colors[is_tty][COL_GREEN], finished, s,
-                process->path_with_namespace, pg_colors[is_tty][COL_RESET]);
-        } else {
-            ot_span_set_status(process->project_span, OT_ST_INTERNAL_ERROR);
-            static char err_msg[1024] = "";
-            int res = read(process->stderr_fd, err_msg, sizeof(err_msg));
-            if (res == -1) {
-                fprintf(stderr, "Failed to read(2): err=%s\n", strerror(errno));
-            }
-
-            printf(
-                "%s[%llu/%s] ❌ "
-                "%s (%d): %.*s%s\n",
-                pg_colors[is_tty][COL_RED], finished, s,
-                process->path_with_namespace, exit_status, res, err_msg,
-                pg_colors[is_tty][COL_RESET]);
-        }
-        ot_span_end(process->project_span);
-        gb_string_free(process->path_with_namespace);
-        close(process->stderr_fd);
-        free(process);
-
     } while (gb_atomic64_load(&projects_count) == 0 ||
              finished < gb_atomic64_load(&projects_count));
 
@@ -693,14 +675,34 @@ static int change_directory(char* path) {
     return 0;
 }
 
+static int record_process_finished_event(int queue, pid_t pid,
+                                         ot_span_t* project_span) {
+    assert(project_span != NULL);
+
+    struct kevent event = {
+        .filter = EVFILT_PROC,
+        .ident = pid,
+        .flags = EV_ADD | EV_ONESHOT,
+        .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
+        .udata = project_span,
+    };
+    if (kevent(queue, &event, 1, NULL, 0, 0) == -1) {
+        fprintf(stderr,
+                "Failed to kevent(2) to watch for child process: err=%s\n",
+                strerror(errno));
+        return errno;
+    }
+    return 0;
+}
+
 static int upsert_project(gbString path, char* git_url, char* fs_path,
-                          const options_t* options,
+                          const options_t* options, int queue,
                           const ot_span_t* parent_span) {
     assert(path != NULL);
     assert(git_url != NULL);
     assert(options != NULL);
 
-    ot_span_t* const project_span =
+    ot_span_t* project_span =
         ot_span_create_child_of(trace_id, "upsert_project", OT_SK_CLIENT,
                                 "clone or update", parent_span);
     ot_span_add_attribute(project_span, "service.name", "clone-gitlab-api",
@@ -709,22 +711,12 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
     ot_span_add_attribute(project_span, "fs_path", strdup(fs_path), true);
     ot_span_add_attribute(project_span, "path", strdup(path), true);
 
-    int fds[2] = {0};
-    if (pipe(fds) != 0) {
-        fprintf(stderr, "Failed to pipe(2): err=%s\n", strerror(errno));
-        return errno;
-    }
-
+    ot_span_set_udata(project_span, path);
     pid_t pid = fork();
     if (pid == -1) {
         fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
         return errno;
     } else if (pid == 0) {
-        close(fds[0]);  // Child does not read
-        if (dup2(fds[1], 2) == -1) {
-            fprintf(stderr, "Failed to dup2(2): err=%s\n", strerror(errno));
-        }
-
         if (is_directory(fs_path)) {
             worker_update_project(fs_path, git_url, options);
         } else {
@@ -732,22 +724,16 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
         }
         assert(0 && "Unreachable");
     } else {
-        close(fds[1]);  // Parent does not write
-        process_t* process = calloc(1, sizeof(process_t));
-        process->pid = pid;
-        process->project_span = project_span;
-        process->path_with_namespace = path;
-        process->stderr_fd = fds[0];
-        pthread_mutex_lock(&processes_mtx);
-        process->next = processes;
-        processes = process;
-        pthread_mutex_unlock(&processes_mtx);
+        int res = 0;
+        if ((res = record_process_finished_event(queue, pid, project_span)) !=
+            0)
+            return res;
     }
     return 0;
 }
 
 static int api_fetch_projects(gbAllocator allocator, api_t* api,
-                              const options_t* options,
+                              const options_t* options, int queue,
                               uint64_t* projects_handled) {
     assert(api != NULL);
     assert(options != NULL);
@@ -765,8 +751,9 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
         goto end;
     }
 
-    if ((res = api_parse_and_upsert_projects(api, options, projects_handled,
-                                             span_fetch_projects)) != 0) {
+    if ((res = api_parse_and_upsert_projects(
+             api, options, queue, projects_handled, span_fetch_projects)) !=
+        0) {
         ot_span_set_status(span_fetch_projects, OT_ST_INTERNAL_ERROR);
         goto end;
     }
@@ -785,9 +772,23 @@ int main(int argc, char* argv[]) {
     options.observability ? ot_start() : ot_start_noop();
     trace_id = ot_generate_trace_id();
 
-    pthread_mutex_init(&processes_mtx, NULL);
-
     int res = 0;
+    // Do not require wait(2) on child processes
+    {
+        struct sigaction sa = {.sa_flags = SA_NOCLDWAIT};
+        if ((res = sigaction(SIGCHLD, &sa, NULL)) == -1) {
+            fprintf(stderr, "Failed to sigaction(2): err=%s\n",
+                    strerror(errno));
+            return errno;
+        }
+    }
+
+    // Queue to get notified that child processes finished
+    int queue = kqueue();
+    if (queue == -1) {
+        fprintf(stderr, "Failed to kqueue(2): err=%s\n", strerror(errno));
+        return errno;
+    }
 
     api_t api = {0};
     api_init(allocator, &api, &options);
@@ -802,11 +803,15 @@ int main(int argc, char* argv[]) {
 
     printf("Changed directory to: %s\n", options.root_directory);
 
+    watch_project_cloning_arg_t arg = {
+        .queue = queue,
+    };
+
     // Start process exit watcher thread, only after we know from the first API
     // query how many items there are
     pthread_t process_exit_watcher = {0};
     {
-        if (pthread_create(&process_exit_watcher, NULL, watch_workers, NULL) !=
+        if (pthread_create(&process_exit_watcher, NULL, watch_workers, &arg) !=
             0) {
             fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
                     strerror(errno));
@@ -816,7 +821,7 @@ int main(int argc, char* argv[]) {
 
     uint64_t projects_handled = 0;
     while (!api.finished &&
-           (res = api_fetch_projects(allocator, &api, &options,
+           (res = api_fetch_projects(allocator, &api, &options, queue,
                                      &projects_handled)) == 0) {
     }
     gb_atomic64_compare_exchange(&projects_count, 0, projects_handled);
