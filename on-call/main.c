@@ -26,10 +26,11 @@ typedef struct {
 } bill_summary_t;
 
 static bool datetime_is_week_end(const struct tm* d) {
-    return d->tm_wday == 0 || d->tm_wday == 6;
+    return d->tm_wday == /* Sunday */ 0 || d->tm_wday == /* Saturday */ 6;
 }
 
 static bool datetime_is_working_hour(const struct tm* d) {
+    // Work hours in local time: 9AM-6PM
     return !datetime_is_week_end(d) && 9 <= d->tm_hour && d->tm_hour < 18;
 }
 
@@ -49,7 +50,7 @@ static void shift_bill_hour(bill_summary_t* summary, time_t timestamp) {
     }
 }
 
-static time_t get_first_day_of_next_month_as_timestamp(const struct tm* d) {
+static time_t get_start_of_next_month(const struct tm* d) {
     struct tm tmp = *d;
     tmp.tm_mday = 1;
     tmp.tm_mon = d->tm_mon + 1;
@@ -80,22 +81,24 @@ static void shift_bill_monthly(gbArray(bill_summary_t) summaries,
     time_t timestamp = timelocal(&shift->start);
     const time_t end_timestamp = timelocal(&shift->end);
     assert(timestamp < end_timestamp);
-    const time_t first_day_of_next_month_as_timestamp =
-        get_first_day_of_next_month_as_timestamp(&shift->start);
+    const time_t start_of_next_month = get_start_of_next_month(&shift->start);
 
-    while (timestamp <
-           MIN(end_timestamp, first_day_of_next_month_as_timestamp)) {
+    // Bill from the start of the shift to the end of the month
+    while (timestamp < MIN(end_timestamp, start_of_next_month)) {
         shift_bill_hour(summary, timestamp);
         timestamp += 3600;
     }
     if (shift->start.tm_mon == shift->end.tm_mon) return;
 
-    // Shift spanning 2 months
+    // Handle the case of a shift spanning 2 months so it appears in 2 monthly
+    // bills
     assert(shift->start.tm_mon + 1 == shift->end.tm_mon);
     gb_array_append(summaries,
                     ((bill_summary_t){.month = shift->end.tm_mon + 1,
                                       .year = shift->end.tm_year + 1900}));
     summary = &summaries[gb_array_count(summaries) - 1];
+
+    // Bill from the first of the month to the end of the shift
     while (timestamp < end_timestamp) {
         shift_bill_hour(summary, timestamp);
         timestamp += 3600;
@@ -108,10 +111,12 @@ static void bill(datetime_range_t* work, u64 work_len) {
 
     gbArray(bill_summary_t) summaries = NULL;
     gb_array_init_reserve(summaries, gb_heap_allocator(), 100);
+
     for (int i = 0; i < work_len; i++) {
         shift_bill_monthly(summaries, &work[i]);
     }
 
+    // TODO: better formatting
     for (int i = 0; i < gb_array_count(summaries); i++) {
         __builtin_dump_struct(&summaries[i], &printf);
     }
