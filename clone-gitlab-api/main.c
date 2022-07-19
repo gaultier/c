@@ -35,6 +35,19 @@ static const char pg_colors[2][COL_COUNT][14] = {
 
 static struct timeval start;
 
+struct process_t {
+    ot_span_t* project_span;
+    gbString path_with_namespace;
+    int stderr_fd;
+    pid_t pid;
+    gbArray(char) err;
+    struct process_t* next;  // TODO: improve
+};
+typedef struct process_t process_t;
+
+static pthread_mutex_t processes_mtx;
+static process_t* processes;
+
 typedef enum {
     GCM_SSH = 0,
     GCM_HTTPS = 1,
@@ -562,13 +575,36 @@ static void* watch_workers(void* varg) {
         for (int i = 0; i < event_count; i++) {
             const struct kevent* const event = &events[i];
 
-            if ((event->filter == EVFILT_PROC) &&
-                (event->fflags & NOTE_EXITSTATUS)) {
+            if (event->filter == EVFILT_READ) {
+                process_t* process = NULL;
+                {
+                    pthread_mutex_lock(&processes_mtx);
+                    process_t** it = &processes;
+                    pthread_mutex_unlock(&processes_mtx);
+                    while (it != NULL && *it != NULL &&
+                           (*it)->stderr_fd != event->ident) {
+                        it = &(*it)->next;
+                    }
+                    assert(it != NULL);
+                    assert(*it != NULL);
+                    process = *it;
+                }
+                assert(process != NULL);
+
+                gb_array_init_reserve(process->err, gb_heap_allocator(), 512);
+                int res = read(process->stderr_fd, process->err,
+                               gb_array_capacity(process->err));
+                if (res == -1) {
+                    fprintf(stderr, "Failed to read(2): err=%s\n",
+                            strerror(errno));
+                }
+                gb_array_resize(process->err, res);
+                gb_array_set_capacity(process->err, res);
+            } else if ((event->filter == EVFILT_PROC) &&
+                       (event->fflags & NOTE_EXITSTATUS)) {
                 const int exit_status = (event->data >> 8);
-                ot_span_t* project_span = event->udata;
-                assert(project_span != NULL);
-                char* const path_with_namespace =
-                    ot_span_get_udata(project_span);
+                process_t* process = event->udata;
+                assert(process != NULL);
 
                 finished += 1;
                 const i64 count = gb_atomic64_load(&projects_count);
@@ -584,18 +620,40 @@ static void* watch_workers(void* varg) {
                         "%s[%llu/%s] ✓ "
                         "%s%s\n",
                         pg_colors[is_tty][COL_GREEN], finished, s,
-                        path_with_namespace, pg_colors[is_tty][COL_RESET]);
+                        process->path_with_namespace,
+                        pg_colors[is_tty][COL_RESET]);
                 } else {
-                    ot_span_set_status(project_span, OT_ST_INTERNAL_ERROR);
+                    ot_span_set_status(process->project_span,
+                                       OT_ST_INTERNAL_ERROR);
+
                     printf(
                         "%s[%llu/%s] ❌ "
-                        "%s (%d)%s\n",
+                        "%s (%d): %s %s\n",
                         pg_colors[is_tty][COL_RED], finished, s,
-                        path_with_namespace, exit_status,
+                        process->path_with_namespace, exit_status,
+                        process->err != NULL ? process->err : "<unknown>",
                         pg_colors[is_tty][COL_RESET]);
                 }
-                ot_span_end(project_span);
-                gb_string_free(path_with_namespace);
+                ot_span_end(process->project_span);
+                gb_string_free(process->path_with_namespace);
+                if (process->err != NULL) gb_array_free(process->err);
+                close(process->stderr_fd);
+                // Rm
+                {
+                    pthread_mutex_lock(&processes_mtx);
+                    process_t** it = &processes;
+                    while (it != NULL && *it != NULL &&
+                           (*it)->pid != event->ident) {
+                        it = &(*it)->next;
+                    }
+                    assert(it != NULL);
+                    assert(*it != NULL);
+                    process = *it;
+                    *it = process->next;
+                    free(process);
+
+                    pthread_mutex_unlock(&processes_mtx);
+                }
             }
         }
     } while (gb_atomic64_load(&projects_count) == 0 ||
@@ -675,18 +733,20 @@ static int change_directory(char* path) {
     return 0;
 }
 
-static int record_process_finished_event(int queue, pid_t pid,
-                                         ot_span_t* project_span) {
-    assert(project_span != NULL);
+static int record_process_finished_event(int queue, process_t* process) {
+    assert(process != NULL);
 
-    struct kevent event = {
-        .filter = EVFILT_PROC,
-        .ident = pid,
-        .flags = EV_ADD | EV_ONESHOT,
-        .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
-        .udata = project_span,
+    struct kevent events[] = {
+        {
+            .filter = EVFILT_PROC,
+            .ident = process->pid,
+            .flags = EV_ADD | EV_ONESHOT,
+            .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
+            .udata = process,
+        },
     };
-    if (kevent(queue, &event, 1, NULL, 0, 0) == -1) {
+    if (kevent(queue, events, sizeof(events) / sizeof(events[0]), NULL, 0, 0) ==
+        -1) {
         fprintf(stderr,
                 "Failed to kevent(2) to watch for child process: err=%s\n",
                 strerror(errno));
@@ -711,12 +771,23 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
     ot_span_add_attribute(project_span, "fs_path", strdup(fs_path), true);
     ot_span_add_attribute(project_span, "path", strdup(path), true);
 
-    ot_span_set_udata(project_span, path);
+    int fds[2] = {0};
+    if (pipe(fds) != 0) {
+        fprintf(stderr, "Failed to pipe(2): err=%s\n", strerror(errno));
+        return errno;
+    }
+
     pid_t pid = fork();
     if (pid == -1) {
         fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
         return errno;
     } else if (pid == 0) {
+        close(fds[0]);  // Child does not read
+        if (dup2(fds[1], 2) == -1) {
+            fprintf(stderr, "Failed to dup2(2): err=%s\n", strerror(errno));
+        }
+        close(fds[1]);  // Not needed anymore
+
         if (is_directory(fs_path)) {
             worker_update_project(fs_path, git_url, options);
         } else {
@@ -724,9 +795,18 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
         }
         assert(0 && "Unreachable");
     } else {
+        close(fds[1]);  // Parent does not write
+        process_t* process = calloc(1, sizeof(process_t));
+        process->pid = pid;
+        process->project_span = project_span;
+        process->path_with_namespace = path;
+
+        pthread_mutex_lock(&processes_mtx);
+        process->next = processes;
+        processes = process;
+        pthread_mutex_unlock(&processes_mtx);
         int res = 0;
-        if ((res = record_process_finished_event(queue, pid, project_span)) !=
-            0)
+        if ((res = record_process_finished_event(queue, process)) != 0)
             return res;
     }
     return 0;
@@ -764,6 +844,8 @@ end:
 }
 
 int main(int argc, char* argv[]) {
+    pthread_mutex_init(&processes_mtx, NULL);
+
     gettimeofday(&start, NULL);
     gbAllocator allocator = gb_heap_allocator();
     options_t options = {0};
