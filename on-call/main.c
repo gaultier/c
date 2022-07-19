@@ -49,7 +49,7 @@ static void shift_bill_hour(bill_summary_t* summary, time_t timestamp) {
     }
 }
 
-static time_t datetime_end_of_month_timestamp(const struct tm* d) {
+static time_t get_first_day_of_next_month_as_timestamp(const struct tm* d) {
     struct tm tmp = *d;
     tmp.tm_mday = 1;
     tmp.tm_mon = d->tm_mon + 1;
@@ -80,9 +80,11 @@ static void shift_bill_monthly(gbArray(bill_summary_t) summaries,
     time_t timestamp = timelocal(&shift->start);
     const time_t end_timestamp = timelocal(&shift->end);
     assert(timestamp < end_timestamp);
-    const time_t eom = datetime_end_of_month_timestamp(&shift->start);
+    const time_t first_day_of_next_month_as_timestamp =
+        get_first_day_of_next_month_as_timestamp(&shift->start);
 
-    while (timestamp < MIN(end_timestamp, eom)) {
+    while (timestamp <
+           MIN(end_timestamp, first_day_of_next_month_as_timestamp)) {
         shift_bill_hour(summary, timestamp);
         timestamp += 3600;
     }
