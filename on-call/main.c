@@ -135,7 +135,7 @@ static void bill_shifts(datetime_range_t* shifts, u64 shifts_len) {
     }
 
     printf("├──────────┴────────────┴──────────┴────────────────┴────────────┴─────────────┴─────────┤\n"); 
-    printf("│ Sum                                                                             %4llu  │\n", total_money);
+    printf("│ Sum                                                                             %5llu  │\n", total_money);
     printf("└────────────────────────────────────────────────────────────────────────────────────────┘\n");
     // clang-format on
 }
