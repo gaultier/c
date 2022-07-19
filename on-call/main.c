@@ -79,15 +79,16 @@ static void bill_shift_monthly(gbArray(monthly_bill_t) monthly_bills,
         }
     }
 
-    time_t timestamp = timelocal(&shift->start);
-    const time_t end_timestamp = timelocal(&shift->end);
-    assert(timestamp < end_timestamp);
+    time_t it = timelocal(&shift->start);
+    const time_t end = timelocal(&shift->end);
+    assert(it < end);
     const time_t start_of_next_month = get_start_of_next_month(&shift->start);
 
-    // Bill from the start of the shift to the end of the month
-    while (timestamp < MIN(end_timestamp, start_of_next_month)) {
-        shift_bill_hour(monthly_bill, timestamp);
-        timestamp += 3600;
+    // Bill from the start of the shift until the end of the month
+    // or until the end of shift, whichever comes first
+    while (it < MIN(end, start_of_next_month)) {
+        shift_bill_hour(monthly_bill, it);
+        it += 3600;
     }
     if (shift->start.tm_mon == shift->end.tm_mon) return;
 
@@ -100,9 +101,9 @@ static void bill_shift_monthly(gbArray(monthly_bill_t) monthly_bills,
     monthly_bill = &monthly_bills[gb_array_count(monthly_bills) - 1];
 
     // Bill from the first of the month to the end of the shift
-    while (timestamp < end_timestamp) {
-        shift_bill_hour(monthly_bill, timestamp);
-        timestamp += 3600;
+    while (it < end) {
+        shift_bill_hour(monthly_bill, it);
+        it += 3600;
     }
 }
 
