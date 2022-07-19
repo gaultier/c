@@ -59,6 +59,8 @@ ot_span_t* ot_span_create_child_of(__uint128_t trace_id, char* name,
 void ot_span_end(ot_span_t* span);
 bool ot_span_add_attribute(ot_span_t* span, char* key, char* value);
 void ot_span_set_status(ot_span_t* span, ot_span_status_t status);
+void ot_span_set_udata(ot_span_t* span, void* udata);
+void* ot_span_get_udata(ot_span_t* span);
 
 void ot_start();
 void ot_start_noop();

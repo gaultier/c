@@ -571,7 +571,8 @@ static void* watch_workers(void* varg) {
                 const int exit_status = (event->data >> 8);
                 ot_span_t* project_span = event->udata;
                 assert(project_span != NULL);
-                char* const path_with_namespace = project_span->udata;
+                char* const path_with_namespace =
+                    ot_span_get_udata(project_span);
 
                 finished += 1;
                 const i64 count = gb_atomic64_load(&projects_count);
@@ -714,7 +715,7 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
     ot_span_add_attribute(project_span, "fs_path", strdup(fs_path));
     ot_span_add_attribute(project_span, "path", strdup(path));
 
-    project_span->udata = path;
+    ot_span_set_udata(project_span, path);
     pid_t pid = fork();
     if (pid == -1) {
         fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));

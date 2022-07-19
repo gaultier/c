@@ -45,6 +45,8 @@ typedef bool(ot_span_add_attribute_fn_t(ot_span_t*, char*, char*));
 typedef __uint128_t(ot_span_trace_id_fn_t());
 typedef void(ot_end_fn_t());
 typedef void(ot_span_set_status_fn_t(ot_span_t* span, ot_span_status_t status));
+typedef void(ot_span_set_udata_fn_t(ot_span_t* span, void* udata));
+typedef void*(ot_span_get_udata_fn_t(ot_span_t* span));
 
 typedef struct {
     ot_span_t* spans;
@@ -58,6 +60,8 @@ typedef struct {
     ot_span_add_attribute_fn_t* span_add_attribute;
     ot_end_fn_t* end;
     ot_span_set_status_fn_t* span_set_status;
+    ot_span_set_udata_fn_t* span_set_udata;
+    ot_span_get_udata_fn_t* span_get_udata;
 } ot_t;
 
 static ot_t ot;
@@ -355,6 +359,28 @@ void ot_span_set_status(ot_span_t* span, ot_span_status_t status) {
     ot.span_set_status(span, status);
 }
 
+void ot_span_set_udata_noop(ot_span_t* span, void* udata) {
+    (void)span;
+    (void)udata;
+}
+
+void ot_span_set_udata_impl(ot_span_t* span, void* udata) {
+    span->udata = udata;
+}
+
+void ot_span_set_udata(ot_span_t* span, void* udata) {
+    ot.span_set_udata(span, udata);
+}
+
+void* ot_span_get_udata_noop(ot_span_t* span) {
+    (void)span;
+    return NULL;
+}
+
+void* ot_span_get_udata_impl(ot_span_t* span) { return span->udata; }
+
+void* ot_span_get_udata(ot_span_t* span) { return ot.span_get_udata(span); }
+
 void ot_start_noop() {
     ot.span_create_root = ot_span_create_root_noop;
     ot.span_create_child_of = ot_span_create_child_of_noop;
@@ -362,6 +388,8 @@ void ot_start_noop() {
     ot.span_add_attribute = ot_span_add_attribute_noop;
     ot.end = ot_end_noop;
     ot.span_set_status = ot_span_set_status_noop;
+    ot.span_set_udata = ot_span_set_udata_noop;
+    ot.span_get_udata = ot_span_get_udata_noop;
 }
 
 void ot_start() {
@@ -374,5 +402,7 @@ void ot_start() {
     ot.span_add_attribute = ot_span_add_attribute_impl;
     ot.end = ot_end_impl;
     ot.span_set_status = ot_span_set_status_impl;
+    ot.span_set_udata = ot_span_set_udata_impl;
+    ot.span_get_udata = ot_span_get_udata_impl;
 }
 
