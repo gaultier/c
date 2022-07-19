@@ -1,6 +1,5 @@
 #pragma once
 
-#include <inttypes.h>
 #include <stdbool.h>
 
 typedef enum __attribute__((packed)) {
