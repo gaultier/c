@@ -119,8 +119,17 @@ static void bill_shifts(datetime_range_t* shifts, u64 shifts_len) {
     }
 
     // TODO: better formatting
+    printf(
+        "Month      Week hours        Week money    Week-end hours   "
+        "Week-end "
+        "money  Total "
+        "hours        Total\n");
     for (int i = 0; i < gb_array_count(monthly_bills); i++) {
-        __builtin_dump_struct(&monthly_bills[i], &printf);
+        const monthly_bill_t* const bill = &monthly_bills[i];
+        printf("%d-%02d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\t\t%d\n", bill->year,
+               bill->month, bill->week_hours, bill->week_money,
+               bill->week_end_hours, bill->week_end_money, bill->total_hours,
+               bill->total_money);
     }
 }
 
