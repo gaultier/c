@@ -9,4 +9,4 @@
 	url = https://github.com/zserge/jsmn.git
 [submodule "vendor/cJSON"]
 	path = vendor/cJSON
-	url = https://github.com/DaveGamble/cJSON.git
+	url = git@github.com:gaultier/cJSON.git
