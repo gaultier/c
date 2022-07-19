@@ -549,7 +549,7 @@ static void* watch_workers(void* varg) {
     u64 finished = 0;
     struct kevent events[512] = {0};
 
-    const bool is_tty = isatty(2);
+    const bool is_tty = isatty(fileno(stdout));
 
     do {
         int event_count = kevent(arg->queue, NULL, 0, events, 512, 0);
