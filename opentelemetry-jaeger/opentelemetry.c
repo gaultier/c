@@ -17,6 +17,10 @@
 #define CJSON_HIDE_SYMBOLS
 #include "../vendor/cJSON/cJSON.c"
 
+#define GB_IMPLEMENTATION
+#define GB_STATIC
+#include "../vendor/gb/gb.h"
+
 typedef struct {
     char *key, *value;
 } ot_attribute_t;
@@ -31,8 +35,7 @@ struct ot_span_t {
     char* message;
     struct ot_span_t* next;
     void* udata;
-    ot_attribute_t attributes[64];
-    uint8_t attributes_len;
+    gbArray(ot_attribute_t) attributes;
 };
 
 typedef ot_span_t*(ot_span_create_root_fn_t(__uint128_t, char*, ot_span_kind_t,
@@ -103,12 +106,8 @@ static bool ot_span_add_attribute_noop(ot_span_t* span, char* key,
 
 static bool ot_span_add_attribute_impl(ot_span_t* span, char* key,
                                        char* value) {
-    if (span->attributes_len ==
-        sizeof(span->attributes) / sizeof(ot_attribute_t)) {
-        return false;
-    }
-    span->attributes[span->attributes_len++] =
-        (ot_attribute_t){.key = key, .value = value};
+    gb_array_append(span->attributes,
+                    ((ot_attribute_t){.key = key, .value = value}));
     return true;
 }
 
@@ -126,10 +125,10 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
 
     cJSON* j_resource = cJSON_AddObjectToObject(j_resource_span, "resource");
 
-    if (span->attributes_len > 0) {
+    if (gb_array_count(span->attributes) > 0) {
         cJSON* j_attributes = cJSON_AddArrayToObject(j_resource, "attributes");
 
-        for (int i = 0; i < span->attributes_len; i++) {
+        for (int i = 0; i < gb_array_count(span->attributes); i++) {
             cJSON* j_attribute = cJSON_CreateObject();
             cJSON_AddItemToArray(j_attributes, j_attribute);
             cJSON_AddStringToObject(j_attribute, "key",
@@ -194,6 +193,12 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
     return j_root;
 }
 
+static void ot_span_destroy_impl(ot_span_t* span) {
+    // TODO: free each attribute
+    gb_array_free(span->attributes);
+    free(span);
+}
+
 static ot_span_t* ot_span_create_child_of_impl(__uint128_t trace_id, char* name,
                                                ot_span_kind_t kind,
                                                char* message,
@@ -203,6 +208,7 @@ static ot_span_t* ot_span_create_child_of_impl(__uint128_t trace_id, char* name,
 
     ot_span_t* span = calloc(1, sizeof(ot_span_t));
 
+    gb_array_init_reserve(span->attributes, gb_heap_allocator(), 3);
     span->start_time_unix_nano = tp.tv_sec * 1000 * 1000 * 1000 + tp.tv_nsec;
     span->trace_id = trace_id;
     span->kind = kind;
@@ -325,7 +331,7 @@ static void* ot_export(void* varg) {
         }
 
         cJSON_Delete(root);
-        free(span);
+        ot_span_destroy_impl(span);
         fflush(stdout);
 
         pthread_mutex_unlock(&ot.spans_mtx);
