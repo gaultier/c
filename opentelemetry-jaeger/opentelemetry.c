@@ -18,7 +18,6 @@
 #include "../vendor/cJSON/cJSON.c"
 
 #define GB_IMPLEMENTATION
-#define GB_STATIC
 #include "../vendor/gb/gb.h"
 
 typedef struct {

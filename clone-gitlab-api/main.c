@@ -12,8 +12,6 @@
 #include <unistd.h>
 
 #include "../opentelemetry-jaeger/opentelemetry.h"
-#define GB_IMPLEMENTATION
-#define GB_STATIC
 #include "../vendor/gb/gb.h"
 #define JSMN_STATIC
 #include "vendor/jsmn/jsmn.h"
