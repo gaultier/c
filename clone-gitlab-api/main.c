@@ -55,7 +55,7 @@ typedef struct {
     gbString api_token;
     gbString gitlab_domain;
     git_clone_method_t clone_method;
-    bool observability;
+    gbString opentelemetry_url;
 } options_t;
 static bool verbose = false;
 
@@ -311,8 +311,8 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
          .val = 'm'},
         {.name = "url", .has_arg = required_argument, .flag = NULL, .val = 'u'},
         {.name = "help", .has_arg = no_argument, .flag = NULL, .val = 'h'},
-        {.name = "observability",
-         .has_arg = no_argument,
+        {.name = "opentelemetry-url",
+         .has_arg = required_argument,
          .flag = NULL,
          .val = 'o'},
         {.name = "verbose", .has_arg = no_argument, .flag = NULL, .val = 'v'},
@@ -379,7 +379,7 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
                 verbose = true;
                 break;
             case 'o':
-                options->observability = true;
+                options->opentelemetry_url = gb_string_make(allocator, optarg);
                 break;
             default:
                 print_usage(argc, argv);
@@ -820,7 +820,11 @@ int main(int argc, char* argv[]) {
     options_t options = {0};
     options_parse_from_cli(allocator, argc, argv, &options);
 
-    options.observability ? ot_start() : ot_start_noop();
+    if (gb_string_length(options.opentelemetry_url) > 0)
+        ot_start(options.opentelemetry_url);
+    else
+        ot_start_noop("");
+
     trace_id = ot_generate_trace_id();
 
     int res = 0;

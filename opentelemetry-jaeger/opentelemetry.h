@@ -63,8 +63,8 @@ void ot_span_set_status(ot_span_t* span, ot_span_status_t status);
 void ot_span_set_udata(ot_span_t* span, void* udata);
 void* ot_span_get_udata(ot_span_t* span);
 
-void ot_start();
-void ot_start_noop();
+void ot_start(char* url);
+void ot_start_noop(char* url);
 void ot_end();
 __uint128_t ot_generate_trace_id();
 

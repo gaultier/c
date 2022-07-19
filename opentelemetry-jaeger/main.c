@@ -5,7 +5,8 @@
 #include "opentelemetry.h"
 
 int main(int argc, char* argv[]) {
-    getenv("NOOP") != NULL ? ot_start_noop() : ot_start();
+    getenv("NOOP") != NULL ? ot_start_noop("")
+                           : ot_start("localhost:4318/v1/traces");
 
     const __uint128_t trace_id = ot_generate_trace_id();
 

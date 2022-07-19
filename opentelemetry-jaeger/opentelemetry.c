@@ -66,6 +66,7 @@ typedef struct {
     ot_span_set_status_fn_t* span_set_status;
     ot_span_set_udata_fn_t* span_set_udata;
     ot_span_get_udata_fn_t* span_get_udata;
+    char* url;
 } ot_t;
 
 static ot_t ot;
@@ -284,8 +285,7 @@ static void* ot_export(void* varg) {
     CURL* http_handle = curl_easy_init();
     assert(http_handle != NULL);
 
-    const char url[] = "localhost:4318/v1/traces";
-    assert(curl_easy_setopt(http_handle, CURLOPT_URL, url) == CURLE_OK);
+    assert(curl_easy_setopt(http_handle, CURLOPT_URL, ot.url) == CURLE_OK);
     assert(curl_easy_setopt(http_handle, CURLOPT_WRITEFUNCTION,
                             on_http_body_chunk_noop) == CURLE_OK);
     assert(curl_easy_setopt(http_handle, CURLOPT_MAXREDIRS, 5) == CURLE_OK);
@@ -334,7 +334,7 @@ static void* ot_export(void* varg) {
             fprintf(stderr,
                     "Failed to post traces : url=%s res=%d err=%s "
                     "errno=%d\n",
-                    url, res, curl_easy_strerror(res), res);
+                    ot.url, res, curl_easy_strerror(res), res);
             // TODO: retry?
         } else {
             // printf("Exported span: span_id=%02llx\n", span->id);
@@ -397,7 +397,9 @@ void* ot_span_get_udata_impl(ot_span_t* span) { return span->udata; }
 
 void* ot_span_get_udata(ot_span_t* span) { return ot.span_get_udata(span); }
 
-void ot_start_noop() {
+void ot_start_noop(char* url) {
+    (void)url;
+
     ot.span_create_root = ot_span_create_root_noop;
     ot.span_create_child_of = ot_span_create_child_of_noop;
     ot.span_end = ot_span_end_noop;
@@ -408,10 +410,11 @@ void ot_start_noop() {
     ot.span_get_udata = ot_span_get_udata_noop;
 }
 
-void ot_start() {
+void ot_start(char* url) {
     pthread_mutex_init(&ot.spans_mtx, NULL);
     pthread_cond_init(&ot.spans_to_export, NULL);
     pthread_create(&ot.exporter, NULL, ot_export, NULL);
+    ot.url = url;
     ot.span_create_root = ot_span_create_root_impl;
     ot.span_create_child_of = ot_span_create_child_of_impl;
     ot.span_end = ot_span_end_impl;
