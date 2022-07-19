@@ -23,6 +23,7 @@
 
 typedef struct {
     char *key, *value;
+    bool should_free_value;
 } ot_attribute_t;
 
 struct ot_span_t {
@@ -44,7 +45,8 @@ typedef ot_span_t*(ot_span_create_child_of_fn_t(__uint128_t, char*,
                                                 ot_span_kind_t, char*,
                                                 const ot_span_t*));
 typedef void(ot_span_end_fn_t(ot_span_t*));
-typedef bool(ot_span_add_attribute_fn_t(ot_span_t*, char*, char*));
+typedef bool(ot_span_add_attribute_fn_t(ot_span_t*, char*, char*,
+                                        bool should_free_value));
 typedef __uint128_t(ot_span_trace_id_fn_t());
 typedef void(ot_end_fn_t());
 typedef void(ot_span_set_status_fn_t(ot_span_t* span, ot_span_status_t status));
@@ -96,23 +98,27 @@ static ot_span_t* ot_span_create_child_of_noop(__uint128_t trace_id, char* name,
     return NULL;
 }
 
-static bool ot_span_add_attribute_noop(ot_span_t* span, char* key,
-                                       char* value) {
+static bool ot_span_add_attribute_noop(ot_span_t* span, char* key, char* value,
+                                       bool should_free_value) {
     (void)span;
     (void)key;
     (void)value;
+    (void)should_free_value;
     return true;
 }
 
-static bool ot_span_add_attribute_impl(ot_span_t* span, char* key,
-                                       char* value) {
+static bool ot_span_add_attribute_impl(ot_span_t* span, char* key, char* value,
+                                       bool should_free_value) {
     gb_array_append(span->attributes,
-                    ((ot_attribute_t){.key = key, .value = value}));
+                    ((ot_attribute_t){.key = key,
+                                      .value = value,
+                                      .should_free_value = should_free_value}));
     return true;
 }
 
-bool ot_span_add_attribute(ot_span_t* span, char* key, char* value) {
-    return ot.span_add_attribute(span, key, value);
+bool ot_span_add_attribute(ot_span_t* span, char* key, char* value,
+                           bool should_free_value) {
+    return ot.span_add_attribute(span, key, value, should_free_value);
 }
 
 static cJSON* ot_spans_to_json(const ot_span_t* span) {
@@ -194,7 +200,12 @@ static cJSON* ot_spans_to_json(const ot_span_t* span) {
 }
 
 static void ot_span_destroy_impl(ot_span_t* span) {
-    // TODO: free each attribute
+    for (int i = 0; i < gb_array_count(span->attributes); i++) {
+        ot_attribute_t* attr = &span->attributes[i];
+        if (attr->should_free_value) {
+            free(attr->value);
+        }
+    }
     gb_array_free(span->attributes);
     free(span);
 }

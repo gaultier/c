@@ -396,10 +396,8 @@ static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
     ot_span_t* span =
         ot_span_create_child_of(trace_id, "api_query_projects", OT_SK_CLIENT,
                                 "api_query_projects", parent_span);
-    ot_span_add_attribute(span, "service.name", "clone-gitlab-api");
-    ot_span_add_attribute(
-        span, "url",
-        strndup(api->url, gb_string_length(api->url)));  // FIXME: free
+    ot_span_add_attribute(span, "service.name", "gitlab", false);
+    ot_span_add_attribute(span, "url", strdup(api->url), true);
 
     int res = 0;
     assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
@@ -436,7 +434,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     int res = 0;
     ot_span_t* json_span = ot_span_create_child_of(
         trace_id, "parse json", OT_SK_CLIENT, "parse json", parent_span);
-    ot_span_add_attribute(json_span, "service.name", "clone-gitlab-api");
+    ot_span_add_attribute(json_span, "service.name", "clone-gitlab-api", false);
 
     do {
         jsmn_init(&p);
@@ -709,11 +707,11 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
     ot_span_t* project_span =
         ot_span_create_child_of(trace_id, "upsert_project", OT_SK_CLIENT,
                                 "clone or update", parent_span);
-    ot_span_add_attribute(project_span, "service.name", "clone-gitlab-api");
-    // FIXME: free
-    ot_span_add_attribute(project_span, "git_url", strdup(git_url));
-    ot_span_add_attribute(project_span, "fs_path", strdup(fs_path));
-    ot_span_add_attribute(project_span, "path", strdup(path));
+    ot_span_add_attribute(project_span, "service.name", "clone-gitlab-api",
+                          false);
+    ot_span_add_attribute(project_span, "git_url", strdup(git_url), true);
+    ot_span_add_attribute(project_span, "fs_path", strdup(fs_path), true);
+    ot_span_add_attribute(project_span, "path", strdup(path), true);
 
     ot_span_set_udata(project_span, path);
     pid_t pid = fork();
@@ -745,7 +743,7 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
     ot_span_t* span_fetch_projects = ot_span_create_root(
         trace_id, "api_fetch_projects", OT_SK_CLIENT, "api_fetch_projects");
     ot_span_add_attribute(span_fetch_projects, "service.name",
-                          "clone-gitlab-api");
+                          "clone-gitlab-api", false);
 
     int res = 0;
     gb_string_clear(api->response_body);
