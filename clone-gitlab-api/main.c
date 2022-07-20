@@ -576,8 +576,9 @@ static void* watch_workers(void* varg) {
                 process_t* process = event->udata;
                 assert(process != NULL);
 
-                pg_array_set_capacity(process->err, event->data);
-                int res = read(process->stderr_fd, process->err, event->data);
+                const u64 max_read = MIN(event->data, 128);
+                pg_array_set_capacity(process->err, max_read);
+                int res = read(process->stderr_fd, process->err, max_read);
                 if (res == -1) {
                     fprintf(stderr, "Failed to read(2): err=%s\n",
                             strerror(errno));
