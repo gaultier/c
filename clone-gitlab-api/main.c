@@ -594,17 +594,17 @@ static void* watch_workers(void* varg) {
                 const u64 count =
                     __c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST);
                 if (exit_status == 0) {
-                    printf("%s[%" PRIu64 "/%" PRIu64
+                    printf("\n%s[%" PRIu64 "/%" PRIu64
                            "] ✓ "
-                           "%.*s%s\n",
+                           "%.*s%s",
                            pg_colors[is_tty][COL_GREEN], finished, count,
                            (int)pg_array_count(process->path_with_namespace),
                            process->path_with_namespace,
                            pg_colors[is_tty][COL_RESET]);
                 } else {
-                    printf("%s[%" PRIu64 "/%" PRIu64
+                    printf("\n%s[%" PRIu64 "/%" PRIu64
                            "] ❌ "
-                           "%.*s (%d): %.*s%s\n",
+                           "%.*s (%d): %.*s%s",
                            pg_colors[is_tty][COL_RED], finished, count,
                            (int)pg_array_count(process->path_with_namespace),
                            process->path_with_namespace, exit_status,
