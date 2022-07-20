@@ -53,7 +53,6 @@ typedef struct {
     pg_array_t(char) api_token;
     pg_array_t(char) gitlab_domain;
     git_clone_method_t clone_method;
-    pg_array_t(char) opentelemetry_url;
 } options_t;
 static bool verbose = false;
 
@@ -312,10 +311,6 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
          .val = 'm'},
         {.name = "url", .has_arg = required_argument, .flag = NULL, .val = 'u'},
         {.name = "help", .has_arg = no_argument, .flag = NULL, .val = 'h'},
-        {.name = "opentelemetry-url",
-         .has_arg = required_argument,
-         .flag = NULL,
-         .val = 'o'},
         {.name = "verbose", .has_arg = no_argument, .flag = NULL, .val = 'v'},
     };
 
@@ -386,13 +381,6 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
             case 'v':
                 verbose = true;
                 break;
-            case 'o': {
-                const u64 optarg_len = strlen(optarg);
-                pg_array_init_reserve(options->opentelemetry_url, optarg_len);
-                pg_array_appendv(options->opentelemetry_url, optarg,
-                                 optarg_len);
-                break;
-            }
             default:
                 print_usage(argc, argv);
                 exit(0);

@@ -11,8 +11,6 @@ Every project is cloned concurrently for maximum performance and the memory usag
 Usage:
 
 ```
-$ clone-gitlab-api --help
-
 Clone or update all git repositories from Gitlab.
 
 USAGE:
@@ -26,7 +24,7 @@ OPTIONS:
 	-h, --help
 	-v, --verbose
 
-The repositories are cloned with git over ssh with a depth of 1, without tags, in a flat manner.
+The repositories are cloned with git over ssh with, without tags, in a flat manner.
 If some repositories already exist in the root directory, they are updated (with git pull) instead of cloned.
 If some repositories fail, this command does not stop and tries to clone or update the other repositories.
 
