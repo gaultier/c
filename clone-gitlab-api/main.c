@@ -91,7 +91,7 @@ static void print_usage(int argc, char* argv[]) {
         "private repositories\n"
         "\t-h, --help\n"
         "\t-v, --verbose\n\n"
-        "The repositories are cloned with git over ssh with a depth of 1, "
+        "The repositories are cloned with git over ssh with, "
         "without tags, in a flat manner.\n"
         "If some repositories already exist in the root directory, they are "
         "updated (with git pull) instead of cloned.\n"
@@ -651,8 +651,7 @@ static int worker_update_project(char* fs_path, pg_array_t(char) git_url,
         exit(errno);
     }
 
-    char* const argv[] = {"git", "pull",      "--quiet", "--depth",
-                          "1",   "--no-tags", 0};
+    char* const argv[] = {"git", "pull", "--quiet", "--no-tags", 0};
 
     if (execvp("git", argv) == -1) {
         fprintf(stderr, "Failed to pull: git_url=%.*s err=%s\n",
@@ -669,8 +668,8 @@ static int worker_clone_project(char* fs_path, pg_array_t(char) git_url,
     assert(git_url != NULL);
     assert(options != NULL);
 
-    char* const argv[] = {"git",       "clone", "--quiet", "--depth", "1",
-                          "--no-tags", git_url, fs_path,   0};
+    char* const argv[] = {"git",   "clone", "--quiet", "--no-tags",
+                          git_url, fs_path, 0};
 
     if (execvp("git", argv) == -1) {
         fprintf(stderr, "Failed to clone: git_url=%.*s err=%s\n",
