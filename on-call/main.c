@@ -119,24 +119,25 @@ static void bill_shifts(datetime_range_t* shifts, u64 shifts_len) {
         bill_shift_monthly(monthly_bills, &shifts[i]);
     }
 
+    const float tax_rate = 0.425;
     uint64_t total_money = 0;
     // clang-format off
-    printf("┌──────────┬────────────┬──────────┬────────────────┬────────────┬─────────────┬─────────┐\n");
-    printf("│   Month  │ Week hours │  Week €  │ Week-end hours │ Week-end € │ Total hours │ Total € │\n");
-    printf("├──────────┼────────────┼──────────┼────────────────┼────────────┼─────────────┼─────────┤\n"); 
+    printf("┌──────────┬────────────┬────────┬────────────────┬────────────┬─────────────┬─────────────────┬───────────────┐\n");
+    printf("│   Month  │ Week hours │ Week € │ Week-end hours │ Week-end € │ Total hours │ Total (gross) € │ Total (net) € │ \n");
+    printf("├──────────┼────────────┼────────┼────────────────┼────────────┼─────────────┼─────────────────┼───────────────┤\n"); 
     for (int i = 0; i < gb_array_count(monthly_bills); i++) {
         const monthly_bill_t* const bill = &monthly_bills[i];
-        printf("│ %4d-%02d  │   %4d     │   %4d   │     %4d       │    %4d    │     %4d    │   %4d  │\n", 
+        printf("│ %4d-%02d  │   %5d    │ %5d  │     %5d      │    %5d   │    %5d    │      %5d      │   %7.02f     │  \n", 
             bill->year, bill->month, bill->week_hours, bill->week_money,
             bill->week_end_hours, bill->week_end_money, bill->total_hours,
-            bill->total_money);
+            bill->total_money,            bill->total_money*(1-tax_rate));
 
         total_money += bill->total_money;
     }
 
-    printf("├──────────┴────────────┴──────────┴────────────────┴────────────┴─────────────┴─────────┤\n"); 
-    printf("│ Sum                                                                             %5llu  │\n", total_money);
-    printf("└────────────────────────────────────────────────────────────────────────────────────────┘\n");
+    printf("├──────────┴────────────┴────────┴────────────────┴────────────┴─────────────┼─────────────────┼───────────────┤\n"); 
+    printf("│ Sum                                                                        │      %5llu      │   %7.02f     │\n", total_money, total_money*(1-tax_rate));
+    printf("└────────────────────────────────────────────────────────────────────────────┴─────────────────┴───────────────┘\n");
     // clang-format on
 }
 
