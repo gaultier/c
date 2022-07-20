@@ -243,8 +243,6 @@ static void api_init(api_t* api, options_t* options) {
     pg_array_init_reserve(api->url, MAX_URL_LEN);
     pg_array_appendv(api->url, options->gitlab_domain,
                      pg_array_count(options->gitlab_domain));
-    pg_array_appendv(api->url, options->gitlab_domain,
-                     pg_array_count(options->gitlab_domain));
     pg_array_appendv0(api->url,
                       "/api/v4/"
                       "projects?statistics=false&top_level=&with_custom_"
@@ -271,8 +269,8 @@ static void api_init(api_t* api, options_t* options) {
 
     if (options->api_token != NULL) {
         static char token_header[150] = "";
-        snprintf(token_header, sizeof(token_header) - 1, "PRIVATE-TOKEN: %s",
-                 options->api_token);
+        snprintf(token_header, sizeof(token_header) - 1, "PRIVATE-TOKEN: %.*s",
+                 (int)pg_array_count(options->api_token), options->api_token);
 
         api->curl_headers = curl_slist_append(NULL, token_header);
         assert(api->curl_headers != NULL);
@@ -413,17 +411,23 @@ static int api_query_projects(api_t* api) {
     assert(api->url != NULL);
 
     int res = 0;
-    assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
-           CURLE_OK);
+    {
+        pg_array_null_terminate(api->url);
+        assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
+               CURLE_OK);
+        pg_array_drop_null_terminator(api->url);
+    }
 
     if ((res = curl_easy_perform(api->http_handle)) != 0) {
         int error;
         curl_easy_getinfo(api->http_handle, CURLINFO_OS_ERRNO, &error);
-        fprintf(stderr,
-                "Failed to query api: url=%s response_body=%s res=%d err=%s "
-                "errno=%d\n",
-                api->url, api->response_body, res, curl_easy_strerror(res),
-                error);
+        fprintf(
+            stderr,
+            "Failed to query api: url=%.*s response_body=%.*s res=%d err=%s "
+            "errno=%d\n",
+            (int)pg_array_count(api->url), api->url,
+            (int)pg_array_count(api->response_body), api->response_body, res,
+            curl_easy_strerror(res), error);
         return res;
     }
 
@@ -454,14 +458,16 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
             continue;
         }
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
-            fprintf(stderr, "Failed to parse JSON: body=%s res=%d\n",
-                    api->response_body, res);
+            fprintf(stderr, "Failed to parse JSON: body=%.*s res=%d\n",
+                    (int)pg_array_count(api->response_body), api->response_body,
+                    res);
             return res;
         }
         if (res == 0) {
             fprintf(stderr,
-                    "Failed to parse JSON (is it empty?): body=%s res=%d\n",
-                    api->response_body, res);
+                    "Failed to parse JSON (is it empty?): body=%.*s res=%d\n",
+                    (int)pg_array_count(api->response_body), api->response_body,
+                    res);
             return res;
         }
     } while (res == JSMN_ERROR_NOMEM);
@@ -599,15 +605,17 @@ static void* watch_workers(void* varg) {
                 if (exit_status == 0) {
                     printf(
                         "%s[%llu/%s] ✓ "
-                        "%s%s\n",
+                        "%.*s%s\n",
                         pg_colors[is_tty][COL_GREEN], finished, s,
+                        (int)pg_array_count(process->path_with_namespace),
                         process->path_with_namespace,
                         pg_colors[is_tty][COL_RESET]);
                 } else {
                     printf(
                         "%s[%llu/%s] ❌ "
-                        "%s (%d): %.*s%s\n",
+                        "%.*s (%d): %.*s%s\n",
                         pg_colors[is_tty][COL_RED], finished, s,
+                        (int)pg_array_count(process->path_with_namespace),
                         process->path_with_namespace, exit_status,
                         (int)pg_array_count(process->err), process->err,
                         pg_colors[is_tty][COL_RESET]);
@@ -644,8 +652,8 @@ static int worker_update_project(char* fs_path, pg_array_t(char) git_url,
                           "1",   "--no-tags", 0};
 
     if (execvp("git", argv) == -1) {
-        fprintf(stderr, "Failed to pull: git_url=%s err=%s\n", git_url,
-                strerror(errno));
+        fprintf(stderr, "Failed to pull: git_url=%.*s err=%s\n",
+                (int)pg_array_count(git_url), git_url, strerror(errno));
         exit(errno);
     }
     assert(0 && "Unreachable");
@@ -662,17 +670,18 @@ static int worker_clone_project(char* fs_path, pg_array_t(char) git_url,
                           "--no-tags", git_url, fs_path,   0};
 
     if (execvp("git", argv) == -1) {
-        fprintf(stderr, "Failed to clone: git_url=%s err=%s\n", git_url,
-                strerror(errno));
+        fprintf(stderr, "Failed to clone: git_url=%.*s err=%s\n",
+                (int)pg_array_count(git_url), git_url, strerror(errno));
         exit(errno);
     }
     assert(0 && "Unreachable");
     return 0;
 }
 
-static int change_directory(char* path) {
+static int change_directory(pg_array_t(char) path) {
     assert(path != NULL);
 
+    pg_array_null_terminate(path);
     if (chdir(path) == -1) {
         if (errno == ENOENT) {
             if (mkdir(path, S_IRWXU) == -1) {
@@ -823,7 +832,8 @@ int main(int argc, char* argv[]) {
 
     if ((res = change_directory(options.root_directory)) != 0) return res;
 
-    printf("Changed directory to: %s\n", options.root_directory);
+    printf("Changed directory to: %.*s\n",
+           (int)pg_array_count(options.root_directory), options.root_directory);
 
     watch_project_cloning_arg_t arg = {
         .queue = queue,
