@@ -609,17 +609,17 @@ static void* watch_workers(void* varg) {
                 const u64 count =
                     __c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST);
                 if (exit_status == 0) {
-                    printf("\n%s[%" PRIu64 "/%" PRIu64
+                    printf("%s[%" PRIu64 "/%" PRIu64
                            "] ✓ "
-                           "%.*s%s",
+                           "%.*s%s\n",
                            pg_colors[is_tty][COL_GREEN], finished, count,
                            (int)pg_array_count(process->path_with_namespace),
                            process->path_with_namespace,
                            pg_colors[is_tty][COL_RESET]);
                 } else {
-                    printf("\n%s[%" PRIu64 "/%" PRIu64
+                    printf("%s[%" PRIu64 "/%" PRIu64
                            "] ❌ "
-                           "%.*s (%d): %.*s%s",
+                           "%.*s (%d): %.*s%s\n",
                            pg_colors[is_tty][COL_RED], finished, count,
                            (int)pg_array_count(process->path_with_namespace),
                            process->path_with_namespace, exit_status,
@@ -758,11 +758,9 @@ static int upsert_project(pg_array_t(char) path, char* git_url, char* fs_path,
     } else if (pid == 0) {
         close(fds[0]);  // Child does not read
         close(0);       // Close stdin
-        // Silence stdout
-        if (freopen("/dev/null", "w", stdout) == NULL) {
-            fprintf(stderr, "Failed to freopen(3): err=%s\n", strerror(errno));
-        }
-        if (dup2(fds[1], 2) == -1) {
+        close(1);       // Close stdout
+        if (dup2(fds[1], 2) ==
+            -1) {  // Direct stderr to the pipe for the parent to read
             fprintf(stderr, "Failed to dup2(2): err=%s\n", strerror(errno));
         }
         close(fds[1]);  // Not needed anymore
