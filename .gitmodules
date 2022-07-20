@@ -1,6 +1,6 @@
 [submodule "vendor/gb"]
 	path = vendor/gb
-	url = git@github.com:gaultier/gb.git
+	url = https://github.com:gaultier/gb.git
 [submodule "http-server/vendor/picohttpparser"]
 	path = http-server/vendor/picohttpparser
 	url = https://github.com/h2o/picohttpparser
@@ -9,4 +9,4 @@
 	url = https://github.com/zserge/jsmn.git
 [submodule "vendor/cJSON"]
 	path = vendor/cJSON
-	url = git@github.com:gaultier/cJSON.git
+	url = https://github.com:gaultier/cJSON.git
