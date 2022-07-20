@@ -755,6 +755,10 @@ static int upsert_project(pg_array_t(char) path, char* git_url, char* fs_path,
         return errno;
     } else if (pid == 0) {
         close(fds[0]);  // Child does not read
+        // Silence stdout
+        if (freopen("/dev/null", "w", stdout) == NULL) {
+            fprintf(stderr, "Failed to freopen(3): err=%s\n", strerror(errno));
+        }
         if (dup2(fds[1], 2) == -1) {
             fprintf(stderr, "Failed to dup2(2): err=%s\n", strerror(errno));
         }
