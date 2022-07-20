@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <curl/curl.h>
+#include <errno.h>
 #include <getopt.h>
 #include <pthread.h>
 #include <signal.h>
@@ -12,7 +13,7 @@
 #include <unistd.h>
 
 #include "../opentelemetry-jaeger/opentelemetry.h"
-#include "../vendor/gb/gb.h"
+#include "../pg.h"
 #define JSMN_STATIC
 #include "vendor/jsmn/jsmn.h"
 
@@ -37,10 +38,10 @@ static struct timeval start;
 
 struct process_t {
     ot_span_t* project_span;
-    gbString path_with_namespace;
+    pg_array_t(char) path_with_namespace;
     int stderr_fd;
     pid_t pid;
-    gbArray(char) err;
+    pg_array_t(char) err;
     struct process_t* next;  // TODO: improve
 };
 typedef struct process_t process_t;
@@ -51,11 +52,11 @@ typedef enum {
 } git_clone_method_t;
 
 typedef struct {
-    gbString root_directory;
-    gbString api_token;
-    gbString gitlab_domain;
+    pg_array_t(char) root_directory;
+    pg_array_t(char) api_token;
+    pg_array_t(char) gitlab_domain;
     git_clone_method_t clone_method;
-    gbString opentelemetry_url;
+    pg_array_t(char) opentelemetry_url;
 } options_t;
 static bool verbose = false;
 
@@ -65,14 +66,14 @@ typedef struct {
 
 typedef struct {
     CURL* http_handle;
-    gbString response_body;
-    gbString url;
-    gbArray(jsmntok_t) tokens;
+    pg_array_t(char) response_body;
+    pg_array_t(char) url;
+    pg_array_t(jsmntok_t) tokens;
     bool finished;
     struct curl_slist* curl_headers;
 } api_t;
 
-static gbAtomic64 projects_count = {0};
+static _Atomic u64 projects_count = 0;
 
 static void print_usage(int argc, char* argv[]) {
     printf(
@@ -109,25 +110,25 @@ static void print_usage(int argc, char* argv[]) {
         argv[0]);
 }
 
-static bool str_equal(const char* a, usize a_len, const char* b, usize b_len) {
+static bool str_equal(const char* a, u64 a_len, const char* b, u64 b_len) {
     assert(a != NULL);
     assert(b != NULL);
 
     return a_len == b_len && memcmp(a, b, a_len) == 0;
 }
 
-static bool str_iequal(const char* a, usize a_len, const char* b, usize b_len) {
+static bool str_iequal(const char* a, u64 a_len, const char* b, u64 b_len) {
     assert(a != NULL);
     assert(b != NULL);
 
     if (a_len != b_len) return false;
     for (int i = 0; i < a_len; i++) {
-        if (gb_char_to_lower(a[i]) != gb_char_to_lower(b[i])) return false;
+        if (pg_char_to_lower(a[i]) != pg_char_to_lower(b[i])) return false;
     }
     return true;
 }
 
-static bool str_iequal_c(const char* a, usize a_len, const char* b0) {
+static bool str_iequal_c(const char* a, u64 a_len, const char* b0) {
     assert(a != NULL);
     assert(b0 != NULL);
 
@@ -144,14 +145,14 @@ static bool is_directory(const char* path) {
     return S_ISDIR(s.st_mode);
 }
 
-static u64 str_to_u64(const char* s, usize s_len) {
+static u64 str_to_u64(const char* s, u64 s_len) {
     assert(s != NULL);
 
     u64 res = 0;
     for (u64 i = 0; i < s_len; i++) {
         const char c = s[i];
-        if (gb_char_is_space(c)) continue;
-        if (gb_char_is_digit(c)) {
+        if (pg_char_is_space(c)) continue;
+        if (pg_char_is_digit(c)) {
             const int v = c - '0';
             res *= 10;
             res += v;
@@ -161,33 +162,32 @@ static u64 str_to_u64(const char* s, usize s_len) {
     return res;
 }
 
-static usize on_http_response_body_chunk(void* contents, usize size,
-                                         usize nmemb, void* userp) {
+static u64 on_http_response_body_chunk(void* contents, u64 size, u64 nmemb,
+                                       void* userp) {
     assert(contents != NULL);
     assert(userp != NULL);
 
-    const usize real_size = size * nmemb;
-    gbString* response_body = userp;
-    *response_body =
-        gb_string_append_length(*response_body, contents, real_size);
+    const u64 real_size = size * nmemb;
+    pg_array_t(char)* response_body = userp;
+    pg_array_appendv(*response_body, contents, real_size);
 
     return real_size;
 }
 
-static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
+static u64 on_header(char* buffer, u64 size, u64 nitems, void* userdata) {
     assert(buffer != NULL);
     assert(userdata != NULL);
     api_t* const api = userdata;
 
-    const usize real_size = nitems * size;
+    const u64 real_size = nitems * size;
     const char* val = memchr(buffer, ':', real_size);
     if (val == NULL) return real_size;  // Could be HTTP/1.1 OK, skip
 
     assert(val > buffer);
     assert(val < buffer + real_size);
-    const usize key_len = val - buffer;
+    const u64 key_len = val - buffer;
     val++;  // Skip `:`
-    usize val_len = buffer + real_size - val;
+    u64 val_len = buffer + real_size - val;
 
     if (str_iequal_c(buffer, key_len, "Link")) {
         const char needle[] = ">; rel=\"next\"";
@@ -219,36 +219,41 @@ static usize on_header(char* buffer, usize size, usize nitems, void* userdata) {
         }
 
         assert(api->url != NULL);
-        gb_string_clear(api->url);
-        api->url = gb_string_append_length(api->url, val, val_len);
+        pg_array_clear(api->url);
+        pg_array_appendv(api->url, val, val_len);
     } else if (str_iequal_c(buffer, key_len, "X-Total")) {
         const u64 total = str_to_u64(val, val_len);
-        gb_atomic64_compare_exchange(&projects_count, 0, total);
+        u64 expected = 0;
+        __c11_atomic_compare_exchange_strong(&projects_count, &expected, total,
+                                             __ATOMIC_SEQ_CST,
+                                             __ATOMIC_SEQ_CST);
     }
 
     return nitems * size;
 }
 
-static void api_init(gbAllocator allocator, api_t* api, options_t* options) {
+static void api_init(api_t* api, options_t* options) {
     assert(api != NULL);
     assert(options != NULL);
     assert(options->gitlab_domain != NULL);
 
-    api->response_body = gb_string_make_reserve(allocator, 200 * 1024);
+    pg_array_init_reserve(api->response_body, 200 * 1024);
 
-    gb_array_init_reserve(api->tokens, gb_heap_allocator(), 8 * 1000);
+    pg_array_init_reserve(api->tokens, 8 * 1000);
 
     api->http_handle = curl_easy_init();
     assert(api->http_handle != NULL);
 
-    api->url = gb_string_make_reserve(allocator, MAX_URL_LEN);
-    api->url = gb_string_append(api->url, options->gitlab_domain);
-    api->url = gb_string_appendc(
-        api->url,
-        "/api/v4/"
-        "projects?statistics=false&top_level=&with_custom_"
-        "attributes=false&simple=true&per_page=100&all_available="
-        "true&order_by=id&sort=asc");
+    pg_array_init_reserve(api->url, MAX_URL_LEN);
+    pg_array_appendv(api->url, options->gitlab_domain,
+                     pg_array_count(options->gitlab_domain));
+    pg_array_appendv(api->url, options->gitlab_domain,
+                     pg_array_count(options->gitlab_domain));
+    pg_array_appendv0(api->url,
+                      "/api/v4/"
+                      "projects?statistics=false&top_level=&with_custom_"
+                      "attributes=false&simple=true&per_page=100&all_available="
+                      "true&order_by=id&sort=asc");
     assert(curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose) ==
            CURLE_OK);
     assert(curl_easy_setopt(api->http_handle, CURLOPT_MAXREDIRS, 5) ==
@@ -283,16 +288,15 @@ static void api_init(gbAllocator allocator, api_t* api, options_t* options) {
 static void api_destroy(api_t* api) {
     assert(api != NULL);
 
-    gb_string_free(api->url);
-    gb_string_free(api->response_body);
-    gb_array_free(api->tokens);
+    pg_array_free(api->url);
+    pg_array_free(api->response_body);
+    pg_array_free(api->tokens);
 
     curl_slist_free_all(api->curl_headers);
     curl_easy_cleanup(api->http_handle);
 }
 
-static void options_parse_from_cli(gbAllocator allocator, int argc,
-                                   char* argv[], options_t* options) {
+static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
     assert(argv != NULL);
     assert(options != NULL);
 
@@ -335,7 +339,9 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
                 break;
             }
             case 'd': {
-                options->root_directory = gb_string_make(allocator, optarg);
+                const u64 optarg_len = strlen(optarg);
+                pg_array_init_reserve(options->root_directory, optarg_len);
+                pg_array_appendv(options->root_directory, optarg, optarg_len);
                 if (strlen(optarg) > MAXPATHLEN) {
                     fprintf(stderr,
                             "Directory is too long: maximum %d characters\n",
@@ -355,32 +361,41 @@ static void options_parse_from_cli(gbAllocator allocator, int argc,
                             "Token is too long: maximum 128 characters\n");
                     exit(EINVAL);
                 }
-                options->api_token = gb_string_make(allocator, optarg);
+                pg_array_init_reserve(options->api_token, optarg_len);
+                pg_array_appendv(options->api_token, optarg, optarg_len);
                 break;
             }
             case 'u': {
-                if (strlen(optarg) > MAX_URL_LEN) {
+                const u64 optarg_len = strlen(optarg);
+                if (optarg_len > MAX_URL_LEN) {
                     fprintf(stderr, "Url is too long: maximum %d characters\n",
                             MAX_URL_LEN);
                     exit(EINVAL);
                 }
 
-                if (!gb_str_has_prefix(optarg, "https://")) {
-                    options->gitlab_domain = gb_string_make_reserve(
-                        allocator, strlen(optarg) + sizeof("https://"));
-                    options->gitlab_domain = gb_string_append_fmt(
-                        options->gitlab_domain, "https://%s", optarg);
-                } else
-                    options->gitlab_domain = gb_string_make(allocator, optarg);
+                if (!pg_str_has_prefix(optarg, "https://")) {
+                    pg_array_init_reserve(options->gitlab_domain,
+                                          optarg_len + sizeof("https://"));
+                    pg_array_appendv(options->gitlab_domain, "https://",
+                                     sizeof("https://") - 1);
+                } else {
+                    pg_array_init_reserve(options->gitlab_domain, optarg_len);
+                }
+
+                pg_array_appendv(options->gitlab_domain, optarg, optarg_len);
 
                 break;
             }
             case 'v':
                 verbose = true;
                 break;
-            case 'o':
-                options->opentelemetry_url = gb_string_make(allocator, optarg);
+            case 'o': {
+                const u64 optarg_len = strlen(optarg);
+                pg_array_init_reserve(options->opentelemetry_url, optarg_len);
+                pg_array_appendv(options->opentelemetry_url, optarg,
+                                 optarg_len);
                 break;
+            }
             default:
                 print_usage(argc, argv);
                 exit(0);
@@ -412,7 +427,7 @@ static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
            CURLE_OK);
 
     if ((res = curl_easy_perform(api->http_handle)) != 0) {
-        i32 error;
+        int error;
         curl_easy_getinfo(api->http_handle, CURLINFO_OS_ERRNO, &error);
         fprintf(stderr,
                 "Failed to query api: url=%s response_body=%s res=%d err=%s "
@@ -427,7 +442,7 @@ end:
     return res;
 }
 
-static int upsert_project(gbString path, char* git_url, char* fs_path,
+static int upsert_project(pg_array_t(char) path, char* git_url, char* fs_path,
                           const options_t* options, int queue,
                           const ot_span_t* parent_span);
 
@@ -438,7 +453,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
 
     jsmn_parser p;
 
-    gb_array_clear(api->tokens);
+    pg_array_clear(api->tokens);
     int res = 0;
     ot_span_t* json_span = ot_span_create_child_of(
         trace_id, "parse json", OT_SK_CLIENT, "parse json", parent_span);
@@ -447,11 +462,11 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     do {
         jsmn_init(&p);
         res = jsmn_parse(&p, api->response_body,
-                         gb_string_length(api->response_body), api->tokens,
-                         gb_array_capacity(api->tokens));
+                         pg_array_count(api->response_body), api->tokens,
+                         pg_array_count(api->tokens));
         if (res == JSMN_ERROR_NOMEM) {
-            gb_array_reserve(api->tokens,
-                             gb_array_capacity(api->tokens) * 2 + 8);
+            pg_array_reserve(api->tokens,
+                             pg_array_capacity(api->tokens) * 2 + 8);
             continue;
         }
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
@@ -470,48 +485,48 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     } while (res == JSMN_ERROR_NOMEM);
 
     ot_span_end(json_span);
-    gb_array_resize(api->tokens, res);
+    pg_array_resize(api->tokens, res);
     res = 0;
 
-    const usize tokens_count = gb_array_count(api->tokens);
+    const u64 tokens_count = pg_array_count(api->tokens);
     assert(tokens_count > 0);
     if (api->tokens[0].type != JSMN_ARRAY) {
         fprintf(
             stderr,
             "Received unexpected JSON response: expected array, got: %.*s\n",
-            (int)gb_string_length(api->response_body), api->response_body);
+            (int)pg_array_count(api->response_body), api->response_body);
         return EINVAL;
     }
 
     const char key_path_with_namespace[] = "path_with_namespace";
-    const usize key_path_with_namespace_len = sizeof("path_with_namespace") - 1;
+    const u64 key_path_with_namespace_len = sizeof("path_with_namespace") - 1;
     const char clone_method_fields[][20] = {
         [GCM_SSH] = "ssh_url_to_repo",
         [GCM_HTTPS] = "http_url_to_repo",
     };
     const char* key_git_url = clone_method_fields[options->clone_method];
-    const usize key_git_url_len = strlen(key_git_url);
+    const u64 key_git_url_len = strlen(key_git_url);
 
     char* fs_path = NULL;
-    gbString path_with_namespace = NULL;
+    pg_array_t(char) path_with_namespace = NULL;
     char* git_url = NULL;
     u64 field_count = 0;
 
-    for (int i = 1; i < gb_array_count(api->tokens); i++) {
+    for (int i = 1; i < pg_array_count(api->tokens); i++) {
         jsmntok_t* const cur = &api->tokens[i - 1];
         jsmntok_t* const next = &api->tokens[i];
         if (!(cur->type == JSMN_STRING && next->type == JSMN_STRING)) continue;
 
         char* const cur_s = &api->response_body[cur->start];
-        const usize cur_s_len = cur->end - cur->start;
+        const u64 cur_s_len = cur->end - cur->start;
         char* const next_s = &api->response_body[next->start];
-        const usize next_s_len = next->end - next->start;
+        const u64 next_s_len = next->end - next->start;
 
         if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
                       key_path_with_namespace_len)) {
             field_count++;
-            path_with_namespace =
-                gb_string_make_length(gb_heap_allocator(), next_s, next_s_len);
+            pg_array_init_reserve(path_with_namespace, next_s_len);
+            pg_array_appendv(path_with_namespace, next_s, next_s_len);
 
             // `execvp(2)` expects null terminated strings
             // This is safe to do because we override the terminating double
@@ -576,13 +591,13 @@ static void* watch_workers(void* varg) {
                 process_t* process = event->udata;
                 assert(process != NULL);
 
-                gb_array_set_capacity(process->err, event->data);
+                pg_array_set_capacity(process->err, event->data);
                 int res = read(process->stderr_fd, process->err, event->data);
                 if (res == -1) {
                     fprintf(stderr, "Failed to read(2): err=%s\n",
                             strerror(errno));
                 }
-                gb_array_resize(process->err, res);
+                pg_array_resize(process->err, res);
             } else if ((event->filter == EVFILT_PROC) &&
                        (event->fflags & NOTE_EXITSTATUS)) {
                 const int exit_status = (event->data >> 8);
@@ -590,12 +605,14 @@ static void* watch_workers(void* varg) {
                 assert(process != NULL);
 
                 finished += 1;
-                const i64 count = gb_atomic64_load(&projects_count);
+
+                const u64 count =
+                    __c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST);
                 char s[26] = "";
                 if (count == 0) {
                     memcpy(s, "?", 1);
                 } else {
-                    gb_i64_to_str(count, s, 10);
+                    strtoull(s, NULL, 10);
                 }
 
                 if (exit_status == 0) {
@@ -614,18 +631,18 @@ static void* watch_workers(void* varg) {
                         "%s (%d): %.*s%s\n",
                         pg_colors[is_tty][COL_RED], finished, s,
                         process->path_with_namespace, exit_status,
-                        (int)gb_array_count(process->err), process->err,
+                        (int)pg_array_count(process->err), process->err,
                         pg_colors[is_tty][COL_RESET]);
                 }
                 ot_span_end(process->project_span);
-                gb_string_free(process->path_with_namespace);
-                gb_array_free(process->err);
+                pg_array_free(process->path_with_namespace);
+                pg_array_free(process->err);
                 close(process->stderr_fd);
                 free(process);
             }
         }
-    } while (gb_atomic64_load(&projects_count) == 0 ||
-             finished < gb_atomic64_load(&projects_count));
+    } while (__c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST) == 0 ||
+             finished < __c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST));
 
     struct timeval end = {0};
     gettimeofday(&end, NULL);
@@ -634,7 +651,7 @@ static void* watch_workers(void* varg) {
     return NULL;
 }
 
-static int worker_update_project(char* fs_path, gbString git_url,
+static int worker_update_project(char* fs_path, pg_array_t(char) git_url,
                                  const options_t* options) {
     assert(fs_path != NULL);
     assert(git_url != NULL);
@@ -658,7 +675,7 @@ static int worker_update_project(char* fs_path, gbString git_url,
     return 0;
 }
 
-static int worker_clone_project(char* fs_path, gbString git_url,
+static int worker_clone_project(char* fs_path, pg_array_t(char) git_url,
                                 const options_t* options) {
     assert(fs_path != NULL);
     assert(git_url != NULL);
@@ -729,7 +746,7 @@ static int record_process_finished_event(int queue, process_t* process) {
     return 0;
 }
 
-static int upsert_project(gbString path, char* git_url, char* fs_path,
+static int upsert_project(pg_array_t(char) path, char* git_url, char* fs_path,
                           const options_t* options, int queue,
                           const ot_span_t* parent_span) {
     assert(path != NULL);
@@ -775,7 +792,7 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
         process->project_span = project_span;
         process->stderr_fd = fds[0];
         process->path_with_namespace = path;
-        gb_array_init(process->err, gb_heap_allocator());
+        pg_array_init(process->err);
         int res = 0;
         if ((res = record_process_finished_event(queue, process)) != 0)
             return res;
@@ -783,8 +800,7 @@ static int upsert_project(gbString path, char* git_url, char* fs_path,
     return 0;
 }
 
-static int api_fetch_projects(gbAllocator allocator, api_t* api,
-                              const options_t* options, int queue,
+static int api_fetch_projects(api_t* api, const options_t* options, int queue,
                               uint64_t* projects_handled) {
     assert(api != NULL);
     assert(options != NULL);
@@ -795,7 +811,7 @@ static int api_fetch_projects(gbAllocator allocator, api_t* api,
                           "clone-gitlab-api", false);
 
     int res = 0;
-    gb_string_clear(api->response_body);
+    pg_array_clear(api->response_body);
 
     if ((res = api_query_projects(api, span_fetch_projects)) != 0) {
         ot_span_set_status(span_fetch_projects, OT_ST_UNKNOWN_ERROR);
@@ -816,11 +832,10 @@ end:
 
 int main(int argc, char* argv[]) {
     gettimeofday(&start, NULL);
-    gbAllocator allocator = gb_heap_allocator();
     options_t options = {0};
-    options_parse_from_cli(allocator, argc, argv, &options);
+    options_parse_from_cli(argc, argv, &options);
 
-    if (gb_string_length(options.opentelemetry_url) > 0)
+    if (pg_array_count(options.opentelemetry_url) > 0)
         ot_start(options.opentelemetry_url);
     else
         ot_start_noop("");
@@ -846,7 +861,7 @@ int main(int argc, char* argv[]) {
     }
 
     api_t api = {0};
-    api_init(allocator, &api, &options);
+    api_init(&api, &options);
 
     static char cwd[MAXPATHLEN] = "";
     if (getcwd(cwd, MAXPATHLEN) == NULL) {
@@ -876,10 +891,13 @@ int main(int argc, char* argv[]) {
 
     uint64_t projects_handled = 0;
     while (!api.finished &&
-           (res = api_fetch_projects(allocator, &api, &options, queue,
+           (res = api_fetch_projects(&api, &options, queue,
                                      &projects_handled)) == 0) {
     }
-    gb_atomic64_compare_exchange(&projects_count, 0, projects_handled);
+    u64 expected = 0;
+    __c11_atomic_compare_exchange_strong(&projects_count, &expected,
+                                         projects_handled, __ATOMIC_SEQ_CST,
+                                         __ATOMIC_SEQ_CST);
 
 end:
     if ((res = change_directory(cwd)) != 0) return res;
