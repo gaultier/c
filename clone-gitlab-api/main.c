@@ -230,6 +230,17 @@ static u64 on_header(char* buffer, u64 size, u64 nitems, void* userdata) {
     return nitems * size;
 }
 
+static int on_curl_socktopt(void* clientp, curl_socket_t curlfd,
+                            curlsocktype purpose) {
+    (void)clientp;
+    (void)purpose;
+    if (fcntl(curlfd, F_SETFD, FD_CLOEXEC) == -1) {
+        fprintf(stderr, "Failed to fcntl(2) with FD_CLOEXEC: err=%s\n",
+                strerror(errno));
+    }
+    return CURL_SOCKOPT_OK;
+}
+
 static void api_init(api_t* api, options_t* options) {
     assert(api != NULL);
     assert(options != NULL);
@@ -250,6 +261,8 @@ static void api_init(api_t* api, options_t* options) {
                       "projects?statistics=false&top_level=&with_custom_"
                       "attributes=false&simple=true&per_page=100&all_available="
                       "true&order_by=id&sort=asc");
+    assert(curl_easy_setopt(api->http_handle, CURLOPT_SOCKOPTFUNCTION,
+                            on_curl_socktopt) == CURLE_OK);
     assert(curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose) ==
            CURLE_OK);
     assert(curl_easy_setopt(api->http_handle, CURLOPT_MAXREDIRS, 5) ==
