@@ -1,3 +1,4 @@
+#include <_types/_uint32_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -599,7 +600,7 @@ static void* watch_workers(void* varg) {
                 }
                 pg_array_resize(process->err, res);
             } else if ((event->filter == EVFILT_PROC) &&
-                       (event->fflags & NOTE_EXITSTATUS)) {
+                       (event->fflags & NOTE_EXIT)) {
                 const int exit_status = (event->data >> 8);
                 process_t* process = event->udata;
                 assert(process != NULL);
@@ -721,12 +722,16 @@ static int change_directory(char* path) {
 static int record_process_finished_event(int queue, process_t* process) {
     assert(process != NULL);
 
+    uint32_t proc_fflags = NOTE_EXIT;
+#if defined(__APPLE__)
+    proc_fflags |= NOTE_EXITSTATUS;
+#endif
     struct kevent events[2] = {
         {
             .filter = EVFILT_PROC,
             .ident = process->pid,
             .flags = EV_ADD | EV_ONESHOT,
-            .fflags = NOTE_EXIT | NOTE_EXITSTATUS,
+            .fflags = proc_fflags,
             .udata = process,
         },
         {
