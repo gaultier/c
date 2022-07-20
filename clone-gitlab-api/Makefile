@@ -1,6 +1,6 @@
 .PHONY: install
 
-CFLAGS ?= -O2 -I/usr/local/include
+CFLAGS ?= -O2 -I/usr/local/include/
 LDLIBS := -lcurl -lpthread
 LDFLAGS ?= -flto -L/usr/local/lib/
 
