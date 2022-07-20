@@ -1,4 +1,3 @@
-#include <_types/_uint32_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -13,14 +12,11 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "../opentelemetry-jaeger/opentelemetry.h"
 #include "../pg.h"
 #define JSMN_STATIC
 #include "vendor/jsmn/jsmn.h"
 
 #define MAX_URL_LEN 4096
-
-static __uint128_t trace_id = 0;
 
 typedef enum {
     COL_RESET,
@@ -38,7 +34,6 @@ static const char pg_colors[2][COL_COUNT][14] = {
 static struct timeval start;
 
 struct process_t {
-    ot_span_t* project_span;
     pg_array_t(char) path_with_namespace;
     int stderr_fd;
     pid_t pid;
@@ -413,15 +408,9 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
     }
 }
 
-static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
+static int api_query_projects(api_t* api) {
     assert(api != NULL);
     assert(api->url != NULL);
-
-    ot_span_t* span =
-        ot_span_create_child_of(trace_id, "api_query_projects", OT_SK_CLIENT,
-                                "api_query_projects", parent_span);
-    ot_span_add_attribute(span, "service.name", "gitlab", false);
-    ot_span_add_attribute(span, "url", strdup(api->url), true);
 
     int res = 0;
     assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
@@ -435,30 +424,24 @@ static int api_query_projects(api_t* api, const ot_span_t* parent_span) {
                 "errno=%d\n",
                 api->url, api->response_body, res, curl_easy_strerror(res),
                 error);
-        goto end;
+        return res;
     }
 
-end:
-    ot_span_end(span);
-    return res;
+    return 0;
 }
 
 static int upsert_project(pg_array_t(char) path, char* git_url, char* fs_path,
-                          const options_t* options, int queue,
-                          const ot_span_t* parent_span);
+                          const options_t* options, int queue);
 
 static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
-                                         int queue, uint64_t* projects_handled,
-                                         const ot_span_t* parent_span) {
+                                         int queue,
+                                         uint64_t* projects_handled) {
     assert(api != NULL);
 
     jsmn_parser p;
 
     pg_array_clear(api->tokens);
     int res = 0;
-    ot_span_t* json_span = ot_span_create_child_of(
-        trace_id, "parse json", OT_SK_CLIENT, "parse json", parent_span);
-    ot_span_add_attribute(json_span, "service.name", "clone-gitlab-api", false);
 
     do {
         jsmn_init(&p);
@@ -473,19 +456,16 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
             fprintf(stderr, "Failed to parse JSON: body=%s res=%d\n",
                     api->response_body, res);
-            ot_span_end(json_span);
             return res;
         }
         if (res == 0) {
             fprintf(stderr,
                     "Failed to parse JSON (is it empty?): body=%s res=%d\n",
                     api->response_body, res);
-            ot_span_end(json_span);
             return res;
         }
     } while (res == JSMN_ERROR_NOMEM);
 
-    ot_span_end(json_span);
     pg_array_resize(api->tokens, res);
     res = 0;
 
@@ -554,7 +534,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
                 assert(path_with_namespace != NULL);
 
                 if ((res = upsert_project(path_with_namespace, git_url, fs_path,
-                                          options, queue, parent_span)) != 0)
+                                          options, queue)) != 0)
                     return res;
                 git_url = NULL;
 
@@ -624,9 +604,6 @@ static void* watch_workers(void* varg) {
                         process->path_with_namespace,
                         pg_colors[is_tty][COL_RESET]);
                 } else {
-                    ot_span_set_status(process->project_span,
-                                       OT_ST_INTERNAL_ERROR);
-
                     printf(
                         "%s[%llu/%s] ❌ "
                         "%s (%d): %.*s%s\n",
@@ -635,7 +612,6 @@ static void* watch_workers(void* varg) {
                         (int)pg_array_count(process->err), process->err,
                         pg_colors[is_tty][COL_RESET]);
                 }
-                ot_span_end(process->project_span);
                 pg_array_free(process->path_with_namespace);
                 pg_array_free(process->err);
                 close(process->stderr_fd);
@@ -751,20 +727,10 @@ static int record_process_finished_event(int queue, process_t* process) {
 }
 
 static int upsert_project(pg_array_t(char) path, char* git_url, char* fs_path,
-                          const options_t* options, int queue,
-                          const ot_span_t* parent_span) {
+                          const options_t* options, int queue) {
     assert(path != NULL);
     assert(git_url != NULL);
     assert(options != NULL);
-
-    ot_span_t* project_span =
-        ot_span_create_child_of(trace_id, "upsert_project", OT_SK_CLIENT,
-                                "clone or update", parent_span);
-    ot_span_add_attribute(project_span, "service.name", "clone-gitlab-api",
-                          false);
-    ot_span_add_attribute(project_span, "git_url", strdup(git_url), true);
-    ot_span_add_attribute(project_span, "fs_path", strdup(fs_path), true);
-    ot_span_add_attribute(project_span, "path", strdup(path), true);
 
     int fds[2] = {0};
     if (pipe(fds) != 0) {
@@ -793,7 +759,6 @@ static int upsert_project(pg_array_t(char) path, char* git_url, char* fs_path,
         close(fds[1]);  // Parent does not write
         process_t* process = calloc(1, sizeof(process_t));
         process->pid = pid;
-        process->project_span = project_span;
         process->stderr_fd = fds[0];
         process->path_with_namespace = path;
         pg_array_init(process->err);
@@ -809,28 +774,18 @@ static int api_fetch_projects(api_t* api, const options_t* options, int queue,
     assert(api != NULL);
     assert(options != NULL);
 
-    ot_span_t* span_fetch_projects = ot_span_create_root(
-        trace_id, "api_fetch_projects", OT_SK_CLIENT, "api_fetch_projects");
-    ot_span_add_attribute(span_fetch_projects, "service.name",
-                          "clone-gitlab-api", false);
-
     int res = 0;
     pg_array_clear(api->response_body);
 
-    if ((res = api_query_projects(api, span_fetch_projects)) != 0) {
-        ot_span_set_status(span_fetch_projects, OT_ST_UNKNOWN_ERROR);
-        goto end;
+    if ((res = api_query_projects(api)) != 0) {
+        return res;
     }
 
-    if ((res = api_parse_and_upsert_projects(
-             api, options, queue, projects_handled, span_fetch_projects)) !=
-        0) {
-        ot_span_set_status(span_fetch_projects, OT_ST_INTERNAL_ERROR);
-        goto end;
+    if ((res = api_parse_and_upsert_projects(api, options, queue,
+                                             projects_handled)) != 0) {
+        return res;
     }
 
-end:
-    ot_span_end(span_fetch_projects);
     return 0;
 }
 
@@ -838,13 +793,6 @@ int main(int argc, char* argv[]) {
     gettimeofday(&start, NULL);
     options_t options = {0};
     options_parse_from_cli(argc, argv, &options);
-
-    if (pg_array_count(options.opentelemetry_url) > 0)
-        ot_start(options.opentelemetry_url);
-    else
-        ot_start_noop("");
-
-    trace_id = ot_generate_trace_id();
 
     int res = 0;
     // Do not require wait(2) on child processes
@@ -908,6 +856,4 @@ end:
     api_destroy(&api);
 
     pthread_join(process_exit_watcher, NULL);
-
-    ot_end();
 }
