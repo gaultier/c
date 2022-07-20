@@ -2,6 +2,7 @@
 #include <curl/curl.h>
 #include <errno.h>
 #include <getopt.h>
+#include <inttypes.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
@@ -72,6 +73,8 @@ typedef struct {
 static _Atomic u64 projects_count = 0;
 
 static void print_usage(int argc, char* argv[]) {
+    (void)argc;
+
     printf(
         "Clone or update all git repositories from Gitlab.\n\n"
         "USAGE:\n"
@@ -118,7 +121,7 @@ static bool str_iequal(const char* a, u64 a_len, const char* b, u64 b_len) {
     assert(b != NULL);
 
     if (a_len != b_len) return false;
-    for (int i = 0; i < a_len; i++) {
+    for (u64 i = 0; i < a_len; i++) {
         if (pg_char_to_lower(a[i]) != pg_char_to_lower(b[i])) return false;
     }
     return true;
@@ -499,7 +502,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     char* git_url = NULL;
     u64 field_count = 0;
 
-    for (int i = 1; i < pg_array_count(api->tokens); i++) {
+    for (u64 i = 1; i < pg_array_count(api->tokens); i++) {
         jsmntok_t* const cur = &api->tokens[i - 1];
         jsmntok_t* const next = &api->tokens[i];
         if (!(cur->type == JSMN_STRING && next->type == JSMN_STRING)) continue;
@@ -520,7 +523,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
             // quote which no one cares about
             fs_path = next_s;
             fs_path[next_s_len] = 0;
-            for (int j = 0; j < next_s_len; j++) {
+            for (u64 j = 0; j < next_s_len; j++) {
                 if (fs_path[j] == '/') fs_path[j] = '.';
             }
 
@@ -603,22 +606,22 @@ static void* watch_workers(void* varg) {
                 const u64 count =
                     __c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST);
                 if (exit_status == 0) {
-                    printf(
-                        "%s[%llu/%llu] ✓ "
-                        "%.*s%s\n",
-                        pg_colors[is_tty][COL_GREEN], finished, count,
-                        (int)pg_array_count(process->path_with_namespace),
-                        process->path_with_namespace,
-                        pg_colors[is_tty][COL_RESET]);
+                    printf("%s[%" PRIu64 "/%" PRIu64
+                           "] ✓ "
+                           "%.*s%s\n",
+                           pg_colors[is_tty][COL_GREEN], finished, count,
+                           (int)pg_array_count(process->path_with_namespace),
+                           process->path_with_namespace,
+                           pg_colors[is_tty][COL_RESET]);
                 } else {
-                    printf(
-                        "%s[%llu/%llu] ❌ "
-                        "%.*s (%d): %.*s%s\n",
-                        pg_colors[is_tty][COL_RED], finished, count,
-                        (int)pg_array_count(process->path_with_namespace),
-                        process->path_with_namespace, exit_status,
-                        (int)pg_array_count(process->err), process->err,
-                        pg_colors[is_tty][COL_RESET]);
+                    printf("%s[%" PRIu64 "/%" PRIu64
+                           "] ❌ "
+                           "%.*s (%d): %.*s%s\n",
+                           pg_colors[is_tty][COL_RED], finished, count,
+                           (int)pg_array_count(process->path_with_namespace),
+                           process->path_with_namespace, exit_status,
+                           (int)pg_array_count(process->err), process->err,
+                           pg_colors[is_tty][COL_RESET]);
                 }
                 pg_array_free(process->path_with_namespace);
                 pg_array_free(process->err);

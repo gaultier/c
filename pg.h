@@ -93,7 +93,6 @@ static void *pg__array_set_capacity(void *array, uint64_t capacity,
 #define pg_array_appendv(x, items, item_count)                           \
   do {                                                                   \
     pg_array_header_t *pg__ah = PG_ARRAY_HEADER(x);                      \
-    assert(sizeof((items)[0]) == sizeof((x)[0]));                        \
     if (pg__ah->capacity < pg__ah->count + (item_count))                 \
       pg_array_grow(x, pg__ah->count + (item_count));                    \
     memcpy(&(x)[pg__ah->count], (items), sizeof((x)[0]) * (item_count)); \
@@ -112,11 +111,11 @@ static void *pg__array_set_capacity(void *array, uint64_t capacity,
     PG_ARRAY_HEADER(x)->count = 0; \
   } while (0)
 
-#define pg_array_resize(x, new_count)               \
-  do {                                              \
-    if (PG_ARRAY_HEADER(x)->capacity < (new_count)) \
-      pg_array_grow(x, (new_count));                \
-    PG_ARRAY_HEADER(x)->count = (new_count);        \
+#define pg_array_resize(x, new_count)                    \
+  do {                                                   \
+    if (PG_ARRAY_HEADER(x)->capacity < (u64)(new_count)) \
+      pg_array_grow(x, (u64)(new_count));                \
+    PG_ARRAY_HEADER(x)->count = (u64)(new_count);        \
   } while (0)
 
 #define pg_array_reserve(x, new_capacity)              \
