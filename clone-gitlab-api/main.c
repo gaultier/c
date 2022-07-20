@@ -721,7 +721,7 @@ static int change_directory(char* path) {
 static int record_process_finished_event(int queue, process_t* process) {
     assert(process != NULL);
 
-    struct kevent events[] = {
+    struct kevent events[2] = {
         {
             .filter = EVFILT_PROC,
             .ident = process->pid,
@@ -736,8 +736,7 @@ static int record_process_finished_event(int queue, process_t* process) {
             .udata = process,
         },
     };
-    if (kevent(queue, events, sizeof(events) / sizeof(events[0]), NULL, 0, 0) ==
-        -1) {
+    if (kevent(queue, events, 2, NULL, 0, 0) == -1) {
         fprintf(stderr,
                 "Failed to kevent(2) to watch for child process: err=%s\n",
                 strerror(errno));
