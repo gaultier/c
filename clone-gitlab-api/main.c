@@ -583,6 +583,7 @@ static void* watch_workers(void* varg) {
                             strerror(errno));
                 }
                 pg_array_resize(process->err, res);
+                close(process->stderr_fd);
             } else if ((event->filter == EVFILT_PROC) &&
                        (event->fflags & proc_fflags)) {
                 const int exit_status = (event->data >> 8);
