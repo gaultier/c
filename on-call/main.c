@@ -1,4 +1,3 @@
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <stdio.h>
 #include <time.h>
@@ -115,12 +114,12 @@ static void bill_shifts(datetime_range_t* shifts, u64 shifts_len) {
     gbArray(monthly_bill_t) monthly_bills = NULL;
     gb_array_init_reserve(monthly_bills, gb_heap_allocator(), 100);
 
-    for (int i = 0; i < shifts_len; i++) {
+    for (u64 i = 0; i < shifts_len; i++) {
         bill_shift_monthly(monthly_bills, &shifts[i]);
     }
 
     const float tax_rate = 0.425;
-    uint64_t total_money = 0;
+    u64 total_money = 0;
     // clang-format off
     printf("┌──────────┬────────────┬────────┬────────────────┬────────────┬─────────────┬─────────────────┬───────────────┐\n");
     printf("│   Month  │ Week hours │ Week € │ Week-end hours │ Week-end € │ Total hours │ Total (gross) € │ Total (net) € │ \n");
