@@ -678,10 +678,9 @@ static int worker_clone_project(char* fs_path, pg_array_t(char) git_url,
     return 0;
 }
 
-static int change_directory(pg_array_t(char) path) {
+static int change_directory(char* path) {
     assert(path != NULL);
 
-    pg_array_null_terminate(path);
     if (chdir(path) == -1) {
         if (errno == ENOENT) {
             if (mkdir(path, S_IRWXU) == -1) {
@@ -830,6 +829,7 @@ int main(int argc, char* argv[]) {
         return errno;
     }
 
+    pg_array_null_terminate(options.root_directory);
     if ((res = change_directory(options.root_directory)) != 0) return res;
 
     printf("Changed directory to: %.*s\n",
