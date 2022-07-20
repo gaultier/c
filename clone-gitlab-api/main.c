@@ -451,7 +451,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
         jsmn_init(&p);
         res = jsmn_parse(&p, api->response_body,
                          pg_array_count(api->response_body), api->tokens,
-                         pg_array_count(api->tokens));
+                         pg_array_capacity(api->tokens));
         if (res == JSMN_ERROR_NOMEM) {
             pg_array_reserve(api->tokens,
                              pg_array_capacity(api->tokens) * 2 + 8);
@@ -563,6 +563,13 @@ static void* watch_workers(void* varg) {
 
     const bool is_tty = isatty(fileno(stdout));
 
+    const uint32_t proc_fflags =
+#if defined(__APPLE__)
+        NOTE_EXITSTATUS;
+#elif defined(__FreeBSD__)
+        NOTE_EXIT
+#endif
+    ;
     do {
         int event_count = kevent(arg->queue, NULL, 0, events, 512, 0);
         if (event_count == -1) {
@@ -586,7 +593,7 @@ static void* watch_workers(void* varg) {
                 }
                 pg_array_resize(process->err, res);
             } else if ((event->filter == EVFILT_PROC) &&
-                       (event->fflags & NOTE_EXIT)) {
+                       (event->fflags & proc_fflags)) {
                 const int exit_status = (event->data >> 8);
                 process_t* process = event->udata;
                 assert(process != NULL);
@@ -595,26 +602,19 @@ static void* watch_workers(void* varg) {
 
                 const u64 count =
                     __c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST);
-                char s[26] = "";
-                if (count == 0) {
-                    memcpy(s, "?", 1);
-                } else {
-                    strtoull(s, NULL, 10);
-                }
-
                 if (exit_status == 0) {
                     printf(
-                        "%s[%llu/%s] ✓ "
+                        "%s[%llu/%llu] ✓ "
                         "%.*s%s\n",
-                        pg_colors[is_tty][COL_GREEN], finished, s,
+                        pg_colors[is_tty][COL_GREEN], finished, count,
                         (int)pg_array_count(process->path_with_namespace),
                         process->path_with_namespace,
                         pg_colors[is_tty][COL_RESET]);
                 } else {
                     printf(
-                        "%s[%llu/%s] ❌ "
+                        "%s[%llu/%llu] ❌ "
                         "%.*s (%d): %.*s%s\n",
-                        pg_colors[is_tty][COL_RED], finished, s,
+                        pg_colors[is_tty][COL_RED], finished, count,
                         (int)pg_array_count(process->path_with_namespace),
                         process->path_with_namespace, exit_status,
                         (int)pg_array_count(process->err), process->err,
