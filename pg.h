@@ -130,20 +130,6 @@ static void *pg__array_set_capacity(void *array, uint64_t capacity,
     pg_array_set_capacity(x, pg_array_count(x)); \
   } while (0)
 
-#define pg_array_null_terminate(x) \
-  do {                             \
-    pg_array_append(x, 0);         \
-  } while (0)
-
-void pg_array_drop_null_terminator(pg_array_t(char) s) {
-  pg_array_resize(s, pg_array_count(s) - 1);
-}
-
-char *pg_array_as_c_str(pg_array_t(char) s) {
-  pg_array_null_terminate(s);
-  return s;
-}
-
 static char pg_char_to_lower(char c) {
   if (c >= 'A' && c <= 'Z') return 'a' + (c - 'A');
   return c;

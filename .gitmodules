@@ -10,3 +10,6 @@
 [submodule "vendor/cJSON"]
 	path = vendor/cJSON
 	url = https://github.com/gaultier/cJSON.git
+[submodule "vendor/sds"]
+	path = vendor/sds
+	url = https://github.com/antirez/sds.git

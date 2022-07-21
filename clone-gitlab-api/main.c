@@ -15,6 +15,7 @@
 
 #include "../pg.h"
 #define JSMN_STATIC
+#include "../vendor/sds/sds.c"
 #include "vendor/jsmn/jsmn.h"
 
 #define MAX_URL_LEN 4096
@@ -35,10 +36,10 @@ static const char pg_colors[2][COL_COUNT][14] = {
 static struct timeval start;
 
 struct process_t {
-    pg_array_t(char) path_with_namespace;
+    sds path_with_namespace;
     int stderr_fd;
     pid_t pid;
-    pg_array_t(char) err;
+    sds err;
     struct process_t* next;  // TODO: improve
 };
 typedef struct process_t process_t;
@@ -49,9 +50,9 @@ typedef enum {
 } git_clone_method_t;
 
 typedef struct {
-    pg_array_t(char) root_directory;
-    pg_array_t(char) api_token;
-    pg_array_t(char) gitlab_domain;
+    sds root_directory;
+    sds api_token;
+    sds gitlab_domain;
     git_clone_method_t clone_method;
 } options_t;
 static bool verbose = false;
@@ -62,8 +63,8 @@ typedef struct {
 
 typedef struct {
     CURL* http_handle;
-    pg_array_t(char) response_body;
-    pg_array_t(char) url;
+    sds response_body;
+    sds url;
     pg_array_t(jsmntok_t) tokens;
     bool finished;
     struct curl_slist* curl_headers;
@@ -166,8 +167,8 @@ static u64 on_http_response_body_chunk(void* contents, u64 size, u64 nmemb,
     assert(userp != NULL);
 
     const u64 real_size = size * nmemb;
-    pg_array_t(char)* response_body = userp;
-    pg_array_appendv(*response_body, contents, real_size);
+    sds* response_body = userp;
+    *response_body = sdscatlen(*response_body, contents, real_size);
 
     return real_size;
 }
@@ -217,8 +218,8 @@ static u64 on_header(char* buffer, u64 size, u64 nitems, void* userdata) {
         }
 
         assert(api->url != NULL);
-        pg_array_clear(api->url);
-        pg_array_appendv(api->url, val, val_len);
+        sdsclear(api->url);
+        api->url = sdscatlen(api->url, val, val_len);
     } else if (str_iequal_c(buffer, key_len, "X-Total")) {
         const u64 total = str_to_u64(val, val_len);
         u64 expected = 0;
@@ -246,17 +247,16 @@ static void api_init(api_t* api, options_t* options) {
     assert(options != NULL);
     assert(options->gitlab_domain != NULL);
 
-    pg_array_init_reserve(api->response_body, 200 * 1024);
+    api->response_body = sdsempty();
+    api->response_body = sdsMakeRoomFor(api->response_body, 200 * 1024);
 
     pg_array_init_reserve(api->tokens, 8 * 1000);
 
     api->http_handle = curl_easy_init();
     assert(api->http_handle != NULL);
 
-    pg_array_init_reserve(api->url, MAX_URL_LEN);
-    pg_array_appendv(api->url, options->gitlab_domain,
-                     pg_array_count(options->gitlab_domain));
-    pg_array_appendv0(api->url,
+    api->url = sdsdup(options->gitlab_domain);
+    api->url = sdscat(api->url,
                       "/api/v4/"
                       "projects?statistics=false&top_level=&with_custom_"
                       "attributes=false&simple=true&per_page=100&all_available="
@@ -284,8 +284,8 @@ static void api_init(api_t* api, options_t* options) {
 
     if (options->api_token != NULL) {
         static char token_header[150] = "";
-        snprintf(token_header, sizeof(token_header) - 1, "PRIVATE-TOKEN: %.*s",
-                 (int)pg_array_count(options->api_token), options->api_token);
+        snprintf(token_header, sizeof(token_header) - 1, "PRIVATE-TOKEN: %s",
+                 options->api_token);
 
         api->curl_headers = curl_slist_append(NULL, token_header);
         assert(api->curl_headers != NULL);
@@ -297,8 +297,8 @@ static void api_init(api_t* api, options_t* options) {
 static void api_destroy(api_t* api) {
     assert(api != NULL);
 
-    pg_array_free(api->url);
-    pg_array_free(api->response_body);
+    sdsfree(api->url);
+    sdsfree(api->response_body);
     pg_array_free(api->tokens);
 
     curl_slist_free_all(api->curl_headers);
@@ -344,15 +344,13 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
                 break;
             }
             case 'd': {
-                const u64 optarg_len = strlen(optarg);
-                pg_array_init_reserve(options->root_directory, optarg_len);
-                pg_array_appendv(options->root_directory, optarg, optarg_len);
                 if (strlen(optarg) > MAXPATHLEN) {
                     fprintf(stderr,
                             "Directory is too long: maximum %d characters\n",
                             MAXPATHLEN);
                     exit(EINVAL);
                 }
+                options->root_directory = sdsnew(optarg);
                 break;
             }
             case 't': {
@@ -366,8 +364,7 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
                             "Token is too long: maximum 128 characters\n");
                     exit(EINVAL);
                 }
-                pg_array_init_reserve(options->api_token, optarg_len);
-                pg_array_appendv(options->api_token, optarg, optarg_len);
+                options->api_token = sdsnew(optarg);
                 break;
             }
             case 'u': {
@@ -378,16 +375,12 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
                     exit(EINVAL);
                 }
 
+                options->gitlab_domain = sdsempty();
                 if (!pg_str_has_prefix(optarg, "https://")) {
-                    pg_array_init_reserve(options->gitlab_domain,
-                                          optarg_len + sizeof("https://"));
-                    pg_array_appendv(options->gitlab_domain, "https://",
-                                     sizeof("https://") - 1);
-                } else {
-                    pg_array_init_reserve(options->gitlab_domain, optarg_len);
+                    options->gitlab_domain =
+                        sdscat(options->gitlab_domain, "https://");
                 }
-
-                pg_array_appendv(options->gitlab_domain, optarg, optarg_len);
+                options->gitlab_domain = sdscat(options->gitlab_domain, optarg);
 
                 break;
             }
@@ -416,29 +409,25 @@ static int api_query_projects(api_t* api) {
 
     int res = 0;
     {
-        pg_array_null_terminate(api->url);
         assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
                CURLE_OK);
-        pg_array_drop_null_terminator(api->url);
     }
 
     if ((res = curl_easy_perform(api->http_handle)) != 0) {
         int error;
         curl_easy_getinfo(api->http_handle, CURLINFO_OS_ERRNO, &error);
-        fprintf(
-            stderr,
-            "Failed to query api: url=%.*s response_body=%.*s res=%d err=%s "
-            "errno=%d\n",
-            (int)pg_array_count(api->url), api->url,
-            (int)pg_array_count(api->response_body), api->response_body, res,
-            curl_easy_strerror(res), error);
+        fprintf(stderr,
+                "Failed to query api: url=%s response_body=%s res=%d err=%s "
+                "errno=%d\n",
+                api->url, api->response_body, res, curl_easy_strerror(res),
+                error);
         return res;
     }
 
     return 0;
 }
 
-static int upsert_project(pg_array_t(char) path, char* git_url, char* fs_path,
+static int upsert_project(sds path, char* git_url, char* fs_path,
                           const options_t* options, int queue);
 
 static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
@@ -453,25 +442,22 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
 
     do {
         jsmn_init(&p);
-        res = jsmn_parse(&p, api->response_body,
-                         pg_array_count(api->response_body), api->tokens,
-                         pg_array_capacity(api->tokens));
+        res = jsmn_parse(&p, api->response_body, sdslen(api->response_body),
+                         api->tokens, pg_array_capacity(api->tokens));
         if (res == JSMN_ERROR_NOMEM) {
             pg_array_reserve(api->tokens,
                              pg_array_capacity(api->tokens) * 2 + 8);
             continue;
         }
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
-            fprintf(stderr, "Failed to parse JSON: body=%.*s res=%d\n",
-                    (int)pg_array_count(api->response_body), api->response_body,
-                    res);
+            fprintf(stderr, "Failed to parse JSON: body=%s res=%d\n",
+                    api->response_body, res);
             return res;
         }
         if (res == 0) {
             fprintf(stderr,
-                    "Failed to parse JSON (is it empty?): body=%.*s res=%d\n",
-                    (int)pg_array_count(api->response_body), api->response_body,
-                    res);
+                    "Failed to parse JSON (is it empty?): body=%s res=%d\n",
+                    api->response_body, res);
             return res;
         }
     } while (res == JSMN_ERROR_NOMEM);
@@ -482,10 +468,9 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     const u64 tokens_count = pg_array_count(api->tokens);
     assert(tokens_count > 0);
     if (api->tokens[0].type != JSMN_ARRAY) {
-        fprintf(
-            stderr,
-            "Received unexpected JSON response: expected array, got: %.*s\n",
-            (int)pg_array_count(api->response_body), api->response_body);
+        fprintf(stderr,
+                "Received unexpected JSON response: expected array, got: %s\n",
+                api->response_body);
         return EINVAL;
     }
 
@@ -499,7 +484,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     const u64 key_git_url_len = strlen(key_git_url);
 
     char* fs_path = NULL;
-    pg_array_t(char) path_with_namespace = NULL;
+    sds path_with_namespace = NULL;
     char* git_url = NULL;
     u64 field_count = 0;
 
@@ -516,8 +501,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
         if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
                       key_path_with_namespace_len)) {
             field_count++;
-            pg_array_init_reserve(path_with_namespace, next_s_len);
-            pg_array_appendv(path_with_namespace, next_s, next_s_len);
+            path_with_namespace = sdsnewlen(next_s, next_s_len);
 
             // `execvp(2)` expects null terminated strings
             // This is safe to do because we override the terminating double
@@ -590,13 +574,13 @@ static void* watch_workers(void* varg) {
                 assert(process != NULL);
 
                 const u64 max_read = MIN(event->data, 128);
-                pg_array_set_capacity(process->err, max_read);
+                process->err = sdsMakeRoomFor(process->err, max_read);
                 int res = read(process->stderr_fd, process->err, max_read);
                 if (res == -1) {
                     fprintf(stderr, "Failed to read(2): err=%s\n",
                             strerror(errno));
                 }
-                pg_array_resize(process->err, res);
+                sdsIncrLen(process->err, res);
                 close(process->stderr_fd);
             } else if ((event->filter == EVFILT_PROC) &&
                        (event->fflags & proc_fflags)) {
@@ -611,23 +595,20 @@ static void* watch_workers(void* varg) {
                 if (exit_status == 0) {
                     printf("%s[%" PRIu64 "/%" PRIu64
                            "] ✓ "
-                           "%.*s%s\n",
+                           "%s%s\n",
                            pg_colors[is_tty][COL_GREEN], finished, count,
-                           (int)pg_array_count(process->path_with_namespace),
                            process->path_with_namespace,
                            pg_colors[is_tty][COL_RESET]);
                 } else {
                     printf("%s[%" PRIu64 "/%" PRIu64
                            "] ❌ "
-                           "%.*s (%d): %.*s%s\n",
+                           "%s (%d): %s%s\n",
                            pg_colors[is_tty][COL_RED], finished, count,
-                           (int)pg_array_count(process->path_with_namespace),
                            process->path_with_namespace, exit_status,
-                           (int)pg_array_count(process->err), process->err,
-                           pg_colors[is_tty][COL_RESET]);
+                           process->err, pg_colors[is_tty][COL_RESET]);
                 }
-                pg_array_free(process->path_with_namespace);
-                pg_array_free(process->err);
+                sdsfree(process->path_with_namespace);
+                sdsfree(process->err);
                 close(process->stderr_fd);
                 free(process);
             }
@@ -642,7 +623,7 @@ static void* watch_workers(void* varg) {
     return NULL;
 }
 
-static int worker_update_project(char* fs_path, pg_array_t(char) git_url,
+static int worker_update_project(char* fs_path, sds git_url,
                                  const options_t* options) {
     assert(fs_path != NULL);
     assert(git_url != NULL);
@@ -657,15 +638,15 @@ static int worker_update_project(char* fs_path, pg_array_t(char) git_url,
     char* const argv[] = {"git", "pull", "--quiet", "--no-tags", 0};
 
     if (execvp("git", argv) == -1) {
-        fprintf(stderr, "Failed to pull: git_url=%.*s err=%s\n",
-                (int)pg_array_count(git_url), git_url, strerror(errno));
+        fprintf(stderr, "Failed to pull: git_url=%s err=%s\n", git_url,
+                strerror(errno));
         exit(errno);
     }
     assert(0 && "Unreachable");
     return 0;
 }
 
-static int worker_clone_project(char* fs_path, pg_array_t(char) git_url,
+static int worker_clone_project(char* fs_path, sds git_url,
                                 const options_t* options) {
     assert(fs_path != NULL);
     assert(git_url != NULL);
@@ -675,8 +656,8 @@ static int worker_clone_project(char* fs_path, pg_array_t(char) git_url,
                           git_url, fs_path, 0};
 
     if (execvp("git", argv) == -1) {
-        fprintf(stderr, "Failed to clone: git_url=%.*s err=%s\n",
-                (int)pg_array_count(git_url), git_url, strerror(errno));
+        fprintf(stderr, "Failed to clone: git_url=%s err=%s\n", git_url,
+                strerror(errno));
         exit(errno);
     }
     assert(0 && "Unreachable");
@@ -739,7 +720,7 @@ static int record_process_finished_event(int queue, process_t* process) {
     return 0;
 }
 
-static int upsert_project(pg_array_t(char) path, char* git_url, char* fs_path,
+static int upsert_project(sds path, char* git_url, char* fs_path,
                           const options_t* options, int queue) {
     assert(path != NULL);
     assert(git_url != NULL);
@@ -777,7 +758,7 @@ static int upsert_project(pg_array_t(char) path, char* git_url, char* fs_path,
         process->pid = pid;
         process->stderr_fd = fds[0];
         process->path_with_namespace = path;
-        pg_array_init(process->err);
+        process->err = sdsempty();
         int res = 0;
         if ((res = record_process_finished_event(queue, process)) != 0)
             return res;
@@ -791,7 +772,7 @@ static int api_fetch_projects(api_t* api, const options_t* options, int queue,
     assert(options != NULL);
 
     int res = 0;
-    pg_array_clear(api->response_body);
+    sdsclear(api->response_body);
 
     if ((res = api_query_projects(api)) != 0) {
         return res;
@@ -837,11 +818,9 @@ int main(int argc, char* argv[]) {
         return errno;
     }
 
-    pg_array_null_terminate(options.root_directory);
     if ((res = change_directory(options.root_directory)) != 0) return res;
 
-    printf("Changed directory to: %.*s\n",
-           (int)pg_array_count(options.root_directory), options.root_directory);
+    printf("Changed directory to: %s\n", options.root_directory);
 
     watch_project_cloning_arg_t arg = {
         .queue = queue,
