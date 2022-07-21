@@ -248,7 +248,7 @@ static void api_init(api_t* api, options_t* options) {
     assert(options->gitlab_domain != NULL);
 
     api->response_body = sdsempty();
-    api->response_body = sdsMakeRoomFor(api->response_body, 200 * 1024);
+    api->response_body = sdsMakeRoomFor(api->response_body, 4 * 1024);
 
     pg_array_init_reserve(api->tokens, 8 * 1000);
 
@@ -413,6 +413,7 @@ static int api_query_projects(api_t* api) {
                CURLE_OK);
     }
 
+    api->response_body = sdsMakeRoomFor(api->response_body, 4 * 1024);
     if ((res = curl_easy_perform(api->http_handle)) != 0) {
         int error;
         curl_easy_getinfo(api->http_handle, CURLINFO_OS_ERRNO, &error);
@@ -423,6 +424,7 @@ static int api_query_projects(api_t* api) {
                 error);
         return res;
     }
+    api->response_body = sdsRemoveFreeSpace(api->response_body);
 
     return 0;
 }
