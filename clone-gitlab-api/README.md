@@ -24,7 +24,7 @@ OPTIONS:
 	-h, --help
 	-v, --verbose
 
-The repositories are cloned with git over ssh with, without tags, in a flat manner.
+The repositories are cloned with git over https or ssh without tags, in a flat manner.
 If some repositories already exist in the root directory, they are updated (with git pull) instead of cloned.
 If some repositories fail, this command does not stop and tries to clone or update the other repositories.
 
