@@ -7,7 +7,7 @@
 
 #define NUMS_LEN 7
 
-bool is_sum_of_2_present(uint64_t* nums, uint64_t target_sum) {
+static bool is_sum_of_2_present(uint64_t* nums, uint64_t target_sum) {
     pg_hashmap_u64_t hashmap = {0};
     pg_hashmap_init(&hashmap, 50);
     for (uint64_t i = 0; i < NUMS_LEN; i++) {
