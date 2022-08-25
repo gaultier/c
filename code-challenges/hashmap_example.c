@@ -1,5 +1,4 @@
-#include <_types/_uint32_t.h>
-#include <_types/_uint64_t.h>
+#include <inttypes.h>
 #include <stdio.h>
 
 #include "hashmap_u64.h"
