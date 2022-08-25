@@ -11,7 +11,7 @@ typedef struct {
     pg_array_t(uint64_t) values;
 } pg_hashmap_u64_t;
 
-void pg_hashmap_init(pg_hashmap_u64_t* hashmap, uint64_t capacity) {
+static void pg_hashmap_init(pg_hashmap_u64_t* hashmap, uint64_t capacity) {
     assert(hashmap != NULL);
 
     pg_array_init_reserve(hashmap->hashes, capacity);
@@ -25,7 +25,7 @@ void pg_hashmap_init(pg_hashmap_u64_t* hashmap, uint64_t capacity) {
 }
 
 // FNV-1a
-uint32_t pg_hash(uint8_t* n, uint64_t len) {
+static uint32_t pg_hash(uint8_t* n, uint64_t len) {
     uint32_t hash = 2166136261u;
     for (uint64_t i = 0; i < len; i++) {
         hash ^= (uint8_t)n[i];
@@ -34,9 +34,9 @@ uint32_t pg_hash(uint8_t* n, uint64_t len) {
     return hash;
 }
 
-uint64_t pg_hashmap_find_entry_index(const pg_hashmap_u64_t* hashmap,
-                                     uint64_t key, uint64_t* value, bool* found,
-                                     uint32_t* hash) {
+static uint64_t pg_hashmap_find_entry_index(const pg_hashmap_u64_t* hashmap,
+                                            uint64_t key, uint64_t* value,
+                                            bool* found, uint32_t* hash) {
     assert(hashmap != NULL);
     assert(value != NULL);
     assert(found != NULL);
@@ -66,7 +66,8 @@ uint64_t pg_hashmap_find_entry_index(const pg_hashmap_u64_t* hashmap,
     return index;
 }
 
-void pg_hashmap_add(pg_hashmap_u64_t* hashmap, uint64_t key, uint64_t value) {
+static void pg_hashmap_add(pg_hashmap_u64_t* hashmap, uint64_t key,
+                           uint64_t value) {
     assert(hashmap != NULL);
 
     uint64_t val = 0;
@@ -90,7 +91,7 @@ void pg_hashmap_add(pg_hashmap_u64_t* hashmap, uint64_t key, uint64_t value) {
     pg_array_resize(hashmap->values, pg_array_count(hashmap->values) + 1);
 }
 
-bool pg_hashmap_exists(const pg_hashmap_u64_t* hashmap, uint64_t key) {
+static bool pg_hashmap_exists(const pg_hashmap_u64_t* hashmap, uint64_t key) {
     uint64_t val = 0;
     bool found = false;
     uint32_t hash = 0;
