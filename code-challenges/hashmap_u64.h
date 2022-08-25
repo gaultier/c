@@ -1,5 +1,4 @@
 #pragma once
-#include <_types/_uint32_t.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <string.h>
