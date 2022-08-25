@@ -9,16 +9,9 @@ struct item_t {
 };
 typedef struct item_t item_t;
 
-void merge_sorted_linked_lists_do(item_t* nodes, item_t* lesser,
-                                  item_t* greater) {
+static void merge_sorted_linked_lists_do(item_t* nodes, item_t* lesser,
+                                         item_t* greater) {
     if (lesser == NULL || greater == NULL) return;
-
-    // Swap if passed the wrong way around
-    if (lesser->val > greater->val) {
-        item_t* tmp = lesser;
-        lesser = greater;
-        greater = tmp;
-    }
 
     item_t* lesser_next = lesser->next_i == -1 ? NULL : &nodes[lesser->next_i];
     // Merge greater into lesser if it is suitable i.e. lesser->val <
@@ -42,8 +35,8 @@ void merge_sorted_linked_lists_do(item_t* nodes, item_t* lesser,
     merge_sorted_linked_lists_do(nodes, lesser, greater);
 }
 
-void merge_sorted_linked_lists(item_t* nodes, item_t* lesser, item_t* greater,
-                               item_t** head) {
+static void merge_sorted_linked_lists(item_t* nodes, item_t* lesser,
+                                      item_t* greater, item_t** head) {
     assert(head != NULL);
     if (lesser == NULL || greater == NULL) return;
 
