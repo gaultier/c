@@ -8,7 +8,7 @@
 
 typedef struct {
     pg_array_t(uint32_t) hashes;
-    pg_array_t(uint32_t) keys;
+    pg_array_t(uint64_t) keys;
     pg_array_t(uint64_t) values;
 } pg_hashmap_u64_t;
 
@@ -36,7 +36,7 @@ uint32_t pg_hash(uint8_t* n, uint64_t len) {
 }
 
 uint64_t pg_hashmap_find_entry_index(const pg_hashmap_u64_t* hashmap,
-                                     uint32_t key, uint64_t* value, bool* found,
+                                     uint64_t key, uint64_t* value, bool* found,
                                      uint32_t* hash) {
     assert(hashmap != NULL);
     assert(value != NULL);
@@ -47,7 +47,7 @@ uint64_t pg_hashmap_find_entry_index(const pg_hashmap_u64_t* hashmap,
     *value = 0;
 
     const uint64_t capacity = pg_array_capacity(hashmap->keys);
-    *hash = pg_hash((uint8_t*)&key, 4);
+    *hash = pg_hash((uint8_t*)&key, 8);
     uint64_t index = *hash % capacity;
 
     for (;;) {
@@ -67,7 +67,7 @@ uint64_t pg_hashmap_find_entry_index(const pg_hashmap_u64_t* hashmap,
     return index;
 }
 
-void pg_hashmap_add(pg_hashmap_u64_t* hashmap, uint32_t key, uint64_t value) {
+void pg_hashmap_add(pg_hashmap_u64_t* hashmap, uint64_t key, uint64_t value) {
     assert(hashmap != NULL);
 
     uint64_t val = 0;
@@ -91,3 +91,10 @@ void pg_hashmap_add(pg_hashmap_u64_t* hashmap, uint32_t key, uint64_t value) {
     pg_array_resize(hashmap->values, pg_array_count(hashmap->values) + 1);
 }
 
+bool pg_hashmap_exists(const pg_hashmap_u64_t* hashmap, uint64_t key) {
+    uint64_t val = 0;
+    bool found = false;
+    uint32_t hash = 0;
+    pg_hashmap_find_entry_index(hashmap, key, &val, &found, &hash);
+    return found;
+}
