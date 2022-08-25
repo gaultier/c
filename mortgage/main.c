@@ -14,14 +14,14 @@ int main(int argc, char* argv[]) {
     const float principal = strtoull(argv[3], NULL, 10);
 
     float paid = 0;
+    const float monthly_payment =
+        principal * monthly_interest_rate *
+        powf(1 + monthly_interest_rate, months_total) /
+        (powf(1 + monthly_interest_rate, months_total) - 1);
     for (u64 month = 1; month <= months_total; month++) {
-        const float monthly_payment =
-            principal * monthly_interest_rate *
-            powf(1 + monthly_interest_rate, months_total) /
-            (powf(1 + monthly_interest_rate, months_total) - 1);
         paid += monthly_payment;
-        printf("Month=%llu Monthly payment=%.2f Paid=%.2f \n", month,
-               monthly_payment, paid);
     }
-    printf("Paid=%.2f\n", paid);
+    assert(paid > principal);
+    printf("Monthly payment=%2.f Paid=%.2f Interest paid=%.2f\n",
+           monthly_payment, paid, paid - principal);
 }
