@@ -19,9 +19,9 @@ int main() {
 
     for (uint64_t i = 1; i <= pow(2, len); i++) {
         for (uint32_t j = 0; j < len; j++) {
-            if (out_len >= 4) break;
             if (CHECK_BIT(i, j)) {
                 out[out_len++] = numbers[j];
+                if (out_len >= 4) break;
             }
         }
         print_combination(out, out_len);
