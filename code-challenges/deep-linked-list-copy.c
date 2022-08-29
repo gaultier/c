@@ -15,7 +15,7 @@ node_t* clone_linked_list(node_t* nodes, uint64_t nodes_len) {
     memcpy(clones, nodes, nodes_len * sizeof(node_t));
 
     for (uint64_t i = 0; i < nodes_len; i++) {
-        node_t* node = &nodes[i];
+        const node_t* node = &nodes[i];
         node_t* clone = &clones[i];
 
         const uint64_t next_offset = (node->next - nodes);
@@ -37,13 +37,13 @@ int main() {
     const uint64_t nodes_len = sizeof(nodes) / sizeof(nodes[0]);
 
     for (uint64_t i = 0; i < nodes_len; i++) {
-        node_t* node = &nodes[i];
+        const node_t* node = &nodes[i];
         printf("%p %p %p %d\n", node, node->next, node->arbitrary, node->val);
     }
 
     node_t* clones = clone_linked_list(nodes, nodes_len);
     for (uint64_t i = 0; i < nodes_len; i++) {
-        node_t* clone = &clones[i];
+        const node_t* clone = &clones[i];
         printf("%p %p %p %d\n", clone, clone->next, clone->arbitrary,
                clone->val);
     }
