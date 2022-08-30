@@ -298,7 +298,6 @@ static gbString app_handle(const http_req_t* http_req) {
                          "%s",
                          gb_string_length(body), body);
 
-    if (body != NULL) gb_string_free(body);
     return res;
 }
 
