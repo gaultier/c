@@ -1,8 +1,9 @@
-#include </usr/local/opt/lmdb/include/lmdb.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
+
+#include "../vendor/lmdb/libraries/liblmdb/lmdb.h"
 
 static int db_dump(MDB_env* env) {
     int err = 0;

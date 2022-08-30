@@ -134,10 +134,23 @@ static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
     return 0;
 }
 
+static gbString app_handle(const http_req_t* http_req) {
+    gbString res = gb_string_make_reserve(gb_heap_allocator(), 256);
+    gb_string_append_fmt(res,
+                         "HTTP/1.1 200 OK\r\n"
+                         "Content-Type: text/plain; charset=utf8\r\n"
+                         "Content-Length: %td\r\n"
+                         "\r\n"
+                         "%.*s",
+                         http_req->path_len, http_req->path_len,
+                         http_req->path);
+
+    return res;
+}
+
 static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     char ip_addr[IP_ADDR_STR_LEN] = "";
     ip(client_addr.sin_addr.s_addr, ip_addr);
-    /* printf("New connection: %s:%hu\n", ip_addr, client_addr.sin_port); */
 
     gbString req = gb_string_make_reserve(gb_heap_allocator(), 256);
     int err = 0;
@@ -177,15 +190,7 @@ static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
         return;
     }
 
-    // Response
-    gbString res = gb_string_make_reserve(gb_heap_allocator(), 256);
-    gb_string_append_fmt(res,
-                         "HTTP/1.1 200 OK\r\n"
-                         "Content-Type: text/plain; charset=utf8\r\n"
-                         "Content-Length: %td\r\n"
-                         "\r\n"
-                         "%.*s",
-                         http_req.path_len, http_req.path_len, http_req.path);
+    gbString res = app_handle(&http_req);
 
     u64 written = 0;
     const u64 total = gb_string_length(res);
