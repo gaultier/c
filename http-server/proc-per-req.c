@@ -68,6 +68,11 @@ static bool str_eq0(const char* a, u64 a_len, const char* b0) {
     return str_eq(a, a_len, b0, b_len);
 }
 
+static bool str_starts_with0(const char* a, u64 a_len, const char* b0) {
+    const u64 b_len = strlen(b0);
+    return a_len >= b_len && str_eq(a, b_len, b0, b_len);
+}
+
 static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
     assert(req != NULL);
 
@@ -227,7 +232,7 @@ end:
     return err;
 }
 
-static int db_get(MDB_env* env, char* key) {
+static int db_get(char* key, u64 key_len, MDB_val* value) {
     int err = 0;
     MDB_txn* txn = NULL;
     MDB_dbi dbi = {0};
@@ -242,14 +247,11 @@ static int db_get(MDB_env* env, char* key) {
         goto end;
     }
 
-    MDB_val mdb_key = {.mv_data = key, .mv_size = strlen(key)}, mdb_value = {0};
-    if ((err = mdb_get(txn, dbi, &mdb_key, &mdb_value)) != 0) {
+    MDB_val mdb_key = {.mv_data = key, .mv_size = key_len};
+    if ((err = mdb_get(txn, dbi, &mdb_key, value)) != 0) {
         fprintf(stderr, "Failed to mdb_get: err=%s\n", mdb_strerror(err));
         goto end;
     }
-    printf("key=%.*s value=%.*s\n", (int)mdb_key.mv_size,
-           (char*)mdb_key.mv_data, (int)mdb_value.mv_size,
-           (char*)mdb_value.mv_data);
 
 end:
     if (txn != NULL) mdb_txn_abort(txn);
@@ -260,8 +262,10 @@ end:
 
 static gbString app_handle(const http_req_t* http_req) {
     gbString body = NULL;
-    if (str_eq0(http_req->path, http_req->path_len, "/get-todos") &&
-        http_req->method == HM_GET) {
+    if ((str_eq0(http_req->path, http_req->path_len, "/get-todos") &&
+         http_req->method == HM_GET) ||
+        (str_eq0(http_req->path, http_req->path_len, "/get-todos/") &&
+         http_req->method == HM_GET)) {
         gbArray(kv_t) kvs = {0};
         gb_array_init_reserve(kvs, gb_heap_allocator(), 10);
         int err = 0;
@@ -281,6 +285,36 @@ static gbString app_handle(const http_req_t* http_req) {
                                         kv->key.mv_data, kv->value.mv_size,
                                         kv->value.mv_data);
         }
+    } else if (str_starts_with0(http_req->path, http_req->path_len,
+                                "/get-todo?key=") &&
+               http_req->method == HM_GET) {
+        char* key_param = memmem(http_req->path, http_req->path_len, "=", 1);
+        assert(key_param != NULL);
+        u64 key_param_len = http_req->path + http_req->path_len - key_param;
+        if (key_param_len == 1) {
+            return gb_string_make(gb_heap_allocator(),
+                                  "HTTP/1.1 404 Not Found\r\n"
+                                  "Content-Type: text/plain; charset=utf8\r\n"
+                                  "Content-Length: 0\r\n"
+                                  "\r\n");
+        }
+        // Skip '='
+        key_param++;
+        key_param_len--;
+
+        int err = 0;
+        MDB_val value = {0};
+        if ((err = db_get(key_param, key_param_len, &value)) != 0) {
+            return gb_string_make(gb_heap_allocator(),
+                                  "HTTP/1.1 500 Internal Error\r\n"
+                                  "Content-Type: text/plain; charset=utf8\r\n"
+                                  "Content-Length: 0\r\n"
+                                  "\r\n");
+        }
+
+        body = gb_string_make_length(gb_heap_allocator(), value.mv_data,
+                                     value.mv_size);
+
     } else {
         return gb_string_make(gb_heap_allocator(),
                               "HTTP/1.1 404 Not Found\r\n"
