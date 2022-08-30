@@ -111,7 +111,7 @@ static bool str_eq0(const char* a, u64 a_len, const char* b0) {
     return str_eq(a, a_len, b0, b_len);
 }
 
-static int http_request_parse(http_req* req, gbArray(char) buf,
+static int http_parse_request(http_req* req, gbArray(char) buf,
                               u64 prev_buf_len) {
     assert(req != NULL);
 
@@ -234,7 +234,7 @@ static int conn_handle_read_request(conn_handle* ch, u64 nbytes_to_read) {
     LOG("[D009] Read: received=%zd `%.*s`\n", received,
         (int)gb_array_count(ch->req_buf), ch->req_buf);
 
-    int res = http_request_parse(&ch->req, ch->req_buf, prev_len);
+    int res = http_parse_request(&ch->req, ch->req_buf, prev_len);
     ch->state = CHS_PARSED_REQ;
     return res;
 }

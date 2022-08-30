@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <errno.h>
 #include <netinet/in.h>
 #include <signal.h>
@@ -12,10 +13,16 @@
 #define GB_IMPLEMENTATION
 #define GB_STATIC
 #include "../vendor/gb/gb.h"
-#include "../vendor/http-parser/http_parser.h"
+#include "vendor/picohttpparser/picohttpparser.h"
 
 #define IP_ADDR_STR_LEN 17
 #define CONN_BUF_LEN 4096
+
+static bool verbose = true;
+#define LOG(fmt, ...)                                     \
+    do {                                                  \
+        if (verbose) fprintf(stderr, fmt, ##__VA_ARGS__); \
+    } while (0)
 
 static void ip(uint32_t val, char* res) {
     uint8_t a = val >> 24, b = val >> 16, c = val >> 8, d = val & 0xff;
@@ -27,8 +34,103 @@ static void print_usage(int argc, char* argv[]) {
     printf("%s <port>\n", argv[0]);
 }
 
-static int on_url(http_parser* parser, const char* at, size_t length) {
-    parser->data = gb_string_append_length(parser->data, at, length);
+typedef enum {
+    HM_GET,
+    HM_HEAD,
+    HM_POST,
+    HM_PUT,
+    HM_DELETE,
+    HM_CONNECT,
+    HM_OPTIONS,
+    HM_TRACE,
+    HM_PATCH,
+} http_method;
+
+typedef struct {
+    const char* path;
+    http_method method;
+    u16 path_len;
+    u8 num_headers;
+    struct phr_header headers[50];
+} http_req_t;
+
+static bool str_eq(const char* a, u64 a_len, const char* b, u64 b_len) {
+    return a_len == b_len && memcmp(a, b, a_len) == 0;
+}
+
+static bool str_eq0(const char* a, u64 a_len, const char* b0) {
+    const u64 b_len = strlen(b0);
+    return str_eq(a, a_len, b0, b_len);
+}
+
+static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
+    assert(req != NULL);
+
+    const char* method = NULL;
+    const char* path = NULL;
+    usize method_len = 0;
+    usize path_len = 0;
+    int minor_version = 0;
+    struct phr_header headers[100] = {0};
+    usize num_headers = sizeof(headers) / sizeof(headers[0]);
+
+    int res = phr_parse_request(buf, gb_string_length(buf), &method,
+                                &method_len, &path, &path_len, &minor_version,
+                                headers, &num_headers, prev_buf_len);
+
+    LOG("phr_parse_request: res=%d\n", res);
+    if (res == -1) {
+        LOG("Failed to phr_parse_request:\n");
+        return res;
+    }
+    if (res == -2) {
+        LOG("Partial http parse, need more data\n");
+        return res;
+    }
+    if (method_len >= sizeof("CONNECT") - 1) {  // Longest method
+        LOG("Invalid method, too long: method_len=%zu method=%.*s", method_len,
+            (int)method_len, method);
+        return EINVAL;
+    }
+    if (str_eq0(method, method_len, "GET"))
+        req->method = HM_GET;
+    else if (str_eq0(method, method_len, "HEAD"))
+        req->method = HM_HEAD;
+    else if (str_eq0(method, method_len, "POST"))
+        req->method = HM_POST;
+    else if (str_eq0(method, method_len, "PUT"))
+        req->method = HM_PUT;
+    else if (str_eq0(method, method_len, "DELETE"))
+        req->method = HM_DELETE;
+    else if (str_eq0(method, method_len, "CONNECT"))
+        req->method = HM_CONNECT;
+    else if (str_eq0(method, method_len, "OPTIONS"))
+        req->method = HM_OPTIONS;
+    else if (str_eq0(method, method_len, "TRACE"))
+        req->method = HM_TRACE;
+    else if (str_eq0(method, method_len, "PATCH"))
+        req->method = HM_PATCH;
+    else {
+        LOG("Unknown method: method=%.*s", (int)method_len, method);
+        return EINVAL;
+    }
+
+    if (path_len >= 4096) {
+        LOG("Invalid path, too long: path=%s", path);
+        return EINVAL;
+    }
+    req->path = path;
+    req->path_len = path_len;
+
+    if (num_headers >= UINT8_MAX ||
+        num_headers >= sizeof(headers) / sizeof(headers[0])) {
+        LOG("Invalid headers");
+        return EINVAL;
+    }
+    req->num_headers = num_headers;
+    /* memcpy(req->headers, headers, num_headers * sizeof(headers[0])); */
+
+    LOG("method=%d path=%.*s\n", req->method, req->path_len, req->path);
     return 0;
 }
 
@@ -37,23 +139,16 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     ip(client_addr.sin_addr.s_addr, ip_addr);
     /* printf("New connection: %s:%hu\n", ip_addr, client_addr.sin_port); */
 
-    char conn_buf[CONN_BUF_LEN] = "";
-
-    http_parser_settings settings = {.on_url = on_url};
-    http_parser parser = {0};
-    http_parser_init(&parser, HTTP_REQUEST);
-
-    static u8 mem[10 * 1024 /* 10KiB */] = {};
-    gbArena arena = {0};
-    gb_arena_init_from_memory(&arena, mem, sizeof(mem));
-    gbAllocator allocator = gb_arena_allocator(&arena);
-    gbString url = gb_string_make_reserve(allocator, 100);
-    gbString req = gb_string_make_reserve(allocator, 4096);
-    parser.data = url;
+    gbString req = gb_string_make_reserve(gb_heap_allocator(), 256);
     int err = 0;
+    http_req_t http_req = {0};
+    gbString res = NULL;
 
     while (1) {
-        ssize_t received = recv(conn_fd, conn_buf, CONN_BUF_LEN, 0);
+        if (gb_string_available_space(req) <= 256)
+            gb_string_make_space_for(req, 256);
+        ssize_t received = recv(conn_fd, &req[gb_string_length(req)],
+                                gb_string_available_space(req), 0);
         if (received == -1) {
             fprintf(stderr, "Failed to recv(2): addr=%s:%hu err=%s\n", ip_addr,
                     client_addr.sin_port, strerror(errno));
@@ -63,9 +158,9 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
         if (received == 0) {  // Client closed connection
             goto end;
         }
-        req = gb_string_append_length(req, conn_buf, received);
-
+        gb__set_string_length(req, gb_string_length(req) + received);
         const isize len = gb_string_length(req);
+
         // End of request ?
         // TODO: limit on received bytes total
         if (len >= 4 && req[len - 4] == '\r' && req[len - 3] == '\n' &&
@@ -74,40 +169,40 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
         }
     }
 
-    int nparsed =
-        http_parser_execute(&parser, &settings, req, gb_string_length(req));
+    err = http_parse_request(&http_req, (char*)req, 0);
 
-    if (parser.upgrade) {
-        GB_ASSERT_MSG(0, "Unimplemented");
-    } else if (nparsed != gb_string_length(req)) {
+    if (err != 0) {
         fprintf(stderr,
-                "Failed to parse http request: addr=%s:%hu nparsed=%d "
+                "Failed to parse http request: addr=%s:%hu res=%d "
                 "received=%zd\n",
-                ip_addr, client_addr.sin_port, nparsed, gb_string_length(req));
+                ip_addr, client_addr.sin_port, err, gb_array_count(req));
         goto end;
     }
 
     // Response
-    bzero(conn_buf, CONN_BUF_LEN);
-    snprintf(conn_buf, CONN_BUF_LEN,
-             "HTTP/1.1 200 OK\r\n"
-             "Content-Type: text/plain; charset=utf8\r\n"
-             "Content-Length: %td\r\n"
-             "\r\n"
-             "%s",
-             GB_STRING_HEADER(url)->length, url);
+    res = gb_string_make_reserve(gb_heap_allocator(), 256);
+    gb_string_append_fmt(res,
+                         "HTTP/1.1 200 OK\r\n"
+                         "Content-Type: text/plain; charset=utf8\r\n"
+                         "Content-Length: %td\r\n"
+                         "\r\n"
+                         "%.*s",
+                         http_req.path_len, http_req.path_len, http_req.path);
 
     // TODO: send in loop
-    int sent = send(conn_fd, conn_buf, strlen(conn_buf), 0);
+    int sent = send(conn_fd, res, gb_string_length(res), 0);
     if (sent == -1) {
         fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
                 client_addr.sin_port, strerror(errno));
         err = errno;
         goto end;
+    } else if (sent != gb_string_length(res)) {
+        LOG("Partial send(2), FIXME");
     }
 
 end:
-    gb_string_free(url);
+    gb_string_free(req);
+    if (res != NULL) gb_string_free(res);
     if ((err = close(conn_fd)) != 0) {
         fprintf(stderr, "Failed to close socket for: err=%s\n",
                 strerror(errno));
