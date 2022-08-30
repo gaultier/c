@@ -194,22 +194,13 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     if (sent == -1) {
         fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
                 client_addr.sin_port, strerror(errno));
-        err = errno;
         goto end;
     } else if (sent != gb_string_length(res)) {
         LOG("Partial send(2), FIXME");
     }
 
 end:
-    gb_string_free(req);
-    if (res != NULL) gb_string_free(res);
-    if ((err = close(conn_fd)) != 0) {
-        fprintf(stderr, "Failed to close socket for: err=%s\n",
-                strerror(errno));
-        err = errno;
-    }
-
-    return 0;
+    exit(0);
 }
 
 int main(int argc, char* argv[]) {
@@ -244,8 +235,10 @@ int main(int argc, char* argv[]) {
         return errno;
     }
 
+    const u8 ip[4] = {127, 0, 0, 1};
     const struct sockaddr_in addr = {
         .sin_family = AF_INET,
+        .sin_addr = {.s_addr = *(u32*)ip},
         .sin_port = htons(12345),
     };
 
