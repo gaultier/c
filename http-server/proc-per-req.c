@@ -134,7 +134,7 @@ static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
     return 0;
 }
 
-static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
+static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     char ip_addr[IP_ADDR_STR_LEN] = "";
     ip(client_addr.sin_addr.s_addr, ip_addr);
     /* printf("New connection: %s:%hu\n", ip_addr, client_addr.sin_port); */
@@ -152,11 +152,10 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
         if (received == -1) {
             fprintf(stderr, "Failed to recv(2): addr=%s:%hu err=%s\n", ip_addr,
                     client_addr.sin_port, strerror(errno));
-            err = errno;
-            goto end;
+            return;
         }
         if (received == 0) {  // Client closed connection
-            goto end;
+            return;
         }
         gb__set_string_length(req, gb_string_length(req) + received);
         const isize len = gb_string_length(req);
@@ -176,7 +175,7 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
                 "Failed to parse http request: addr=%s:%hu res=%d "
                 "received=%zd\n",
                 ip_addr, client_addr.sin_port, err, gb_array_count(req));
-        goto end;
+        return;
     }
 
     // Response
@@ -194,13 +193,10 @@ static int handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     if (sent == -1) {
         fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
                 client_addr.sin_port, strerror(errno));
-        goto end;
+        return;
     } else if (sent != gb_string_length(res)) {
         LOG("Partial send(2), FIXME");
     }
-
-end:
-    exit(0);
 }
 
 int main(int argc, char* argv[]) {
@@ -267,8 +263,8 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
             close(conn_fd);
         } else if (pid == 0) {  // Child
-            err = handle_connection(client_addr, conn_fd);
-            exit(err);
+            handle_connection(client_addr, conn_fd);
+            exit(0);
         } else {  // Parent
             // Fds are duplicated by fork(2) and need to be
             // closed by both parent & child
