@@ -1,3 +1,4 @@
 kqueue
 *.dSYM/
 req
+testdb*

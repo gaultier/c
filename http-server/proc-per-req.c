@@ -6,9 +6,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/errno.h>
 #include <sys/signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
+
+#include "../vendor/lmdb/libraries/liblmdb/lmdb.h"
 
 #define GB_IMPLEMENTATION
 #define GB_STATIC
@@ -19,6 +22,8 @@
 #define CONN_BUF_LEN 4096
 
 static bool verbose = true;
+static MDB_env* env = NULL;
+
 #define LOG(fmt, ...)                                     \
     do {                                                  \
         if (verbose) fprintf(stderr, fmt, ##__VA_ARGS__); \
@@ -134,17 +139,166 @@ static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
     return 0;
 }
 
+typedef struct {
+    MDB_val key, value;
+} kv_t;
+
+static int db_scan(gbArray(kv_t) kvs) {
+    int err = 0;
+    MDB_txn* txn = NULL;
+    MDB_dbi dbi = {0};
+    MDB_cursor* cursor = NULL;
+
+    if ((err = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn)) != 0) {
+        fprintf(stderr, "Failed to mdb_txn_begin: err=%s\n", mdb_strerror(err));
+        goto end;
+    }
+
+    if ((err = mdb_dbi_open(txn, NULL, 0, &dbi)) != 0) {
+        fprintf(stderr, "Failed to mdb_dbi_open: err=%s", mdb_strerror(err));
+        goto end;
+    }
+
+    if ((err = mdb_cursor_open(txn, dbi, &cursor)) != 0) {
+        fprintf(stderr, "Failed to mdb_cursor_open: err=%s\n",
+                mdb_strerror(err));
+        goto end;
+    }
+    MDB_val key = {0}, value = {0};
+    while ((err = mdb_cursor_get(cursor, &key, &value, MDB_NEXT)) == 0) {
+        char* key_data = malloc(key.mv_size);
+        memcpy(key_data, key.mv_data, key.mv_size);
+        char* value_data = malloc(value.mv_size);
+        memcpy(value_data, value.mv_data, value.mv_size);
+
+        gb_array_append(
+            kvs,
+            ((kv_t){
+                .key = (MDB_val){.mv_data = key_data, .mv_size = key.mv_size},
+                .value =
+                    (MDB_val){.mv_data = value_data, .mv_size = value.mv_size},
+            }));
+    }
+    if (err == MDB_NOTFOUND) {
+        err = 0;  // Not really an error
+    } else {
+        fprintf(stderr, "Failed to mdb_cursor_get: err=%s\n",
+                mdb_strerror(err));
+        goto end;
+    }
+
+end:
+    if (cursor != NULL) mdb_cursor_close(cursor);
+    if (txn != NULL) mdb_txn_abort(txn);
+    mdb_dbi_close(env, dbi);
+
+    return err;
+}
+
+static int db_put(MDB_env* env, char* key, char* value) {
+    int err = 0;
+    MDB_txn* txn = NULL;
+    MDB_dbi dbi = {0};
+    if ((err = mdb_txn_begin(env, NULL, 0, &txn)) != 0) {
+        fprintf(stderr, "Failed to mdb_txn_begin: err=%s", mdb_strerror(err));
+        goto end;
+    }
+
+    if ((err = mdb_dbi_open(txn, NULL, 0, &dbi)) != 0) {
+        fprintf(stderr, "Failed to mdb_dbi_open: err=%s", mdb_strerror(err));
+        goto end;
+    }
+
+    MDB_val mdb_key = {.mv_data = key, .mv_size = strlen(key)},
+            mdb_value = {.mv_data = value, .mv_size = strlen(value)};
+
+    if ((err = mdb_put(txn, dbi, &mdb_key, &mdb_value, 0)) != 0) {
+        fprintf(stderr, "Failed to mdb_put: err=%s", mdb_strerror(err));
+        goto end;
+    }
+    if ((err = mdb_txn_commit(txn)) != 0) {
+        fprintf(stderr, "Failed to mdb_txn_commit: err=%s", mdb_strerror(err));
+        goto end;
+    }
+
+end:
+    mdb_dbi_close(env, dbi);
+
+    return err;
+}
+
+static int db_get(MDB_env* env, char* key) {
+    int err = 0;
+    MDB_txn* txn = NULL;
+    MDB_dbi dbi = {0};
+
+    if ((err = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn)) != 0) {
+        fprintf(stderr, "Failed to mdb_txn_begin: err=%s\n", mdb_strerror(err));
+        goto end;
+    }
+
+    if ((err = mdb_dbi_open(txn, NULL, 0, &dbi)) != 0) {
+        fprintf(stderr, "Failed to mdb_dbi_open: err=%s", mdb_strerror(err));
+        goto end;
+    }
+
+    MDB_val mdb_key = {.mv_data = key, .mv_size = strlen(key)}, mdb_value = {0};
+    if ((err = mdb_get(txn, dbi, &mdb_key, &mdb_value)) != 0) {
+        fprintf(stderr, "Failed to mdb_get: err=%s\n", mdb_strerror(err));
+        goto end;
+    }
+    printf("key=%.*s value=%.*s\n", (int)mdb_key.mv_size,
+           (char*)mdb_key.mv_data, (int)mdb_value.mv_size,
+           (char*)mdb_value.mv_data);
+
+end:
+    if (txn != NULL) mdb_txn_abort(txn);
+    mdb_dbi_close(env, dbi);
+
+    return err;
+}
+
 static gbString app_handle(const http_req_t* http_req) {
+    gbString body = NULL;
+    if (str_eq0(http_req->path, http_req->path_len, "/get-todos") &&
+        http_req->method == HM_GET) {
+        gbArray(kv_t) kvs = {0};
+        gb_array_init_reserve(kvs, gb_heap_allocator(), 10);
+        int err = 0;
+        if ((err = db_scan(kvs)) != 0) {
+            return gb_string_make(gb_heap_allocator(),
+                                  "HTTP/1.1 500 Internal Error\r\n"
+                                  "Content-Type: text/plain; charset=utf8\r\n"
+                                  "Content-Length: 0\r\n"
+                                  "\r\n");
+        }
+        body = gb_string_make_reserve(gb_heap_allocator(), 512);
+
+        for (u64 i = 0; i < (u64)gb_array_count(kvs); i++) {
+            const kv_t* const kv = &kvs[i];
+
+            body = gb_string_append_fmt(body, "%.*s: %.*s\n", kv->key.mv_size,
+                                        kv->key.mv_data, kv->value.mv_size,
+                                        kv->value.mv_data);
+        }
+    } else {
+        return gb_string_make(gb_heap_allocator(),
+                              "HTTP/1.1 404 Not Found\r\n"
+                              "Content-Type: text/plain; charset=utf8\r\n"
+                              "Content-Length: 0\r\n"
+                              "\r\n");
+    }
+
     gbString res = gb_string_make_reserve(gb_heap_allocator(), 256);
     gb_string_append_fmt(res,
                          "HTTP/1.1 200 OK\r\n"
                          "Content-Type: text/plain; charset=utf8\r\n"
                          "Content-Length: %td\r\n"
                          "\r\n"
-                         "%.*s",
-                         http_req->path_len, http_req->path_len,
-                         http_req->path);
+                         "%s",
+                         gb_string_length(body), body);
 
+    if (body != NULL) gb_string_free(body);
     return res;
 }
 
@@ -256,6 +410,16 @@ int main(int argc, char* argv[]) {
         return errno;
     }
 
+    if ((err = mdb_env_create(&env)) != 0) {
+        fprintf(stderr, "Failed to mdb_env_create: err=%s", mdb_strerror(err));
+        goto end;
+    }
+
+    if ((err = mdb_env_open(env, "./testdb", MDB_NOSUBDIR, 0664)) != 0) {
+        fprintf(stderr, "Failed to mdb_env_open: err=%s", mdb_strerror(err));
+        goto end;
+    }
+
     while (1) {
         struct sockaddr_in client_addr = {0};
         socklen_t client_addr_len = sizeof(client_addr);
@@ -278,4 +442,6 @@ int main(int argc, char* argv[]) {
             close(conn_fd);
         }
     }
+end:
+    if (env != NULL) mdb_env_close(env);
 }
