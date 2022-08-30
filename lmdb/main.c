@@ -1,6 +1,7 @@
 #include </usr/local/opt/lmdb/include/lmdb.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/time.h>
 
 static int dump_db(MDB_env* env) {
@@ -45,7 +46,7 @@ end:
     return err;
 }
 
-static int put_db(MDB_env* env) {
+static int put_db(MDB_env* env, char* key, char* value) {
     int err = 0;
     MDB_txn* txn = NULL;
     MDB_dbi dbi = {0};
@@ -59,17 +60,10 @@ static int put_db(MDB_env* env) {
         goto end;
     }
 
-    char buf_key[128] = "";
-    char buf_value[128] = "";
-    MDB_val key = {.mv_data = buf_key, .mv_size = sizeof(buf_key)},
-            data = {.mv_data = buf_value, .mv_size = sizeof(buf_value)};
-    struct timeval now = {0};
-    gettimeofday(&now, NULL);
-    snprintf(buf_key, sizeof(buf_key), "now-%ld", now.tv_sec);
-    snprintf(buf_value, sizeof(buf_value),
-             "{\"seconds\":%ld, \"microseconds\":%d}", now.tv_sec, now.tv_usec);
+    MDB_val mdb_key = {.mv_data = key, .mv_size = strlen(key)},
+            mdb_data = {.mv_data = value, .mv_size = strlen(value)};
 
-    if ((err = mdb_put(txn, dbi, &key, &data, 0)) != 0) {
+    if ((err = mdb_put(txn, dbi, &mdb_key, &mdb_data, 0)) != 0) {
         fprintf(stderr, "Failed to mdb_put: err=%s", mdb_strerror(err));
         goto end;
     }
@@ -84,7 +78,39 @@ end:
     return err;
 }
 
-int main() {
+static void print_usage(int argc, char* argv[]) {
+    printf("%s get <key>\n%s put <key> <value>\n%s dump\n", argv[0], argv[0],
+           argv[0]);
+}
+
+typedef enum { OP_DUMP, OP_GET, OP_PUT } op_t;
+
+int main(int argc, char* argv[]) {
+    if (argc <= 1 || argc > 4) {
+        print_usage(argc, argv);
+        return 0;
+    }
+
+    op_t op = 0;
+    if (argc == 2) {
+        if (strcmp(argv[1], "dump") != 0) {
+            print_usage(argc, argv);
+            return 0;
+        }
+        op = OP_DUMP;
+    } else if (argc == 3) {
+        if (strcmp(argv[1], "get") != 0) {
+            print_usage(argc, argv);
+            return 0;
+        }
+        op = OP_GET;
+    } else if (argc == 4) {
+        if (strcmp(argv[1], "put") != 0) {
+            print_usage(argc, argv);
+            return 0;
+        }
+        op = OP_PUT;
+    }
     int err = 0;
     MDB_env* env = NULL;
 
@@ -98,9 +124,21 @@ int main() {
         goto end;
     }
 
-    if ((err = dump_db(env)) != 0) goto end;
+    switch (op) {
+        case OP_DUMP:
+            if ((err = dump_db(env)) != 0) goto end;
+            break;
 
-    if ((err = put_db(env)) != 0) goto end;
+        case OP_GET:
+            (void)*(void*)0;  // FIXME
+
+        case OP_PUT:
+            if ((err = put_db(env, argv[2], argv[3])) != 0) goto end;
+            break;
+
+        default:
+            __builtin_unreachable();
+    }
 
 end:
     if (env != NULL) mdb_env_close(env);
