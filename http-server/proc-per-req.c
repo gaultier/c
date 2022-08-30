@@ -197,6 +197,7 @@ static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     } else if (sent != gb_string_length(res)) {
         LOG("Partial send(2), FIXME");
     }
+    // Nothing to cleanup, since this process is going to exit right after
 }
 
 int main(int argc, char* argv[]) {
@@ -215,7 +216,7 @@ int main(int argc, char* argv[]) {
     struct sigaction sa = {.sa_flags = SA_NOCLDWAIT};
     if ((err = sigaction(SIGCHLD, &sa, NULL)) == -1) {
         fprintf(stderr, "Failed to sigaction(2): err=%s\n", strerror(errno));
-        exit(errno);
+        return errno;
     }
 
     int sock_fd = socket(PF_INET, SOCK_STREAM, 0);
