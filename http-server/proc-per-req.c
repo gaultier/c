@@ -142,11 +142,10 @@ static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     gbString req = gb_string_make_reserve(gb_heap_allocator(), 256);
     int err = 0;
     http_req_t http_req = {0};
-    gbString res = NULL;
 
     while (1) {
         if (gb_string_available_space(req) <= 256)
-            gb_string_make_space_for(req, 256);
+            req = gb_string_make_space_for(req, 256);
         ssize_t received = recv(conn_fd, &req[gb_string_length(req)],
                                 gb_string_available_space(req), 0);
         if (received == -1) {
@@ -179,7 +178,7 @@ static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     }
 
     // Response
-    res = gb_string_make_reserve(gb_heap_allocator(), 256);
+    gbString res = gb_string_make_reserve(gb_heap_allocator(), 256);
     gb_string_append_fmt(res,
                          "HTTP/1.1 200 OK\r\n"
                          "Content-Type: text/plain; charset=utf8\r\n"
