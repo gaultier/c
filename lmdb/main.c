@@ -4,7 +4,7 @@
 #include <string.h>
 #include <sys/time.h>
 
-static int dump_db(MDB_env* env) {
+static int db_dump(MDB_env* env) {
     int err = 0;
     MDB_txn* txn = NULL;
     MDB_dbi dbi = {0};
@@ -46,7 +46,7 @@ end:
     return err;
 }
 
-static int put_db(MDB_env* env, char* key, char* value) {
+static int db_put(MDB_env* env, char* key, char* value) {
     int err = 0;
     MDB_txn* txn = NULL;
     MDB_dbi dbi = {0};
@@ -61,9 +61,9 @@ static int put_db(MDB_env* env, char* key, char* value) {
     }
 
     MDB_val mdb_key = {.mv_data = key, .mv_size = strlen(key)},
-            mdb_data = {.mv_data = value, .mv_size = strlen(value)};
+            mdb_value = {.mv_data = value, .mv_size = strlen(value)};
 
-    if ((err = mdb_put(txn, dbi, &mdb_key, &mdb_data, 0)) != 0) {
+    if ((err = mdb_put(txn, dbi, &mdb_key, &mdb_value, 0)) != 0) {
         fprintf(stderr, "Failed to mdb_put: err=%s", mdb_strerror(err));
         goto end;
     }
@@ -79,8 +79,41 @@ end:
 }
 
 static void print_usage(int argc, char* argv[]) {
+    (void)argc;
+
     printf("%s get <key>\n%s put <key> <value>\n%s dump\n", argv[0], argv[0],
            argv[0]);
+}
+
+static int db_get(MDB_env* env, char* key) {
+    int err = 0;
+    MDB_txn* txn = NULL;
+    MDB_dbi dbi = {0};
+
+    if ((err = mdb_txn_begin(env, NULL, MDB_RDONLY, &txn)) != 0) {
+        fprintf(stderr, "Failed to mdb_txn_begin: err=%s\n", mdb_strerror(err));
+        goto end;
+    }
+
+    if ((err = mdb_dbi_open(txn, NULL, 0, &dbi)) != 0) {
+        fprintf(stderr, "Failed to mdb_dbi_open: err=%s", mdb_strerror(err));
+        goto end;
+    }
+
+    MDB_val mdb_key = {.mv_data = key, .mv_size = strlen(key)}, mdb_value = {0};
+    if ((err = mdb_get(txn, dbi, &mdb_key, &mdb_value)) != 0) {
+        fprintf(stderr, "Failed to mdb_get: err=%s\n", mdb_strerror(err));
+        goto end;
+    }
+    printf("key=%.*s value=%.*s\n", (int)mdb_key.mv_size,
+           (char*)mdb_key.mv_data, (int)mdb_value.mv_size,
+           (char*)mdb_value.mv_data);
+
+end:
+    if (txn != NULL) mdb_txn_abort(txn);
+    mdb_dbi_close(env, dbi);
+
+    return err;
 }
 
 typedef enum { OP_DUMP, OP_GET, OP_PUT } op_t;
@@ -126,14 +159,15 @@ int main(int argc, char* argv[]) {
 
     switch (op) {
         case OP_DUMP:
-            if ((err = dump_db(env)) != 0) goto end;
+            if ((err = db_dump(env)) != 0) goto end;
             break;
 
         case OP_GET:
-            (void)*(void*)0;  // FIXME
+            if ((err = db_get(env, argv[2])) != 0) goto end;
+            break;
 
         case OP_PUT:
-            if ((err = put_db(env, argv[2], argv[3])) != 0) goto end;
+            if ((err = db_put(env, argv[2], argv[3])) != 0) goto end;
             break;
 
         default:
