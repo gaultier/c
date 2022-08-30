@@ -177,7 +177,7 @@ int main(int argc, char* argv[]) {
         pid_t pid = fork();
         if (pid == -1) {
             fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
-            /* exit(errno); */
+            close(conn_fd);
         } else if (pid == 0) {  // Child
             err = handle_connection(client_addr, conn_fd);
             exit(err);

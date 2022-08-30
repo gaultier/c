@@ -14,8 +14,7 @@
 
 #define GB_IMPLEMENTATION
 #define GB_STATIC
-#include <../vendor/gb/gb.h>
-
+#include "../vendor/gb/gb.h"
 #include "vendor/picohttpparser/picohttpparser.h"
 
 #define CONN_BUF_LEN 2048
@@ -41,10 +40,14 @@ typedef struct {
 
 typedef enum {
     HM_GET,
+    HM_HEAD,
     HM_POST,
     HM_PUT,
-    HM_PATCH,
     HM_DELETE,
+    HM_CONNECT,
+    HM_OPTIONS,
+    HM_TRACE,
+    HM_PATCH,
 } http_method;
 
 typedef struct {
@@ -133,19 +136,26 @@ static int http_request_parse(http_req* req, gbArray(char) buf,
         LOG("Partial http parse, need more data\n");
         return res;
     }
-    if (method_len >= sizeof("DELETE") - 1) {  // Longest method
+    if (method_len >= sizeof("CONNECT") - 1) {  // Longest method
         return EINVAL;
     }
-    if (str_eq0(method, method_len, "GET"))
-        req->method = HM_GET;
+    if (str_eq0(method, method_len, "GET")) req->method = HM_GET;
+    if (str_eq0(method, method_len, "HEAD"))
+        req->method = HM_HEAD;
     else if (str_eq0(method, method_len, "POST"))
         req->method = HM_POST;
     else if (str_eq0(method, method_len, "PUT"))
         req->method = HM_PUT;
-    else if (str_eq0(method, method_len, "PATCH"))
-        req->method = HM_PATCH;
     else if (str_eq0(method, method_len, "DELETE"))
         req->method = HM_DELETE;
+    else if (str_eq0(method, method_len, "CONNECT"))
+        req->method = HM_CONNECT;
+    else if (str_eq0(method, method_len, "OPTIONS"))
+        req->method = HM_OPTIONS;
+    else if (str_eq0(method, method_len, "TRACE"))
+        req->method = HM_TRACE;
+    else if (str_eq0(method, method_len, "PATCH"))
+        req->method = HM_PATCH;
     else
         return EINVAL;
 
