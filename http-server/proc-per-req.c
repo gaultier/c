@@ -187,14 +187,16 @@ static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
                          "%.*s",
                          http_req.path_len, http_req.path_len, http_req.path);
 
-    // TODO: send in loop
-    int sent = send(conn_fd, res, gb_string_length(res), 0);
-    if (sent == -1) {
-        fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
-                client_addr.sin_port, strerror(errno));
-        return;
-    } else if (sent != gb_string_length(res)) {
-        LOG("Partial send(2), FIXME");
+    u64 written = 0;
+    const u64 total = gb_string_length(res);
+    while (written < total) {
+        int sent = send(conn_fd, &res[written], total - written, 0);
+        if (sent == -1) {
+            fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
+                    client_addr.sin_port, strerror(errno));
+            return;
+        }
+        written += total;
     }
     // Nothing to cleanup, since this process is going to exit right after
 }

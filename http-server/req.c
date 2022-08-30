@@ -52,13 +52,12 @@ static int request_send(int fd, u64 delay_ms, u64 batch_size_max) {
     return 0;
 }
 
-static int response_receive(int fd) {
+static int response_receive(int fd, u64 batch_size_max) {
     u64 received = 0;
     u64 total_received = 0;
     char buf[4096] = "";
     while (total_received <= sizeof(buf)) {
-        received =
-            recv(fd, &buf[total_received], sizeof(buf) - total_received, 0);
+        received = recv(fd, &buf[total_received], batch_size_max, 0);
         if (received == -1) {
             fprintf(stderr, "Failed to recv(2): %s\n", strerror(errno));
             return errno;
@@ -66,10 +65,12 @@ static int response_receive(int fd) {
         if (received == 0) {
             break;
         }
+        printf("Partial received: %llu\n", received);
         total_received += received;
     }
 
-    fprintf(stderr, "Received: `%.*s`\n", (int)total_received, buf);
+    fprintf(stderr, "Received: total_received=%llu `%.*s`\n", total_received,
+            (int)total_received, buf);
     return 0;
 }
 
@@ -107,7 +108,7 @@ int main(int argc, char* argv[]) {
     if ((res = request_send(fd, delay_ms, batch_size_max)) != 0) {
         return res;
     }
-    if ((res = response_receive(fd)) != 0) {
+    if ((res = response_receive(fd, batch_size_max)) != 0) {
         return res;
     }
 
