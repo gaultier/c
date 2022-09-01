@@ -2,3 +2,6 @@ kqueue
 *.dSYM/
 req
 testdb*
+proc-per-req
+*.a
+*.o

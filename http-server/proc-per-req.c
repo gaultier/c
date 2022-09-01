@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <errno.h>
 #include <netinet/in.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -21,6 +22,7 @@
 
 static const uint64_t KiB = 1024;
 static const uint64_t max_payload_length = 16 * KiB;
+static const uint64_t timeout_seconds = 15;
 static bool verbose = true;
 static MDB_env* env = NULL;
 
@@ -358,7 +360,16 @@ static gbString app_handle(const http_req_t* http_req, const char* req_body,
     return res;
 }
 
+static void* timeout_background_worker_run(void* arg) {
+    sleep(timeout_seconds);
+    exit(0);
+    return NULL;
+}
+
 static void handle_connection(int conn_fd) {
+    pthread_t timeout_background_worker = {0};
+    pthread_create(&timeout_background_worker, NULL,
+                   timeout_background_worker_run, NULL);
     gbString req =
         gb_string_make_reserve(gb_heap_allocator(), max_payload_length);
     int err = 0;
@@ -386,7 +397,6 @@ static void handle_connection(int conn_fd) {
         err = http_parse_request(&http_req, (char*)req, prev_len);
 
         if (err == -2) {
-            LOG("Need more data");
             continue;
         }
         if (err == -1) {
