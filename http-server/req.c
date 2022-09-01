@@ -1,3 +1,5 @@
+#include <_types/_uint64_t.h>
+#include <assert.h>
 #include <netinet/in.h>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -17,12 +19,16 @@ static void print_usage(int argc, char* argv[]) {
 
 static u64 clamp_u64(u64 val, u64 limit) { return val > limit ? limit : val; }
 
-static int request_send(int fd, u64 delay_ms, u64 batch_size_max) {
-    const char msg[] =
-        "GET /index.html HTTP/1.1\r\n"
+static int request_send(int fd, u64 delay_ms, u64 batch_size_max,
+                        u64 payload_len) {
+    static char msg[1000000] =
+        "POST /index.html HTTP/1.1\r\n"
         "Host: localhost:12347\r\n"
         "\r\n";
-    const u64 msg_len = sizeof(msg) - 1;
+    assert(payload_len < sizeof(msg));
+    u64 msg_len = strlen(msg);
+    for (uint64_t i = 0; i < payload_len; i++) msg[msg_len++] = 'A';
+
     i64 sent = 0;
     u64 total_sent = 0;
 
@@ -39,7 +45,7 @@ static int request_send(int fd, u64 delay_ms, u64 batch_size_max) {
         total_sent += sent;
 
         fprintf(stderr, "Sent: sent=%llu total_sent=%llu\n", sent, total_sent);
-        usleep(delay_ms * 1000);
+        if (delay_ms > 0) usleep(delay_ms * 1000);
     }
     struct timeval send_end = {0};
     gettimeofday(&send_end, NULL);
@@ -75,7 +81,7 @@ static int response_receive(int fd, u64 batch_size_max) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 4) {
+    if (argc < 5) {
         print_usage(argc, argv);
         return 0;
     }
@@ -88,6 +94,7 @@ int main(int argc, char* argv[]) {
 
     const u64 delay_ms = gb_str_to_u64(argv[2], NULL, 10);
     const u64 batch_size_max = gb_str_to_u64(argv[3], NULL, 10);
+    const u64 payload_len = gb_str_to_u64(argv[4], NULL, 10);
 
     int fd = socket(PF_INET, SOCK_STREAM, 0);
     if (fd == -1) {
@@ -105,7 +112,7 @@ int main(int argc, char* argv[]) {
     }
 
     int res = 0;
-    if ((res = request_send(fd, delay_ms, batch_size_max)) != 0) {
+    if ((res = request_send(fd, delay_ms, batch_size_max, payload_len)) != 0) {
         return res;
     }
     if ((res = response_receive(fd, batch_size_max)) != 0) {

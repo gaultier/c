@@ -329,13 +329,14 @@ static gbString app_handle(const http_req_t* http_req) {
     return res;
 }
 
-static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
+static void handle_connection(int conn_fd) {
     gbString req =
         gb_string_make_reserve(gb_heap_allocator(), max_payload_length);
     int err = 0;
     http_req_t http_req = {0};
 
-    while (gb_string_available_space(req) > 0) {
+    u64 prev_len = 0;
+    while (1) {
         ssize_t received = recv(conn_fd, &req[gb_string_length(req)],
                                 gb_string_available_space(req), 0);
         if (received == -1) {
@@ -345,28 +346,37 @@ static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
         if (received == 0) {  // Client closed connection
             return;
         }
+        prev_len = gb_string_length(req);
         gb__set_string_length(req, gb_string_length(req) + received);
-        const isize len = gb_string_length(req);
-
-        // End of request ?
-        // TODO: limit on received bytes total
-        if (len >= 4 && req[len - 4] == '\r' && req[len - 3] == '\n' &&
-            req[len - 2] == '\r' && req[len - 1] == '\n') {
-            break;
+        LOG("Request length: %td\n", gb_string_length(req));
+        if (gb_string_available_space(req) == 0) {
+            fprintf(stderr, "Request too big\n");
+            return;
         }
+
+        err = http_parse_request(&http_req, (char*)req, prev_len);
+
+        if (err == -2) {
+            LOG("Need more data");
+            continue;
+        }
+        if (err == -1) {
+            fprintf(stderr,
+                    "Failed to parse http request: res=%d "
+                    "received=%zd\n",
+                    err, gb_array_count(req));
+            return;
+        }
+        break;
     }
-
-    err = http_parse_request(&http_req, (char*)req, 0);
-
-    if (err != 0) {
-        fprintf(stderr,
-                "Failed to parse http request: res=%d "
-                "received=%zd\n",
-                err, gb_array_count(req));
-        return;
+    const char* body_start = memmem(req, gb_string_length(req), "\r\n\r\n", 4);
+    if (body_start != NULL) {
+        LOG("body=`%.*s`\n", (int)(req + gb_string_length(req) - body_start),
+            body_start + 4);
     }
 
     gbString res = app_handle(&http_req);
+    LOG("res=%s\n", res);
 
     u64 written = 0;
     const u64 total = gb_string_length(res);
@@ -442,9 +452,7 @@ int main(int argc, char* argv[]) {
     }
 
     while (1) {
-        struct sockaddr_in client_addr = {0};
-        socklen_t client_addr_len = sizeof(client_addr);
-        int conn_fd = accept(sock_fd, (void*)&client_addr, &client_addr_len);
+        int conn_fd = accept(sock_fd, NULL, 0);
         if (conn_fd == -1) {
             fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
             return errno;
@@ -455,7 +463,7 @@ int main(int argc, char* argv[]) {
             fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
             close(conn_fd);
         } else if (pid == 0) {  // Child
-            handle_connection(client_addr, conn_fd);
+            handle_connection(conn_fd);
             exit(0);
         } else {  // Parent
             // Fds are duplicated by fork(2) and need to be
