@@ -108,7 +108,7 @@ static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
         return res;
     }
     if (res == -2) {
-        LOG("Partial http parse, need more data\n");
+        // Partial http parse, need more data
         return res;
     }
     if (method_len >= sizeof("CONNECT") - 1) {  // Longest method
@@ -153,7 +153,7 @@ static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
     }
     req->headers_len = headers_len;
 
-    for (int i = 0; i < headers_len; i++) {
+    for (u64 i = 0; i < headers_len; i++) {
         const struct phr_header* const header = &req->headers[i];
 
         if (str_eq0(header->name, header->name_len, "Content-Length")) {
@@ -286,6 +286,9 @@ end:
 
 static gbString app_handle(const http_req_t* http_req, const char* req_body,
                            u64 req_body_len) {
+    (void)req_body;
+    (void)req_body_len;
+
     gbString res_body = NULL;
     if ((str_eq0(http_req->path, http_req->path_len, "/get-todos") &&
          http_req->method == HM_GET) ||
@@ -361,6 +364,8 @@ static gbString app_handle(const http_req_t* http_req, const char* req_body,
 }
 
 static void* timeout_background_worker_run(void* arg) {
+    (void)arg;
+
     sleep(timeout_seconds);
     exit(0);
     return NULL;
