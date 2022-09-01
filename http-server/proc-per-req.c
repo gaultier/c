@@ -284,11 +284,8 @@ end:
     return err;
 }
 
-static gbString app_handle(const http_req_t* http_req, const char* req_body,
+static gbString app_handle(const http_req_t* http_req, char* req_body,
                            u64 req_body_len) {
-    (void)req_body;
-    (void)req_body_len;
-
     gbString res_body = NULL;
     if ((str_eq0(http_req->path, http_req->path_len, "/get-todos") &&
          http_req->method == HM_GET) ||
@@ -342,6 +339,28 @@ static gbString app_handle(const http_req_t* http_req, const char* req_body,
 
         res_body = gb_string_make_length(gb_heap_allocator(), value.mv_data,
                                          value.mv_size);
+
+    } else if (http_req->method == HM_POST &&
+               str_starts_with0(http_req->path, http_req->path_len,
+                                "/create-todo")) {
+        char* data = req_body;
+        MDB_val key = {0}, value = {0};
+        key.mv_size = *(uint64_t*)data;
+        data += sizeof(uint64_t);
+        key.mv_data = data;
+
+        data += key.mv_size;
+        value.mv_size = *(uint64_t*)data;
+        data += sizeof(uint64_t);
+        value.mv_data = data;
+        printf("%zu `%.*s` %zu `%.*s`\n", key.mv_size, (int)key.mv_size,
+               (char*)key.mv_data, value.mv_size, (int)value.mv_size,
+               (char*)value.mv_data);
+        return gb_string_make(gb_heap_allocator(),
+                              "HTTP/1.1 200 OK\r\n"
+                              "Content-Type: text/plain; charset=utf8\r\n"
+                              "Content-Length: 0\r\n"
+                              "\r\n");
 
     } else {
         return gb_string_make(gb_heap_allocator(),
@@ -416,7 +435,7 @@ static void handle_connection(int conn_fd) {
     LOG("Content-Length: %d\n", http_req.content_len);
     // Perhaps we do not have the full body yet and we need to get the
     // Content-Length and read that amount
-    const char* req_body = memmem(req, gb_string_length(req), "\r\n\r\n", 4);
+    char* req_body = memmem(req, gb_string_length(req), "\r\n\r\n", 4);
     u64 req_body_len = req + gb_string_length(req) - req_body;
     if (req_body != NULL) {
         req_body += 4;
