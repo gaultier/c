@@ -49,7 +49,7 @@ typedef struct {
     const char* path;
     http_method method;
     u16 path_len;
-    u8 num_headers;
+    u8 headers_len;
     struct phr_header headers[50];
 } http_req_t;
 
@@ -75,12 +75,11 @@ static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
     usize method_len = 0;
     usize path_len = 0;
     int minor_version = 0;
-    struct phr_header headers[100] = {0};
-    usize num_headers = sizeof(headers) / sizeof(headers[0]);
+    usize headers_len = sizeof(req->headers) / sizeof(req->headers[0]);
 
     int res = phr_parse_request(buf, gb_string_length(buf), &method,
                                 &method_len, &path, &path_len, &minor_version,
-                                headers, &num_headers, prev_buf_len);
+                                req->headers, &headers_len, prev_buf_len);
 
     LOG("phr_parse_request: res=%d\n", res);
     if (res == -1) {
@@ -126,13 +125,12 @@ static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
     req->path = path;
     req->path_len = path_len;
 
-    if (num_headers >= UINT8_MAX ||
-        num_headers >= sizeof(headers) / sizeof(headers[0])) {
+    if (req->headers_len >= UINT8_MAX ||
+        req->headers_len >= sizeof(req->headers) / sizeof(req->headers[0])) {
         LOG("Invalid headers");
         return EINVAL;
     }
-    req->num_headers = num_headers;
-    /* memcpy(req->headers, headers, num_headers * sizeof(headers[0])); */
+    req->headers_len = headers_len;
 
     LOG("method=%d path=%.*s\n", req->method, req->path_len, req->path);
     return 0;
@@ -370,6 +368,8 @@ static void handle_connection(int conn_fd) {
         }
         break;
     }
+    // Perhaps we do not have the full body yet and we need to get the
+    // Content-Length and read that amount
     const char* req_body = memmem(req, gb_string_length(req), "\r\n\r\n", 4);
     u64 req_body_len = req + gb_string_length(req) - req_body;
     if (req_body != NULL) {
@@ -380,6 +380,11 @@ static void handle_connection(int conn_fd) {
         req_body_len = 0;
     }
 
+    for (int i = 0; i < http_req.headers_len; i++) {
+        printf("`%.*s`=`%.*s`\n", (int)http_req.headers[i].name_len,
+               http_req.headers[i].name, (int)http_req.headers[i].value_len,
+               http_req.headers[i].value);
+    }
     gbString res = app_handle(&http_req, req_body, req_body_len);
     LOG("res=%s\n", res);
 
