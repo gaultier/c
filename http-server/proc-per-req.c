@@ -224,7 +224,8 @@ end:
     return err;
 }
 
-static int db_put(MDB_env* env, char* key, char* value) {
+static int db_put(MDB_env* env, char* key, uint64_t key_len, char* value,
+                  uint64_t value_len) {
     int err = 0;
     MDB_txn* txn = NULL;
     MDB_dbi dbi = {0};
@@ -238,8 +239,8 @@ static int db_put(MDB_env* env, char* key, char* value) {
         goto end;
     }
 
-    MDB_val mdb_key = {.mv_data = key, .mv_size = strlen(key)},
-            mdb_value = {.mv_data = value, .mv_size = strlen(value)};
+    MDB_val mdb_key = {.mv_data = key, .mv_size = key_len},
+            mdb_value = {.mv_data = value, .mv_size = value_len};
 
     if ((err = mdb_put(txn, dbi, &mdb_key, &mdb_value, 0)) != 0) {
         fprintf(stderr, "Failed to mdb_put: err=%s", mdb_strerror(err));
@@ -356,6 +357,17 @@ static gbString app_handle(const http_req_t* http_req, char* req_body,
         printf("%zu `%.*s` %zu `%.*s`\n", key.mv_size, (int)key.mv_size,
                (char*)key.mv_data, value.mv_size, (int)value.mv_size,
                (char*)value.mv_data);
+
+        int err = 0;
+        if ((err = db_put(env, key.mv_data, key.mv_size, value.mv_data,
+                          value.mv_size)) != 0) {
+            return gb_string_make(gb_heap_allocator(),
+                                  "HTTP/1.1 500 Internal Error\r\n"
+                                  "Content-Type: text/plain; charset=utf8\r\n"
+                                  "Content-Length: 0\r\n"
+                                  "\r\n");
+        }
+
         return gb_string_make(gb_heap_allocator(),
                               "HTTP/1.1 200 OK\r\n"
                               "Content-Type: text/plain; charset=utf8\r\n"
