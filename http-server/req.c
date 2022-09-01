@@ -23,7 +23,7 @@ static int request_send(int fd, u64 delay_ms, u64 batch_size_max) {
         "Host: localhost:12347\r\n"
         "\r\n";
     const u64 msg_len = sizeof(msg) - 1;
-    u64 sent = 0;
+    i64 sent = 0;
     u64 total_sent = 0;
 
     struct timeval send_start = {0};
@@ -53,7 +53,7 @@ static int request_send(int fd, u64 delay_ms, u64 batch_size_max) {
 }
 
 static int response_receive(int fd, u64 batch_size_max) {
-    u64 received = 0;
+    i64 received = 0;
     u64 total_received = 0;
     char buf[4096] = "";
     while (total_received <= sizeof(buf)) {

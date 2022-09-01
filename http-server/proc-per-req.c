@@ -18,9 +18,8 @@
 #include "../vendor/gb/gb.h"
 #include "vendor/picohttpparser/picohttpparser.h"
 
-#define IP_ADDR_STR_LEN 17
-#define CONN_BUF_LEN 4096
-
+static const uint64_t KiB = 1024;
+static const uint64_t max_payload_length = 16 * KiB;
 static bool verbose = true;
 static MDB_env* env = NULL;
 
@@ -28,11 +27,6 @@ static MDB_env* env = NULL;
     do {                                                  \
         if (verbose) fprintf(stderr, fmt, ##__VA_ARGS__); \
     } while (0)
-
-static void ip(uint32_t val, char* res) {
-    uint8_t a = val >> 24, b = val >> 16, c = val >> 8, d = val & 0xff;
-    snprintf(res, 16, "%hhu.%hhu.%hhu.%hhu", d, c, b, a);
-}
 
 static void print_usage(int argc, char* argv[]) {
     GB_ASSERT(argc > 0);
@@ -336,21 +330,16 @@ static gbString app_handle(const http_req_t* http_req) {
 }
 
 static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
-    char ip_addr[IP_ADDR_STR_LEN] = "";
-    ip(client_addr.sin_addr.s_addr, ip_addr);
-
-    gbString req = gb_string_make_reserve(gb_heap_allocator(), 256);
+    gbString req =
+        gb_string_make_reserve(gb_heap_allocator(), max_payload_length);
     int err = 0;
     http_req_t http_req = {0};
 
-    while (1) {
-        if (gb_string_available_space(req) <= 256)
-            req = gb_string_make_space_for(req, 256);
+    while (gb_string_available_space(req) > 0) {
         ssize_t received = recv(conn_fd, &req[gb_string_length(req)],
                                 gb_string_available_space(req), 0);
         if (received == -1) {
-            fprintf(stderr, "Failed to recv(2): addr=%s:%hu err=%s\n", ip_addr,
-                    client_addr.sin_port, strerror(errno));
+            fprintf(stderr, "Failed to recv(2): err=%s\n", strerror(errno));
             return;
         }
         if (received == 0) {  // Client closed connection
@@ -371,9 +360,9 @@ static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
 
     if (err != 0) {
         fprintf(stderr,
-                "Failed to parse http request: addr=%s:%hu res=%d "
+                "Failed to parse http request: res=%d "
                 "received=%zd\n",
-                ip_addr, client_addr.sin_port, err, gb_array_count(req));
+                err, gb_array_count(req));
         return;
     }
 
@@ -384,8 +373,7 @@ static void handle_connection(struct sockaddr_in client_addr, int conn_fd) {
     while (written < total) {
         int sent = send(conn_fd, &res[written], total - written, 0);
         if (sent == -1) {
-            fprintf(stderr, "Failed to send(2): addr=%s:%hu err=%s\n", ip_addr,
-                    client_addr.sin_port, strerror(errno));
+            fprintf(stderr, "Failed to send(2): err=%s\n", strerror(errno));
             return;
         }
         written += total;
