@@ -254,8 +254,9 @@ end:
     return err;
 }
 
-static gbString app_handle(const http_req_t* http_req) {
-    gbString body = NULL;
+static gbString app_handle(const http_req_t* http_req, const char* req_body,
+                           u64 req_body_len) {
+    gbString res_body = NULL;
     if ((str_eq0(http_req->path, http_req->path_len, "/get-todos") &&
          http_req->method == HM_GET) ||
         (str_eq0(http_req->path, http_req->path_len, "/get-todos/") &&
@@ -270,14 +271,14 @@ static gbString app_handle(const http_req_t* http_req) {
                                   "Content-Length: 0\r\n"
                                   "\r\n");
         }
-        body = gb_string_make_reserve(gb_heap_allocator(), 512);
+        res_body = gb_string_make_reserve(gb_heap_allocator(), 512);
 
         for (u64 i = 0; i < (u64)gb_array_count(kvs); i++) {
             const kv_t* const kv = &kvs[i];
 
-            body = gb_string_append_fmt(body, "%.*s: %.*s\n", kv->key.mv_size,
-                                        kv->key.mv_data, kv->value.mv_size,
-                                        kv->value.mv_data);
+            res_body = gb_string_append_fmt(
+                res_body, "%.*s: %.*s\n", kv->key.mv_size, kv->key.mv_data,
+                kv->value.mv_size, kv->value.mv_data);
         }
     } else if (str_starts_with0(http_req->path, http_req->path_len,
                                 "/get-todo?key=") &&
@@ -306,8 +307,8 @@ static gbString app_handle(const http_req_t* http_req) {
                                   "\r\n");
         }
 
-        body = gb_string_make_length(gb_heap_allocator(), value.mv_data,
-                                     value.mv_size);
+        res_body = gb_string_make_length(gb_heap_allocator(), value.mv_data,
+                                         value.mv_size);
 
     } else {
         return gb_string_make(gb_heap_allocator(),
@@ -324,7 +325,7 @@ static gbString app_handle(const http_req_t* http_req) {
                          "Content-Length: %td\r\n"
                          "\r\n"
                          "%s",
-                         gb_string_length(body), body);
+                         gb_string_length(res_body), res_body);
 
     return res;
 }
@@ -369,13 +370,17 @@ static void handle_connection(int conn_fd) {
         }
         break;
     }
-    const char* body_start = memmem(req, gb_string_length(req), "\r\n\r\n", 4);
-    if (body_start != NULL) {
-        LOG("body=`%.*s`\n", (int)(req + gb_string_length(req) - body_start),
-            body_start + 4);
+    const char* req_body = memmem(req, gb_string_length(req), "\r\n\r\n", 4);
+    u64 req_body_len = req + gb_string_length(req) - req_body;
+    if (req_body != NULL) {
+        req_body += 4;
+        req_body_len -= 4;
+        LOG("body=`%.*s`\n", (int)req_body_len, req_body);
+    } else {
+        req_body_len = 0;
     }
 
-    gbString res = app_handle(&http_req);
+    gbString res = app_handle(&http_req, req_body, req_body_len);
     LOG("res=%s\n", res);
 
     u64 written = 0;
