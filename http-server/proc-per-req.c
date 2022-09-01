@@ -288,9 +288,9 @@ end:
 static gbString app_handle(const http_req_t* http_req, char* req_body,
                            u64 req_body_len) {
     gbString res_body = NULL;
-    if ((str_eq0(http_req->path, http_req->path_len, "/get-todos") &&
+    if ((str_eq0(http_req->path, http_req->path_len, "/list-todos") &&
          http_req->method == HM_GET) ||
-        (str_eq0(http_req->path, http_req->path_len, "/get-todos/") &&
+        (str_eq0(http_req->path, http_req->path_len, "/list-todos/") &&
          http_req->method == HM_GET)) {
         gbArray(kv_t) kvs = {0};
         gb_array_init_reserve(kvs, gb_heap_allocator(), 10);
@@ -331,6 +331,14 @@ static gbString app_handle(const http_req_t* http_req, char* req_body,
         int err = 0;
         MDB_val value = {0};
         if ((err = db_get(key_param, key_param_len, &value)) != 0) {
+            if (err == MDB_NOTFOUND) {
+                return gb_string_make(
+                    gb_heap_allocator(),
+                    "HTTP/1.1 404 Not Found\r\n"
+                    "Content-Type: text/plain; charset=utf8\r\n"
+                    "Content-Length: 0\r\n"
+                    "\r\n");
+            }
             return gb_string_make(gb_heap_allocator(),
                                   "HTTP/1.1 500 Internal Error\r\n"
                                   "Content-Type: text/plain; charset=utf8\r\n"
