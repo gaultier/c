@@ -54,9 +54,9 @@ typedef struct {
     const char* path;
     http_method method;
     u16 path_len;
-    u8 num_headers;
+    u8 headers_len;
     struct phr_header headers[50];
-} http_req;
+} http_req_t;
 
 typedef struct {
     gbString content_type;
@@ -75,7 +75,7 @@ typedef enum {
 typedef struct {
     struct timeval start;
     gbArray(char) req_buf;
-    http_req req;
+    http_req_t req;
     int socket_fd;  // For recv(2)/send(2)
     // For sendfile(2)
     int sendfile_file_fd;
@@ -111,7 +111,24 @@ static bool str_eq0(const char* a, u64 a_len, const char* b0) {
     return str_eq(a, a_len, b0, b_len);
 }
 
-static int http_parse_request(http_req* req, gbArray(char) buf,
+static u64 str_to_u64(const char* s, u64 s_len) {
+    assert(s != NULL);
+
+    u64 res = 0;
+    for (u64 i = 0; i < s_len; i++) {
+        const char c = s[i];
+        if (pg_char_is_space(c)) continue;
+        if (pg_char_is_digit(c)) {
+            const int v = c - '0';
+            res *= 10;
+            res += v;
+        } else
+            return 0;
+    }
+    return res;
+}
+
+static int http_parse_request(http_req_t* req, gbArray(char) buf,
                               u64 prev_buf_len) {
     assert(req != NULL);
 
@@ -168,7 +185,7 @@ static int http_parse_request(http_req* req, gbArray(char) buf,
     if (num_headers >= UINT8_MAX ||
         num_headers >= sizeof(headers) / sizeof(headers[0]))
         return EINVAL;
-    req->num_headers = num_headers;
+    req->headers_len = num_headers;
     /* memcpy(req->headers, headers, num_headers * sizeof(headers[0])); */
 
     LOG("method=%d path=%.*s\n", req->method, req->path_len, req->path);
@@ -204,7 +221,7 @@ static void conn_handle_init(conn_handle* ch, gbAllocator allocator,
     gettimeofday(&ch->start, NULL);
 
     gb_array_init_reserve(ch->req_buf, allocator, CONN_BUF_LEN_MAX);
-    ch->req.num_headers = sizeof(ch->req.headers) / sizeof(ch->req.headers[0]);
+    ch->req.headers_len = sizeof(ch->req.headers) / sizeof(ch->req.headers[0]);
 
     gb_pool_init(&ch->pool, allocator, 50, 128);
     ch->res.response = gb_string_make_reserve(allocator, 256);

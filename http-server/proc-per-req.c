@@ -15,6 +15,7 @@
 
 #define GB_IMPLEMENTATION
 #define GB_STATIC
+#include "../pg.h"
 #include "../vendor/gb/gb.h"
 #include "vendor/picohttpparser/picohttpparser.h"
 
@@ -49,6 +50,7 @@ typedef struct {
     const char* path;
     http_method method;
     u16 path_len;
+    u16 content_len;
     u8 headers_len;
     struct phr_header headers[50];
 } http_req_t;
@@ -65,6 +67,23 @@ static bool str_eq0(const char* a, u64 a_len, const char* b0) {
 static bool str_starts_with0(const char* a, u64 a_len, const char* b0) {
     const u64 b_len = strlen(b0);
     return a_len >= b_len && str_eq(a, b_len, b0, b_len);
+}
+
+static u64 str_to_u64(const char* s, u64 s_len) {
+    assert(s != NULL);
+
+    u64 res = 0;
+    for (u64 i = 0; i < s_len; i++) {
+        const char c = s[i];
+        if (pg_char_is_space(c)) continue;
+        if (pg_char_is_digit(c)) {
+            const int v = c - '0';
+            res *= 10;
+            res += v;
+        } else
+            return 0;
+    }
+    return res;
 }
 
 static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
@@ -131,6 +150,17 @@ static int http_parse_request(http_req_t* req, gbString buf, u64 prev_buf_len) {
         return EINVAL;
     }
     req->headers_len = headers_len;
+
+    for (int i = 0; i < headers_len; i++) {
+        const struct phr_header* const header = &req->headers[i];
+
+        if (str_eq0(header->name, header->name_len, "Content-Length")) {
+            const u64 content_len =
+                str_to_u64(header->value, header->value_len);
+            if (content_len > UINT16_MAX) return EINVAL;
+            req->content_len = content_len;
+        }
+    }
 
     LOG("method=%d path=%.*s\n", req->method, req->path_len, req->path);
     return 0;
@@ -368,6 +398,7 @@ static void handle_connection(int conn_fd) {
         }
         break;
     }
+    LOG("Content-Length: %d\n", http_req.content_len);
     // Perhaps we do not have the full body yet and we need to get the
     // Content-Length and read that amount
     const char* req_body = memmem(req, gb_string_length(req), "\r\n\r\n", 4);
@@ -380,11 +411,6 @@ static void handle_connection(int conn_fd) {
         req_body_len = 0;
     }
 
-    for (int i = 0; i < http_req.headers_len; i++) {
-        printf("`%.*s`=`%.*s`\n", (int)http_req.headers[i].name_len,
-               http_req.headers[i].name, (int)http_req.headers[i].value_len,
-               http_req.headers[i].value);
-    }
     gbString res = app_handle(&http_req, req_body, req_body_len);
     LOG("res=%s\n", res);
 
