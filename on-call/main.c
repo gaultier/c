@@ -157,6 +157,7 @@ int main() {
         {DATE_TIME(2022, 7, 10, 0), DATE_TIME(2022, 7, 11, 9)},
         {DATE_TIME(2022, 7, 20, 18), DATE_TIME(2022, 7, 22, 9)},
         {DATE_TIME(2022, 7, 22, 20), DATE_TIME(2022, 7, 23, 9)},
+        {DATE_TIME(2022, 9, 26, 18), DATE_TIME(2022, 9, 30, 9)},
     };
     bill_shifts(shifts, sizeof(shifts) / sizeof(shifts[0]));
 }
