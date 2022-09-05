@@ -287,6 +287,13 @@ end:
 
 static gbString app_handle(const http_req_t* http_req, char* req_body,
                            u64 req_body_len) {
+    if (req_body_len < 2 * sizeof(uint64_t))
+        return gb_string_make(gb_heap_allocator(),
+                              "HTTP/1.1 500 Internal Error\r\n"
+                              "Content-Type: text/plain; charset=utf8\r\n"
+                              "Content-Length: 0\r\n"
+                              "\r\n");
+
     gbString res_body = NULL;
     if ((str_eq0(http_req->path, http_req->path_len, "/list-todos") &&
          http_req->method == HM_GET) ||
