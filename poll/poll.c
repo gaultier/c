@@ -31,8 +31,8 @@ int main() {
         },
         {
             .sin_family = AF_INET,
-            .sin_port = htons(35676),
-            .sin_addr = {.s_addr = inet_addr("80.78.21.2")},
+            .sin_port = htons(8081),
+            .sin_addr = {.s_addr = inet_addr("127.0.0.1")},
         }};
 
     struct pollfd fds[3] = {0};
@@ -93,16 +93,18 @@ int main() {
                                 strerror(errno));
                         continue;
                     } else if (res == 0) {
-                        fprintf(stderr, "Failed recv(2): i=%d EOF\n", i);
+                        fprintf(stderr,
+                                "Failed recv(2): i=%d res=%d errno=%d\n", i,
+                                res, errno);
 
-                        for (int j = 0; j < fds_len; j++) {
-                            if (fds[j].fd == event->fd) {
-                                memcpy(&fds[j], &fds[fds_len - 1],
-                                       sizeof(struct pollfd));
-                                fds_len--;
-                                break;
-                            }
-                        }
+                        // for (int j = 0; j < fds_len; j++) {
+                        //     if (fds[j].fd == event->fd) {
+                        //         memcpy(&fds[j], &fds[fds_len - 1],
+                        //                sizeof(struct pollfd));
+                        //         fds_len--;
+                        //         break;
+                        //     }
+                        // }
                         continue;
                     }
                 } else {
