@@ -12,10 +12,18 @@ static uint16_t ports[] = {6881, 6881, 8081};
 static uv_tcp_t servers[3] = {0};
 static uv_connect_t reqs[3] = {0};
 
+static void on_timer_expired(uv_timer_t* handle) {
+    const uint64_t i = (uint64_t)handle->data;
+
+    printf("[%s:%d] Timer expired\n", ips[i], ports[i]);
+    uv_read_stop((uv_stream_t*)&servers[i]);
+}
+
 static void on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     if (nread > 0) {
         const uint64_t i = (uint64_t)stream->data;
         printf("[%s:%d] Read: %.*s\n", ips[i], ports[i], (int)nread, buf->base);
+        uv_timer_start(&timers[i], on_timer_expired, 5000, 0);
     }
 }
 
@@ -24,13 +32,6 @@ static void my_alloc_cb(uv_handle_t* handle, size_t suggested_size,
     (void)handle;
     buf->base = malloc(suggested_size);
     buf->len = suggested_size;
-}
-
-static void on_timer_expired(uv_timer_t* handle) {
-    const uint64_t i = (uint64_t)handle->data;
-
-    printf("[%s:%d] Timer expired\n", ips[i], ports[i]);
-    uv_read_stop((uv_stream_t*)&servers[i]);
 }
 
 static void on_close(uv_handle_t* handle) {
