@@ -52,6 +52,14 @@ static void on_connect(uv_connect_t* handle, int status) {
 }
 
 int main() {
+    printf(
+        "uv_loop_t=%lu\nuv_handle_t=%lu\n, "
+        "uv_stream_t=%lu\nuv_tcp_t:%lu\nuv_connect_t:%lu\nuv_req_t=%lu\nuv_"
+        "write_t=%lu\nsignal_t=%lu\n",
+        sizeof(uv_loop_t), sizeof(uv_handle_t), sizeof(uv_stream_t),
+        sizeof(uv_tcp_t), sizeof(uv_connect_t), sizeof(uv_req_t),
+        sizeof(uv_write_t), sizeof(uv_signal_t));
+    return 0;
     loop = uv_default_loop();
 
     for (uint64_t i = 0; i < sizeof(ips) / sizeof(ips[0]); i++) {
