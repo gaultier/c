@@ -16,3 +16,6 @@
 [submodule "vendor/lmdb"]
 	path = vendor/lmdb
 	url = https://github.com/LMDB/lmdb.git
+[submodule "nvim/vendor/msgpack-c"]
+	path = nvim/vendor/msgpack-c
+	url = https://github.com/msgpack/msgpack-c.git
