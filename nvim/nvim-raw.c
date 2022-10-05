@@ -1,3 +1,4 @@
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -144,6 +145,25 @@ static gbString get_path_from_request(gbString in) {
     return gb_string_make_length(gb_heap_allocator(), in, len);
 }
 
+static gbString get_project_path_from_remote_git_url(
+    gbString git_repository_url) {
+    gbString project_path = gb_string_make_reserve(gb_heap_allocator(), 30);
+    const char* remote_path_start =
+        gb_char_first_occurence(git_repository_url, ':');
+    assert(remote_path_start != NULL);
+    remote_path_start += 1;
+
+    assert(gb_str_has_suffix(remote_path_start, ".git"));
+
+    const uint64_t len = gb_string_length(git_repository_url) -
+                         (sizeof(".git") - 1) -
+                         (remote_path_start - git_repository_url);
+    project_path =
+        gb_string_append_length(project_path, remote_path_start, len);
+
+    return project_path;
+}
+
 static void handle_connection(int conn_fd) {
     gbString in = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
 
@@ -161,32 +181,22 @@ static void handle_connection(int conn_fd) {
                 errno, strerror(errno));
         exit(errno);
     }
-    gbString remote_path = gb_string_make_reserve(gb_heap_allocator(), 20);
-    {
-        gbString git_repository_url = get_git_origin_remote_url();
-        printf("git_repository_url=%s\n", git_repository_url);
 
-        const char* remote_path_start =
-            gb_char_first_occurence(git_repository_url, ':');
-        assert(remote_path_start != NULL);
-        remote_path_start += 1;
+    gbString git_repository_url = get_git_origin_remote_url();
+    printf("git_repository_url=%s\n", git_repository_url);
 
-        assert(gb_str_has_suffix(remote_path_start, ".git"));
-
-        remote_path = gb_string_append_length(
-            remote_path, remote_path_start,
-            gb_string_length(git_repository_url) - (sizeof(".git") - 1) -
-                (remote_path_start - git_repository_url));
-    }
+    gbString project_path =
+        get_project_path_from_remote_git_url(git_repository_url);
 
     gbString path_from_git_root = get_path_from_git_root();
     gbString commit = get_current_git_commit();
-    gbString res_url = gb_string_make_reserve(gb_heap_allocator(), 100);
     const uint64_t line = get_line_from_request(in);
 
+    gbString res_url = gb_string_make_reserve(gb_heap_allocator(), 100);
     res_url = gb_string_append_fmt(
-        res_url, "https://gitlab.ppro.com/%s/-/blob/%s/%s%s#L%llu", remote_path,
-        commit, path_from_git_root, gb_path_base_name(file_path), line);
+        res_url, "https://gitlab.ppro.com/%s/-/blob/%s/%s%s#L%llu",
+        project_path, commit, path_from_git_root, gb_path_base_name(file_path),
+        line);
     printf("Url: %s\n", res_url);
 
     open_url_in_browser(res_url);
