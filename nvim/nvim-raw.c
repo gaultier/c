@@ -77,6 +77,28 @@ static gbString get_path_from_git_root() {
     return output;
 }
 
+static gbString get_current_commit() {
+    gbString cmd = gb_string_make(gb_heap_allocator(), "git rev-parse HEAD");
+    printf("Running: %s\n", cmd);
+    FILE* cmd_handle = popen(cmd, "r");
+    assert(cmd_handle != NULL);
+
+    gb_string_free(cmd);
+
+    gbString output = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
+
+    int ret = 0;
+    if ((ret = read_all(fileno(cmd_handle), &output)) != 0) {
+        fprintf(stderr, "Failed to read(2) output from command: %d %s\n", errno,
+                strerror(errno));
+        exit(errno);
+    }
+
+    output = gb_string_trim(output, "\n");
+
+    return output;
+}
+
 static void handle_connection(int conn_fd) {
     gbString in = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
 
@@ -87,7 +109,6 @@ static void handle_connection(int conn_fd) {
     }
     printf("Received: %s\n", in);
 
-    char* branch = "master";
     char* in_file_path_end =
         memchr(in, 0xa /* newline */, gb_string_length(in));
     assert(in_file_path_end != NULL);
@@ -135,11 +156,12 @@ static void handle_connection(int conn_fd) {
     uint64_t line = strtoul(in_file_path_end + 1, NULL, 10);
 
     gbString path_from_git_root = get_path_from_git_root();
+    gbString commit = get_current_commit();
 
     gbString res_url = gb_string_make_reserve(gb_heap_allocator(), 100);
     res_url = gb_string_append_fmt(
-        res_url, "https://gitlab.ppro.com/%s/-/tree/%s/%s%s#L%llu", remote_path,
-        branch, path_from_git_root, gb_path_base_name(file_path), line);
+        res_url, "https://gitlab.ppro.com/%s/-/blob/%s/%s%s#L%llu", remote_path,
+        commit, path_from_git_root, gb_path_base_name(file_path), line);
     printf("Url: %s\n", res_url);
 
     open_url_in_browser(res_url);
