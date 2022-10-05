@@ -117,6 +117,33 @@ static gbString get_git_origin_remote_url() {
     return output;
 }
 
+static uint64_t get_line_from_request(gbString in) {
+    char* start = in + gb_string_length(in) - 1;
+
+    while (start > in && gb_char_is_digit(*start)) {
+        start--;
+    }
+
+    const uint64_t line = strtoul(start, NULL, 10);
+    return line;
+}
+
+static gbString path_get_directory(gbString path) {
+    const char* sep = gb_char_last_occurence(path, '/');
+    assert(sep != NULL);
+    gbString dir = gb_string_make_length(gb_heap_allocator(), path, sep - path);
+
+    return dir;
+}
+
+static gbString get_path_from_request(gbString in) {
+    const char* end = gb_char_first_occurence(in, 0xa /* newline */);
+    assert(end != NULL);
+    const uint64_t len = end - in;
+
+    return gb_string_make_length(gb_heap_allocator(), in, len);
+}
+
 static void handle_connection(int conn_fd) {
     gbString in = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
 
@@ -126,27 +153,16 @@ static void handle_connection(int conn_fd) {
         exit(errno);
     }
 
-    char* in_file_path_end =
-        memchr(in, 0xa /* newline */, gb_string_length(in));
-    assert(in_file_path_end != NULL);
-    gbString file_path = gb_string_make_reserve(gb_heap_allocator(), 20);
-    {
-        uint64_t in_file_path_len = in_file_path_end - (char*)in;
-        file_path = gb_string_append_length(file_path, in, in_file_path_len);
+    gbString file_path = get_path_from_request(in);
+    gbString dir = path_get_directory(file_path);
+
+    if ((ret = chdir(dir)) != 0) {
+        fprintf(stderr, "Failed to chdir(2): file_path=%s errno=%d %s\n", dir,
+                errno, strerror(errno));
+        exit(errno);
     }
     gbString remote_path = gb_string_make_reserve(gb_heap_allocator(), 20);
     {
-        const char* sep = gb_char_last_occurence(file_path, '/');
-        assert(sep != NULL);
-        gbString dir = gb_string_make_length(gb_heap_allocator(), file_path,
-                                             sep - file_path);
-
-        if ((ret = chdir(dir)) != 0) {
-            fprintf(stderr, "Failed to chdir(2): file_path=%s errno=%d %s\n",
-                    dir, errno, strerror(errno));
-            exit(errno);
-        }
-
         gbString git_repository_url = get_git_origin_remote_url();
         printf("git_repository_url=%s\n", git_repository_url);
 
@@ -162,12 +178,12 @@ static void handle_connection(int conn_fd) {
             gb_string_length(git_repository_url) - (sizeof(".git") - 1) -
                 (remote_path_start - git_repository_url));
     }
-    uint64_t line = strtoul(in_file_path_end + 1, NULL, 10);
 
     gbString path_from_git_root = get_path_from_git_root();
     gbString commit = get_current_git_commit();
-
     gbString res_url = gb_string_make_reserve(gb_heap_allocator(), 100);
+    const uint64_t line = get_line_from_request(in);
+
     res_url = gb_string_append_fmt(
         res_url, "https://gitlab.ppro.com/%s/-/blob/%s/%s%s#L%llu", remote_path,
         commit, path_from_git_root, gb_path_base_name(file_path), line);
