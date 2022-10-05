@@ -13,6 +13,7 @@
 #include <unistd.h>
 
 #include "vendor/msgpack-c/include/msgpack.h"
+#include "vendor/msgpack-c/include/msgpack/pack.h"
 
 static void handle_connection(int conn_fd) {
     static uint8_t buf[512];
@@ -76,9 +77,8 @@ static void handle_connection(int conn_fd) {
     msgpack_pack_int(pk, 1);           // RESPONSE
     msgpack_pack_int(pk, msg_id_u32);  // MSG ID
     msgpack_pack_nil(pk);              // ERROR
-    msgpack_pack_array(pk, 2);         // RESULT
-    msgpack_pack_int(pk, msg_id_u32);
-    msgpack_pack_nil(pk);
+    msgpack_pack_str_with_body(pk, "hello world",
+                               sizeof("hello world") - 1);  // RESULT
 
     uint64_t sent = 0;
     printf("Sending: ");

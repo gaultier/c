@@ -1,4 +1,6 @@
-let chan = sockconnect('tcp', '0.0.0.0:12345', {'rpc': v:true})
+let chan = sockconnect('tcp', '0.0.0.0:12345',{} )
 echo 'requesting'
-let result = rpcrequest(chan, 'nvim_get_api_info')
-echo result
+" let result = rpcrequest(chan, 'hello/world')
+call chansend(chan, "hello world")
+call chanclose(chan)
+echo 'requested'
