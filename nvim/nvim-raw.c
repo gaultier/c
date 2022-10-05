@@ -77,13 +77,31 @@ static gbString get_path_from_git_root() {
     return output;
 }
 
-static gbString get_current_commit() {
-    gbString cmd = gb_string_make(gb_heap_allocator(), "git rev-parse HEAD");
+static gbString get_current_git_commit() {
+    char* cmd = "git rev-parse HEAD";
     printf("Running: %s\n", cmd);
     FILE* cmd_handle = popen(cmd, "r");
     assert(cmd_handle != NULL);
 
-    gb_string_free(cmd);
+    gbString output = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
+
+    int ret = 0;
+    if ((ret = read_all(fileno(cmd_handle), &output)) != 0) {
+        fprintf(stderr, "Failed to read(2) output from command: %d %s\n", errno,
+                strerror(errno));
+        exit(errno);
+    }
+
+    output = gb_string_trim(output, "\n");
+
+    return output;
+}
+
+static gbString get_git_origin_remote_url() {
+    char* cmd = "git remote get-url origin";
+    printf("Running: %s\n", cmd);
+    FILE* cmd_handle = popen(cmd, "r");
+    assert(cmd_handle != NULL);
 
     gbString output = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
 
@@ -107,7 +125,6 @@ static void handle_connection(int conn_fd) {
         fprintf(stderr, "Failed to recv(2): %d %s\n", errno, strerror(errno));
         exit(errno);
     }
-    printf("Received: %s\n", in);
 
     char* in_file_path_end =
         memchr(in, 0xa /* newline */, gb_string_length(in));
@@ -130,15 +147,7 @@ static void handle_connection(int conn_fd) {
             exit(errno);
         }
 
-        FILE* git_cmd_handle = popen("git remote get-url origin", "r");
-        gbString git_repository_url =
-            gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
-        if ((ret =
-                 read_all(fileno(git_cmd_handle), &git_repository_url) != 0)) {
-            fprintf(stderr, "Failed to read output from command: %d %s\n",
-                    errno, strerror(errno));
-            exit(errno);
-        }
+        gbString git_repository_url = get_git_origin_remote_url();
         printf("git_repository_url=%s\n", git_repository_url);
 
         const char* remote_path_start =
@@ -146,17 +155,17 @@ static void handle_connection(int conn_fd) {
         assert(remote_path_start != NULL);
         remote_path_start += 1;
 
-        assert(gb_str_has_suffix(remote_path_start, ".git\n"));
+        assert(gb_str_has_suffix(remote_path_start, ".git"));
 
         remote_path = gb_string_append_length(
             remote_path, remote_path_start,
-            gb_string_length(git_repository_url) - 5 -
+            gb_string_length(git_repository_url) - (sizeof(".git") - 1) -
                 (remote_path_start - git_repository_url));
     }
     uint64_t line = strtoul(in_file_path_end + 1, NULL, 10);
 
     gbString path_from_git_root = get_path_from_git_root();
-    gbString commit = get_current_commit();
+    gbString commit = get_current_git_commit();
 
     gbString res_url = gb_string_make_reserve(gb_heap_allocator(), 100);
     res_url = gb_string_append_fmt(
