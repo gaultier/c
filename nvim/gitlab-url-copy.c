@@ -118,31 +118,12 @@ static gbString get_git_origin_remote_url() {
     return output;
 }
 
-static uint64_t get_line_from_request(gbString in) {
-    char* start = in + gb_string_length(in) - 1;
-
-    while (start > in && gb_char_is_digit(*start)) {
-        start--;
-    }
-
-    const uint64_t line = strtoul(start, NULL, 10);
-    return line;
-}
-
 static gbString path_get_directory(gbString path) {
     const char* sep = gb_char_last_occurence(path, '/');
     assert(sep != NULL);
     gbString dir = gb_string_make_length(gb_heap_allocator(), path, sep - path);
 
     return dir;
-}
-
-static gbString get_path_from_request(gbString in) {
-    const char* end = gb_char_first_occurence(in, 0xa /* newline */);
-    assert(end != NULL);
-    const uint64_t len = end - in;
-
-    return gb_string_make_length(gb_heap_allocator(), in, len);
 }
 
 static gbString get_project_path_from_remote_git_url(
@@ -164,18 +145,12 @@ static gbString get_project_path_from_remote_git_url(
     return project_path;
 }
 
-static void handle_connection(int conn_fd) {
-    gbString in = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
-
-    int ret = 0;
-    if ((ret = read_all(conn_fd, &in)) != 0) {
-        fprintf(stderr, "Failed to recv(2): %d %s\n", errno, strerror(errno));
-        exit(errno);
-    }
-
-    gbString file_path = get_path_from_request(in);
+int main(int argc, char* argv[]) {
+    assert(argc == 3);
+    gbString file_path = gb_string_make(gb_heap_allocator(), argv[1]);
     gbString dir = path_get_directory(file_path);
 
+    int ret = 0;
     if ((ret = chdir(dir)) != 0) {
         fprintf(stderr, "Failed to chdir(2): file_path=%s errno=%d %s\n", dir,
                 errno, strerror(errno));
@@ -190,7 +165,7 @@ static void handle_connection(int conn_fd) {
 
     gbString path_from_git_root = get_path_from_git_root();
     gbString commit = get_current_git_commit();
-    const uint64_t line = get_line_from_request(in);
+    const uint64_t line = strtoul(argv[2], NULL, 10);
 
     gbString res_url = gb_string_make_reserve(gb_heap_allocator(), 100);
     res_url = gb_string_append_fmt(
@@ -202,58 +177,4 @@ static void handle_connection(int conn_fd) {
     open_url_in_browser(res_url);
 
     copy_to_clipboard(res_url);
-}
-
-int main() {
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-
-    if (fd == -1) {
-        fprintf(stderr, "Failed to socket(2): %s\n", strerror(errno));
-        return errno;
-    }
-
-    int val = 1;
-    int err = 0;
-    if ((err = setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(val))) ==
-        -1) {
-        fprintf(stderr, "Failed to setsockopt(2): %s\n", strerror(errno));
-        return errno;
-    }
-
-    const uint8_t ip[4] = {127, 0, 0, 1};
-    const struct sockaddr_in addr = {
-        .sin_family = AF_INET,
-        .sin_addr = {.s_addr = *(uint32_t*)ip},
-        .sin_port = htons(12345),
-    };
-
-    if ((err = bind(fd, (const struct sockaddr*)&addr, sizeof(addr))) == -1) {
-        fprintf(stderr, "Failed to bind(2): %s\n", strerror(errno));
-        return errno;
-    }
-
-    if ((err = listen(fd, 16 * 1024)) == -1) {
-        fprintf(stderr, "Failed to listen(2): %s\n", strerror(errno));
-        return errno;
-    }
-    while (1) {
-        int conn_fd = accept(fd, NULL, 0);
-        if (conn_fd == -1) {
-            fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
-            return errno;
-        }
-
-        pid_t pid = fork();
-        if (pid == -1) {
-            fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
-            close(conn_fd);
-        } else if (pid == 0) {  // Child
-            handle_connection(conn_fd);
-            exit(0);
-        } else {  // Parent
-            // Fds are duplicated by fork(2) and need to be
-            // closed by both parent & child
-            close(conn_fd);
-        }
-    }
 }

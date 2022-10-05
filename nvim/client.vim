@@ -1,10 +1,7 @@
 function! s:copy_gitlab_url()
-  echo "foO"
-  let chan = sockconnect('tcp', '0.0.0.0:12345',{} )
   let file_path = expand('%:p')
   let line=line('.')
-  call chansend(chan, [file_path, line])
-  call chanclose(chan)
+   call jobstart(['/Users/pgaultier/code/c/nvim/gitlab-url-copy', file_path, line], {})
 endfunction
 
-nnoremap <leader>x :call <SID>copy_gitlab_url()<cr>
+nmap <leader>x :call <SID>copy_gitlab_url()<cr>
