@@ -9,7 +9,7 @@
 
 #define MAX_URL_LEN 2048
 #define GIT_COMMIT_LENGTH (2 * 20)
-#define MEM_SIZE (5 * MAX_URL_LEN)
+#define MEM_SIZE (8500)
 
 static int read_all(int fd, gbString* in) {
     while (gb_string_available_space(*in) > 0) {
