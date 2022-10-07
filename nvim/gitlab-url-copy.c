@@ -1,17 +1,8 @@
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
-#include <netinet/in.h>
-#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/errno.h>
-#include <sys/param.h>
-#include <sys/socket.h>
-#include <unistd.h>
 
 #define GB_IMPLEMENTATION
 #include "../vendor/gb/gb.h"
