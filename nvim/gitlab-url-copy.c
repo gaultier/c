@@ -16,6 +16,9 @@
 #define GB_IMPLEMENTATION
 #include "../vendor/gb/gb.h"
 
+#define MAX_URL_LEN 2048
+#define GIT_COMMIT_LENGTH (2 * 20)
+
 static int read_all(int fd, gbString* in) {
     while (gb_string_available_space(*in) > 0) {
         int ret = read(fd, *in + gb_string_length(*in),
@@ -34,8 +37,8 @@ static int read_all(int fd, gbString* in) {
 }
 
 static void open_url_in_browser(gbString url) {
-    gbString cmd =
-        gb_string_make_reserve(gb_heap_allocator(), 10 + gb_string_length(url));
+    gbString cmd = gb_string_make_reserve(
+        gb_heap_allocator(), sizeof("open ''") + gb_string_length(url));
     cmd = gb_string_append_fmt(cmd, "open '%s'", url);
     printf("Running: %s\n", cmd);
     FILE* cmd_handle = popen(cmd, "r");
@@ -45,8 +48,9 @@ static void open_url_in_browser(gbString url) {
 }
 
 static void copy_to_clipboard(gbString s) {
-    gbString cmd =
-        gb_string_make_reserve(gb_heap_allocator(), 30 + gb_string_length(s));
+    gbString cmd = gb_string_make_reserve(
+        gb_heap_allocator(),
+        sizeof("printf '' | pbcopy") + gb_string_length(s));
     cmd = gb_string_append_fmt(cmd, "printf '%s' | pbcopy", s);
     printf("Running: %s\n", cmd);
     FILE* cmd_handle = popen(cmd, "r");
@@ -56,13 +60,10 @@ static void copy_to_clipboard(gbString s) {
 }
 
 static gbString get_path_from_git_root() {
-    gbString cmd =
-        gb_string_make(gb_heap_allocator(), "git rev-parse --show-prefix");
+    const char* const cmd = "git rev-parse --show-prefix";
     printf("Running: %s\n", cmd);
     FILE* cmd_handle = popen(cmd, "r");
     assert(cmd_handle != NULL);
-
-    gb_string_free(cmd);
 
     gbString output = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
 
@@ -79,12 +80,13 @@ static gbString get_path_from_git_root() {
 }
 
 static gbString get_current_git_commit() {
-    char* cmd = "git rev-parse HEAD";
+    const char* const cmd = "git rev-parse HEAD";
     printf("Running: %s\n", cmd);
     FILE* cmd_handle = popen(cmd, "r");
     assert(cmd_handle != NULL);
 
-    gbString output = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
+    gbString output =
+        gb_string_make_reserve(gb_heap_allocator(), GIT_COMMIT_LENGTH);
 
     int ret = 0;
     if ((ret = read_all(fileno(cmd_handle), &output)) != 0) {
@@ -92,8 +94,6 @@ static gbString get_current_git_commit() {
                 strerror(errno));
         exit(errno);
     }
-
-    output = gb_string_trim(output, "\n");
 
     return output;
 }
@@ -104,7 +104,7 @@ static gbString get_git_origin_remote_url() {
     FILE* cmd_handle = popen(cmd, "r");
     assert(cmd_handle != NULL);
 
-    gbString output = gb_string_make_reserve(gb_heap_allocator(), MAXPATHLEN);
+    gbString output = gb_string_make_reserve(gb_heap_allocator(), MAX_URL_LEN);
 
     int ret = 0;
     if ((ret = read_all(fileno(cmd_handle), &output)) != 0) {
@@ -128,7 +128,6 @@ static gbString path_get_directory(gbString path) {
 
 static gbString get_project_path_from_remote_git_url(
     gbString git_repository_url) {
-    gbString project_path = gb_string_make_reserve(gb_heap_allocator(), 30);
     const char* remote_path_start =
         gb_char_first_occurence(git_repository_url, ':');
     assert(remote_path_start != NULL);
@@ -139,14 +138,14 @@ static gbString get_project_path_from_remote_git_url(
     const uint64_t len = gb_string_length(git_repository_url) -
                          (sizeof(".git") - 1) -
                          (remote_path_start - git_repository_url);
-    project_path =
-        gb_string_append_length(project_path, remote_path_start, len);
-
+    gbString project_path =
+        gb_string_make_length(gb_heap_allocator(), remote_path_start, len);
     return project_path;
 }
 
 int main(int argc, char* argv[]) {
     assert(argc == 3);
+
     gbString file_path = gb_string_make(gb_heap_allocator(), argv[1]);
     gbString dir = path_get_directory(file_path);
 
@@ -167,7 +166,7 @@ int main(int argc, char* argv[]) {
     gbString commit = get_current_git_commit();
     const uint64_t line = strtoul(argv[2], NULL, 10);
 
-    gbString res_url = gb_string_make_reserve(gb_heap_allocator(), 100);
+    gbString res_url = gb_string_make_reserve(gb_heap_allocator(), MAX_URL_LEN);
     res_url = gb_string_append_fmt(
         res_url, "https://gitlab.ppro.com/%s/-/blob/%s/%s%s#L%llu",
         project_path, commit, path_from_git_root, gb_path_base_name(file_path),
