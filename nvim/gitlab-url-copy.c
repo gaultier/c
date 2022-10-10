@@ -134,7 +134,7 @@ static gbString get_project_path_from_remote_git_url(
 }
 
 int main(int argc, char* argv[]) {
-    assert(argc == 3);
+    assert(argc == 3 || argc == 4);
 
     static char mem[MEM_SIZE] = {};
     gbArena arena = {0};
@@ -159,13 +159,16 @@ int main(int argc, char* argv[]) {
 
     gbString path_from_git_root = get_path_from_git_root(allocator);
     gbString commit = get_current_git_commit(allocator);
-    const uint64_t line = strtoul(argv[2], NULL, 10);
+    const uint64_t line_start = strtoull(argv[2], NULL, 10);
+
+    const uint64_t line_end =
+        (argc == 4) ? strtoull(argv[3], NULL, 10) : line_start;
 
     gbString res_url = gb_string_make_reserve(allocator, MAX_URL_LEN);
     res_url = gb_string_append_fmt(
-        res_url, "https://gitlab.ppro.com/%s/-/blob/%s/%s%s#L%llu",
+        res_url, "https://gitlab.ppro.com/%s/-/blob/%s/%s%s#L%llu-L%llu",
         project_path, commit, path_from_git_root, gb_path_base_name(file_path),
-        line);
+        line_start, line_end);
     printf("Url: %s\n", res_url);
 
     open_url_in_browser(allocator, res_url);
