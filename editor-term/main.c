@@ -40,9 +40,10 @@ typedef struct {
   uint16_t rows, cols;
   // Cursor
   uint16_t cx, cy;
-  gbString text;
+  gbString ui;
   gbArray(text_style_t) text_styles;
   gbString draw;
+  gbString text;
 } editor_t;
 
 static pg_key_t read_key() {
@@ -142,13 +143,19 @@ static void draw(editor_t* e) {
       e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", text_style.color >> 16,
       (text_style.color & 0x00ff00) >> 8, text_style.color & 0xff);
 
-  e->draw = gb_string_append(e->draw, e->text);
-  for (uint16_t i = gb_string_length(e->text); i < e->cols; i++) {
+  e->draw = gb_string_append(e->draw, e->ui);
+  for (uint64_t i = gb_string_length(e->ui); i < e->cols; i++) {
     e->draw = gb_string_append_length(e->draw, " ", 1);
   }
   e->draw = gb_string_append_length(e->draw, "\r\n", 2);
 
-  e->draw = gb_string_append_length(e->draw, "\x1b[41m", 5);
+  e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0xE1,
+                                 0xF5, 0xFE);
+
+  e->draw = gb_string_append(e->draw, e->text);
+  for (uint64_t i = gb_string_length(e->text); i < e->cols; i++) {
+    e->draw = gb_string_append_length(e->draw, " ", 1);
+  }
 
   e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6);  // Show cursor
 
@@ -162,40 +169,41 @@ int main() {
   get_window_size(&cols, &rows);
 
   const uint64_t mem_draw_len = cols * rows * 30;
-  const uint64_t mem_text_len = cols * rows * sizeof(uint32_t);
-  const uint64_t mem_len = mem_draw_len + mem_text_len;
+  const uint64_t mem_ui_len = cols * rows * sizeof(uint32_t);
+  const uint64_t mem_len = mem_draw_len + mem_ui_len;
   uint8_t* mem = malloc(mem_len);
   uint8_t* mem_draw = mem;
-  uint8_t* mem_text = mem + mem_draw_len;
+  uint8_t* mem_ui = mem + mem_draw_len;
 
   gbArena arena_draw = {0};
   gb_arena_init_from_memory(&arena_draw, mem_draw, mem_draw_len);
-  gbArena arena_text = {0};
-  gb_arena_init_from_memory(&arena_text, mem_text, mem_text_len);
+  gbArena arena_ui = {0};
+  gb_arena_init_from_memory(&arena_ui, mem_ui, mem_ui_len);
 
   gbAllocator allocator_draw = gb_arena_allocator(&arena_draw);
-  gbAllocator allocator_text = gb_arena_allocator(&arena_text);
+  gbAllocator allocator_ui = gb_arena_allocator(&arena_ui);
 
   editor_t e = {
       .draw = gb_string_make_reserve(allocator_draw, cols * rows),
       .cols = cols,
       .rows = rows,
-      .text = gb_string_make_reserve(allocator_text, cols * rows),
+      .ui = gb_string_make_reserve(allocator_ui, cols * rows),
+      .text = gb_string_make_reserve(gb_heap_allocator(), 0),
   };
-  gb_array_init(e.text_styles, allocator_text);
+  gb_array_init(e.text_styles, allocator_ui);
+  e.text = gb_string_append_length(e.text, "hello world!", 12);
 
   while (1) {
-    e.text = gb_string_append_fmt(e.text,
-                                  "cols=%d | rows=%d | cx=%d | cy=%d | mem=%td",
-                                  e.cols, e.rows, e.cx, e.cy, mem_len);
+    e.ui = gb_string_append_fmt(e.ui,
+                                "cols=%d | rows=%d | cx=%d | cy=%d | mem=%td",
+                                e.cols, e.rows, e.cx, e.cy, mem_len);
 
     text_style_t debug_style = {
-        .span = {.start = 0, .len = gb_string_length(e.text)},
-        .color = 0x29B6F6};
+        .span = {.start = 0, .len = gb_string_length(e.ui)}, .color = 0x29B6F6};
     gb_array_append(e.text_styles, debug_style);
 
     draw(&e);
-    gb_string_clear(e.text);
+    gb_string_clear(e.ui);
 
     const pg_key_t key = read_key();
     if (key == 0) {
