@@ -41,7 +41,6 @@ typedef struct {
   // Cursor
   uint16_t cx, cy;
   gbString ui;
-  gbArray(text_style_t) text_styles;
   gbString draw;
   gbString text;
 } editor_t;
@@ -137,22 +136,25 @@ static void draw(editor_t* e) {
   e->draw = gb_string_append_length(e->draw, "\x1b[J", 3);  // Clear screen
   e->draw = gb_string_append_length(e->draw, "\x1b[H", 3);  // Go home
 
-  text_style_t text_style = e->text_styles[0];  // FIXME
-  e->draw = gb_string_append_fmt(
-      e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", text_style.color >> 16,
-      (text_style.color & 0x00ff00) >> 8, text_style.color & 0xff);
-
-  e->draw = gb_string_append(e->draw, e->ui);
-  for (uint64_t i = gb_string_length(e->ui); i < e->cols; i++) {
-    e->draw = gb_string_append_length(e->draw, " ", 1);
-  }
-  e->draw = gb_string_append_length(e->draw, "\r\n", 2);
-
   e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0xE1,
                                  0xF5, 0xFE);
 
   e->draw = gb_string_append(e->draw, e->text);
   for (uint64_t i = gb_string_length(e->text); i < e->cols; i++) {
+    e->draw = gb_string_append_length(e->draw, " ", 1);
+  }
+
+  for (uint64_t y = 1; y < e->rows - 1; y++) {
+    for (uint64_t x = 0; x < e->cols; x++) {
+      e->draw = gb_string_append_length(e->draw, " ", 1);
+    }
+    e->draw = gb_string_append_length(e->draw, "\r\n", 2);
+  }
+
+  e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0x29,
+                                 0xB6, 0xF6);
+  e->draw = gb_string_append(e->draw, e->ui);
+  for (uint64_t i = gb_string_length(e->ui); i < e->cols; i++) {
     e->draw = gb_string_append_length(e->draw, " ", 1);
   }
 
@@ -162,14 +164,17 @@ static void draw(editor_t* e) {
 
   write(STDOUT_FILENO, e->draw, gb_string_length(e->draw));
   gb_string_clear(e->draw);
+  gb_string_clear(e->ui);
 }
 
 int main() {
   screen_enable_raw_mode();
   uint16_t cols = 0, rows = 0;
   get_window_size(&cols, &rows);
+  assert(cols > 0);
+  assert(rows > 0);
 
-  const uint64_t mem_draw_len = cols * rows * 30;
+  const uint64_t mem_draw_len = cols * rows * 100;
   const uint64_t mem_ui_len = cols * rows * sizeof(uint32_t);
   const uint64_t mem_len = mem_draw_len + mem_ui_len;
   uint8_t* mem = malloc(mem_len);
@@ -191,7 +196,6 @@ int main() {
       .ui = gb_string_make_reserve(allocator_ui, cols * rows),
       .text = gb_string_make_reserve(gb_heap_allocator(), 0),
   };
-  gb_array_init(e.text_styles, allocator_ui);
   e.text = gb_string_append_length(e.text, "hello world!", 12);
 
   while (1) {
@@ -199,12 +203,7 @@ int main() {
                                 "cols=%d | rows=%d | cx=%d | cy=%d | mem=%td",
                                 e.cols, e.rows, e.cx, e.cy, mem_len);
 
-    text_style_t debug_style = {
-        .span = {.start = 0, .len = gb_string_length(e.ui)}, .color = 0x29B6F6};
-    gb_array_append(e.text_styles, debug_style);
-
     draw(&e);
-    gb_string_clear(e.ui);
 
     const pg_key_t key = read_key();
     if (key == 0) {
