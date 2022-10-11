@@ -36,7 +36,7 @@ typedef struct {
   // Screen dimensions
   uint16_t rows, cols;
   // Cursor
-  uint64_t cx, cy;
+  uint16_t cx, cy;
   buf_t draw_buf;
 } editor_t;
 
@@ -145,13 +145,18 @@ static void draw(editor_t* e) {
   buf_append(&e->draw_buf, "\x1b[?25l", 6);  // Hide cursor
   buf_append(&e->draw_buf, "\x1b[H", 3);     // Go home
 
-  char debug[80] = "";
-  uint32_t debug_len =
-      snprintf(debug, sizeof(debug) - 1,
-               "\x1b[0Kcols=%d rows=%d cx=%llu cy=%llu mem=%u\r\n", e->cols,
-               e->rows, e->cx, e->cy, e->draw_buf.cap);
+  char debug[500] = "";
+  uint32_t debug_len = snprintf(
+      debug, sizeof(debug) - 1,
+      "\x1b[0K\x1b[48;2;%d;%d;%dmcols=%d | rows=%d | cx=%d | "
+      "cy=%d | mem=%u",
+      0x29, 0xB6, 0xF6, e->cols, e->rows, e->cx, e->cy, e->draw_buf.cap);
   buf_append(&e->draw_buf, debug, debug_len);
-  // Padding
+  //  for (uint16_t i = 0; i < e->cols; i++) {
+  //    buf_append(&e->draw_buf, " ", 1);
+  //  }
+  buf_append(&e->draw_buf, "\r\n", 2);
+
   buf_append(&e->draw_buf, "\x1b[41m", 5);
   for (uint16_t i = 1; i < e->rows - 1; i++) {
     buf_append(&e->draw_buf, "\x1b[0K", 4);
