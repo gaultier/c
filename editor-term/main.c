@@ -147,6 +147,7 @@ static void editor_parse_text(editor_t* e) {
 static void draw_line(editor_t* e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
   const char* const line = e->text + span.start;
+  e->draw = gb_string_append_fmt(e->draw, "%d ", line_i + 1);
   e->draw = gb_string_append_length(e->draw, line, span.len);
   e->draw = gb_string_append_length(e->draw, "\r\n", 2);
 }
