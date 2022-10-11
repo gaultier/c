@@ -12,14 +12,6 @@
 #define GB_IMPLEMENTATION
 #include "../vendor/gb/gb.h"
 
-#define CLAMP(min, n, max) \
-  do {                     \
-    if ((n) < (min))       \
-      (n) = (min);         \
-    else if ((n) > (max))  \
-      (n) = (max);         \
-  } while (0)
-
 static struct termios original_termios;
 
 typedef enum {
@@ -68,20 +60,24 @@ static void handle_key(editor_t* editor, pg_key_t key) {
       exit(0);
       break;
     case 'h':
-      editor->cx--;
-      CLAMP(0, editor->cx, editor->cols);
+      if (editor->cx > 0) {
+        editor->cx--;
+      }
       break;
     case 'j':
-      editor->cy++;
-      CLAMP(0, editor->cy, editor->rows);
+      if (editor->cy < editor->rows - 1) {
+        editor->cy++;
+      }
       break;
     case 'k':
-      editor->cy--;
-      CLAMP(0, editor->cy, editor->rows);
+      if (editor->cy > 0) {
+        editor->cy--;
+      }
       break;
     case 'l':
-      editor->cx++;
-      CLAMP(0, editor->cx, editor->cols);
+      if (editor->cx < editor->cols - 1) {
+        editor->cx++;
+      }
       break;
     default:
       break;
@@ -155,7 +151,9 @@ static void draw(editor_t* e) {
   e->draw = gb_string_append_length(e->draw, "\x1b[41m", 5);
 
   e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6);  // Show cursor
+
   write(STDOUT_FILENO, e->draw, gb_string_length(e->draw));
+  gb_string_clear(e->draw);
 }
 
 int main() {
@@ -187,13 +185,6 @@ int main() {
   gb_array_init(e.text_styles, allocator_text);
 
   while (1) {
-    const pg_key_t key = read_key();
-    if (key == 0) {
-      usleep(50);
-    }
-
-    handle_key(&e, key);
-
     e.text = gb_string_append_fmt(e.text,
                                   "cols=%d | rows=%d | cx=%d | cy=%d | mem=%td",
                                   e.cols, e.rows, e.cx, e.cy, mem_len);
@@ -205,6 +196,13 @@ int main() {
 
     draw(&e);
     gb_string_clear(e.text);
-    gb_string_clear(e.draw);
+
+    const pg_key_t key = read_key();
+    if (key == 0) {
+      usleep(50);
+      continue;
+    }
+
+    handle_key(&e, key);
   }
 }
