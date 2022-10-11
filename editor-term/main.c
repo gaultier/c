@@ -163,9 +163,16 @@ static void draw_line_number(editor_t* e, uint64_t line_i) {
   e->draw = gb_string_append_fmt(e->draw, "%d ", line_i + 1);
 }
 
+static uint8_t get_line_column_width(editor_t* e) {
+  char tmp[25] = "";
+  return snprintf(tmp, sizeof(tmp), "%td", gb_array_count(e->lines));
+}
+
 static void draw_line_trailing_padding(editor_t* e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
-  for (uint64_t i = span.len; i < e->cols - /* FIXME */ 2; i++) {
+  for (uint64_t i = span.len; i < e->cols - get_line_column_width(e) -
+                                      /* account for trailing newline */ 1;
+       i++) {
     e->draw = gb_string_append_length(e->draw, " ", 1);
   }
 }
