@@ -1,14 +1,16 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
-#include <malloc/_malloc.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
-#include <sys/termios.h>
 #include <termios.h>
 #include <unistd.h>
+
+#define GB_IMPLEMENTATION
+#include "../vendor/gb/gb.h"
 
 #define CLAMP(min, n, max) \
   do {                     \
@@ -25,7 +27,7 @@ typedef enum {
   K_TAB = 9,
   K_ENTER = 13,
   K_ESC = 27,
-} key_t;
+} pg_key_t;
 
 typedef struct {
   char* s;
@@ -33,31 +35,25 @@ typedef struct {
 } buf_t;
 
 typedef struct {
+  uint32_t start, len;
+} span_t;
+
+typedef struct {
+  span_t span;
+  uint32_t color;
+} text_style_t;
+
+typedef struct {
   // Screen dimensions
   uint16_t rows, cols;
   // Cursor
   uint16_t cx, cy;
-  buf_t draw_buf;
+  gbString text;
+  gbArray(text_style_t) text_styles;
+  gbString draw;
 } editor_t;
 
-static buf_t buf_make(uint32_t cap) {
-  buf_t buf = {
-      .s = calloc(cap, 1),
-      .cap = cap,
-  };
-  return buf;
-}
-
-static void buf_append(buf_t* buf, char* s, uint32_t size) {
-  assert(buf->len + size < buf->cap);
-
-  memcpy(buf->s + buf->len, s, size);
-  buf->len += size;
-}
-
-static void buf_reset(buf_t* buf) { buf->len = 0; }
-
-static key_t read_key() {
+static pg_key_t read_key() {
   char c = 0;
   if (read(STDIN_FILENO, &c, 1) < 0) {
     fprintf(stderr, "Failed to read(2): %s\n", strerror(errno));
@@ -66,7 +62,7 @@ static key_t read_key() {
   return c;
 }
 
-static void handle_key(editor_t* editor, key_t key) {
+static void handle_key(editor_t* editor, pg_key_t key) {
   switch ((int)key) {
     case K_ESC:
       exit(0);
@@ -141,50 +137,78 @@ static void draw(editor_t* e) {
   assert(e->rows > 0);
   assert(e->cols > 0);
 
-  buf_append(&e->draw_buf, "\x1b[J", 1);     // Clear screen
-  buf_append(&e->draw_buf, "\x1b[?25l", 6);  // Hide cursor
-  buf_append(&e->draw_buf, "\x1b[H", 3);     // Go home
+  //  buf_append(&e->draw, "\x1b[J", 1);     // Clear screen
+  //  buf_append(&e->draw, "\x1b[?25l", 6);  // Hide cursor
+  //  buf_append(&e->draw, "\x1b[H", 3);     // Go home
 
-  char text_debug[500] = "";
-  uint16_t text_debug_len =
-      snprintf(text_debug, sizeof(text_debug) - 1,
-               "cols=%d | rows=%d | cx=%d | cy=%d | mem=%u", e->cols, e->rows,
-               e->cx, e->cy, e->draw_buf.cap);
-  char draw_debug[500] = "";
-  uint16_t draw_debug_len =
-      snprintf(draw_debug, sizeof(draw_debug) - 1,
-               "\x1b[0K\x1b[48;2;%d;%d;%dm%s", 0x29, 0xB6, 0xF6, text_debug);
-  buf_append(&e->draw_buf, draw_debug, draw_debug_len);
-  for (uint16_t i = text_debug_len; i < e->cols; i++) {
-    buf_append(&e->draw_buf, " ", 1);
-  }
-  buf_append(&e->draw_buf, "\r\n", 2);
+  //  char draw_debug[500] = "";
+  //  uint16_t draw_debug_len =
+  //      snprintf(draw_debug, sizeof(draw_debug) - 1,
+  //               "\x1b[0K\x1b[48;2;%d;%d;%dm%s", 0x29, 0xB6, 0xF6,
+  //               text_debug);
+  //  buf_append(&e->draw, draw_debug, draw_debug_len);
+  //  for (uint16_t i = text_debug_len; i < e->cols; i++) {
+  //    buf_append(&e->draw, " ", 1);
+  //  }
+  //  buf_append(&e->draw, "\r\n", 2);
 
-  buf_append(&e->draw_buf, "\x1b[41m", 5);
-  for (uint16_t i = 1; i < e->rows - 1; i++) {
-    buf_append(&e->draw_buf, "\x1b[0K", 4);
-    buf_append(&e->draw_buf, "\r\n", 2);
-  }
-  buf_append(&e->draw_buf, "\x1b[?25h", 6);  // Show cursor
-
-  write(STDOUT_FILENO, e->draw_buf.s, e->draw_buf.len);
+  //  buf_append(&e->draw, "\x1b[41m", 5);
+  //  for (uint16_t i = 0; i < e->rows - 1; i++) {
+  //    buf_append(&e->draw, "\x1b[0K", 4);
+  //    buf_append(&e->draw, "\r\n", 2);
+  //  }
+  //  buf_append(&e->draw, "\x1b[?25h", 6);  // Show cursor
+  //
+  //  write(STDOUT_FILENO, e->draw.s, e->draw.len);
 }
 
 int main() {
   screen_enable_raw_mode();
   uint16_t cols = 0, rows = 0;
   get_window_size(&cols, &rows);
-  editor_t editor = {
-      .draw_buf = buf_make(cols * rows * 30), .cols = cols, .rows = rows};
+
+  const uint64_t mem_draw_len = cols * rows * 30;
+  const uint64_t mem_text_len = cols * rows * sizeof(uint32_t);
+  const uint64_t mem_len = mem_draw_len + mem_text_len;
+  uint8_t* mem = malloc(mem_len);
+  uint8_t* mem_draw = mem;
+  uint8_t* mem_text = mem + mem_draw_len;
+
+  gbArena arena_draw = {0};
+  gb_arena_init_from_memory(&arena_draw, mem_draw, mem_draw_len);
+  gbArena arena_text = {0};
+  gb_arena_init_from_memory(&arena_text, mem_text, mem_text_len);
+
+  gbAllocator allocator_draw = gb_arena_allocator(&arena_draw);
+  gbAllocator allocator_text = gb_arena_allocator(&arena_text);
+
+  editor_t e = {
+      .draw = gb_string_make_reserve(allocator_draw, cols * rows),
+      .cols = cols,
+      .rows = rows,
+      .text = gb_string_make_reserve(allocator_text, cols * rows),
+  };
+  gb_array_init(e.text_styles, allocator_text);
 
   while (1) {
-    const key_t key = read_key();
+    const pg_key_t key = read_key();
     if (key == 0) {
       usleep(50);
     }
 
-    handle_key(&editor, key);
-    draw(&editor);
-    buf_reset(&editor.draw_buf);
+    handle_key(&e, key);
+
+    e.text = gb_string_append_fmt(e.text,
+                                  "cols=%d | rows=%d | cx=%d | cy=%d | mem=%td",
+                                  e.cols, e.rows, e.cx, e.cy, mem_len);
+
+    text_style_t debug_style = {
+        .span = {.start = 0, .len = gb_string_length(e.text)},
+        .color = 0x29B6F6};
+    gb_array_append(e.text_styles, debug_style);
+
+    draw(&e);
+    gb_string_clear(e.text);
+    gb_string_clear(e.draw);
   }
 }
