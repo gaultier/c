@@ -170,6 +170,7 @@ static uint8_t get_line_column_width(editor_t* e) {
 
 static void draw_line_trailing_padding(editor_t* e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
+  // TODO: move get_line_column_width out of the render loop
   for (uint64_t i = span.len; i < e->cols - get_line_column_width(e) -
                                       /* account for trailing newline */ 1;
        i++) {
