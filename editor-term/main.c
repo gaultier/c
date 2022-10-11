@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <errno.h>
+#include <inttypes.h>
 #include <malloc/_malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,18 +29,18 @@ typedef enum {
 
 typedef struct {
   char* s;
-  int cap, len;
+  uint32_t cap, len;
 } buf_t;
 
 typedef struct {
   // Screen dimensions
-  int rows, cols;
+  uint16_t rows, cols;
   // Cursor
-  int cx, cy, coffset;
+  uint64_t cx, cy;
   buf_t draw_buf;
 } editor_t;
 
-static buf_t buf_make(int cap) {
+static buf_t buf_make(uint32_t cap) {
   buf_t buf = {
       .s = calloc(cap, 1),
       .cap = cap,
@@ -47,7 +48,7 @@ static buf_t buf_make(int cap) {
   return buf;
 }
 
-static void buf_append(buf_t* buf, char* s, int size) {
+static void buf_append(buf_t* buf, char* s, uint32_t size) {
   assert(buf->len + size < buf->cap);
 
   memcpy(buf->s + buf->len, s, size);
@@ -126,7 +127,7 @@ static void screen_enable_raw_mode() {
   atexit(screen_disable_raw_mode_and_reset);
 }
 
-static void get_window_size(int* cols, int* rows) {
+static void get_window_size(uint16_t* cols, uint16_t* rows) {
   struct winsize ws = {0};
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
     fprintf(stderr, "ioctl(2) failed: %s\n", strerror(errno));
@@ -145,13 +146,13 @@ static void draw(editor_t* e) {
   buf_append(&e->draw_buf, "\x1b[H", 3);     // Go home
 
   char debug[80] = "";
-  int debug_len = snprintf(debug, sizeof(debug) - 1,
-                           "\x1b[0Kcols=%d rows=%d cx=%d cy=%d\r\n", e->cols,
-                           e->rows, e->cx, e->cy);
+  uint32_t debug_len = snprintf(debug, sizeof(debug) - 1,
+                                "\x1b[0Kcols=%d rows=%d cx=%llu cy=%llu\r\n",
+                                e->cols, e->rows, e->cx, e->cy);
   buf_append(&e->draw_buf, debug, debug_len);
   // Padding
   buf_append(&e->draw_buf, "\x1b[41m", 5);
-  for (int i = 1; i < e->rows - 1; i++) {
+  for (uint16_t i = 1; i < e->rows - 1; i++) {
     buf_append(&e->draw_buf, "\x1b[0K", 4);
     buf_append(&e->draw_buf, "\r\n", 2);
   }
@@ -162,7 +163,7 @@ static void draw(editor_t* e) {
 
 int main() {
   screen_enable_raw_mode();
-  int cols = 0, rows = 0;
+  uint16_t cols = 0, rows = 0;
   get_window_size(&cols, &rows);
   editor_t editor = {
       .draw_buf = buf_make(cols * rows * 5), .cols = cols, .rows = rows};
