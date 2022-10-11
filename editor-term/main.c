@@ -141,8 +141,10 @@ static void draw(editor_t* e) {
   e->draw = gb_string_append_length(e->draw, "\x1b[?25l", 6);  // Hide cursor
   e->draw = gb_string_append_length(e->draw, "\x1b[H", 3);     // Go home
 
-  e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0x29,
-                                 0xB6, 0xF6);
+  text_style_t text_style = e->text_styles[0];  // FIXME
+  e->draw = gb_string_append_fmt(
+      e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", text_style.color >> 16,
+      (text_style.color & 0x00ff00) >> 8, text_style.color & 0xff);
 
   e->draw = gb_string_append(e->draw, e->text);
   for (uint16_t i = gb_string_length(e->text); i < e->cols; i++) {
@@ -151,6 +153,7 @@ static void draw(editor_t* e) {
   e->draw = gb_string_append_length(e->draw, "\r\n", 2);
 
   e->draw = gb_string_append_length(e->draw, "\x1b[41m", 5);
+
   e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6);  // Show cursor
   write(STDOUT_FILENO, e->draw, gb_string_length(e->draw));
 }
