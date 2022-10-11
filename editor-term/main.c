@@ -144,6 +144,13 @@ static void editor_parse_text(editor_t* e) {
   }
 }
 
+static void draw_rgb_color_bg(editor_t* e, uint32_t rgb) {
+  uint8_t r = (rgb & 0xff0000) >> 16;
+  uint8_t g = (rgb & 0x00ff00) >> 8;
+  uint8_t b = (rgb & 0x0000ff);
+  e->draw = gb_string_append_fmt(e->draw, "\x1b[48;2;%d;%d;%dm", r, g, b);
+}
+
 static void draw_rgb_color_fg(editor_t* e, uint32_t rgb) {
   uint8_t r = (rgb & 0xff0000) >> 16;
   uint8_t g = (rgb & 0x00ff00) >> 8;
@@ -151,18 +158,30 @@ static void draw_rgb_color_fg(editor_t* e, uint32_t rgb) {
   e->draw = gb_string_append_fmt(e->draw, "\x1b[38;2;%d;%d;%dm", r, g, b);
 }
 
-static void draw_reset_color(editor_t* e) {
-  e->draw = gb_string_append_length(e->draw, "\x1b[0m", 4);
+static void draw_line_number(editor_t* e, uint64_t line_i) {
+  draw_rgb_color_bg(e, 0xF48FB1);
+  e->draw = gb_string_append_fmt(e->draw, "%d ", line_i + 1);
+}
+
+static void draw_line_trailing_padding(editor_t* e, uint64_t line_i) {
+  const span_t span = e->lines[line_i];
+  for (uint64_t i = span.len; i < e->cols - /* FIXME */ 2; i++) {
+    e->draw = gb_string_append_length(e->draw, " ", 1);
+  }
 }
 
 static void draw_line(editor_t* e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
   const char* const line = e->text + span.start;
-  draw_rgb_color_fg(e, 0xBDBDBD);
-  e->draw = gb_string_append_fmt(e->draw, "%d ", line_i + 1);
-  draw_reset_color(e);
+
+  draw_line_number(e, line_i);
+
+  draw_rgb_color_bg(e, 0xDCEDC8);
   e->draw = gb_string_append_length(e->draw, line, span.len);
-  e->draw = gb_string_append_length(e->draw, "\r\n", 2);
+
+  draw_line_trailing_padding(e, line_i);
+
+  // e->draw = gb_string_append_length(e->draw, "\r", 1);
 }
 
 static void draw_lines(editor_t* e) {
@@ -185,6 +204,7 @@ static void draw(editor_t* e) {
   // assert(e->draw != NULL);
 
   draw_lines(e);
+  draw_rgb_color_bg(e, 0xE1BEE7);
 
   //  e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm",
   //  0x29,
