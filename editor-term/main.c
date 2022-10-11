@@ -151,11 +151,9 @@ static void draw(editor_t* e) {
                "cols=%d | rows=%d | cx=%d | cy=%d | mem=%u", e->cols, e->rows,
                e->cx, e->cy, e->draw_buf.cap);
   char draw_debug[500] = "";
-  uint16_t draw_debug_len = snprintf(
-      draw_debug, sizeof(draw_debug) - 1,
-      "\x1b[0K\x1b[48;2;%d;%d;%dmcols=%d | rows=%d | cx=%d | "
-      "cy=%d | mem=%u",
-      0x29, 0xB6, 0xF6, e->cols, e->rows, e->cx, e->cy, e->draw_buf.cap);
+  uint16_t draw_debug_len =
+      snprintf(draw_debug, sizeof(draw_debug) - 1,
+               "\x1b[0K\x1b[48;2;%d;%d;%dm%s", 0x29, 0xB6, 0xF6, text_debug);
   buf_append(&e->draw_buf, draw_debug, draw_debug_len);
   for (uint16_t i = text_debug_len; i < e->cols; i++) {
     buf_append(&e->draw_buf, " ", 1);
