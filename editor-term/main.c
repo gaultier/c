@@ -134,9 +134,8 @@ static void draw(editor_t* e) {
   assert(e->rows > 0);
   assert(e->cols > 0);
 
-  e->draw = gb_string_append_length(e->draw, "\x1b[J", 3);     // Clear screen
-  e->draw = gb_string_append_length(e->draw, "\x1b[?25l", 6);  // Hide cursor
-  e->draw = gb_string_append_length(e->draw, "\x1b[H", 3);     // Go home
+  e->draw = gb_string_append_length(e->draw, "\x1b[J", 3);  // Clear screen
+  e->draw = gb_string_append_length(e->draw, "\x1b[H", 3);  // Go home
 
   text_style_t text_style = e->text_styles[0];  // FIXME
   e->draw = gb_string_append_fmt(
@@ -157,6 +156,8 @@ static void draw(editor_t* e) {
     e->draw = gb_string_append_length(e->draw, " ", 1);
   }
 
+  e->draw = gb_string_append_fmt(e->draw, "\x1b[%d;%dH", e->cy + 1,
+                                 e->cx + 1);                   // Go to (cx, cy)
   e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6);  // Show cursor
 
   write(STDOUT_FILENO, e->draw, gb_string_length(e->draw));
