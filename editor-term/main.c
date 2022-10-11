@@ -137,29 +137,22 @@ static void draw(editor_t* e) {
   assert(e->rows > 0);
   assert(e->cols > 0);
 
-  //  buf_append(&e->draw, "\x1b[J", 1);     // Clear screen
-  //  buf_append(&e->draw, "\x1b[?25l", 6);  // Hide cursor
-  //  buf_append(&e->draw, "\x1b[H", 3);     // Go home
+  e->draw = gb_string_append_length(e->draw, "\x1b[J", 3);     // Clear screen
+  e->draw = gb_string_append_length(e->draw, "\x1b[?25l", 6);  // Hide cursor
+  e->draw = gb_string_append_length(e->draw, "\x1b[H", 3);     // Go home
 
-  //  char draw_debug[500] = "";
-  //  uint16_t draw_debug_len =
-  //      snprintf(draw_debug, sizeof(draw_debug) - 1,
-  //               "\x1b[0K\x1b[48;2;%d;%d;%dm%s", 0x29, 0xB6, 0xF6,
-  //               text_debug);
-  //  buf_append(&e->draw, draw_debug, draw_debug_len);
-  //  for (uint16_t i = text_debug_len; i < e->cols; i++) {
-  //    buf_append(&e->draw, " ", 1);
-  //  }
-  //  buf_append(&e->draw, "\r\n", 2);
+  e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0x29,
+                                 0xB6, 0xF6);
 
-  //  buf_append(&e->draw, "\x1b[41m", 5);
-  //  for (uint16_t i = 0; i < e->rows - 1; i++) {
-  //    buf_append(&e->draw, "\x1b[0K", 4);
-  //    buf_append(&e->draw, "\r\n", 2);
-  //  }
-  //  buf_append(&e->draw, "\x1b[?25h", 6);  // Show cursor
-  //
-  //  write(STDOUT_FILENO, e->draw.s, e->draw.len);
+  e->draw = gb_string_append(e->draw, e->text);
+  for (uint16_t i = gb_string_length(e->text); i < e->cols; i++) {
+    e->draw = gb_string_append_length(e->draw, " ", 1);
+  }
+  e->draw = gb_string_append_length(e->draw, "\r\n", 2);
+
+  e->draw = gb_string_append_length(e->draw, "\x1b[41m", 5);
+  e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6);  // Show cursor
+  write(STDOUT_FILENO, e->draw, gb_string_length(e->draw));
 }
 
 int main() {
