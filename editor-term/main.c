@@ -146,9 +146,10 @@ static void draw(editor_t* e) {
   buf_append(&e->draw_buf, "\x1b[H", 3);     // Go home
 
   char debug[80] = "";
-  uint32_t debug_len = snprintf(debug, sizeof(debug) - 1,
-                                "\x1b[0Kcols=%d rows=%d cx=%llu cy=%llu\r\n",
-                                e->cols, e->rows, e->cx, e->cy);
+  uint32_t debug_len =
+      snprintf(debug, sizeof(debug) - 1,
+               "\x1b[0Kcols=%d rows=%d cx=%llu cy=%llu mem=%u\r\n", e->cols,
+               e->rows, e->cx, e->cy, e->draw_buf.cap);
   buf_append(&e->draw_buf, debug, debug_len);
   // Padding
   buf_append(&e->draw_buf, "\x1b[41m", 5);
@@ -166,7 +167,7 @@ int main() {
   uint16_t cols = 0, rows = 0;
   get_window_size(&cols, &rows);
   editor_t editor = {
-      .draw_buf = buf_make(cols * rows * 5), .cols = cols, .rows = rows};
+      .draw_buf = buf_make(cols * rows * 30), .cols = cols, .rows = rows};
 
   while (1) {
     const key_t key = read_key();
