@@ -134,33 +134,45 @@ static void draw(editor_t* e) {
   assert(e->cols > 0);
 
   e->draw = gb_string_append_length(e->draw, "\x1b[J", 3);  // Clear screen
+  assert(e->draw != NULL);
   e->draw = gb_string_append_length(e->draw, "\x1b[H", 3);  // Go home
+  assert(e->draw != NULL);
 
   e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0xE1,
                                  0xF5, 0xFE);
+  assert(e->draw != NULL);
 
   e->draw = gb_string_append(e->draw, e->text);
+  assert(e->draw != NULL);
   for (uint64_t i = gb_string_length(e->text); i < e->cols; i++) {
     e->draw = gb_string_append_length(e->draw, " ", 1);
+    assert(e->draw != NULL);
   }
 
   for (uint64_t y = 1; y < e->rows - 1; y++) {
     for (uint64_t x = 0; x < e->cols; x++) {
       e->draw = gb_string_append_length(e->draw, " ", 1);
+      assert(e->draw != NULL);
     }
     e->draw = gb_string_append_length(e->draw, "\r\n", 2);
+    assert(e->draw != NULL);
   }
 
   e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0x29,
                                  0xB6, 0xF6);
+  assert(e->draw != NULL);
   e->draw = gb_string_append(e->draw, e->ui);
+  assert(e->draw != NULL);
   for (uint64_t i = gb_string_length(e->ui); i < e->cols; i++) {
     e->draw = gb_string_append_length(e->draw, " ", 1);
+    assert(e->draw != NULL);
   }
 
   e->draw = gb_string_append_fmt(e->draw, "\x1b[%d;%dH", e->cy + 1,
-                                 e->cx + 1);                   // Go to (cx, cy)
+                                 e->cx + 1);  // Go to (cx, cy)
+  assert(e->draw != NULL);
   e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6);  // Show cursor
+  assert(e->draw != NULL);
 
   write(STDOUT_FILENO, e->draw, gb_string_length(e->draw));
   gb_string_clear(e->draw);
@@ -174,7 +186,7 @@ int main() {
   assert(cols > 0);
   assert(rows > 0);
 
-  const uint64_t mem_draw_len = cols * rows * 100;
+  const uint64_t mem_draw_len = cols * rows * 1000;
   const uint64_t mem_ui_len = cols * rows * sizeof(uint32_t);
   const uint64_t mem_len = mem_draw_len + mem_ui_len;
   uint8_t* mem = malloc(mem_len);
@@ -196,7 +208,12 @@ int main() {
       .ui = gb_string_make_reserve(allocator_ui, cols * rows),
       .text = gb_string_make_reserve(gb_heap_allocator(), 0),
   };
-  e.text = gb_string_append_length(e.text, "hello world!", 12);
+
+  const char text[] =
+      "hello my darling hello my duck I don't know what I'm doing please help! "
+      "Some more text that I'm typing until it reaches the end, hopefully that "
+      "will trigger some interesting behaviour...";
+  e.text = gb_string_append_length(e.text, text, sizeof(text) - 1);
 
   while (1) {
     e.ui = gb_string_append_fmt(e.ui,
