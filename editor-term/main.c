@@ -145,16 +145,21 @@ static void draw(editor_t* e) {
   buf_append(&e->draw_buf, "\x1b[?25l", 6);  // Hide cursor
   buf_append(&e->draw_buf, "\x1b[H", 3);     // Go home
 
-  char debug[500] = "";
-  uint32_t debug_len = snprintf(
-      debug, sizeof(debug) - 1,
+  char text_debug[500] = "";
+  uint16_t text_debug_len =
+      snprintf(text_debug, sizeof(text_debug) - 1,
+               "cols=%d | rows=%d | cx=%d | cy=%d | mem=%u", e->cols, e->rows,
+               e->cx, e->cy, e->draw_buf.cap);
+  char draw_debug[500] = "";
+  uint16_t draw_debug_len = snprintf(
+      draw_debug, sizeof(draw_debug) - 1,
       "\x1b[0K\x1b[48;2;%d;%d;%dmcols=%d | rows=%d | cx=%d | "
       "cy=%d | mem=%u",
       0x29, 0xB6, 0xF6, e->cols, e->rows, e->cx, e->cy, e->draw_buf.cap);
-  buf_append(&e->draw_buf, debug, debug_len);
-  //  for (uint16_t i = 0; i < e->cols; i++) {
-  //    buf_append(&e->draw_buf, " ", 1);
-  //  }
+  buf_append(&e->draw_buf, draw_debug, draw_debug_len);
+  for (uint16_t i = text_debug_len; i < e->cols; i++) {
+    buf_append(&e->draw_buf, " ", 1);
+  }
   buf_append(&e->draw_buf, "\r\n", 2);
 
   buf_append(&e->draw_buf, "\x1b[41m", 5);
