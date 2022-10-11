@@ -22,18 +22,13 @@ typedef enum {
 } pg_key_t;
 
 typedef struct {
-  char* s;
-  uint32_t cap, len;
-} buf_t;
-
-typedef struct {
-  uint32_t start, len;
+  uint64_t start, len;
 } span_t;
 
-typedef struct {
-  span_t span;
-  uint32_t color;
-} text_style_t;
+// typedef struct {
+//   span_t span;
+//   uint32_t color;
+// } text_style_t;
 
 typedef struct {
   // Screen dimensions
@@ -43,6 +38,7 @@ typedef struct {
   gbString ui;
   gbString draw;
   gbString text;
+  gbArray(span_t) lines;
 } editor_t;
 
 static pg_key_t read_key() {
@@ -129,6 +125,38 @@ static void get_window_size(uint16_t* cols, uint16_t* rows) {
   *rows = ws.ws_row;
 }
 
+static void editor_parse_text(editor_t* e) {
+  uint64_t i = 0;
+  while (i < (uint64_t)gb_string_length(e->text)) {
+    char* nl = memchr(e->text + i, '\n', gb_string_length(e->text) - i);
+    if (nl == NULL) {
+      span_t span = {.start = i, .len = gb_string_length(e->text) - i};
+      gb_array_append(e->lines, span);
+      return;
+    }
+
+    const uint64_t len = nl - (e->text + i);
+    assert(len > 0);
+    assert(len < (uint64_t)gb_string_length(e->text));
+    span_t span = {.start = i, .len = len};
+    gb_array_append(e->lines, span);
+    i += len + 1;
+  }
+}
+
+static void draw_line(editor_t* e, uint64_t line_i) {
+  const span_t span = e->lines[line_i];
+  const char* const line = e->text + span.start;
+  e->draw = gb_string_append_length(e->draw, line, span.len);
+  e->draw = gb_string_append_length(e->draw, "\r\n", 2);
+}
+
+static void draw_lines(editor_t* e) {
+  for (uint64_t i = 0; i < (uint64_t)gb_array_count(e->lines); i++) {
+    draw_line(e, i);
+  }
+}
+
 static void draw(editor_t* e) {
   assert(e->rows > 0);
   assert(e->cols > 0);
@@ -138,36 +166,23 @@ static void draw(editor_t* e) {
   e->draw = gb_string_append_length(e->draw, "\x1b[H", 3);  // Go home
   assert(e->draw != NULL);
 
-  e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0xE1,
-                                 0xF5, 0xFE);
-  assert(e->draw != NULL);
+  // e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0xE1,
+  //                                0xF5, 0xFE);
+  // assert(e->draw != NULL);
 
-  e->draw = gb_string_append(e->draw, e->text);
-  assert(e->draw != NULL);
-  for (uint64_t i = gb_string_length(e->text); i < e->cols; i++) {
-    e->draw = gb_string_append_length(e->draw, " ", 1);
-    assert(e->draw != NULL);
-  }
+  draw_lines(e);
 
-  for (uint64_t y = 1; y < e->rows - 1; y++) {
-    for (uint64_t x = 0; x < e->cols; x++) {
-      e->draw = gb_string_append_length(e->draw, " ", 1);
-      assert(e->draw != NULL);
-    }
-    e->draw = gb_string_append_length(e->draw, "\r\n", 2);
-    assert(e->draw != NULL);
-  }
-
-  e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0x29,
-                                 0xB6, 0xF6);
-  assert(e->draw != NULL);
-  e->draw = gb_string_append(e->draw, e->ui);
-  assert(e->draw != NULL);
-  for (uint64_t i = gb_string_length(e->ui); i < e->cols; i++) {
-    e->draw = gb_string_append_length(e->draw, " ", 1);
-    assert(e->draw != NULL);
-  }
-
+  //  e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm",
+  //  0x29,
+  //                                 0xB6, 0xF6);
+  //  assert(e->draw != NULL);
+  //  e->draw = gb_string_append(e->draw, e->ui);
+  //  assert(e->draw != NULL);
+  //  for (uint64_t i = gb_string_length(e->ui); i < e->cols; i++) {
+  //    e->draw = gb_string_append_length(e->draw, " ", 1);
+  //    assert(e->draw != NULL);
+  //  }
+  //
   e->draw = gb_string_append_fmt(e->draw, "\x1b[%d;%dH", e->cy + 1,
                                  e->cx + 1);  // Go to (cx, cy)
   assert(e->draw != NULL);
@@ -183,10 +198,10 @@ int main() {
   screen_enable_raw_mode();
   uint16_t cols = 0, rows = 0;
   get_window_size(&cols, &rows);
-  assert(cols > 0);
-  assert(rows > 0);
+  if (cols == 0) cols = 100;
+  if (rows == 0) rows = 100;
 
-  const uint64_t mem_draw_len = cols * rows * 1000;
+  const uint64_t mem_draw_len = cols * rows * 30;
   const uint64_t mem_ui_len = cols * rows * sizeof(uint32_t);
   const uint64_t mem_len = mem_draw_len + mem_ui_len;
   uint8_t* mem = malloc(mem_len);
@@ -208,17 +223,23 @@ int main() {
       .ui = gb_string_make_reserve(allocator_ui, cols * rows),
       .text = gb_string_make_reserve(gb_heap_allocator(), 0),
   };
+  gb_array_init(e.lines, gb_heap_allocator());
 
   const char text[] =
-      "hello my darling hello my duck I don't know what I'm doing please help! "
-      "Some more text that I'm typing until it reaches the end, hopefully that "
-      "will trigger some interesting behaviour...";
+      "hello my darling \nhello my duck \nI don't know what I'm doing please "
+      "help! \n"
+      "Some more text that I'm typing \nuntil it reaches the end, \nhopefully "
+      "that "
+      "will trigger some \ninteresting behaviour...";
   e.text = gb_string_append_length(e.text, text, sizeof(text) - 1);
+
+  editor_parse_text(&e);
 
   while (1) {
     e.ui = gb_string_append_fmt(e.ui,
                                 "cols=%d | rows=%d | cx=%d | cy=%d | mem=%td",
                                 e.cols, e.rows, e.cx, e.cy, mem_len);
+    assert(e.ui != NULL);
 
     draw(&e);
 
