@@ -30,7 +30,7 @@ typedef struct {
   // Screen dimensions
   uint64_t rows, cols;
   // Cursor
-  uint64_t cx, cy;
+  uint64_t cx, cy, coffset;
 
   gbString ui;
   gbString draw;
@@ -49,39 +49,89 @@ static pg_key_t term_read_key() {
   return c;
 }
 
+static uint8_t editor_get_line_column_width(editor_t* e) {
+  char tmp[25] = "";
+  return snprintf(tmp, sizeof(tmp), "%td", gb_array_count(e->lines)) +
+         /* border */ 1;
+}
+
+static void editor_parse_text(editor_t* e) {
+  gb_array_clear(e->lines);
+
+  uint64_t i = 0;
+  while (i < (uint64_t)gb_string_length(e->text)) {
+    char* nl = memchr(e->text + i, '\n', gb_string_length(e->text) - i);
+    if (nl == NULL) {
+      span_t span = {.start = i, .len = gb_string_length(e->text) - i};
+      gb_array_append(e->lines, span);
+      break;
+    }
+
+    const uint64_t len = nl - (e->text + i);
+    assert(len > 0);
+    assert(len < (uint64_t)gb_string_length(e->text));
+    span_t span = {.start = i, .len = len};
+    gb_array_append(e->lines, span);
+    i += len + 1;
+  }
+
+  e->line_column_width = editor_get_line_column_width(e);
+}
+
+static void editor_del_char(editor_t* e, uint64_t pos) {
+  assert(pos < (uint64_t)gb_string_length(e->text));
+
+  memmove(e->text + pos, e->text + pos + 1,
+          gb_string_length(e->text) - pos - 1);
+  e->text[gb_string_length(e->text) - 1] = '?';  // For debuggability
+  gb__set_string_length(e->text, gb_string_length(e->text) - 1);
+
+  editor_parse_text(e);
+}
+
 static void editor_handle_key(editor_t* e, pg_key_t key) {
   switch ((int)key) {
     case K_ESC:
       exit(0);
       break;
+    case 'x':
+      editor_del_char(e, e->coffset);
+      break;
     case 'h':
       if (e->cx > 0) {
         e->cx--;
+        e->coffset--;
       }
       break;
     case 'j':
       if (e->cy < (uint64_t)gb_array_count(e->lines) - 1) {
         e->cy++;
+        /* e->coffset++;  FIXME */
       }
       break;
     case 'k':
       if (e->cy > 0) {
         e->cy--;
+        /* e->coffset--; FIXME */
       }
       break;
     case 'l': {
       const span_t line = e->lines[e->cy];
       if (e->cx < line.len) {
         e->cx++;
+        e->coffset++;
       }
       break;
     }
     case '$': {
       const span_t line = e->lines[e->cy];
+      const uint64_t prev_cx = e->cx;
       e->cx = line.len - 1;
+      e->coffset += e->cx - prev_cx;
       break;
     }
     case '0':
+      e->coffset -= e->cx;
       e->cx = 0;
       break;
     case '_': {
@@ -92,6 +142,7 @@ static void editor_handle_key(editor_t* e, pg_key_t key) {
         if (gb_char_is_space(e->text[offset])) continue;
 
         e->cx = i;
+        e->coffset = offset;
         break;
       }
       break;
@@ -135,12 +186,6 @@ static void term_enable_raw_mode() {
   atexit(term_disable_raw_mode_and_reset);
 }
 
-static uint8_t editor_get_line_column_width(editor_t* e) {
-  char tmp[25] = "";
-  return snprintf(tmp, sizeof(tmp), "%td", gb_array_count(e->lines)) +
-         /* border */ 1;
-}
-
 static void term_get_window_size(uint64_t* cols, uint64_t* rows) {
   struct winsize ws = {0};
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
@@ -149,27 +194,6 @@ static void term_get_window_size(uint64_t* cols, uint64_t* rows) {
   }
   *cols = ws.ws_col;
   *rows = ws.ws_row;
-}
-
-static void editor_parse_text(editor_t* e) {
-  uint64_t i = 0;
-  while (i < (uint64_t)gb_string_length(e->text)) {
-    char* nl = memchr(e->text + i, '\n', gb_string_length(e->text) - i);
-    if (nl == NULL) {
-      span_t span = {.start = i, .len = gb_string_length(e->text) - i};
-      gb_array_append(e->lines, span);
-      break;
-    }
-
-    const uint64_t len = nl - (e->text + i);
-    assert(len > 0);
-    assert(len < (uint64_t)gb_string_length(e->text));
-    span_t span = {.start = i, .len = len};
-    gb_array_append(e->lines, span);
-    i += len + 1;
-  }
-
-  e->line_column_width = editor_get_line_column_width(e);
 }
 
 static void editor_draw_rgb_color_bg(editor_t* e, uint32_t rgb) {
