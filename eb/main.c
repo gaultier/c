@@ -17,11 +17,21 @@ typedef struct {
 
 static void print_usage(char* argv0) {
     printf(
-        "%s\n\t--max-retries, -r\tHow many maximum retries to "
-        "attempt.\n\t--max-duration-seconds, -d\tHow long to "
-        "run.\n\t--wait-ms, -w\tHow much time to wait between invocations of "
-        "the program.\n\t--help, -h\tThis help message.\n",
-        argv0);
+        // clang-format off
+        "%s <command> [arguments...]\n"
+        "Options:\n"
+        "    --max-retries, -r    How many maximum retries to attempt.\n"
+        "    --max-duration-seconds, -d    How long to run.\n"
+        "    --wait-ms, -w    How much time to wait between invocations of the command.\n"
+        "    --help, -h    This help message.\n"
+        "Examples:\n"
+        "    %s curl google.com\n"
+        "    %s --max-duration-seconds 5 -- nc -z google.com 80\n"
+        "    %s -r 5 -- make test\n"
+        "    %s -w 100 -- echo $PWD\n"
+        "    %s --help\n",
+        // clang-format on
+        argv0, argv0, argv0, argv0, argv0, argv0);
 }
 
 static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
