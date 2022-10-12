@@ -47,31 +47,33 @@ static pg_key_t read_key() {
   return c;
 }
 
-static void handle_key(editor_t* editor, pg_key_t key) {
+static void handle_key(editor_t* e, pg_key_t key) {
   switch ((int)key) {
     case K_ESC:
       exit(0);
       break;
     case 'h':
-      if (editor->cx > 0) {
-        editor->cx--;
+      if (e->cx > 0) {
+        e->cx--;
       }
       break;
     case 'j':
-      if (editor->cy < editor->rows - 1) {
-        editor->cy++;
+      if (e->cy < (uint64_t)gb_array_count(e->lines) - 1) {
+        e->cy++;
       }
       break;
     case 'k':
-      if (editor->cy > 0) {
-        editor->cy--;
+      if (e->cy > 0) {
+        e->cy--;
       }
       break;
-    case 'l':
-      if (editor->cx < editor->cols - 1) {
-        editor->cx++;
+    case 'l': {
+      const span_t line = e->lines[e->cy];
+      if (e->cx < line.len) {
+        e->cx++;
       }
       break;
+    }
     default:
       break;
   }
