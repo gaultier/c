@@ -7,23 +7,18 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define GB_IMPLEMENTATION
-#include "../vendor/gb/gb.h"
-
 int main(int argc, char* argv[]) {
     if (argc == 1) {
         return EINVAL;
     }
 
-    gbString cmd = gb_string_make_reserve(gb_heap_allocator(), 100);
-    for (int i = 1; i < argc; i++) {
-        cmd = gb_string_append_length(cmd, argv[i], strlen(argv[i]));
-        cmd = gb_string_append_rune(cmd, ' ');
-    }
-
     uint64_t sleep_milliseconds = 100;
     while (1) {
-        puts(cmd);
+        for (int i = 1; i < argc; i++) {
+            printf("%s ", argv[i]);
+        }
+        printf("\n");
+
         pid_t pid = {0};
         int ret = posix_spawnp(&pid, argv[1], NULL, NULL, argv + 2, NULL);
         if (ret < 0) {
