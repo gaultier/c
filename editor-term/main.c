@@ -31,10 +31,11 @@ typedef struct {
 // } text_style_t;
 
 typedef struct {
+  gbAllocator allocator;
   // Screen dimensions
-  uint16_t rows, cols;
+  uint64_t rows, cols;
   // Cursor
-  uint16_t cx, cy;
+  uint64_t cx, cy;
   gbString ui;
   gbString draw;
   gbString text;
@@ -115,7 +116,7 @@ static void screen_enable_raw_mode() {
   atexit(screen_disable_raw_mode_and_reset);
 }
 
-static void get_window_size(uint16_t* cols, uint16_t* rows) {
+static void get_window_size(uint64_t* cols, uint64_t* rows) {
   struct winsize ws = {0};
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
     fprintf(stderr, "ioctl(2) failed: %s\n", strerror(errno));
@@ -159,7 +160,6 @@ static void draw_rgb_color_fg(editor_t* e, uint32_t rgb) {
 }
 
 static void draw_line_number(editor_t* e, uint64_t line_i) {
-  draw_rgb_color_bg(e, 0xF48FB1);
   e->draw = gb_string_append_fmt(e->draw, "%d ", line_i + 1);
 }
 
@@ -182,9 +182,9 @@ static void draw_line(editor_t* e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
   const char* const line = e->text + span.start;
 
+  e->draw = gb_string_append_length(e->draw, "\x1b[0K", 4);
   draw_line_number(e, line_i);
 
-  draw_rgb_color_bg(e, 0xDCEDC8);
   e->draw = gb_string_append_length(e->draw, line, span.len);
 
   draw_line_trailing_padding(e, line_i);
@@ -193,8 +193,29 @@ static void draw_line(editor_t* e, uint64_t line_i) {
 }
 
 static void draw_lines(editor_t* e) {
-  for (uint64_t i = 0; i < (uint64_t)gb_array_count(e->lines); i++) {
+  for (uint64_t i = 0;
+       i < MIN((uint64_t)gb_array_count(e->lines), e->rows - /* debug bar */ 1);
+       i++) {
     draw_line(e, i);
+  }
+}
+
+static void editor_draw_debug_ui(editor_t* e) {
+  const uint64_t mem_len = 0;  // FIXME
+  e->ui =
+      gb_string_append_fmt(e->ui, "cols=%d | rows=%d | cx=%d | cy=%d | mem=%td",
+                           e->cols, e->rows, e->cx, e->cy, mem_len);
+  e->draw = gb_string_append(e->draw, e->ui);
+}
+
+static void editor_draw_vert_padding(editor_t* e) {
+  if ((uint64_t)gb_array_count(e->lines) >= e->rows - /* debug line */ 1)
+    return;  // nothing to do
+
+  const uint64_t vert_padding_rows =
+      e->rows - (uint64_t)gb_array_count(e->lines) - /* debug line */ 1;
+  for (uint64_t i = 0; i < vert_padding_rows; i++) {
+    e->draw = gb_string_append_length(e->draw, "\r\n", 2);
   }
 }
 
@@ -207,24 +228,11 @@ static void draw(editor_t* e) {
   e->draw = gb_string_append_length(e->draw, "\x1b[H", 3);  // Go home
   assert(e->draw != NULL);
 
-  // e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm", 0xE1,
-  //                                0xF5, 0xFE);
-  // assert(e->draw != NULL);
-
   draw_lines(e);
-  draw_rgb_color_bg(e, 0xE1BEE7);
+  editor_draw_vert_padding(e);
 
-  //  e->draw = gb_string_append_fmt(e->draw, "\x1b[0K\x1b[48;2;%d;%d;%dm",
-  //  0x29,
-  //                                 0xB6, 0xF6);
-  //  assert(e->draw != NULL);
-  //  e->draw = gb_string_append(e->draw, e->ui);
-  //  assert(e->draw != NULL);
-  //  for (uint64_t i = gb_string_length(e->ui); i < e->cols; i++) {
-  //    e->draw = gb_string_append_length(e->draw, " ", 1);
-  //    assert(e->draw != NULL);
-  //  }
-  //
+  editor_draw_debug_ui(e);
+
   e->draw = gb_string_append_fmt(e->draw, "\x1b[%d;%dH", e->cy + 1,
                                  e->cx + 1);  // Go to (cx, cy)
   assert(e->draw != NULL);
@@ -236,36 +244,36 @@ static void draw(editor_t* e) {
   gb_string_clear(e->ui);
 }
 
-int main() {
-  screen_enable_raw_mode();
-  uint16_t cols = 0, rows = 0;
-  get_window_size(&cols, &rows);
+static editor_t editor_make(uint64_t rows, uint64_t cols) {
+  // Can happen if inside a debugger
+  // In that case allocate a reasonable size to be able to debug meaningfully
   if (cols == 0) cols = 100;
   if (rows == 0) rows = 100;
 
-  const uint64_t mem_draw_len = cols * rows * 30;
-  const uint64_t mem_ui_len = cols * rows * sizeof(uint32_t);
-  const uint64_t mem_len = mem_draw_len + mem_ui_len;
-  uint8_t* mem = malloc(mem_len);
-  uint8_t* mem_draw = mem;
-  uint8_t* mem_ui = mem + mem_draw_len;
-
-  gbArena arena_draw = {0};
-  gb_arena_init_from_memory(&arena_draw, mem_draw, mem_draw_len);
-  gbArena arena_ui = {0};
-  gb_arena_init_from_memory(&arena_ui, mem_ui, mem_ui_len);
-
-  gbAllocator allocator_draw = gb_arena_allocator(&arena_draw);
-  gbAllocator allocator_ui = gb_arena_allocator(&arena_ui);
-
+  gbAllocator allocator = gb_heap_allocator();
   editor_t e = {
-      .draw = gb_string_make_reserve(allocator_draw, cols * rows),
+      .allocator = allocator,
+      .draw = gb_string_make_reserve(allocator, cols * rows),
       .cols = cols,
       .rows = rows,
-      .ui = gb_string_make_reserve(allocator_ui, cols * rows),
+      .ui = gb_string_make_reserve(allocator, cols * rows),
       .text = gb_string_make_reserve(gb_heap_allocator(), 0),
   };
   gb_array_init(e.lines, gb_heap_allocator());
+
+  return e;
+}
+
+static void editor_ingest_text(editor_t* e, const char* text, uint64_t len) {
+  e->text = gb_string_append_length(e->text, text, len);
+  editor_parse_text(e);
+}
+
+int main() {
+  screen_enable_raw_mode();
+  uint64_t cols = 0, rows = 0;
+  get_window_size(&cols, &rows);
+  editor_t e = editor_make(rows, cols);
 
   const char text[] =
       "hello my darling \nhello my duck \nI don't know what I'm doing please "
@@ -273,16 +281,10 @@ int main() {
       "Some more text that I'm typing \nuntil it reaches the end, \nhopefully "
       "that "
       "will trigger some \ninteresting behaviour...";
-  e.text = gb_string_append_length(e.text, text, sizeof(text) - 1);
 
-  editor_parse_text(&e);
+  editor_ingest_text(&e, text, sizeof(text) - 1);
 
   while (1) {
-    e.ui = gb_string_append_fmt(e.ui,
-                                "cols=%d | rows=%d | cx=%d | cy=%d | mem=%td",
-                                e.cols, e.rows, e.cx, e.cy, mem_len);
-    assert(e.ui != NULL);
-
     draw(&e);
 
     const pg_key_t key = read_key();
