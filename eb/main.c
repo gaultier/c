@@ -7,7 +7,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[], char* envp[]) {
     if (argc == 1) {
         return EINVAL;
     }
@@ -20,7 +20,7 @@ int main(int argc, char* argv[]) {
         printf("\n");
 
         pid_t pid = {0};
-        int ret = posix_spawnp(&pid, argv[1], NULL, NULL, argv + 2, NULL);
+        int ret = posix_spawnp(&pid, argv[1], NULL, NULL, argv + 1, envp);
         if (ret < 0) {
             fprintf(stderr, "Failed to run command (malformed?): %s",
                     strerror(errno));
