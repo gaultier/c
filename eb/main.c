@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
+#include <pthread.h>
 #include <spawn.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -62,6 +63,13 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
     }
 }
 
+void* exit_after_max_duration(void* arg) {
+    uint64_t* max_duration_seconds = arg;
+    sleep(*max_duration_seconds);
+    exit(EINTR);
+    return NULL;
+}
+
 int main(int argc, char* argv[], char* envp[]) {
     if (argc == 1) {
         return EINVAL;
@@ -72,7 +80,9 @@ int main(int argc, char* argv[], char* envp[]) {
     argv += optind;
 
     if (options.max_duration_seconds > 0) {
-        // TODO
+        pthread_t thread = {0};
+        pthread_create(&thread, NULL, exit_after_max_duration,
+                       &options.max_duration_seconds);
     }
 
     uint64_t sleep_milliseconds = 100;
