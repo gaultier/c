@@ -25,17 +25,13 @@ typedef struct {
   uint64_t start, len;
 } span_t;
 
-// typedef struct {
-//   span_t span;
-//   uint32_t color;
-// } text_style_t;
-
 typedef struct {
   gbAllocator allocator;
   // Screen dimensions
   uint64_t rows, cols;
   // Cursor
   uint64_t cx, cy;
+
   gbString ui;
   gbString draw;
   gbString text;
@@ -92,7 +88,6 @@ static void screen_enable_raw_mode() {
     fprintf(stderr, "tcgetattr failed: %s\n", strerror(errno));
     exit(errno);
   }
-  //__builtin_dump_struct(&original_termios, &printf);
 
   struct termios raw = original_termios;
   /* input modes: no break, no CR to NL, no parity check, no strip char,
@@ -188,13 +183,11 @@ static void draw_line(editor_t* e, uint64_t line_i) {
   e->draw = gb_string_append_length(e->draw, line, span.len);
 
   draw_line_trailing_padding(e, line_i);
-
-  // e->draw = gb_string_append_length(e->draw, "\r", 1);
 }
 
 static void draw_lines(editor_t* e) {
-  for (uint64_t i = 0;
-       i < MIN((uint64_t)gb_array_count(e->lines), e->rows - /* debug bar */ 1);
+  for (uint64_t i = 0; i < MIN((uint64_t)gb_array_count(e->lines),
+                               e->rows - /* debug line */ 1);
        i++) {
     draw_line(e, i);
   }
