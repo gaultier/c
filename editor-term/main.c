@@ -40,7 +40,7 @@ typedef struct {
   uint64_t line_column_width;
 } editor_t;
 
-static pg_key_t read_key() {
+static pg_key_t term_read_key() {
   char c = 0;
   if (read(STDIN_FILENO, &c, 1) < 0) {
     fprintf(stderr, "Failed to read(2): %s\n", strerror(errno));
@@ -49,7 +49,7 @@ static pg_key_t read_key() {
   return c;
 }
 
-static void handle_key(editor_t* e, pg_key_t key) {
+static void editor_handle_key(editor_t* e, pg_key_t key) {
   switch ((int)key) {
     case K_ESC:
       exit(0);
@@ -101,13 +101,13 @@ static void handle_key(editor_t* e, pg_key_t key) {
   }
 }
 
-static void screen_disable_raw_mode_and_reset() {
+static void term_disable_raw_mode_and_reset() {
   write(STDOUT_FILENO, "\x1b[0m\x1b[J\x1b[H",
         10);  // Reset, Clear screen, Go home
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
 }
 
-static void screen_enable_raw_mode() {
+static void term_enable_raw_mode() {
   if (tcgetattr(STDIN_FILENO, &original_termios) == -1) {
     fprintf(stderr, "tcgetattr failed: %s\n", strerror(errno));
     exit(errno);
@@ -132,16 +132,16 @@ static void screen_enable_raw_mode() {
     fprintf(stderr, "tcgetattr failed: %s\n", strerror(errno));
     exit(errno);
   }
-  atexit(screen_disable_raw_mode_and_reset);
+  atexit(term_disable_raw_mode_and_reset);
 }
 
-static uint8_t get_line_column_width(editor_t* e) {
+static uint8_t editor_get_line_column_width(editor_t* e) {
   char tmp[25] = "";
   return snprintf(tmp, sizeof(tmp), "%td", gb_array_count(e->lines)) +
          /* border */ 1;
 }
 
-static void get_window_size(uint64_t* cols, uint64_t* rows) {
+static void term_get_window_size(uint64_t* cols, uint64_t* rows) {
   struct winsize ws = {0};
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
     fprintf(stderr, "ioctl(2) failed: %s\n", strerror(errno));
@@ -169,51 +169,51 @@ static void editor_parse_text(editor_t* e) {
     i += len + 1;
   }
 
-  e->line_column_width = get_line_column_width(e);
+  e->line_column_width = editor_get_line_column_width(e);
 }
 
-static void draw_rgb_color_bg(editor_t* e, uint32_t rgb) {
+static void editor_draw_rgb_color_bg(editor_t* e, uint32_t rgb) {
   uint8_t r = (rgb & 0xff0000) >> 16;
   uint8_t g = (rgb & 0x00ff00) >> 8;
   uint8_t b = (rgb & 0x0000ff);
   e->draw = gb_string_append_fmt(e->draw, "\x1b[48;2;%d;%d;%dm", r, g, b);
 }
 
-static void draw_rgb_color_fg(editor_t* e, uint32_t rgb) {
+static void editor_draw_rgb_color_fg(editor_t* e, uint32_t rgb) {
   uint8_t r = (rgb & 0xff0000) >> 16;
   uint8_t g = (rgb & 0x00ff00) >> 8;
   uint8_t b = (rgb & 0x0000ff);
   e->draw = gb_string_append_fmt(e->draw, "\x1b[38;2;%d;%d;%dm", r, g, b);
 }
 
-static void draw_line_number(editor_t* e, uint64_t line_i) {
+static void editor_draw_line_number(editor_t* e, uint64_t line_i) {
   e->draw = gb_string_append_fmt(e->draw, "%d ", line_i + 1);
 }
 
-static void draw_line_trailing_padding(editor_t* e, uint64_t line_i) {
+static void editor_draw_line_trailing_padding(editor_t* e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
   for (uint64_t i = 0; i < e->cols - e->line_column_width - span.len; i++) {
     e->draw = gb_string_append_length(e->draw, " ", 1);
   }
 }
 
-static void draw_line(editor_t* e, uint64_t line_i) {
+static void editor_draw_line(editor_t* e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
   const char* const line = e->text + span.start;
 
   e->draw = gb_string_append_length(e->draw, "\x1b[0K", 4);
-  draw_line_number(e, line_i);
+  editor_draw_line_number(e, line_i);
 
   e->draw = gb_string_append_length(e->draw, line, span.len);
 
-  draw_line_trailing_padding(e, line_i);
+  editor_draw_line_trailing_padding(e, line_i);
 }
 
-static void draw_lines(editor_t* e) {
+static void editor_draw_lines(editor_t* e) {
   for (uint64_t i = 0; i < MIN((uint64_t)gb_array_count(e->lines),
                                e->rows - /* debug line */ 1);
        i++) {
-    draw_line(e, i);
+    editor_draw_line(e, i);
   }
 }
 
@@ -243,20 +243,16 @@ static void editor_draw_cursor(editor_t* e) {
   e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6);  // Show cursor
 }
 
-static void draw(editor_t* e) {
+static void editor_draw(editor_t* e) {
   assert(e->rows > 0);
   assert(e->cols > 0);
 
   e->draw = gb_string_append_length(e->draw, "\x1b[J", 3);  // Clear screen
-  assert(e->draw != NULL);
   e->draw = gb_string_append_length(e->draw, "\x1b[H", 3);  // Go home
-  assert(e->draw != NULL);
 
-  draw_lines(e);
+  editor_draw_lines(e);
   editor_draw_vert_padding(e);
-
   editor_draw_debug_ui(e);
-
   editor_draw_cursor(e);
 
   write(STDOUT_FILENO, e->draw, gb_string_length(e->draw));
@@ -290,9 +286,9 @@ static void editor_ingest_text(editor_t* e, const char* text, uint64_t len) {
 }
 
 int main() {
-  screen_enable_raw_mode();
+  term_enable_raw_mode();
   uint64_t cols = 0, rows = 0;
-  get_window_size(&cols, &rows);
+  term_get_window_size(&cols, &rows);
   editor_t e = editor_make(rows, cols);
 
   const char text[] =
@@ -306,14 +302,14 @@ int main() {
   editor_ingest_text(&e, text, sizeof(text) - 1);
 
   while (1) {
-    draw(&e);
+    editor_draw(&e);
 
-    const pg_key_t key = read_key();
+    const pg_key_t key = term_read_key();
     if (key == 0) {
       usleep(50);
       continue;
     }
 
-    handle_key(&e, key);
+    editor_handle_key(&e, key);
   }
 }
