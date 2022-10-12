@@ -36,6 +36,8 @@ typedef struct {
   gbString draw;
   gbString text;
   gbArray(span_t) lines;
+
+  uint64_t line_column_width;
 } editor_t;
 
 static pg_key_t read_key() {
@@ -74,6 +76,14 @@ static void handle_key(editor_t* e, pg_key_t key) {
       }
       break;
     }
+    case '$': {
+      const span_t line = e->lines[e->cy];
+      e->cx = line.len - 1;
+      break;
+    }
+    case '0':
+      e->cx = 0;
+      break;
     default:
       break;
   }
@@ -113,6 +123,12 @@ static void screen_enable_raw_mode() {
   atexit(screen_disable_raw_mode_and_reset);
 }
 
+static uint8_t get_line_column_width(editor_t* e) {
+  char tmp[25] = "";
+  return snprintf(tmp, sizeof(tmp), "%td", gb_array_count(e->lines)) +
+         /* border */ 1;
+}
+
 static void get_window_size(uint64_t* cols, uint64_t* rows) {
   struct winsize ws = {0};
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
@@ -130,7 +146,7 @@ static void editor_parse_text(editor_t* e) {
     if (nl == NULL) {
       span_t span = {.start = i, .len = gb_string_length(e->text) - i};
       gb_array_append(e->lines, span);
-      return;
+      break;
     }
 
     const uint64_t len = nl - (e->text + i);
@@ -140,6 +156,8 @@ static void editor_parse_text(editor_t* e) {
     gb_array_append(e->lines, span);
     i += len + 1;
   }
+
+  e->line_column_width = get_line_column_width(e);
 }
 
 static void draw_rgb_color_bg(editor_t* e, uint32_t rgb) {
@@ -160,17 +178,9 @@ static void draw_line_number(editor_t* e, uint64_t line_i) {
   e->draw = gb_string_append_fmt(e->draw, "%d ", line_i + 1);
 }
 
-static uint8_t get_line_column_width(editor_t* e) {
-  char tmp[25] = "";
-  return snprintf(tmp, sizeof(tmp), "%td", gb_array_count(e->lines));
-}
-
 static void draw_line_trailing_padding(editor_t* e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
-  // TODO: move get_line_column_width out of the render loop
-  for (uint64_t i = span.len; i < e->cols - get_line_column_width(e) -
-                                      /* account for trailing newline */ 1;
-       i++) {
+  for (uint64_t i = 0; i < e->cols - e->line_column_width - span.len; i++) {
     e->draw = gb_string_append_length(e->draw, " ", 1);
   }
 }
@@ -214,6 +224,13 @@ static void editor_draw_vert_padding(editor_t* e) {
   }
 }
 
+static void editor_draw_cursor(editor_t* e) {
+  e->draw =
+      gb_string_append_fmt(e->draw, "\x1b[%d;%dH", e->cy + 1,
+                           e->line_column_width + e->cx + 1);  // Go to (cx, cy)
+  e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6);  // Show cursor
+}
+
 static void draw(editor_t* e) {
   assert(e->rows > 0);
   assert(e->cols > 0);
@@ -228,11 +245,7 @@ static void draw(editor_t* e) {
 
   editor_draw_debug_ui(e);
 
-  e->draw = gb_string_append_fmt(e->draw, "\x1b[%d;%dH", e->cy + 1,
-                                 e->cx + 1);  // Go to (cx, cy)
-  assert(e->draw != NULL);
-  e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6);  // Show cursor
-  assert(e->draw != NULL);
+  editor_draw_cursor(e);
 
   write(STDOUT_FILENO, e->draw, gb_string_length(e->draw));
   gb_string_clear(e->draw);
@@ -273,9 +286,10 @@ int main() {
   const char text[] =
       "hello my darling \nhello my duck \nI don't know what I'm doing please "
       "help! \n"
-      "Some more text that I'm typing \nuntil it reaches the end, \nhopefully "
+      "Some more text that I'm typing \nuntil it reaches the end, "
+      "\n hopefully "
       "that "
-      "will trigger some \ninteresting behaviour...";
+      "will trigger some\n interesting behaviour...";
 
   editor_ingest_text(&e, text, sizeof(text) - 1);
 
