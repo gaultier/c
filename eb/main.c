@@ -20,10 +20,10 @@ static void print_usage(char* argv0) {
         // clang-format off
         "%s <command> [arguments...]\n"
         "Options:\n"
-        "    --max-retries, -r    How many maximum retries to attempt.\n"
+        "    --max-retries, -r             How many maximum retries to attempt.\n"
         "    --max-duration-seconds, -d    How long to run.\n"
-        "    --wait-ms, -w    How much time to wait between invocations of the command.\n"
-        "    --help, -h    This help message.\n"
+        "    --wait-ms, -w                 How much time to wait between invocations of the command.\n"
+        "    --help, -h                    This help message.\n"
         "Examples:\n"
         "    %s curl google.com\n"
         "    %s --max-duration-seconds 5 -- nc -z google.com 80\n"
