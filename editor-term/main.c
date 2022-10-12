@@ -84,6 +84,18 @@ static void handle_key(editor_t* e, pg_key_t key) {
     case '0':
       e->cx = 0;
       break;
+    case '_': {
+      const span_t line = e->lines[e->cy];
+
+      for (uint64_t i = 0; i < line.len; i++) {
+        const uint64_t offset = line.start + i;
+        if (gb_char_is_space(e->text[offset])) continue;
+
+        e->cx = i;
+        break;
+      }
+      break;
+    }
     default:
       break;
   }
