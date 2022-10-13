@@ -70,7 +70,6 @@ static void editor_parse_text(editor_t* e) {
     }
 
     const uint64_t len = nl - (e->text + i);
-    assert(len > 0);
     assert(len < (uint64_t)gb_string_length(e->text));
     span_t span = {.start = i, .len = len};
     gb_array_append(e->lines, span);
@@ -81,6 +80,9 @@ static void editor_parse_text(editor_t* e) {
 }
 
 static void editor_del_char(editor_t* e, uint64_t pos) {
+  span_t line = e->lines[e->cy];
+  if (line.len == 0) return;
+
   assert(pos < (uint64_t)gb_string_length(e->text));
 
   memmove(e->text + pos, e->text + pos + 1,
@@ -88,6 +90,12 @@ static void editor_del_char(editor_t* e, uint64_t pos) {
   e->text[gb_string_length(e->text) - 1] = '?';  // For debuggability
   gb__set_string_length(e->text, gb_string_length(e->text) - 1);
 
+  if (e->coffset > 0) {
+    e->coffset--;
+  }
+  if (e->cx > 0) {
+    e->cx--;
+  }
   editor_parse_text(e);
 }
 
@@ -107,14 +115,19 @@ static void editor_handle_key(editor_t* e, pg_key_t key) {
       break;
     case 'j':
       if (e->cy < (uint64_t)gb_array_count(e->lines) - 1) {
+        span_t prev_line = e->lines[e->cy];
         e->cy++;
-        /* e->coffset++;  FIXME */
+
+        e->coffset += prev_line.len;
       }
       break;
     case 'k':
       if (e->cy > 0) {
         e->cy--;
-        /* e->coffset--; FIXME */
+        span_t cur_line = e->lines[e->cy];
+
+        assert(e->coffset >= cur_line.len);
+        e->coffset -= cur_line.len;
       }
       break;
     case 'l': {
@@ -245,9 +258,9 @@ static void editor_draw_lines(editor_t* e) {
 
 static void editor_draw_debug_ui(editor_t* e) {
   const uint64_t mem_len = 0;  // FIXME
-  e->ui =
-      gb_string_append_fmt(e->ui, "cols=%d | rows=%d | cx=%d | cy=%d | mem=%td",
-                           e->cols, e->rows, e->cx, e->cy, mem_len);
+  e->ui = gb_string_append_fmt(
+      e->ui, "cols=%d | rows=%d | cx=%d | cy=%d | coffset=%d | mem=%td",
+      e->cols, e->rows, e->cx, e->cy, e->coffset, mem_len);
   e->draw = gb_string_append(e->draw, e->ui);
 }
 
