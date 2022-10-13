@@ -8,6 +8,10 @@
 #define GB_IMPLEMENTATION
 #include "../vendor/gb/gb.h"
 
+#if defined(__linux__)
+#include <linux/limits.h>  // For PATH_MAX
+#endif
+
 #define MAX_URL_LEN 2048
 #define GIT_COMMIT_LENGTH (2 * 20)
 #define MEM_SIZE (8500)
