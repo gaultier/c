@@ -113,7 +113,7 @@ static void editor_handle_key(editor_t* e, pg_key_t key) {
         e->coffset--;
       }
       break;
-    case 'j':
+    case 'j': {
       if (e->cy < (uint64_t)gb_array_count(e->lines) - 1) {
         span_t prev_line = e->lines[e->cy];
         e->cy++;
@@ -121,7 +121,8 @@ static void editor_handle_key(editor_t* e, pg_key_t key) {
         e->coffset += prev_line.len;
       }
       break;
-    case 'k':
+    }
+    case 'k': {
       if (e->cy > 0) {
         e->cy--;
         span_t cur_line = e->lines[e->cy];
@@ -130,6 +131,7 @@ static void editor_handle_key(editor_t* e, pg_key_t key) {
         e->coffset -= cur_line.len;
       }
       break;
+    }
     case 'l': {
       const span_t line = e->lines[e->cy];
       if (e->cx < line.len) {
