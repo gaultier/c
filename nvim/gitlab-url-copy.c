@@ -134,8 +134,19 @@ static gbString get_project_path_from_remote_git_url(
     return project_path;
 }
 
+static void print_usage(char* argv0) {
+    printf(
+        "%s </path/to/file> <line start> [<line end>]\nExample:\n    "
+        "%s /Users/pgaultier/code/c/nvim/gitlab-url-copy.c 10 "
+        "12\n",
+        argv0, argv0);
+}
+
 int main(int argc, char* argv[]) {
-    assert(argc == 3 || argc == 4);
+    if (argc < 3 || argc > 4) {
+        print_usage(argv[0]);
+        return 0;
+    }
 
     static char mem[MEM_SIZE] = {};
     gbArena arena = {0};
