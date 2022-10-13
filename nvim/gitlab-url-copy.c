@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #define GB_IMPLEMENTATION
 #include "../vendor/gb/gb.h"
