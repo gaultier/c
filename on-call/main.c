@@ -9,6 +9,8 @@
 static const u16 hourly_week_end_rate = 15;
 static const u16 hourly_week_rate = 10;
 
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
 #define DATE_TIME(year, month, day, hour)                            \
     (struct tm) {                                                    \
         .tm_year = year - 1900, .tm_mon = month - 1, .tm_mday = day, \
