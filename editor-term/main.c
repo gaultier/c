@@ -14,6 +14,8 @@
 
 static struct termios original_termios;
 
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
 typedef enum {
   K_NONE = 0,
   K_TAB = 9,
