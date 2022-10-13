@@ -1,3 +1,5 @@
+LDFLAGS += -lpthread -ldl
+
 proc-per-req: proc-per-req.c deps.a
 	$(CC) $(CFLAGS) $(LDFLAGS) $^ -Wall -Wextra -Wno-unused-function -g -o $@
 
