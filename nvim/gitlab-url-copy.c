@@ -8,10 +8,6 @@
 #define GB_IMPLEMENTATION
 #include "../vendor/gb/gb.h"
 
-#if defined(__linux__)
-#include <linux/limits.h>  // For PATH_MAX
-#endif
-
 #define MAX_URL_LEN 2048
 #define GIT_COMMIT_LENGTH (2 * 20)
 #define MEM_SIZE (8500)
@@ -61,7 +57,7 @@ static gbString get_path_from_git_root(gbAllocator allocator) {
     FILE* cmd_handle = popen(cmd, "r");
     assert(cmd_handle != NULL);
 
-    gbString output = gb_string_make_reserve(allocator, PATH_MAX);
+    gbString output = gb_string_make_reserve(allocator, 100);
 
     int ret = 0;
     if ((ret = read_all(fileno(cmd_handle), &output)) != 0) {
