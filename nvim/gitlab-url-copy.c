@@ -56,7 +56,7 @@ static gbString get_path_from_git_root(gbAllocator allocator) {
     FILE* cmd_handle = popen(cmd, "r");
     assert(cmd_handle != NULL);
 
-    gbString output = gb_string_make_reserve(allocator, MAXPATHLEN);
+    gbString output = gb_string_make_reserve(allocator, PATH_MAX);
 
     int ret = 0;
     if ((ret = read_all(fileno(cmd_handle), &output)) != 0) {

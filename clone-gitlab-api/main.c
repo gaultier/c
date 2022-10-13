@@ -344,10 +344,10 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
                 break;
             }
             case 'd': {
-                if (strlen(optarg) > MAXPATHLEN) {
+                if (strlen(optarg) > PATH_MAX) {
                     fprintf(stderr,
                             "Directory is too long: maximum %d characters\n",
-                            MAXPATHLEN);
+                            PATH_MAX);
                     exit(EINVAL);
                 }
                 options->root_directory = sdsnew(optarg);
@@ -814,8 +814,8 @@ int main(int argc, char* argv[]) {
     api_t api = {0};
     api_init(&api, &options);
 
-    static char cwd[MAXPATHLEN] = "";
-    if (getcwd(cwd, MAXPATHLEN) == NULL) {
+    static char cwd[PATH_MAX] = "";
+    if (getcwd(cwd, PATH_MAX) == NULL) {
         fprintf(stderr, "Failed to getcwd(2): err=%s\n", strerror(errno));
         return errno;
     }

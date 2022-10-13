@@ -1777,7 +1777,7 @@ static void stacktrace_find_entry(const debug_data* dd, u64 pc,
 
 static void read_source_code(gbAllocator allocator, debug_data* dd) {
     assert(dd != NULL);
-    static char path[MAXPATHLEN + 1] = "";
+    static char path[PATH_MAX + 1] = "";
 
     gb_array_init_reserve(dd->sources, allocator, 100);
     for (int i = 0; i < gb_array_count(dd->fn_decls); i++) {
@@ -1980,7 +1980,7 @@ void stacktrace_print() {
     static debug_data dd = {0};
     gbAllocator allocator = gb_heap_allocator();
     if (dd.debug_str_strings == NULL) {  // Not yet parse the debug information?
-        char path[MAXPATHLEN + 1] = "";
+        char path[PATH_MAX + 1] = "";
         const char* exe_path = get_exe_path_for_process();
         const char* exe_name = gb_path_base_name(exe_path);
         snprintf(path, sizeof(path), "%s.dSYM/Contents/Resources/DWARF/%s",
