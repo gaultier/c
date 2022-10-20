@@ -32,5 +32,9 @@ int main() {
   assert(!std::is_pod<Car>());
   printf("%d\n", c.age);  // Totally fine!
 
+  Person* pp = new Person;
+  printf("%d\n", pp->age);  // Totally fine!
+  delete pp;
+
   return 0;
 }

@@ -41,15 +41,27 @@ int main() {
   assert(!std::is_pod<Car>());
   printf("%d\n", c.age);  // Totally fine!
 
+  Person* pp = new Person;
+  printf("%d\n", pp->age);  // Totally fine!
+  delete pp;
+
   return 0;
 }
 ```
 
-According to https://en.cppreference.com/w/cpp/language/default_initialization, in C++, using a local, non-static variable, whose type is a POD class (or struct), where the variable has been defined as such: `T object;` leads to undefined behavior, that is, the content of the variable is garbage and cannot be relied upon (technically it's using this variable which is undefined behavior, not merely defining it).
+The [rules](https://en.cppreference.com/w/cpp/language/default_initialization) around default initialization in C++ are complex and confusing and it's easy to write code which is not covered by them:
 
-That's because no constructor has been called explicitly, so the default constructor is called, which then does nothing, so the members of the class are never initialized. 
+> Default initialization is performed in three situations:
+>  1) when a variable with automatic, static, or thread-local storage duration is declared with no initializer;
+>  2) when an object with dynamic storage duration is created by a new-expression with no initializer;
+>  3) when a base class or a non-static data member is not mentioned in a constructor initializer list and that constructor is called.
+>
+>  The effects of default initialization are: 
+>  [...]  no initialization is performed: the objects with automatic storage duration (and their subobjects) contain indeterminate values. 
 
-That situation is problematic because it is not obvious unless we inspect the layout of the class to determine whether it is a POD type or not (and those rules are complex, and change given the C++ standard). And the symptoms might show up way later in the execution of the program.
+That situation is problematic because it is not obvious unless we inspect the layout of the class to determine whether it is a POD type or not. And the symptoms might show up way later in the execution of the program.
+
+Ideally, an object would always be initialized explicitly, but in reality it does not always happen.
 
 This plugin using libclang attempts to detect this issue.
 
@@ -66,7 +78,7 @@ $ ./detect-ub-pod-cpp test.cpp
 test.cpp:8:3: Person p
 ```
 
-Note: We use the C++11 (and above) definition of POD which is different from the C++98 one.
+Note: We use the C++11 (and above) definition of POD which is different from the C++98 one. In a later version this might be configurable.
 
 ### BUGS
 
