@@ -33,6 +33,7 @@ This plugin using libclang attempts to detect this issue.
 ### Usage
 
 ```sh
+# Requires libclang which comes with LLVM/Clang
 $ make
 $ ./detect-ub-pod-cpp test.cpp
 test.cpp:8:3: Person p
