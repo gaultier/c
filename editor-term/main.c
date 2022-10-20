@@ -14,7 +14,9 @@
 
 static struct termios original_termios;
 
+#ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
 
 typedef enum {
   K_NONE = 0,
@@ -69,7 +71,11 @@ static void editor_parse_text(editor_t* e) {
       break;
     }
 
-    const uint64_t len = nl - (e->text + i);
+    const char* const start = e->text + i;
+    uint64_t len = 0;
+    if (nl > start) {
+      len = nl - (e->text + i) - 1;
+    }
     assert(len < (uint64_t)gb_string_length(e->text));
     span_t span = {.start = i, .len = len};
     gb_array_append(e->lines, span);
@@ -90,12 +96,6 @@ static void editor_del_char(editor_t* e, uint64_t pos) {
   e->text[gb_string_length(e->text) - 1] = '?';  // For debuggability
   gb__set_string_length(e->text, gb_string_length(e->text) - 1);
 
-  if (e->coffset > 0) {
-    e->coffset--;
-  }
-  if (e->cx > 0) {
-    e->cx--;
-  }
   editor_parse_text(e);
 }
 
@@ -233,9 +233,12 @@ static void editor_draw_line_number(editor_t* e, uint64_t line_i) {
 
 static void editor_draw_line_trailing_padding(editor_t* e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
-  for (uint64_t i = 0; i < e->cols - e->line_column_width - span.len; i++) {
+  for (uint64_t i = 0;
+       i < e->cols - e->line_column_width - span.len - /* trailing newline */ 1;
+       i++) {
     e->draw = gb_string_append_length(e->draw, " ", 1);
   }
+  e->draw = gb_string_append_length(e->draw, "\n", 1);
 }
 
 static void editor_draw_line(editor_t* e, uint64_t line_i) {
