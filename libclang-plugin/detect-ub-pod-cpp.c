@@ -4,6 +4,9 @@
 
 enum CXChildVisitResult visitor(CXCursor cursor, CXCursor unused_cursor,
                                 CXClientData unused_data) {
+    (void)unused_cursor;
+    (void)unused_data;
+
     enum CXCursorKind kind = clang_getCursorKind(cursor);
 
     if (kind == CXCursor_VarDecl) {
@@ -13,7 +16,7 @@ enum CXChildVisitResult visitor(CXCursor cursor, CXCursor unused_cursor,
         enum CX_StorageClass storage = clang_Cursor_getStorageClass(cursor);
         if (type.kind == CXType_Record &&
             init_cursor.kind == CXCursor_CallExpr && storage != CX_SC_Static &&
-            clang_isPODType(type)) {
+            storage != CX_SC_Auto && clang_isPODType(type)) {
             CXString type_pretty = clang_getTypeSpelling(type);
             CXString cursorName = clang_getCursorDisplayName(cursor);
 
