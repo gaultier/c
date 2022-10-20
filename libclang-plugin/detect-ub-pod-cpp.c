@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
     }
 
     // Command line arguments required for parsing the TU
-    const char *args[] = {"-std=c++14"};
+    const char *args[] = {"-std=c++11"};
 
     // Create an index with excludeDeclsFromPCH = 1, displayDiagnostics = 0
     CXIndex index = clang_createIndex(1, 0);

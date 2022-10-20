@@ -1,18 +1,45 @@
 # libclang-plugin
 
-## detect-ub-pod-cpp.c
+## detect-ub-pod-cpp
 
-This plugin reports this form of undefined behavior in C++:
+*Warning: Work in progress.*
+
+This plugin attempts to report this form of undefined behavior in C++, where default initialization does *not* occur:
 
 ```cpp
+#include <cassert>
 #include <cstdio>
+#include <type_traits>
 
-struct Person { int age; };
+// POD
+struct Person {
+  int age;
+};
+
+// Not a POD, and the default constructor does *not* initialize the member
+struct Animal {
+  int age;
+  Animal() {}
+};
+
+// Not a POD, and the default constructor initializes the member
+struct Car {
+  int age;
+  Car() : age(1) {}
+};
 
 int main() {
-  
   Person p;
-  printf("%d\n", p.age); // Undefined behavior!
+  assert(std::is_pod<Person>());
+  printf("%d\n", p.age);  // Undefined behavior! Will print garbage.
+
+  Animal a;
+  assert(!std::is_pod<Animal>());
+  printf("%d\n", a.age);  // Undefined behavior! Will print garbage.
+
+  Car c;
+  assert(!std::is_pod<Car>());
+  printf("%d\n", c.age);  // Totally fine!
 
   return 0;
 }
