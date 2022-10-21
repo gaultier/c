@@ -1,7 +1,5 @@
 #include <cassert>
 #include <cstdio>
-#include <string>
-#include <type_traits>
 #include <vector>
 
 // POD
@@ -28,31 +26,31 @@ struct Bus {
 
 struct Names {
   int age;
-  std::vector<std::string> names;
+  std::vector<int> ages;
 };
 
 int main() {
   Person p;
-  assert(std::is_pod<Person>());
-  printf("UB: %d\n", p.age);  // Undefined behavior! Will print garbage.
+  printf("UB: %d\n", p.age);
 
   Animal a;
-  assert(!std::is_pod<Animal>());
-  printf("OK: %d\n", a.age);  // Totally fine!
+  printf("UB: %d\n", a.age);
 
   Car c;
-  assert(!std::is_pod<Car>());
-  printf("OK: %d\n", c.age);  // Totally fine!
+  printf("OK: %d\n", c.age);
 
   Person* pp = new Person;
-  printf("OK: %d\n", pp->age);  // Totally fine!
+  printf("OK: %d\n", pp->age);
   delete pp;
 
   Bus b;
-  printf("OK: %d\n", b.age);  // Totally fine!
+  printf("UB: %d\n", b.age);
 
   Names n;
-  printf("UB: %d\n", n.age);  // Undefined behavior! Will print garbage.
+  printf("UB: %d\n", n.age);
+
+  Names n_zero_initialized{};
+  printf("OK: %d\n", n_ok.age);
 
   return 0;
 }
