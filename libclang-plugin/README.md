@@ -8,7 +8,7 @@ This plugin attempts to report this form of undefined behavior in C++, where zer
 
 **tl;dr:** Never use the syntax `T object;` because it will leave some fields uninitialized and they will contain garbage, leading to hard to track bugs. The fix is to always use `T object{}`; which will zero initialize the object.
 
-In some cases, but not all, the problematic syntax is actually fine (see [default initialization](https://en.cppreference.com/w/cpp/language/default_initialization)). But the rules are so complex that it's better no to live on the edge; just zero initialize.
+In some cases, but not all, the problematic syntax is actually fine (see [default initialization](https://en.cppreference.com/w/cpp/language/default_initialization)). But the rules are so complex that it's better not to live on the edge; just zero initialize.
 
 This plugin using libclang attempts to detect this problematic syntax. 
 
@@ -51,12 +51,12 @@ $ ls  /path/to/project/**/*.cpp | xargs -I {} ./detect-ub-pod-cpp {} | grep -v '
 
 **Lengthy explanation:**
 
-Default initialization occurs under certaon circumstances when using the syntax `T object;`. A few problems appear:
+Default initialization occurs under certain circumstances when using the syntax `T object;`. A few problems appear:
 - If `T` is a non class, non array type such as `int`, no initialization is performed at all. This is obvious undefined behavior.
 - If `T` is a POD, no initialization is performed at all. This is akin to doing `int a;` and then using `a`. This is obvious undefined behavior.
 - If `T` is not a POD, the default constructor is called, and is responsible for initializing all fields. It is easy to miss one, leading to undefined behavior.
 
-Not even mentioning that the rules around what is a POD change almost at every C++ standard version, it is apparent it is simpler to let the compiler zero initialize all the fields for us. 
+Not even mentioning that the rules around what is a POD change with nearly every C++ standard version, it is apparent it is simpler to let the compiler zero initialize all the fields for us. 
 
 
 ### Why this plugin?
