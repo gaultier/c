@@ -4,3 +4,7 @@ LDFLAGS += -L/usr/local/opt/llvm/lib
 
 detect-ub-pod-cpp: detect-ub-pod-cpp.c
 	$(CC) $(CFLAGS) -g -std=c99 -Wall -Wextra $^ -o $@ $(LDFLAGS) -lclang
+
+
+test: test.cpp
+	$(CXX) $(CFLAGS) -g -std=c++11 -Wall -Wextra $^ -o $@ $(LDFLAGS)

@@ -1,6 +1,8 @@
 #include <cassert>
 #include <cstdio>
+#include <string>
 #include <type_traits>
+#include <vector>
 
 // POD
 struct Person {
@@ -19,6 +21,16 @@ struct Car {
   Car() : age(1) {}
 };
 
+struct Bus {
+  int age;
+  virtual void f() {}
+};
+
+struct Names {
+  int age;
+  std::vector<std::string> names;
+};
+
 int main() {
   Person p;
   assert(std::is_pod<Person>());
@@ -35,6 +47,12 @@ int main() {
   Person* pp = new Person;
   printf("%d\n", pp->age);  // Totally fine!
   delete pp;
+
+  Bus b;
+  printf("%d\n", b.age);  // Totally fine!
+
+  Names n;
+  printf("%d\n", n.age);  // Undefined behavior! Will print garbage.
 
   return 0;
 }
