@@ -34,25 +34,25 @@ struct Names {
 int main() {
   Person p;
   assert(std::is_pod<Person>());
-  printf("%d\n", p.age);  // Undefined behavior! Will print garbage.
+  printf("UB: %d\n", p.age);  // Undefined behavior! Will print garbage.
 
   Animal a;
   assert(!std::is_pod<Animal>());
-  printf("%d\n", a.age);  // Undefined behavior! Will print garbage.
+  printf("OK: %d\n", a.age);  // Totally fine!
 
   Car c;
   assert(!std::is_pod<Car>());
-  printf("%d\n", c.age);  // Totally fine!
+  printf("OK: %d\n", c.age);  // Totally fine!
 
   Person* pp = new Person;
-  printf("%d\n", pp->age);  // Totally fine!
+  printf("OK: %d\n", pp->age);  // Totally fine!
   delete pp;
 
   Bus b;
-  printf("%d\n", b.age);  // Totally fine!
+  printf("OK: %d\n", b.age);  // Totally fine!
 
   Names n;
-  printf("%d\n", n.age);  // Undefined behavior! Will print garbage.
+  printf("UB: %d\n", n.age);  // Undefined behavior! Will print garbage.
 
   return 0;
 }
