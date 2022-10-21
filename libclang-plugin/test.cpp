@@ -7,50 +7,22 @@ struct Person {
   int age;
 };
 
-// Not a POD, and the default constructor does *not* initialize the member
-struct Animal {
-  int age;
-  Animal() {}
-};
-
-// Not a POD, and the default constructor initializes the member
-struct Car {
-  int age;
-  Car() : age(1) {}
-};
-
-struct Bus {
-  int age;
-  virtual void f() {}
-};
-
-struct Names {
-  int age;
-  std::vector<int> ages;
-};
-
 int main() {
-  Person p;
-  printf("UB: %d\n", p.age);
+  Person p_default_initialized;
+  printf("UB: %d\n", p_default_initialized.age);
 
-  Animal a;
-  printf("UB: %d\n", a.age);
+  Person* p_new = new Person;
+  printf("OK: %d\n", p_new->age);
+  delete p_new;
 
-  Car c;
-  printf("OK: %d\n", c.age);
+  Person p_zero_initialized{};
+  printf("OK: %d\n", p_zero_initialized.age);
 
-  Person* pp = new Person;
-  printf("OK: %d\n", pp->age);
-  delete pp;
+  Person p_zero_initialized_a_la_c{0};
+  printf("OK: %d\n", p_zero_initialized_a_la_c.age);
 
-  Bus b;
-  printf("UB: %d\n", b.age);
-
-  Names n;
-  printf("UB: %d\n", n.age);
-
-  Names n_zero_initialized{};
-  printf("OK: %d\n", n_ok.age);
+  Person p_assigned = Person();
+  printf("OK: %d\n", p_assigned.age);
 
   return 0;
 }
