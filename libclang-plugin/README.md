@@ -54,7 +54,7 @@ $ ls  /path/to/project/**/*.cpp | xargs -I {} ./detect-ub-pod-cpp {} | grep -v '
 Default initialization occurs under certain circumstances when using the syntax `T object;`. A few problems appear:
 - If `T` is a non class, non array type such as `int`, no initialization is performed at all. This is obvious undefined behavior.
 - If `T` is a POD, no initialization is performed at all. This is akin to doing `int a;` and then using `a`. This is obvious undefined behavior.
-- If `T` is not a POD, the default constructor is called, and is responsible for initializing all fields. It is easy to miss one, leading to undefined behavior.
+- If `T` is not a POD, the default constructor is called, and is responsible for initializing all fields. It is easy to miss one, or even forget to implement a default constructor entirely, leading to undefined behavior.
 
 Not even mentioning that the rules around what is a POD change with nearly every C++ standard version, it is apparent it is simpler to let the compiler zero initialize all the fields for us. 
 
