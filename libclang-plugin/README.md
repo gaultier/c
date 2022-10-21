@@ -6,6 +6,12 @@
 
 This plugin attempts to report this form of undefined behavior in C++, where zero initialization ist not used, which might leave some fields uninitialized, and containing garbage data:
 
+**tl;dr:** Never use the syntax `T object;` because it will leave some fields uninitialized and they will contain garbage, leading to hard to track bugs. The fix is to always use `T object{}`; which will zero initialize the object.
+
+In some cases, but not all, the problematic syntax is actually fine (see [default initialization](https://en.cppreference.com/w/cpp/language/default_initialization)). But the rules are so complex that it's better no to live on the edge; just zero initialize.
+
+This plugin using libclang attempts to detect this problematic syntax. 
+
 ### Usage
 
 Given this code `simple.cpp`:
@@ -36,12 +42,12 @@ $ ./detect-no-zero-initialization simple.cpp
 ./simple.cpp:11:3: Foo foo
 ```
 
+To analyze a whole project and ignore system headers:
 
-**tl;dr:** Never use the syntax `T object;` because it will leave some fields uninitialized and they will contain garbage, leading to hard to track bugs. The fix is to always use `T object{}`; which will zero initialize the object.
+```sh
+$ ls  /path/to/project/**/*.cpp | xargs -I {} ./detect-ub-pod-cpp {} | grep -v '/path/to/system/headers'
+```
 
-In some cases, but not all, the problematic syntax is actually fine (see [default initialization](https://en.cppreference.com/w/cpp/language/default_initialization)). But the rules are so complex that it's better no to live on the edge; just zero initialize.
-
-This plugin using libclang attempts to detect this problematic syntax. 
 
 **Lengthy explanation:**
 
