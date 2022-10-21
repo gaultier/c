@@ -61,7 +61,7 @@ Not even mentioning that the rules around what is a POD change with nearly every
 
 ### Why this plugin?
 
-`clang-tidy` reports this issue when trying to pass such a variable as argument to a function, but that's all. We want to detect all problematic locations, even when the variable is not passed to a function.
+`clang-tidy` reports this issue when trying to pass such a variable as argument to a function, but that's all. We want to detect all problematic locations, even when the variable is not passed to a function. Also, `clang-tidy` only reports one location and exits.
 
 `clang` does not report any issue even when called with `-Weverything`.
 
