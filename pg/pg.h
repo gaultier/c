@@ -5,6 +5,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef MIN
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+
 typedef struct pg_allocator_t pg_allocator_t;
 struct pg_allocator_t {
   //  void *backing_memory;
