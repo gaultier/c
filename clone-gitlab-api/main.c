@@ -13,7 +13,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
-#include "../pg.h"
+#include "../pg/pg.h"
 #define JSMN_STATIC
 #include "../vendor/sds/sds.c"
 #include "vendor/jsmn/jsmn.h"
@@ -70,7 +70,7 @@ typedef struct {
     struct curl_slist* curl_headers;
 } api_t;
 
-static _Atomic u64 projects_count = 0;
+static _Atomic uint64_t projects_count = 0;
 
 static void print_usage(int argc, char* argv[]) {
     (void)argc;
@@ -109,25 +109,27 @@ static void print_usage(int argc, char* argv[]) {
         argv[0]);
 }
 
-static bool str_equal(const char* a, u64 a_len, const char* b, u64 b_len) {
+static bool str_equal(const char* a, uint64_t a_len, const char* b,
+                      uint64_t b_len) {
     assert(a != NULL);
     assert(b != NULL);
 
     return a_len == b_len && memcmp(a, b, a_len) == 0;
 }
 
-static bool str_iequal(const char* a, u64 a_len, const char* b, u64 b_len) {
+static bool str_iequal(const char* a, uint64_t a_len, const char* b,
+                       uint64_t b_len) {
     assert(a != NULL);
     assert(b != NULL);
 
     if (a_len != b_len) return false;
-    for (u64 i = 0; i < a_len; i++) {
+    for (uint64_t i = 0; i < a_len; i++) {
         if (pg_char_to_lower(a[i]) != pg_char_to_lower(b[i])) return false;
     }
     return true;
 }
 
-static bool str_iequal_c(const char* a, u64 a_len, const char* b0) {
+static bool str_iequal_c(const char* a, uint64_t a_len, const char* b0) {
     assert(a != NULL);
     assert(b0 != NULL);
 
@@ -144,11 +146,11 @@ static bool is_directory(const char* path) {
     return S_ISDIR(s.st_mode);
 }
 
-static u64 str_to_u64(const char* s, u64 s_len) {
+static uint64_t str_to_u64(const char* s, uint64_t s_len) {
     assert(s != NULL);
 
-    u64 res = 0;
-    for (u64 i = 0; i < s_len; i++) {
+    uint64_t res = 0;
+    for (uint64_t i = 0; i < s_len; i++) {
         const char c = s[i];
         if (pg_char_is_space(c)) continue;
         if (pg_char_is_digit(c)) {
@@ -161,36 +163,37 @@ static u64 str_to_u64(const char* s, u64 s_len) {
     return res;
 }
 
-static u64 on_http_response_body_chunk(void* contents, u64 size, u64 nmemb,
-                                       void* userp) {
+static uint64_t on_http_response_body_chunk(void* contents, uint64_t size,
+                                            uint64_t nmemb, void* userp) {
     assert(contents != NULL);
     assert(userp != NULL);
 
-    const u64 real_size = size * nmemb;
+    const uint64_t real_size = size * nmemb;
     sds* response_body = userp;
     *response_body = sdscatlen(*response_body, contents, real_size);
 
     return real_size;
 }
 
-static u64 on_header(char* buffer, u64 size, u64 nitems, void* userdata) {
+static uint64_t on_header(char* buffer, uint64_t size, uint64_t nitems,
+                          void* userdata) {
     assert(buffer != NULL);
     assert(userdata != NULL);
     api_t* const api = userdata;
 
-    const u64 real_size = nitems * size;
+    const uint64_t real_size = nitems * size;
     const char* val = memchr(buffer, ':', real_size);
     if (val == NULL) return real_size;  // Could be HTTP/1.1 OK, skip
 
     assert(val > buffer);
     assert(val < buffer + real_size);
-    const u64 key_len = val - buffer;
+    const uint64_t key_len = val - buffer;
     val++;  // Skip `:`
-    u64 val_len = buffer + real_size - val;
+    uint64_t val_len = buffer + real_size - val;
 
     if (str_iequal_c(buffer, key_len, "Link")) {
         const char needle[] = ">; rel=\"next\"";
-        const u64 needle_len = sizeof(needle) - 1;
+        const uint64_t needle_len = sizeof(needle) - 1;
         char* end = memmem(val, val_len, needle, needle_len);
         if (end == NULL) {
             // Finished - no more pages
@@ -221,8 +224,8 @@ static u64 on_header(char* buffer, u64 size, u64 nitems, void* userdata) {
         sdsclear(api->url);
         api->url = sdscatlen(api->url, val, val_len);
     } else if (str_iequal_c(buffer, key_len, "X-Total")) {
-        const u64 total = str_to_u64(val, val_len);
-        u64 expected = 0;
+        const uint64_t total = str_to_u64(val, val_len);
+        uint64_t expected = 0;
         __c11_atomic_compare_exchange_strong(&projects_count, &expected, total,
                                              __ATOMIC_SEQ_CST,
                                              __ATOMIC_SEQ_CST);
@@ -250,7 +253,7 @@ static void api_init(api_t* api, options_t* options) {
     api->response_body = sdsempty();
     api->response_body = sdsMakeRoomFor(api->response_body, 4 * 1024);
 
-    pg_array_init_reserve(api->tokens, 8 * 1000);
+    pg_array_init_reserve(api->tokens, 8 * 1000, pg_heap_allocator());
 
     api->http_handle = curl_easy_init();
     assert(api->http_handle != NULL);
@@ -354,7 +357,7 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
                 break;
             }
             case 't': {
-                const u64 optarg_len = strlen(optarg);
+                const uint64_t optarg_len = strlen(optarg);
                 if (optarg_len == 0) {
                     fprintf(stderr, "Empty token\n");
                     exit(EINVAL);
@@ -368,7 +371,7 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
                 break;
             }
             case 'u': {
-                const u64 optarg_len = strlen(optarg);
+                const uint64_t optarg_len = strlen(optarg);
                 if (optarg_len > MAX_URL_LEN) {
                     fprintf(stderr, "Url is too long: maximum %d characters\n",
                             MAX_URL_LEN);
@@ -467,7 +470,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     pg_array_resize(api->tokens, res);
     res = 0;
 
-    const u64 tokens_count = pg_array_count(api->tokens);
+    const uint64_t tokens_count = pg_array_count(api->tokens);
     assert(tokens_count > 0);
     if (api->tokens[0].type != JSMN_ARRAY) {
         fprintf(stderr,
@@ -477,28 +480,29 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     }
 
     const char key_path_with_namespace[] = "path_with_namespace";
-    const u64 key_path_with_namespace_len = sizeof("path_with_namespace") - 1;
+    const uint64_t key_path_with_namespace_len =
+        sizeof("path_with_namespace") - 1;
     const char clone_method_fields[][20] = {
         [GCM_SSH] = "ssh_url_to_repo",
         [GCM_HTTPS] = "http_url_to_repo",
     };
     const char* key_git_url = clone_method_fields[options->clone_method];
-    const u64 key_git_url_len = strlen(key_git_url);
+    const uint64_t key_git_url_len = strlen(key_git_url);
 
     char* fs_path = NULL;
     sds path_with_namespace = NULL;
     char* git_url = NULL;
-    u64 field_count = 0;
+    uint64_t field_count = 0;
 
-    for (u64 i = 1; i < pg_array_count(api->tokens); i++) {
+    for (uint64_t i = 1; i < pg_array_count(api->tokens); i++) {
         jsmntok_t* const cur = &api->tokens[i - 1];
         jsmntok_t* const next = &api->tokens[i];
         if (!(cur->type == JSMN_STRING && next->type == JSMN_STRING)) continue;
 
         char* const cur_s = &api->response_body[cur->start];
-        const u64 cur_s_len = cur->end - cur->start;
+        const uint64_t cur_s_len = cur->end - cur->start;
         char* const next_s = &api->response_body[next->start];
-        const u64 next_s_len = next->end - next->start;
+        const uint64_t next_s_len = next->end - next->start;
 
         if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
                       key_path_with_namespace_len)) {
@@ -510,7 +514,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
             // quote which no one cares about
             fs_path = next_s;
             fs_path[next_s_len] = 0;
-            for (u64 j = 0; j < next_s_len; j++) {
+            for (uint64_t j = 0; j < next_s_len; j++) {
                 if (fs_path[j] == '/') fs_path[j] = '.';
             }
 
@@ -548,7 +552,7 @@ static void* watch_workers(void* varg) {
     assert(varg != NULL);
     watch_project_cloning_arg_t* arg = varg;
 
-    u64 finished = 0;
+    uint64_t finished = 0;
     struct kevent events[512] = {0};
 
     const bool is_tty = isatty(fileno(stdout));
@@ -575,7 +579,7 @@ static void* watch_workers(void* varg) {
                 process_t* process = event->udata;
                 assert(process != NULL);
 
-                const u64 max_read = MIN(event->data, 128);
+                const uint64_t max_read = MIN(event->data, 128);
                 process->err = sdsMakeRoomFor(process->err, max_read);
                 int res = read(process->stderr_fd, process->err, max_read);
                 if (res == -1) {
@@ -592,7 +596,7 @@ static void* watch_workers(void* varg) {
 
                 finished += 1;
 
-                const u64 count =
+                const uint64_t count =
                     __c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST);
                 if (exit_status == 0) {
                     printf("%s[%" PRIu64 "/%" PRIu64
@@ -845,7 +849,7 @@ int main(int argc, char* argv[]) {
            (res = api_fetch_projects(&api, &options, queue,
                                      &projects_handled)) == 0) {
     }
-    u64 expected = 0;
+    uint64_t expected = 0;
     __c11_atomic_compare_exchange_strong(&projects_count, &expected,
                                          projects_handled, __ATOMIC_SEQ_CST,
                                          __ATOMIC_SEQ_CST);
