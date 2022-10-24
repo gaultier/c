@@ -15,6 +15,7 @@ struct pg_allocator_t {
 };
 
 void *pg_heap_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
+  (void)old_size;
   return realloc(old_memory, new_size);
 }
 
@@ -63,7 +64,7 @@ typedef struct pg_array_header_t {
     *pg__array_ = (void *)(pg__ah + 1);                                      \
   } while (0)
 
-#define pg_array_init(x) pg_array_init_reserve(x, PG_ARRAY_GROW_FORMULA(0))
+#define pg_array_init(x, my_allocator) pg_array_init_reserve(x, 0, my_allocator)
 
 #define pg_array_free(x)                            \
   do {                                              \
@@ -80,8 +81,8 @@ typedef struct pg_array_header_t {
     }                                                                      \
   } while (0)
 
-static void *pg__array_set_capacity(void *array, uint64_t capacity,
-                                    uint64_t element_size) {
+void *pg__array_set_capacity(void *array, uint64_t capacity,
+                             uint64_t element_size) {
   pg_array_header_t *h = PG_ARRAY_HEADER(array);
 
   assert(element_size > 0);
@@ -161,23 +162,23 @@ static void *pg__array_set_capacity(void *array, uint64_t capacity,
     pg_array_set_capacity(x, pg_array_count(x)); \
   } while (0)
 
-static char pg_char_to_lower(char c) {
+char pg_char_to_lower(char c) {
   if (c >= 'A' && c <= 'Z') return 'a' + (c - 'A');
   return c;
 }
 
-static bool pg_char_is_space(char c) {
+bool pg_char_is_space(char c) {
   if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v')
     return true;
   return false;
 }
 
-static bool pg_char_is_digit(char c) {
+bool pg_char_is_digit(char c) {
   if (c >= '0' && c <= '9') return true;
   return false;
 }
 
-static bool pg_str_has_prefix(char *haystack0, char *needle0) {
+bool pg_str_has_prefix(char *haystack0, char *needle0) {
   uint64_t haystack0_len = strlen(haystack0);
   uint64_t needle0_len = strlen(needle0);
   if (needle0_len > haystack0_len) return false;

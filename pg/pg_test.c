@@ -19,7 +19,22 @@ TEST test_pg_array_append(void) {
   PASS();
 }
 
-SUITE(pg_array) { RUN_TEST(test_pg_array_append); }
+TEST test_pg_array_capacity() {
+  pg_array_t(uint64_t) array;
+  pg_array_init(array, pg_heap_allocator());
+
+  ASSERT_EQ(pg_array_capacity(array), 0);
+
+  pg_array_set_capacity(array, 3);
+  ASSERT_EQ(pg_array_capacity(array), 3);
+
+  PASS();
+}
+
+SUITE(pg_array) {
+  RUN_TEST(test_pg_array_append);
+  RUN_TEST(test_pg_array_capacity);
+}
 
 GREATEST_MAIN_DEFS();
 
