@@ -349,3 +349,52 @@ pg_string_t pg_string_appendc(pg_string_t str, char const *other) {
   return pg_string_append_length(str, other, strlen(other));
 }
 
+// ---------------- Hashtable
+
+#define PG_HASHTABLE(T, name)     \
+  typedef struct {                \
+    pg_array_t(pg_string_t) keys; \
+    pg_array_t(T) values;         \
+    pg_array_t(uint32_t) hashes;  \
+    pg_allocator_t allocator;     \
+  } name
+
+#define pg_hashtable_init(hashtable, cap, my_allocator)         \
+  do {                                                          \
+    hashtable.allocator = my_allocator;                         \
+    pg_array_init_reserve(hashtable.keys, cap, my_allocator);   \
+    pg_array_init_reserve(hashtable.values, cap, my_allocator); \
+    pg_array_init_reserve(hashtable.hashes, cap, my_allocator); \
+  } while (0)
+
+// FNV-1a
+uint32_t pg_hash(uint8_t *n, uint64_t len) {
+  uint32_t hash = 2166136261u;
+  for (uint64_t i = 0; i < len; i++) {
+    hash ^= (uint8_t)n[i];
+    hash *= 16777619;
+  }
+  return hash;
+}
+
+#define pg_hashtable_find(hashtable, key, found, index)                       \
+  do {                                                                        \
+    const uint32_t hash = pg_hash((uint8_t *)key, pg_string_length(key));     \
+    index = hash % pg_array_capacity(hashtable.keys);                         \
+                                                                              \
+    for (;;) {                                                                \
+      const uint32_t index_hash = hashtable.hashes[index];                    \
+      if (index_hash == 0) break; /* Not found but suitable empty slot */     \
+      if (index_hash == hash &&                                               \
+          pg_string_length(key) == pg_string_length(hashtable.keys[index]) && \
+          memcmp(key, hashtable.keys[index], pg_string_length(key)) == 0) {   \
+        /* Found after checking for collision */                              \
+        found = true;                                                         \
+      }                                                                       \
+      /* Keep going to find either an empty slot or a matching hash */        \
+    }                                                                         \
+  } while (0)
+
+#define pg_hashtable_insert(hashtable, key, val) \
+  do {                                           \
+  } while (0)
