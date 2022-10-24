@@ -3,7 +3,7 @@
 #include <inttypes.h>
 #include <string.h>
 
-#include "../pg.h"
+#include "../pg/pg.h"
 
 typedef struct {
     pg_array_t(uint32_t) hashes;
@@ -14,13 +14,13 @@ typedef struct {
 static void pg_hashmap_init(pg_hashmap_u64_t* hashmap, uint64_t capacity) {
     assert(hashmap != NULL);
 
-    pg_array_init_reserve(hashmap->hashes, capacity);
+    pg_array_init_reserve(hashmap->hashes, capacity, pg_heap_allocator());
     memset(hashmap->hashes, 0, capacity);
 
-    pg_array_init_reserve(hashmap->keys, capacity);
+    pg_array_init_reserve(hashmap->keys, capacity, pg_heap_allocator());
     memset(hashmap->keys, 0, capacity);
 
-    pg_array_init_reserve(hashmap->values, capacity);
+    pg_array_init_reserve(hashmap->values, capacity, pg_heap_allocator());
     memset(hashmap->values, 0, capacity);
 }
 
