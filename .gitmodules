@@ -16,3 +16,6 @@
 [submodule "vendor/lmdb"]
 	path = vendor/lmdb
 	url = https://github.com/LMDB/lmdb.git
+[submodule "pg/vendor/greatest"]
+	path = pg/vendor/greatest
+	url = https://github.com/silentbicycle/greatest.git
