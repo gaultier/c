@@ -16,7 +16,7 @@
 
 #define GB_IMPLEMENTATION
 #define GB_STATIC
-#include "../pg.h"
+#include "../pg/pg.h"
 #include "../vendor/gb/gb.h"
 #include "vendor/picohttpparser/picohttpparser.h"
 
