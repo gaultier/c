@@ -1,9 +1,13 @@
 #pragma once
+
+#include <_types/_uint64_t.h>
 #include <assert.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/_types/_int64_t.h>
 
 #ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -186,5 +190,162 @@ bool pg_str_has_prefix(char *haystack0, char *needle0) {
   uint64_t needle0_len = strlen(needle0);
   if (needle0_len > haystack0_len) return false;
   return memcmp(haystack0, needle0, needle0_len) == 0;
+}
+
+// ------------------ Strings
+
+typedef char *pg_string_t;
+
+// NOTE(bill): If you only need a small string, just use a standard c string or
+// change the size from uint64_t to u16, etc.
+typedef struct pg_string_header_t {
+  pg_allocator_t allocator;
+  uint64_t length;
+  uint64_t capacity;
+} pg_string_header_t;
+
+#define PG_STRING_HEADER(str) ((pg_string_header_t *)(str)-1)
+
+void pg__set_string_length(pg_string_t str, uint64_t len) {
+  PG_STRING_HEADER(str)->length = len;
+}
+
+void pg__set_string_capacity(pg_string_t str, uint64_t cap) {
+  PG_STRING_HEADER(str)->capacity = cap;
+}
+
+pg_string_t pg_string_make_reserve(pg_allocator_t a, uint64_t capacity) {
+  uint64_t header_size = sizeof(pg_string_header_t);
+  void *ptr = a.realloc(header_size + capacity + 1, NULL, 0);
+
+  pg_string_t str;
+  pg_string_header_t *header;
+
+  if (ptr == NULL) return NULL;
+  memset(ptr, 0, header_size + capacity + 1);
+
+  str = (char *)ptr + header_size;
+  header = PG_STRING_HEADER(str);
+  header->allocator = a;
+  header->length = 0;
+  header->capacity = capacity;
+  str[capacity] = '\0';
+
+  return str;
+}
+
+pg_string_t pg_string_make_length(pg_allocator_t a, void const *init_str,
+                                  uint64_t num_bytes) {
+  uint64_t header_size = sizeof(pg_string_header_t);
+  void *ptr = a.realloc(header_size + num_bytes + 1, NULL, 0);
+
+  pg_string_t str;
+  pg_string_header_t *header;
+
+  if (ptr == NULL) return NULL;
+  if (!init_str) memset(ptr, 0, header_size + num_bytes + 1);
+
+  str = (char *)ptr + header_size;
+  header = PG_STRING_HEADER(str);
+  header->allocator = a;
+  header->length = num_bytes;
+  header->capacity = num_bytes;
+  if (num_bytes && init_str) {
+    memcpy(str, init_str, num_bytes);
+  }
+  str[num_bytes] = '\0';
+
+  return str;
+}
+
+pg_string_t pg_string_make(pg_allocator_t a, char const *str) {
+  uint64_t len = str ? strlen(str) : 0;
+  return pg_string_make_length(a, str, len);
+}
+
+void pg_string_free(pg_string_t str) {
+  if (str) {
+    pg_string_header_t *header = PG_STRING_HEADER(str);
+    header->allocator.free(header);
+  }
+}
+
+uint64_t pg_string_length(pg_string_t const str) {
+  return PG_STRING_HEADER(str)->length;
+}
+
+pg_string_t pg_string_duplicate(pg_allocator_t a, pg_string_t const str) {
+  return pg_string_make_length(a, str, pg_string_length(str));
+}
+
+uint64_t pg_string_capacity(pg_string_t const str) {
+  return PG_STRING_HEADER(str)->capacity;
+}
+
+uint64_t pg_string_available_space(pg_string_t const str) {
+  pg_string_header_t *h = PG_STRING_HEADER(str);
+  if (h->capacity > h->length) {
+    return h->capacity - h->length;
+  }
+  return 0;
+}
+
+void pg_string_clear(pg_string_t str) {
+  pg__set_string_length(str, 0);
+  str[0] = '\0';
+}
+
+pg_string_t pg_string_make_space_for(pg_string_t str, int64_t add_len) {
+  int64_t available = pg_string_available_space(str);
+
+  // NOTE(bill): Return if there is enough space left
+  if (available >= add_len) {
+    return str;
+  } else {
+    int64_t new_len, old_size, new_size;
+    void *ptr, *new_ptr;
+    pg_allocator_t a = PG_STRING_HEADER(str)->allocator;
+    pg_string_header_t *header;
+
+    new_len = pg_string_length(str) + add_len;
+    ptr = PG_STRING_HEADER(str);
+    old_size = sizeof(pg_string_header_t) + pg_string_length(str) + 1;
+    new_size = sizeof(pg_string_header_t) + new_len + 1;
+
+    new_ptr = PG_STRING_HEADER(str)->allocator.realloc(new_size, ptr, old_size);
+    if (new_ptr == NULL) return NULL;
+
+    header = (pg_string_header_t *)new_ptr;
+    header->allocator = a;
+
+    str = (pg_string_t)(header + 1);
+    pg__set_string_capacity(str, new_len);
+
+    return str;
+  }
+}
+pg_string_t pg_string_append_length(pg_string_t str, void const *other,
+                                    uint64_t other_len) {
+  if (other_len > 0) {
+    uint64_t curr_len = pg_string_length(str);
+
+    str = pg_string_make_space_for(str, other_len);
+    if (str == NULL) {
+      return NULL;
+    }
+
+    memcpy(str + curr_len, other, other_len);
+    str[curr_len + other_len] = '\0';
+    pg__set_string_length(str, curr_len + other_len);
+  }
+  return str;
+}
+
+pg_string_t pg_string_append(pg_string_t str, pg_string_t const other) {
+  return pg_string_append_length(str, other, pg_string_length(other));
+}
+
+pg_string_t pg_string_appendc(pg_string_t str, char const *other) {
+  return pg_string_append_length(str, other, strlen(other));
 }
 
