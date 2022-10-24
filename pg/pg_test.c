@@ -28,6 +28,9 @@ TEST test_pg_array_capacity() {
   pg_array_set_capacity(array, 3);
   ASSERT_EQ(pg_array_capacity(array), 3);
 
+  pg_array_free(array);
+  ASSERT_EQ(array, NULL);
+
   PASS();
 }
 
