@@ -40,7 +40,7 @@ SUITE(pg_array) {
 }
 
 TEST test_pg_hashtable() {
-  PG_HASHTABLE(uint64_t, my_hash);
+  PG_HASHTABLE(pg_string_t, uint64_t, my_hash);
   my_hash h = {0};
   pg_hashtable_init(h, 5, pg_heap_allocator());
 
@@ -64,7 +64,7 @@ TEST test_pg_hashtable() {
   pg_hashtable_find(h, key, found, index);
   ASSERT_EQ(found, true);
 
-  pg_hashtable_destroy(h);
+  pg_hashtable_destroy(h, pg_string_free, pg_hashtable_destroy_kv_noop);
   PASS();
 }
 

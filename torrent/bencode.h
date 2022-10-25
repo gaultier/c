@@ -1,8 +1,5 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
-#include <sys/_types/_int64_t.h>
-
 #include "../pg/pg.h"
 
 typedef enum {
@@ -29,7 +26,7 @@ const char* bc_value_kind_to_string(int n) {
 
 typedef struct bc_value_t bc_value_t;
 
-PG_HASHTABLE(pg_string_t, bc_dictionary_t);
+PG_HASHTABLE(bc_value_t, bc_value_t, bc_dictionary_t);
 
 struct bc_value_t {
   bc_kind_t kind;
@@ -208,6 +205,26 @@ fail:
   for (uint64_t i = 0; i < pg_array_count(values); i++)
     bc_value_destroy(allocator, &values[i]);
   pg_array_free(values);
+  return err;
+}
+
+bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator,
+                                     pg_string_span_t* span, bc_value_t* res) {
+  bc_parse_error_t err = BC_PE_NONE;
+  pg_string_span_t res_span = *span;
+
+  if ((err = bc_consume_char(&res_span, 'd')) != BC_PE_NONE) return err;
+
+  if ((err = bc_consume_char(&res_span, 'e')) != BC_PE_NONE) goto fail;
+
+  res->kind = BC_KIND_OBJECT;
+  /* res->v.array = values; */
+
+  *span = res_span;
+
+  return BC_PE_NONE;
+
+fail:
   return err;
 }
 
