@@ -27,6 +27,22 @@ TEST test_bc_parse_i64() {
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(130LL, res, "%lld");
   }
+  {
+    pg_string_span_t span = {.data = "-", .len = 3};
+    int64_t res = 0;
+    bc_parse_error_t err = bc_parse_i64(&span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0LL, res, "%lld");
+  }
+  {
+    pg_string_span_t span = {.data = "", .len = 3};
+    int64_t res = 0;
+    bc_parse_error_t err = bc_parse_i64(&span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0LL, res, "%lld");
+  }
 
   PASS();
 }
