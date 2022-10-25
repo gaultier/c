@@ -259,6 +259,7 @@ bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator,
   return BC_PE_NONE;
 
 fail:
+  // FIXME
   // pg_hashtable_destroy(dict, pg_string_free_ptr, bc_value_destroy);
   return err;
 }
