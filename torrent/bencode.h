@@ -1,5 +1,9 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
+#include <_types/_uint8_t.h>
+#include <stdio.h>
+
 #include "../pg/pg.h"
 
 typedef enum {
@@ -153,7 +157,8 @@ void bc_value_destroy(bc_value_t* value) {
       pg_string_free(value->v.string);
       break;
     case BC_KIND_DICTIONARY:
-      // TODO
+      pg_hashtable_destroy(value->v.dictionary, pg_string_free_ptr,
+                           bc_value_destroy);
       break;
     case BC_KIND_ARRAY:
       for (uint64_t i = 0; i < pg_array_count(value->v.array); i++)
@@ -254,7 +259,7 @@ bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator,
   return BC_PE_NONE;
 
 fail:
-  pg_hashtable_destroy(dict, pg_string_free_ptr, bc_value_destroy);
+  // pg_hashtable_destroy(dict, pg_string_free_ptr, bc_value_destroy);
   return err;
 }
 
@@ -269,4 +274,49 @@ bc_parse_error_t bc_parse_value(pg_allocator_t allocator,
     return bc_parse_dictionary(allocator, span, res);
   else
     return bc_parse_string(allocator, span, res);
+}
+
+void bc_value_dump(bc_value_t* value, FILE* f) {
+  switch (value->kind) {
+    case BC_KIND_INTEGER:
+      fprintf(f, "%lld", value->v.integer);
+      break;
+    case BC_KIND_STRING: {
+      bool printable = true;
+      for (uint64_t i = 0; i < pg_string_length(value->v.string); i++) {
+        uint8_t c = (uint8_t)value->v.string[i];
+        if (c < 20 || c > 126) {
+          printable = false;
+          break;
+        }
+      }
+      if (printable) {
+        fprintf(f, "%s", value->v.string);
+      } else {
+        for (uint64_t i = 0; i < pg_string_length(value->v.string); i++) {
+          uint8_t c = (uint8_t)value->v.string[i];
+          fprintf(f, "%#x ", c);
+        }
+      }
+
+      break;
+    }
+    case BC_KIND_ARRAY:
+      fprintf(f, "[ ");
+      for (uint64_t i = 0; i < pg_array_count(value->v.array); i++) {
+        bc_value_dump(value, f);
+        fprintf(f, " ");
+      }
+      fprintf(f, " ]");
+      break;
+    case BC_KIND_DICTIONARY:
+      fprintf(f, "{ ");
+      pg_hashtable_foreach_begin(value->v.dictionary)
+          fprintf(f, "%s: ", value->v.dictionary.keys[it]);
+      bc_value_dump(&value->v.dictionary.values[it], f);
+      fprintf(f, " ");
+      pg_hashtable_foreach_end(value->v.dictionary);
+      fprintf(f, " }");
+      break;
+  }
 }
