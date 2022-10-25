@@ -259,6 +259,79 @@ TEST test_bc_parse_array() {
   PASS();
 }
 
+TEST test_bc_parse_dictionary() {
+  const bc_value_t zero = {0};
+  {
+    pg_string_span_t span = {.data = "", .len = 0};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_null_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "d", .len = 1};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(1ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "de", .len = 2};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0ULL, span.len, "%llu");
+    ASSERT_ENUM_EQ(BC_KIND_DICTIONARY, res.kind, bc_value_kind_to_string);
+    ASSERT_EQ_FMT(0ULL, pg_hashtable_count(res.v.dictionary), "%llu");
+  }
+  {
+    pg_string_span_t span = {.data = "d2:ab", .len = 5};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(5ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "d2:abi3e_", .len = 9};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_UNEXPECTED_CHARACTER, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(9ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "d3:abci3ee", .len = 10};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0ULL, span.len, "%llu");
+    ASSERT_ENUM_EQ(BC_KIND_DICTIONARY, res.kind, bc_value_kind_to_string);
+    ASSERT_EQ_FMT(1ULL, pg_hashtable_count(res.v.dictionary), "%llu");
+
+    pg_string_t key =
+        pg_string_make_length(pg_heap_allocator(), "abc", strlen("abc"));
+    bool found = false;
+    uint64_t index = -1;
+    pg_hashtable_find(res.v.dictionary, key, found, index);
+
+    ASSERT_EQ(true, found);
+
+    bc_value_t val = res.v.dictionary.values[index];
+    ASSERT_ENUM_EQ(BC_KIND_INTEGER, val.kind, bc_value_kind_to_string);
+    ASSERT_EQ_FMT(3LL, val.v.integer, "%lld");
+  }
+  PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv) {
@@ -268,6 +341,7 @@ int main(int argc, char **argv) {
   RUN_TEST(test_bc_parse_string);
   RUN_TEST(test_bc_parse_number);
   RUN_TEST(test_bc_parse_array);
+  RUN_TEST(test_bc_parse_dictionary);
 
   GREATEST_MAIN_END(); /* display results */
 }

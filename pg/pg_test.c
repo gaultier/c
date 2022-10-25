@@ -41,30 +41,32 @@ SUITE(pg_array) {
 
 TEST test_pg_hashtable() {
   PG_HASHTABLE(pg_string_t, uint64_t, my_hash);
-  my_hash h = {0};
-  pg_hashtable_init(h, 5, pg_heap_allocator());
+  my_hash dict = {0};
+  pg_hashtable_init(dict, 5, pg_heap_allocator());
 
   bool found = false;
   uint64_t index = -1;
   pg_string_t key = pg_string_make_length(pg_heap_allocator(), "does not exist",
                                           strlen("does not exist"));
-  pg_hashtable_find(h, key, found, index);
+  pg_hashtable_find(dict, key, found, index);
   ASSERT_EQ(found, false);
 
-  pg_hashtable_upsert(h, key, 42);
-  pg_hashtable_find(h, key, found, index);
+  pg_hashtable_upsert(dict, key, 42);
+  pg_hashtable_find(dict, key, found, index);
   ASSERT_EQ(found, true);
+  ASSERT_EQ(1ULL, pg_hashtable_count(dict));
 
   pg_string_t key2 = pg_string_make_length(pg_heap_allocator(), "some key",
                                            strlen("some key"));
-  pg_hashtable_upsert(h, key2, 42);
-  pg_hashtable_find(h, key2, found, index);
+  pg_hashtable_upsert(dict, key2, 42);
+  pg_hashtable_find(dict, key2, found, index);
+  ASSERT_EQ(found, true);
+  ASSERT_EQ(2ULL, pg_hashtable_count(dict));
+
+  pg_hashtable_find(dict, key, found, index);
   ASSERT_EQ(found, true);
 
-  pg_hashtable_find(h, key, found, index);
-  ASSERT_EQ(found, true);
-
-  pg_hashtable_destroy(h, pg_string_free, pg_hashtable_destroy_kv_noop);
+  pg_hashtable_destroy(dict, pg_string_free_ptr, pg_hashtable_destroy_kv_noop);
   PASS();
 }
 

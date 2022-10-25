@@ -286,6 +286,8 @@ void pg_string_free(pg_string_t str) {
   }
 }
 
+void pg_string_free_ptr(pg_string_t *str) { pg_string_free(*str); }
+
 uint64_t pg_string_length(pg_string_t const str) {
   return PG_STRING_HEADER(str)->length;
 }
@@ -418,6 +420,7 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
           memcmp(key, hashtable.keys[index], pg_string_length(key)) == 0) {   \
         /* Found after checking for collision */                              \
         found = true;                                                         \
+        break;                                                                \
       }                                                                       \
       /* Keep going to find either an empty slot or a matching hash */        \
       index = (index + 1) % pg_array_capacity(hashtable.keys);                \
@@ -457,7 +460,7 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
     }                                                                       \
     bool found = false;                                                     \
     uint64_t index = -1;                                                    \
-    pg_hashtable_find(h, key, found, index);                                \
+    pg_hashtable_find(hashtable, key, found, index);                        \
     if (found) { /* Update */                                               \
       hashtable.values[index] = val;                                        \
       hashtable.hashes[index] =                                             \
@@ -467,23 +470,29 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
       hashtable.hashes[index] =                                             \
           pg_hash((uint8_t *)key, pg_string_length(key));                   \
       hashtable.values[index] = val;                                        \
+      const uint64_t new_len = pg_array_count(hashtable.keys) + 1;          \
+      pg_array_resize(hashtable.keys, new_len);                             \
+      pg_array_resize(hashtable.values, new_len);                           \
+      pg_array_resize(hashtable.hashes, new_len);                           \
     }                                                                       \
   } while (0)
 
 void pg_hashtable_destroy_kv_noop(void *kv) { (void)kv; }
 
-#define pg_hashtable_destroy(hashtable, free_key, free_value)            \
-  do {                                                                   \
-    for (uint64_t i = 0; i < pg_array_count(hashtable.keys); i++)        \
-      if (free_key != NULL) (free_key)((void *)hashtable.keys[i]);       \
-    pg_array_free(hashtable.keys);                                       \
-                                                                         \
-    for (uint64_t i = 0; i < pg_array_count(hashtable.values); i++)      \
-      if (free_value != NULL) (free_value)((void *)hashtable.values[i]); \
-    pg_array_free(hashtable.values);                                     \
-                                                                         \
-    pg_array_free(hashtable.hashes);                                     \
+#define pg_hashtable_destroy(hashtable, free_key, free_value)       \
+  do {                                                              \
+    for (uint64_t i = 0; i < pg_array_count(hashtable.keys); i++)   \
+      if (free_key != NULL) (free_key)(&hashtable.keys[i]);         \
+    pg_array_free(hashtable.keys);                                  \
+                                                                    \
+    for (uint64_t i = 0; i < pg_array_count(hashtable.values); i++) \
+      if (free_value != NULL) (free_value)(&hashtable.values[i]);   \
+    pg_array_free(hashtable.values);                                \
+                                                                    \
+    pg_array_free(hashtable.hashes);                                \
   } while (0)
+
+#define pg_hashtable_count(hashtable) pg_array_count(hashtable.keys)
 
 // ------------------ Span
 

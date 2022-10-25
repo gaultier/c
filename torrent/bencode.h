@@ -6,7 +6,7 @@ typedef enum {
   BC_KIND_INTEGER,
   BC_KIND_STRING,
   BC_KIND_ARRAY,
-  BC_KIND_OBJECT,
+  BC_KIND_DICTIONARY,
 } bc_kind_t;
 
 const char* bc_value_kind_to_string(int n) {
@@ -17,8 +17,8 @@ const char* bc_value_kind_to_string(int n) {
       return "BC_KIND_STRING";
     case BC_KIND_ARRAY:
       return "BC_KIND_ARRAY";
-    case BC_KIND_OBJECT:
-      return "BC_KIND_OBJECT";
+    case BC_KIND_DICTIONARY:
+      return "BC_KIND_DICTIONARY";
     default:
       __builtin_unreachable();
   }
@@ -26,7 +26,7 @@ const char* bc_value_kind_to_string(int n) {
 
 typedef struct bc_value_t bc_value_t;
 
-PG_HASHTABLE(bc_value_t, bc_value_t, bc_dictionary_t);
+PG_HASHTABLE(pg_string_t, bc_value_t, bc_dictionary_t);
 
 struct bc_value_t {
   bc_kind_t kind;
@@ -34,7 +34,7 @@ struct bc_value_t {
     int64_t integer;
     pg_string_t string;
     pg_array_t(bc_value_t) array;
-    bc_dictionary_t object;
+    bc_dictionary_t dictionary;
   } v;
 };
 
@@ -51,6 +51,7 @@ typedef enum {
   BC_PE_UNEXPECTED_CHARACTER,
   BC_PE_INVALID_NUMBER,
   BC_PE_INVALID_STRING_LENGTH,
+  BC_PE_DICT_KEY_NOT_STRING,
 } bc_parse_error_t;
 
 const char* bc_parse_error_to_string(int e) {
@@ -65,6 +66,8 @@ const char* bc_parse_error_to_string(int e) {
       return "BC_PE_INVALID_NUMBER";
     case BC_PE_INVALID_STRING_LENGTH:
       return "BC_PE_INVALID_STRING_LENGTH";
+    case BC_PE_DICT_KEY_NOT_STRING:
+      return "BC_PE_DICT_KEY_NOT_STRING";
     default:
       __builtin_unreachable();
   }
@@ -144,17 +147,17 @@ bc_parse_error_t bc_parse_number(pg_string_span_t* span, bc_value_t* res) {
   return BC_PE_NONE;
 }
 
-void bc_value_destroy(pg_allocator_t allocator, bc_value_t* value) {
+void bc_value_destroy(bc_value_t* value) {
   switch (value->kind) {
     case BC_KIND_STRING:
       pg_string_free(value->v.string);
       break;
-    case BC_KIND_OBJECT:
+    case BC_KIND_DICTIONARY:
       // TODO
       break;
     case BC_KIND_ARRAY:
       for (uint64_t i = 0; i < pg_array_count(value->v.array); i++)
-        bc_value_destroy(allocator, &value->v.array[i]);
+        bc_value_destroy(&value->v.array[i]);
 
       pg_array_free(value->v.array);
       break;
@@ -203,7 +206,7 @@ bc_parse_error_t bc_parse_array(pg_allocator_t allocator,
 
 fail:
   for (uint64_t i = 0; i < pg_array_count(values); i++)
-    bc_value_destroy(allocator, &values[i]);
+    bc_value_destroy(&values[i]);
   pg_array_free(values);
   return err;
 }
@@ -215,16 +218,43 @@ bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator,
 
   if ((err = bc_consume_char(&res_span, 'd')) != BC_PE_NONE) return err;
 
+  bc_dictionary_t dict = {0};
+  pg_hashtable_init(dict, 5, allocator);
+
+  for (uint64_t i = 0; i < res_span.len; i++) {
+    const char c = bc_peek(res_span);
+    if (c == 0) {
+      err = BC_PE_EOF;
+      goto fail;
+    }
+    if (c == 'e') break;
+
+    bc_value_t key = {0};
+    if ((err = bc_parse_value(allocator, &res_span, &key)) != BC_PE_NONE)
+      goto fail;
+
+    if (key.kind != BC_KIND_STRING) {
+      err = BC_PE_DICT_KEY_NOT_STRING;
+      goto fail;
+    }
+
+    bc_value_t value = {0};
+    if ((err = bc_parse_value(allocator, &res_span, &value)) != BC_PE_NONE)
+      goto fail;
+
+    pg_hashtable_upsert(dict, key.v.string, value);
+  }
   if ((err = bc_consume_char(&res_span, 'e')) != BC_PE_NONE) goto fail;
 
-  res->kind = BC_KIND_OBJECT;
-  /* res->v.array = values; */
+  res->kind = BC_KIND_DICTIONARY;
+  res->v.dictionary = dict;
 
   *span = res_span;
 
   return BC_PE_NONE;
 
 fail:
+  pg_hashtable_destroy(dict, pg_string_free_ptr, bc_value_destroy);
   return err;
 }
 
@@ -236,7 +266,7 @@ bc_parse_error_t bc_parse_value(pg_allocator_t allocator,
   else if (c == 'l')
     return bc_parse_array(allocator, span, res);
   else if (c == 'd')
-    __builtin_unreachable();  // TODO
+    return bc_parse_dictionary(allocator, span, res);
   else
     return bc_parse_string(allocator, span, res);
 }
