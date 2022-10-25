@@ -1,10 +1,8 @@
 #include "pg.h"
 
-#include <_types/_uint64_t.h>
-
 #include "vendor/greatest/greatest.h"
 
-TEST test_pg_array_append(void) {
+TEST test_pg_array_append() {
   pg_array_t(int) array;
   pg_array_init_reserve(array, 10, pg_heap_allocator());
 

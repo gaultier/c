@@ -454,9 +454,27 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
     }                                                                 \
   } while (0)
 
-#define pg_hashtable_destroy(hashtable) \
-  do {                                  \
-    pg_array_free(hashtable.keys);      \
-    pg_array_free(hashtable.values);    \
-    pg_array_free(hashtable.hashes);    \
+#define pg_hashtable_destroy(hashtable)                           \
+  do {                                                            \
+    for (uint64_t i = 0; i < pg_array_count(hashtable.keys); i++) \
+      pg_string_free(hashtable.keys[i]);                          \
+    pg_array_free(hashtable.keys);                                \
+    pg_array_free(hashtable.values);                              \
+    pg_array_free(hashtable.hashes);                              \
   } while (0)
+
+// ------------------ Span
+
+typedef struct {
+  char *data;
+  uint64_t len;
+} pg_string_span_t;
+
+void pg_span_consume(pg_string_span_t *span) {
+  assert(span != NULL);
+  assert(span->data != NULL);
+  assert(span->len > 0);
+
+  span->data += 1;
+  span->len -= 1;
+}

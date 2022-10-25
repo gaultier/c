@@ -19,3 +19,6 @@
 [submodule "pg/vendor/greatest"]
 	path = pg/vendor/greatest
 	url = https://github.com/silentbicycle/greatest.git
+[submodule "torrent/vendor/greatest"]
+	path = torrent/vendor/greatest
+	url = https://github.com/silentbicycle/greatest.git
