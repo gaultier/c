@@ -190,6 +190,75 @@ TEST test_bc_parse_number() {
   PASS();
 }
 
+TEST test_bc_parse_array() {
+  const bc_value_t zero = {0};
+  {
+    pg_string_span_t span = {.data = "", .len = 0};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_null_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "l", .len = 1};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(1ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "le", .len = 2};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0ULL, span.len, "%llu");
+    ASSERT_ENUM_EQ(BC_KIND_ARRAY, res.kind, bc_value_kind_to_string);
+    ASSERT_EQ_FMT(0ULL, pg_array_count(res.v.array), "%llu");
+  }
+  {
+    pg_string_span_t span = {.data = "li3e", .len = 4};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(4ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "li3e_", .len = 5};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_UNEXPECTED_CHARACTER, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(5ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "li3e3:fooe", .len = 10};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0ULL, span.len, "%llu");
+    ASSERT_ENUM_EQ(BC_KIND_ARRAY, res.kind, bc_value_kind_to_string);
+    ASSERT_EQ_FMT(2ULL, pg_array_count(res.v.array), "%llu");
+
+    bc_value_t num = res.v.array[0];
+    ASSERT_ENUM_EQ(BC_KIND_INTEGER, num.kind, bc_value_kind_to_string);
+    ASSERT_EQ_FMT(3LL, num.v.integer, "%lld");
+
+    bc_value_t str = res.v.array[1];
+    ASSERT_ENUM_EQ(BC_KIND_STRING, str.kind, bc_value_kind_to_string);
+    ASSERT_STR_EQ("foo", str.v.string);
+  }
+  PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv) {
@@ -198,6 +267,7 @@ int main(int argc, char **argv) {
   RUN_TEST(test_bc_parse_i64);
   RUN_TEST(test_bc_parse_string);
   RUN_TEST(test_bc_parse_number);
+  RUN_TEST(test_bc_parse_array);
 
   GREATEST_MAIN_END(); /* display results */
 }
