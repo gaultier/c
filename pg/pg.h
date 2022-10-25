@@ -470,11 +470,11 @@ typedef struct {
   uint64_t len;
 } pg_string_span_t;
 
-void pg_span_consume(pg_string_span_t *span) {
+void pg_span_consume(pg_string_span_t *span, uint64_t n) {
   assert(span != NULL);
   assert(span->data != NULL);
-  assert(span->len > 0);
+  assert(span->len >= n);
 
-  span->data += 1;
-  span->len -= 1;
+  span->data += n;
+  span->len -= n;
 }
