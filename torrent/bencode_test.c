@@ -325,7 +325,7 @@ TEST test_bc_parse_dictionary() {
 
     ASSERT_EQ(true, found);
 
-    bc_value_t val = res.v.dictionary.values[index];
+    bc_value_t val = pg_hashtable_at(res.v.dictionary, index);
     ASSERT_ENUM_EQ(BC_KIND_INTEGER, val.kind, bc_value_kind_to_string);
     ASSERT_EQ_FMT(3LL, val.v.integer, "%lld");
   }

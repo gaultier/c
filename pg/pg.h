@@ -494,6 +494,8 @@ void pg_hashtable_destroy_kv_noop(void *kv) { (void)kv; }
 
 #define pg_hashtable_count(hashtable) pg_array_count(hashtable.keys)
 
+#define pg_hashtable_at(hashtable, index) hashtable.values[index]
+
 // ------------------ Span
 
 typedef struct {
