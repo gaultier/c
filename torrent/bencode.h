@@ -51,6 +51,8 @@ const char* bc_parse_error_to_string(int e) {
       return "BC_PE_UNEXPECTED_CHARACTER";
     case BC_PE_INVALID_NUMBER:
       return "BC_PE_INVALID_NUMBER";
+    case BC_PE_INVALID_STRING_LENGTH:
+      return "BC_PE_INVALID_STRING_LENGTH";
     default:
       __builtin_unreachable();
   }
@@ -107,6 +109,9 @@ bc_parse_error_t bc_parse_string(pg_allocator_t allocator,
 
   *res_string = pg_string_make_length(allocator, res_span.data, len);
 
+  pg_span_consume(&res_span, len);
+
   *span = res_span;
+
   return BC_PE_NONE;
 }
