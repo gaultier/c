@@ -119,6 +119,76 @@ TEST test_bc_parse_string() {
   PASS();
 }
 
+TEST test_bc_parse_number() {
+  const bc_value_t zero = {0};
+  {
+    pg_string_span_t span = {.data = "", .len = 0};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_number(&span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "x", .len = 1};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_number(&span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_UNEXPECTED_CHARACTER, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(1ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "i", .len = 1};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_number(&span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(1ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "i2", .len = 2};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_number(&span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(2ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "ie", .len = 2};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_number(&span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(2ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "i-", .len = 2};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_number(&span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(2ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
+  }
+  {
+    pg_string_span_t span = {.data = "i-987e", .len = 6};
+    bc_value_t res = {0};
+    bc_parse_error_t err = bc_parse_number(&span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0ULL, span.len, "%llu");
+    ASSERT_ENUM_EQ(BC_KIND_INTEGER, res.kind, bc_value_kind_to_string);
+    ASSERT_EQ_FMT(-987LL, res.v.integer, "%lld");
+  }
+
+  PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv) {
@@ -126,6 +196,7 @@ int main(int argc, char **argv) {
 
   RUN_TEST(test_bc_parse_i64);
   RUN_TEST(test_bc_parse_string);
+  RUN_TEST(test_bc_parse_number);
 
   GREATEST_MAIN_END(); /* display results */
 }

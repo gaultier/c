@@ -12,6 +12,21 @@ typedef enum {
   BC_KIND_OBJECT,
 } bc_kind_t;
 
+const char* bc_value_kind_to_string(int n) {
+  switch (n) {
+    case BC_KIND_INTEGER:
+      return "BC_KIND_INTEGER";
+    case BC_KIND_STRING:
+      return "BC_KIND_STRING";
+    case BC_KIND_ARRAY:
+      return "BC_KIND_ARRAY";
+    case BC_KIND_OBJECT:
+      return "BC_KIND_OBJECT";
+    default:
+      __builtin_unreachable();
+  }
+}
+
 typedef struct bc_value_t bc_value_t;
 
 PG_HASHTABLE(pg_string_t, bc_dictionary_t);
@@ -113,5 +128,21 @@ bc_parse_error_t bc_parse_string(pg_allocator_t allocator,
 
   *span = res_span;
 
+  return BC_PE_NONE;
+}
+
+bc_parse_error_t bc_parse_number(pg_string_span_t* span, bc_value_t* res) {
+  bc_parse_error_t err = BC_PE_NONE;
+  pg_string_span_t res_span = *span;
+
+  if ((err = bc_consume_char(&res_span, 'i')) != BC_PE_NONE) return err;
+  int64_t val = 0;
+  if ((err = bc_parse_i64(&res_span, &val)) != BC_PE_NONE) return err;
+  if ((err = bc_consume_char(&res_span, 'e')) != BC_PE_NONE) return err;
+
+  res->kind = BC_KIND_INTEGER;
+  res->v.integer = val;
+
+  *span = res_span;
   return BC_PE_NONE;
 }
