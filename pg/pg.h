@@ -453,3 +453,10 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
       hashtable.values[index] = val;                                  \
     }                                                                 \
   } while (0)
+
+#define pg_hashtable_destroy(hashtable) \
+  do {                                  \
+    pg_array_free(hashtable.keys);      \
+    pg_array_free(hashtable.values);    \
+    pg_array_free(hashtable.hashes);    \
+  } while (0)

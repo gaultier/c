@@ -66,6 +66,7 @@ TEST test_pg_hashtable() {
   pg_hashtable_find(h, key, found, index);
   ASSERT_EQ(found, true);
 
+  pg_hashtable_destroy(h);
   PASS();
 }
 
