@@ -69,7 +69,8 @@ bc_parse_error_t bc_consume_char(pg_string_span_t* span, char c) {
 bc_parse_error_t bc_parse_i64(pg_string_span_t* span, int64_t* res) {
   assert(span != NULL);
   assert(span->data != NULL);
-  assert(span->len > 0);
+
+  if (span->len == 0) return BC_PE_EOF;
 
   uint64_t i = 0;
   for (; i < span->len; i++) {
@@ -83,7 +84,6 @@ bc_parse_error_t bc_parse_i64(pg_string_span_t* span, int64_t* res) {
       break;
     }
   }
-  if (i == 0) return BC_PE_EOF;
   if (i == 1 && span->data[0] == '-') return BC_PE_INVALID_NUMBER;
   if (span->data[0] == '-') *res *= -1;
 
@@ -91,3 +91,5 @@ bc_parse_error_t bc_parse_i64(pg_string_span_t* span, int64_t* res) {
 
   return BC_PE_NONE;
 }
+
+// bc_parse_error_t bc_parse_string(pg_string_span_t* span, )

@@ -12,7 +12,7 @@ TEST test_bc_parse_i64() {
     ASSERT_EQ_FMT(-23LL, res, "%lld");
   }
   {
-    pg_string_span_t span = {.data = "0", .len = 3};
+    pg_string_span_t span = {.data = "0", .len = 1};
     int64_t res = 0;
     bc_parse_error_t err = bc_parse_i64(&span, &res);
 
@@ -20,15 +20,17 @@ TEST test_bc_parse_i64() {
     ASSERT_EQ_FMT(0LL, res, "%lld");
   }
   {
-    pg_string_span_t span = {.data = "130", .len = 3};
+    pg_string_span_t span = {.data = "130foo", .len = 4};
     int64_t res = 0;
     bc_parse_error_t err = bc_parse_i64(&span, &res);
 
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(130LL, res, "%lld");
+    ASSERT_EQ_FMT(1ULL, span.len, "%llu");
+    ASSERT_STR_EQ("foo", span.data);
   }
   {
-    pg_string_span_t span = {.data = "-", .len = 3};
+    pg_string_span_t span = {.data = "-", .len = 1};
     int64_t res = 0;
     bc_parse_error_t err = bc_parse_i64(&span, &res);
 
@@ -36,7 +38,7 @@ TEST test_bc_parse_i64() {
     ASSERT_EQ_FMT(0LL, res, "%lld");
   }
   {
-    pg_string_span_t span = {.data = "", .len = 3};
+    pg_string_span_t span = {.data = "", .len = 0};
     int64_t res = 0;
     bc_parse_error_t err = bc_parse_i64(&span, &res);
 
