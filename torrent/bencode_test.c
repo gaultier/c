@@ -58,6 +58,25 @@ TEST test_bc_parse_string() {
     bc_parse_error_t err = bc_parse_string(pg_heap_allocator(), &span, &res);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(pg_string_t));
+  }
+  {
+    pg_string_span_t span = {.data = "x", .len = 1};
+    pg_string_t res = {0};
+    bc_parse_error_t err = bc_parse_string(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(1ULL, span.len, "%llu");
+    ASSERT_MEM_EQ(&zero, &res, sizeof(pg_string_t));
+  }
+  {
+    pg_string_span_t span = {.data = "2", .len = 1};
+    pg_string_t res = {0};
+    bc_parse_error_t err = bc_parse_string(pg_heap_allocator(), &span, &res);
+
+    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(1ULL, span.len, "%llu");
     ASSERT_MEM_EQ(&zero, &res, sizeof(pg_string_t));
   }
 

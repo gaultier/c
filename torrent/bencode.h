@@ -59,7 +59,6 @@ const char* bc_parse_error_to_string(int e) {
 bc_parse_error_t bc_consume_char(pg_string_span_t* span, char c) {
   assert(span != NULL);
   assert(span->data != NULL);
-  assert(span->len > 0);
 
   if (span->len == 0) return BC_PE_EOF;
   if (span->data[0] != c) return BC_PE_UNEXPECTED_CHARACTER;
@@ -87,6 +86,7 @@ bc_parse_error_t bc_parse_i64(pg_string_span_t* span, int64_t* res) {
     }
   }
   if (i == 1 && span->data[0] == '-') return BC_PE_INVALID_NUMBER;
+  if (i == 0) return BC_PE_INVALID_NUMBER;
   if (span->data[0] == '-') *res *= -1;
 
   pg_span_consume(span, i);
@@ -95,14 +95,18 @@ bc_parse_error_t bc_parse_i64(pg_string_span_t* span, int64_t* res) {
 }
 
 bc_parse_error_t bc_parse_string(pg_allocator_t allocator,
-                                 pg_string_span_t* span, pg_string_t* res) {
+                                 pg_string_span_t* span,
+                                 pg_string_t* res_string) {
   bc_parse_error_t err = BC_PE_NONE;
   int64_t len = 0;
-  if ((err = bc_parse_i64(span, &len)) != BC_PE_NONE) return err;
-  if ((err = bc_consume_char(span, ':')) != BC_PE_NONE) return err;
-  if (len <= 0 || (uint64_t)len > span->len) return BC_PE_INVALID_STRING_LENGTH;
+  pg_string_span_t res_span = *span;
+  if ((err = bc_parse_i64(&res_span, &len)) != BC_PE_NONE) return err;
+  if ((err = bc_consume_char(&res_span, ':')) != BC_PE_NONE) return err;
+  if (len <= 0 || (uint64_t)len > res_span.len)
+    return BC_PE_INVALID_STRING_LENGTH;
 
-  *res = pg_string_make_length(allocator, span->data, len);
+  *res_string = pg_string_make_length(allocator, res_span.data, len);
 
+  *span = res_span;
   return BC_PE_NONE;
 }
