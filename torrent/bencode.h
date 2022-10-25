@@ -1,6 +1,7 @@
 #pragma once
 
 #include <_types/_uint64_t.h>
+#include <sys/_types/_int64_t.h>
 
 #include "../pg/pg.h"
 
@@ -37,6 +38,7 @@ typedef enum {
   BC_PE_EOF,
   BC_PE_UNEXPECTED_CHARACTER,
   BC_PE_INVALID_NUMBER,
+  BC_PE_INVALID_STRING_LENGTH,
 } bc_parse_error_t;
 
 const char* bc_parse_error_to_string(int e) {
@@ -92,4 +94,15 @@ bc_parse_error_t bc_parse_i64(pg_string_span_t* span, int64_t* res) {
   return BC_PE_NONE;
 }
 
-// bc_parse_error_t bc_parse_string(pg_string_span_t* span, )
+bc_parse_error_t bc_parse_string(pg_allocator_t allocator,
+                                 pg_string_span_t* span, pg_string_t* res) {
+  bc_parse_error_t err = BC_PE_NONE;
+  int64_t len = 0;
+  if ((err = bc_parse_i64(span, &len)) != BC_PE_NONE) return err;
+  if ((err = bc_consume_char(span, ':')) != BC_PE_NONE) return err;
+  if (len <= 0 || (uint64_t)len > span->len) return BC_PE_INVALID_STRING_LENGTH;
+
+  *res = pg_string_make_length(allocator, span->data, len);
+
+  return BC_PE_NONE;
+}
