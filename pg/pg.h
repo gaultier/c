@@ -32,6 +32,22 @@ pg_allocator_t pg_heap_allocator() {
   return (pg_allocator_t){.realloc = pg_heap_realloc, .free = pg_heap_free};
 }
 
+void *pg_null_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
+  (void)new_size;
+  (void)old_memory;
+  (void)old_size;
+  __builtin_unreachable();
+}
+
+void pg_null_free(void *memory) {
+  (void)memory;
+  __builtin_unreachable();
+}
+
+pg_allocator_t pg_null_allocator() {
+  return (pg_allocator_t){.realloc = pg_null_realloc, .free = pg_null_free};
+}
+
 // void *pg_arena_realloc(pg_allocator_t *allocator, uint64_t new_size,
 //                        void *old_memory, uint64_t old_size) {
 //   assert(allocator != NULL);

@@ -112,8 +112,7 @@ bc_parse_error_t bc_parse_i64(pg_string_span_t* span, int64_t* res) {
 }
 
 bc_parse_error_t bc_parse_string(pg_allocator_t allocator,
-                                 pg_string_span_t* span,
-                                 pg_string_t* res_string) {
+                                 pg_string_span_t* span, bc_value_t* value) {
   bc_parse_error_t err = BC_PE_NONE;
   int64_t len = 0;
   pg_string_span_t res_span = *span;
@@ -122,7 +121,8 @@ bc_parse_error_t bc_parse_string(pg_allocator_t allocator,
   if (len <= 0 || (uint64_t)len > res_span.len)
     return BC_PE_INVALID_STRING_LENGTH;
 
-  *res_string = pg_string_make_length(allocator, res_span.data, len);
+  value->kind = BC_KIND_STRING;
+  value->v.string = pg_string_make_length(allocator, res_span.data, len);
 
   pg_span_consume(&res_span, len);
 
@@ -145,4 +145,81 @@ bc_parse_error_t bc_parse_number(pg_string_span_t* span, bc_value_t* res) {
 
   *span = res_span;
   return BC_PE_NONE;
+}
+
+void bc_value_destroy(pg_allocator_t allocator, bc_value_t* value) {
+  switch (value->kind) {
+    case BC_KIND_STRING:
+      pg_string_free(value->v.string);
+      break;
+    case BC_KIND_OBJECT:
+      // TODO
+      break;
+    case BC_KIND_ARRAY:
+      for (uint64_t i = 0; i < pg_array_count(value->v.array); i++)
+        bc_value_destroy(allocator, &value->v.array[i]);
+
+      pg_array_free(value->v.array);
+      break;
+    default:
+      __builtin_unreachable();
+  }
+}
+
+bc_parse_error_t bc_parse_value(pg_allocator_t allocator,
+                                pg_string_span_t* span, bc_value_t* res);
+
+bc_parse_error_t bc_parse_array(pg_allocator_t allocator,
+                                pg_string_span_t* span, bc_value_t* res) {
+  bc_parse_error_t err = BC_PE_NONE;
+  pg_string_span_t res_span = *span;
+
+  if ((err = bc_consume_char(&res_span, 'l')) != BC_PE_NONE) return err;
+
+  pg_array_t(bc_value_t) values = {0};
+  pg_array_init_reserve(values, 8, allocator);
+
+  for (uint64_t i = 0; i < res_span.len; i++) {
+    const char c = bc_peek(res_span);
+    if (c == 0) {
+      err = BC_PE_EOF;
+      goto fail;
+    }
+    if (c == 'e') break;
+
+    bc_value_t value = {0};
+
+    if ((err = bc_parse_value(allocator, &res_span, &value)) != BC_PE_NONE)
+      goto fail;
+
+    pg_array_append(values, value);
+  }
+
+  if ((err = bc_consume_char(&res_span, 'e')) != BC_PE_NONE) goto fail;
+
+  res->kind = BC_KIND_ARRAY;
+  res->v.array = values;
+
+  *span = res_span;
+
+  return BC_PE_NONE;
+
+fail:
+  for (uint64_t i = 0; i < pg_array_count(values); i++)
+    bc_value_destroy(allocator, &values[i]);
+  pg_array_free(values);
+  return err;
+}
+
+bc_parse_error_t bc_parse_value(pg_allocator_t allocator,
+                                pg_string_span_t* span, bc_value_t* res) {
+  const char c = bc_peek(*span);
+  if (c == 'i')
+    return bc_parse_number(span, res);
+  else if (c == 'l')
+    return bc_parse_array(allocator, span, res);
+  else if (c == 'd')
+    __builtin_unreachable();  // TODO
+  else
+    return bc_parse_string(allocator, span, res);
 }
