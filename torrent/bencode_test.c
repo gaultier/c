@@ -287,7 +287,7 @@ TEST test_bc_parse_dictionary() {
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
     ASSERT_ENUM_EQ(BC_KIND_DICTIONARY, res.kind, bc_value_kind_to_string);
-    ASSERT_EQ_FMT(0ULL, pg_hashtable_count(res.v.dictionary), "%llu");
+    ASSERT_EQ_FMT(0ULL, pg_hashtable_count(&res.v.dictionary), "%llu");
   }
   {
     pg_string_span_t span = {.data = "d2:ab", .len = 5};
@@ -315,17 +315,16 @@ TEST test_bc_parse_dictionary() {
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
     ASSERT_ENUM_EQ(BC_KIND_DICTIONARY, res.kind, bc_value_kind_to_string);
-    ASSERT_EQ_FMT(1ULL, pg_hashtable_count(res.v.dictionary), "%llu");
+    ASSERT_EQ_FMT(1ULL, pg_hashtable_count(&res.v.dictionary), "%llu");
 
     pg_string_t key =
         pg_string_make_length(pg_heap_allocator(), "abc", strlen("abc"));
-    bool found = false;
     uint64_t index = -1;
-    pg_hashtable_find(res.v.dictionary, key, found, index);
+    bool found = pg_hashtable_find(&res.v.dictionary, key, &index);
 
     ASSERT_EQ(true, found);
 
-    bc_value_t val = pg_hashtable_at(res.v.dictionary, index);
+    bc_value_t val = res.v.dictionary.values[index];
     ASSERT_ENUM_EQ(BC_KIND_INTEGER, val.kind, bc_value_kind_to_string);
     ASSERT_EQ_FMT(3LL, val.v.integer, "%lld");
   }
