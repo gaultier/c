@@ -496,6 +496,15 @@ typedef enum {
   BC_ME_PIECE_LENGTH_NOT_FOUND,
   BC_ME_PIECE_LENGTH_INVALID_KIND,
   BC_ME_PIECE_LENGTH_INVALID_VALUE,
+  BC_ME_NAME_NOT_FOUND,
+  BC_ME_NAME_INVALID_KIND,
+  BC_ME_NAME_INVALID_VALUE,
+  BC_ME_LENGTH_NOT_FOUND,
+  BC_ME_LENGTH_INVALID_KIND,
+  BC_ME_LENGTH_INVALID_VALUE,
+  BC_ME_PIECES_NOT_FOUND,
+  BC_ME_PIECES_INVALID_KIND,
+  BC_ME_PIECES_INVALID_VALUE,
 
 } bc_metainfo_error_t;
 
@@ -573,9 +582,79 @@ bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
 
       metainfo->piece_length = (uint64_t)piece_length_value->v.integer;
     }
-  }
 
-  //  pg_array_init_reserve(metainfo->pieces, 1000, allocator);
+    // Name
+    {
+      index = -1;
+      pg_string_t name_key = pg_string_make(pg_stack_allocator(), "name");
+      if (!pg_hashtable_find(info, name_key, &index)) {
+        err = BC_ME_NAME_NOT_FOUND;
+        goto end;
+      }
+
+      bc_value_t* name_value = &info->values[index];
+      if (name_value->kind != BC_KIND_STRING) {
+        err = BC_ME_NAME_INVALID_KIND;
+        goto end;
+      }
+
+      pg_string_t s = name_value->v.string;
+      // TODO: revisit when we parse `path`
+      if (pg_string_length(s) == 0) {
+        err = BC_ME_NAME_INVALID_VALUE;
+        goto end;
+      }
+
+      metainfo->name = pg_string_make(allocator, s);
+    }
+    // Length
+    {
+      index = -1;
+      pg_string_t length_key = pg_string_make(pg_stack_allocator(), "length");
+      if (!pg_hashtable_find(info, length_key, &index)) {
+        err = BC_ME_LENGTH_NOT_FOUND;
+        goto end;
+      }
+
+      bc_value_t* length_value = &info->values[index];
+      if (length_value->kind != BC_KIND_INTEGER) {
+        err = BC_ME_LENGTH_INVALID_KIND;
+        goto end;
+      }
+
+      if (length_value->v.integer <= 0) {
+        err = BC_ME_LENGTH_INVALID_VALUE;
+        goto end;
+      }
+
+      metainfo->length = (uint64_t)length_value->v.integer;
+    }
+
+    // Pieces
+    {
+      index = -1;
+      pg_string_t pieces_key = pg_string_make(pg_stack_allocator(), "pieces");
+      if (!pg_hashtable_find(info, pieces_key, &index)) {
+        err = BC_ME_PIECES_NOT_FOUND;
+        goto end;
+      }
+
+      bc_value_t* pieces_value = &info->values[index];
+      if (pieces_value->kind != BC_KIND_STRING) {
+        err = BC_ME_PIECES_INVALID_KIND;
+        goto end;
+      }
+
+      pg_string_t s = pieces_value->v.string;
+      if (pg_string_length(s) == 0 || pg_string_length(s) % 20 != 0) {
+        err = BC_ME_PIECES_INVALID_VALUE;
+        goto end;
+      }
+      pg_array_init_reserve(metainfo->pieces, pg_string_length(s), allocator);
+      memcpy(s, metainfo->pieces, pg_string_length(s));
+      pg_array_resize(metainfo->pieces, pg_string_length(s));
+    }
+  }
 
 end:
   if (err != BC_MI_NONE) bc_metainfo_destroy(metainfo);
