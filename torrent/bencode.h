@@ -277,9 +277,8 @@ bc_parse_error_t bc_parse_value(pg_allocator_t allocator,
     return bc_parse_string(allocator, span, res);
 }
 
-void bc_value_dump_indent(FILE* f, int64_t indent) {
-  if (indent < 0) indent = 0;
-  for (uint64_t i = 0; i < (uint64_t)indent; i++) fprintf(f, " ");
+void bc_value_dump_indent(FILE* f, uint64_t indent) {
+  for (uint64_t i = 0; i < indent; i++) fprintf(f, " ");
 }
 
 void bc_value_dump(bc_value_t* value, FILE* f, uint64_t indent) {
