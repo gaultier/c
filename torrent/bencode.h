@@ -1,8 +1,7 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
-#include <_types/_uint8_t.h>
 #include <stdio.h>
+#include <sys/types.h>
 
 #include "../pg/pg.h"
 
@@ -476,4 +475,48 @@ void bc_value_dump(bc_value_t* value, FILE* f, uint64_t indent) {
       break;
     }
   }
+}
+
+typedef struct {
+  pg_string_t announce;
+  uint64_t piece_length;
+  uint64_t length;
+  pg_string_t name;
+  pg_array_t(uint8_t*) pieces;
+} bc_metainfo_t;
+
+typedef enum {
+  BC_MI_NONE,
+  BC_MI_METAINFO_NOT_DICTIONARY,
+  BC_ME_ANNOUNCE_NOT_FOUND,
+} bc_metainfo_error_t;
+
+void bc_metainfo_destroy(bc_metainfo_t* metainfo) {
+  if (metainfo->pieces != NULL) pg_array_free(metainfo->pieces);
+  if (metainfo->name != NULL) pg_string_free(metainfo->name);
+}
+
+bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
+                                                bc_value_t* val,
+                                                bc_metainfo_t* metainfo) {
+  bc_metainfo_error_t err = BC_MI_NONE;
+
+  if (val->kind != BC_KIND_DICTIONARY) {
+    err = BC_MI_METAINFO_NOT_DICTIONARY;
+    goto end;
+  }
+  bc_dictionary_t* root = &val->v.dictionary;
+
+  uint64_t index = -1;
+  pg_string_t announce_key = pg_string_make(pg_temp_allocator(), "announce");
+  if (!pg_hashtable_find(root, announce_key, &index)) {
+    err = BC_ME_ANNOUNCE_NOT_FOUND;
+    goto end;
+  }
+
+  //  pg_array_init_reserve(metainfo->pieces, 1000, allocator);
+
+end:
+  if (err != BC_MI_NONE) bc_metainfo_destroy(metainfo);
+  return err;
 }

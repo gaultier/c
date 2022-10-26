@@ -1,13 +1,11 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/_types/_int64_t.h>
 
 #ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -31,6 +29,23 @@ void pg_heap_free(void *memory) { free(memory); }
 
 pg_allocator_t pg_heap_allocator() {
   return (pg_allocator_t){.realloc = pg_heap_realloc, .free = pg_heap_free};
+}
+
+void *pg_temp_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
+  (void)old_memory;
+  (void)old_size;
+
+  void *res = alloca(new_size);
+  memset(res, 0, new_size);
+  return res;
+}
+
+void pg_temp_free(void *memory) {
+  (void)memory;  // no-op
+}
+
+pg_allocator_t pg_temp_allocator() {
+  return (pg_allocator_t){.realloc = pg_temp_realloc, .free = pg_temp_free};
 }
 
 void *pg_null_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
