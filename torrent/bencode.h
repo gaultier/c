@@ -51,6 +51,7 @@ struct bc_value_t {
 void pg_hashtable_init(bc_dictionary_t* hashtable, uint64_t cap,
                        pg_allocator_t allocator) {
   assert(hashtable != NULL);
+  if (cap < 2) cap = 2;
 
   hashtable->allocator = allocator;
   pg_array_init_reserve(hashtable->keys, cap, allocator);
@@ -382,7 +383,7 @@ bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator,
   if ((err = bc_consume_char(&res_span, 'd')) != BC_PE_NONE) return err;
 
   bc_dictionary_t dict = {0};
-  pg_hashtable_init(&dict, 5, allocator);
+  pg_hashtable_init(&dict, 2, allocator);
 
   for (uint64_t i = 0; i < res_span.len; i++) {
     const char c = bc_peek(res_span);
