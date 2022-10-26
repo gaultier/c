@@ -101,6 +101,8 @@ bool pg_hashtable_find(bc_dictionary_t* hashtable, pg_string_t key,
 
 #define PG_HASHTABLE_LOAD_FACTOR 0.75
 
+void pg_hashtable_upsert(bc_dictionary_t* hashtable, pg_string_t key,
+                         bc_value_t* val);
 void pg_hashtable_grow(bc_dictionary_t* hashtable, uint64_t new_cap) {
   assert(hashtable != NULL);
   assert(hashtable->keys != NULL);
@@ -113,24 +115,20 @@ void pg_hashtable_grow(bc_dictionary_t* hashtable, uint64_t new_cap) {
   assert(pg_array_count(hashtable->keys) == pg_array_count(hashtable->values));
   assert(pg_array_count(hashtable->keys) == pg_array_count(hashtable->hashes));
 
-  pg_array_t(pg_string_t) new_keys = {0};
-  pg_array_t(bc_value_t) new_values = {0};
-  pg_array_t(uint32_t) new_hashes = {0};
-  pg_array_init_reserve(new_keys, new_cap, hashtable->allocator);
-  pg_array_init_reserve(new_values, new_cap, hashtable->allocator);
-  pg_array_init_reserve(new_hashes, new_cap, hashtable->allocator);
+  bc_dictionary_t new_hashtable = {0};
+  pg_hashtable_init(&new_hashtable, new_cap, hashtable->allocator);
 
   for (uint64_t i = 0; i < pg_array_capacity(hashtable->keys); i++) {
     if (hashtable->hashes[i] == 0) continue;
+    pg_hashtable_upsert(&new_hashtable, hashtable->keys[i],
+                        &hashtable->values[i]);
   }
 
-  assert(pg_array_capacity(hashtable->keys) ==
-         pg_array_capacity(hashtable->values));
-  assert(pg_array_capacity(hashtable->keys) ==
-         pg_array_capacity(hashtable->hashes));
-  assert(pg_array_capacity(hashtable->keys) >= new_cap);
-  assert(pg_array_capacity(hashtable->values) >= new_cap);
-  assert(pg_array_capacity(hashtable->hashes) >= new_cap);
+  pg_array_free(hashtable->keys);
+  pg_array_free(hashtable->values);
+  pg_array_free(hashtable->hashes);
+
+  memcpy(hashtable, &new_hashtable, sizeof(bc_dictionary_t));
 }
 
 void pg_hashtable_upsert(bc_dictionary_t* hashtable, pg_string_t key,
