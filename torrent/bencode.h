@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint32_t.h>
 #include <_types/_uint64_t.h>
 #include <stdio.h>
 #include <sys/types.h>
@@ -85,26 +86,52 @@ bool pg_hashtable_find(bc_dictionary_t* hashtable, pg_string_t key,
 
   for (;;) {
     const uint32_t index_hash = hashtable->hashes[*index];
-    if (index_hash == 0) break; /* Not found but suitable empty slot */
+    if (index_hash == 0) return false; /* Not found but suitable empty slot */
     if (index_hash == hash &&
         pg_string_length(key) == pg_string_length(hashtable->keys[*index]) &&
         memcmp(key, hashtable->keys[*index], pg_string_length(key)) == 0) {
       /* Found after checking for collision */
-      assert(*index < pg_array_capacity(hashtable->keys));
-      assert(*index < pg_array_capacity(hashtable->values));
-      assert(*index < pg_array_capacity(hashtable->hashes));
       return true;
     }
     /* Keep going to find either an empty slot or a matching hash */
     *index = (*index + 1) % pg_array_capacity(hashtable->keys);
   }
-  assert(*index < pg_array_capacity(hashtable->keys));
-  assert(*index < pg_array_capacity(hashtable->values));
-  assert(*index < pg_array_capacity(hashtable->hashes));
-  return false;
+  __builtin_unreachable();
 }
 
 #define PG_HASHTABLE_LOAD_FACTOR 0.75
+
+void pg_hashtable_grow(bc_dictionary_t* hashtable, uint64_t new_cap) {
+  assert(hashtable != NULL);
+  assert(hashtable->keys != NULL);
+  assert(hashtable->values != NULL);
+  assert(hashtable->hashes != NULL);
+  assert(pg_array_capacity(hashtable->keys) ==
+         pg_array_capacity(hashtable->values));
+  assert(pg_array_capacity(hashtable->keys) ==
+         pg_array_capacity(hashtable->hashes));
+  assert(pg_array_count(hashtable->keys) == pg_array_count(hashtable->values));
+  assert(pg_array_count(hashtable->keys) == pg_array_count(hashtable->hashes));
+
+  pg_array_t(pg_string_t) new_keys = {0};
+  pg_array_t(bc_value_t) new_values = {0};
+  pg_array_t(uint32_t) new_hashes = {0};
+  pg_array_init_reserve(new_keys, new_cap, hashtable->allocator);
+  pg_array_init_reserve(new_values, new_cap, hashtable->allocator);
+  pg_array_init_reserve(new_hashes, new_cap, hashtable->allocator);
+
+  for (uint64_t i = 0; i < pg_array_capacity(hashtable->keys); i++) {
+    if (hashtable->hashes[i] == 0) continue;
+  }
+
+  assert(pg_array_capacity(hashtable->keys) ==
+         pg_array_capacity(hashtable->values));
+  assert(pg_array_capacity(hashtable->keys) ==
+         pg_array_capacity(hashtable->hashes));
+  assert(pg_array_capacity(hashtable->keys) >= new_cap);
+  assert(pg_array_capacity(hashtable->values) >= new_cap);
+  assert(pg_array_capacity(hashtable->hashes) >= new_cap);
+}
 
 void pg_hashtable_upsert(bc_dictionary_t* hashtable, pg_string_t key,
                          bc_value_t* val) {
@@ -124,16 +151,7 @@ void pg_hashtable_upsert(bc_dictionary_t* hashtable, pg_string_t key,
   const uint64_t len = pg_array_count(hashtable->keys);
   if ((double)len / cap >= PG_HASHTABLE_LOAD_FACTOR) {
     const uint64_t new_cap = 1.5 * cap;
-    pg_array_grow(hashtable->keys, new_cap);
-    pg_array_grow(hashtable->values, new_cap);
-    pg_array_grow(hashtable->hashes, new_cap);
-    assert(pg_array_capacity(hashtable->keys) ==
-           pg_array_capacity(hashtable->values));
-    assert(pg_array_capacity(hashtable->keys) ==
-           pg_array_capacity(hashtable->hashes));
-    assert(pg_array_capacity(hashtable->keys) >= new_cap);
-    assert(pg_array_capacity(hashtable->values) >= new_cap);
-    assert(pg_array_capacity(hashtable->hashes) >= new_cap);
+    pg_hashtable_grow(hashtable, new_cap);
   }
   uint64_t index = -1;
   if (pg_hashtable_find(hashtable, key, &index)) { /* Update */
@@ -505,8 +523,50 @@ typedef enum {
   BC_ME_PIECES_NOT_FOUND,
   BC_ME_PIECES_INVALID_KIND,
   BC_ME_PIECES_INVALID_VALUE,
-
 } bc_metainfo_error_t;
+
+const char* bc_metainfo_error_to_string(int err) {
+  switch (err) {
+    case BC_MI_NONE:
+      return "BC_MI_NONE";
+    case BC_MI_METAINFO_NOT_DICTIONARY:
+      return "BC_MI_METAINFO_NOT_DICTIONARY";
+    case BC_ME_ANNOUNCE_NOT_FOUND:
+      return "BC_ME_ANNOUNCE_NOT_FOUND";
+    case BC_ME_ANNOUNCE_INVALID_KIND:
+      return "BC_ME_ANNOUNCE_INVALID_KIND";
+    case BC_ME_INFO_NOT_FOUND:
+      return "BC_ME_INFO_NOT_FOUND";
+    case BC_ME_INFO_INVALID_KIND:
+      return "BC_ME_INFO_INVALID_KIND";
+    case BC_ME_PIECE_LENGTH_NOT_FOUND:
+      return "BC_ME_PIECE_LENGTH_NOT_FOUND";
+    case BC_ME_PIECE_LENGTH_INVALID_KIND:
+      return "BC_ME_PIECE_LENGTH_INVALID_KIND";
+    case BC_ME_PIECE_LENGTH_INVALID_VALUE:
+      return "BC_ME_PIECE_LENGTH_INVALID_VALUE";
+    case BC_ME_NAME_NOT_FOUND:
+      return "BC_ME_NAME_NOT_FOUND";
+    case BC_ME_NAME_INVALID_KIND:
+      return "BC_ME_NAME_INVALID_KIND";
+    case BC_ME_NAME_INVALID_VALUE:
+      return "BC_ME_NAME_INVALID_VALUE";
+    case BC_ME_LENGTH_NOT_FOUND:
+      return "BC_ME_LENGTH_NOT_FOUND";
+    case BC_ME_LENGTH_INVALID_KIND:
+      return "BC_ME_LENGTH_INVALID_KIND";
+    case BC_ME_LENGTH_INVALID_VALUE:
+      return "BC_ME_LENGTH_INVALID_VALUE";
+    case BC_ME_PIECES_NOT_FOUND:
+      return "BC_ME_PIECES_NOT_FOUND";
+    case BC_ME_PIECES_INVALID_KIND:
+      return "BC_ME_PIECES_INVALID_KIND";
+    case BC_ME_PIECES_INVALID_VALUE:
+      return "BC_ME_PIECES_INVALID_VALUE";
+    default:
+      __builtin_unreachable();
+  }
+}
 
 void bc_metainfo_destroy(bc_metainfo_t* metainfo) {
   if (metainfo->pieces != NULL) pg_array_free(metainfo->pieces);

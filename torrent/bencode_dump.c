@@ -1,6 +1,7 @@
 #include <_types/_uint64_t.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/errno.h>
 #include <unistd.h>
@@ -33,10 +34,25 @@ int main(int argc, char* argv[]) {
 
   pg_string_span_t span = {.data = buf, .len = pg_array_count(buf)};
   bc_value_t bencode = {0};
-  bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &bencode);
-  if (err != BC_PE_NONE) {
-    fprintf(stderr, "Failed to parse: %s\n", bc_parse_error_to_string(err));
-    exit(EINVAL);
+  {
+    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &bencode);
+    if (err != BC_PE_NONE) {
+      fprintf(stderr, "Failed to parse: %s\n", bc_parse_error_to_string(err));
+      exit(EINVAL);
+    }
   }
   bc_value_dump(&bencode, stdout, 0);
+  puts("");
+
+  bc_metainfo_t metainfo = {0};
+  {
+    bc_metainfo_error_t err = BC_MI_NONE;
+    if ((err = bc_metainfo_init_from_value(pg_heap_allocator(), &bencode,
+                                           &metainfo)) != BC_MI_NONE) {
+      fprintf(stderr, "Failed to bc_metainfo_init_from_value: %s\n",
+              bc_metainfo_error_to_string(err));
+      exit(EINVAL);
+    }
+  }
+  __builtin_dump_struct(&metainfo, &printf);
 }
