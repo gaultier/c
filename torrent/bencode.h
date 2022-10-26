@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
 #include <stdio.h>
 #include <sys/types.h>
 
@@ -489,6 +490,13 @@ typedef enum {
   BC_MI_NONE,
   BC_MI_METAINFO_NOT_DICTIONARY,
   BC_ME_ANNOUNCE_NOT_FOUND,
+  BC_ME_ANNOUNCE_INVALID_KIND,
+  BC_ME_INFO_NOT_FOUND,
+  BC_ME_INFO_INVALID_KIND,
+  BC_ME_PIECE_LENGTH_NOT_FOUND,
+  BC_ME_PIECE_LENGTH_INVALID_KIND,
+  BC_ME_PIECE_LENGTH_INVALID_VALUE,
+
 } bc_metainfo_error_t;
 
 void bc_metainfo_destroy(bc_metainfo_t* metainfo) {
@@ -507,11 +515,64 @@ bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
   }
   bc_dictionary_t* root = &val->v.dictionary;
 
-  uint64_t index = -1;
-  pg_string_t announce_key = pg_string_make(pg_temp_allocator(), "announce");
-  if (!pg_hashtable_find(root, announce_key, &index)) {
-    err = BC_ME_ANNOUNCE_NOT_FOUND;
-    goto end;
+  // Announce
+  {
+    uint64_t index = -1;
+    pg_string_t announce_key = pg_string_make(pg_stack_allocator(), "announce");
+    if (!pg_hashtable_find(root, announce_key, &index)) {
+      err = BC_ME_ANNOUNCE_NOT_FOUND;
+      goto end;
+    }
+
+    bc_value_t* announce_value = &root->values[index];
+    if (announce_value->kind != BC_KIND_STRING) {
+      err = BC_ME_ANNOUNCE_INVALID_KIND;
+      goto end;
+    }
+
+    metainfo->announce = pg_string_make(allocator, announce_value->v.string);
+  }
+
+  // Info
+  {
+    uint64_t index = -1;
+    pg_string_t info_key = pg_string_make(pg_stack_allocator(), "info");
+    if (!pg_hashtable_find(root, info_key, &index)) {
+      err = BC_ME_INFO_NOT_FOUND;
+      goto end;
+    }
+
+    bc_value_t* info_value = &root->values[index];
+    if (info_value->kind != BC_KIND_DICTIONARY) {
+      err = BC_ME_INFO_INVALID_KIND;
+      goto end;
+    }
+
+    bc_dictionary_t* info = &info_value->v.dictionary;
+
+    // Piece length
+    {
+      index = -1;
+      pg_string_t piece_length_key =
+          pg_string_make(pg_stack_allocator(), "piece length");
+      if (!pg_hashtable_find(info, piece_length_key, &index)) {
+        err = BC_ME_PIECE_LENGTH_NOT_FOUND;
+        goto end;
+      }
+
+      bc_value_t* piece_length_value = &info->values[index];
+      if (piece_length_value->kind != BC_KIND_INTEGER) {
+        err = BC_ME_PIECE_LENGTH_INVALID_KIND;
+        goto end;
+      }
+
+      if (piece_length_value->v.integer <= 0) {
+        err = BC_ME_PIECE_LENGTH_INVALID_VALUE;
+        goto end;
+      }
+
+      metainfo->piece_length = (uint64_t)piece_length_value->v.integer;
+    }
   }
 
   //  pg_array_init_reserve(metainfo->pieces, 1000, allocator);

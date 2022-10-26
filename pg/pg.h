@@ -31,7 +31,7 @@ pg_allocator_t pg_heap_allocator() {
   return (pg_allocator_t){.realloc = pg_heap_realloc, .free = pg_heap_free};
 }
 
-void *pg_temp_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
+void *pg_stack_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
   (void)old_memory;
   (void)old_size;
 
@@ -40,12 +40,12 @@ void *pg_temp_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
   return res;
 }
 
-void pg_temp_free(void *memory) {
+void pg_stack_free(void *memory) {
   (void)memory;  // no-op
 }
 
-pg_allocator_t pg_temp_allocator() {
-  return (pg_allocator_t){.realloc = pg_temp_realloc, .free = pg_temp_free};
+pg_allocator_t pg_stack_allocator() {
+  return (pg_allocator_t){.realloc = pg_stack_realloc, .free = pg_stack_free};
 }
 
 void *pg_null_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
