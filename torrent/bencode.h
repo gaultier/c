@@ -131,9 +131,9 @@ void pg_hashtable_upsert(bc_dictionary_t* hashtable, pg_string_t key,
            pg_array_capacity(hashtable->values));
     assert(pg_array_capacity(hashtable->keys) ==
            pg_array_capacity(hashtable->hashes));
-    assert(pg_array_capacity(hashtable->keys) > cap);
-    assert(pg_array_capacity(hashtable->values) > cap);
-    assert(pg_array_capacity(hashtable->hashes) > cap);
+    assert(pg_array_capacity(hashtable->keys) >= new_cap);
+    assert(pg_array_capacity(hashtable->values) >= new_cap);
+    assert(pg_array_capacity(hashtable->hashes) >= new_cap);
   }
   uint64_t index = -1;
   if (pg_hashtable_find(hashtable, key, &index)) { /* Update */
@@ -464,24 +464,20 @@ void bc_value_dump(bc_value_t* value, FILE* f, uint64_t indent) {
       fprintf(f, "{\n");
 
       bc_dictionary_t* dict = &value->v.dictionary;
-      //   bc_dictionary_iter_t it = {0};
-
-      //  pg_hashtable_init_iter(*dict, it);
 
       uint64_t count = 0;
       for (uint64_t i = 0; i < pg_array_capacity(dict->keys); i++) {
-        if (dict->hashes[i] == 0) continue;
-        printf("[D009] %llu/%llu\n", count, pg_hashtable_count(dict));
+        if (dict->hashes[i] == 0) {
+          continue;
+        }
+        count++;
 
         bc_value_dump_indent(f, indent + 2);
         fprintf(f, "\"%s\": ", dict->keys[i]);
         bc_value_dump(&dict->values[i], f, indent + 2);
-        if (count < pg_hashtable_count(dict) - 1) fprintf(f, ",");
+        if (count < pg_hashtable_count(dict)) fprintf(f, ",");
 
         fprintf(f, "\n");
-
-        count++;
-        //  pg_hashtable_next(*dict, it);
       }
 
       bc_value_dump_indent(f, indent);

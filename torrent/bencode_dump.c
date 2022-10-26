@@ -26,7 +26,7 @@ int main(int argc, char* argv[]) {
     }
     if (ret == 0) break;
     pg_array_resize(buf, pg_array_count(buf) + ret);
-    pg_array_grow(buf, 1.5 * pg_array_capacity(buf));
+    pg_array_grow(buf, pg_array_capacity(buf));
   }
 
   pg_string_span_t span = {.data = buf, .len = pg_array_count(buf)};

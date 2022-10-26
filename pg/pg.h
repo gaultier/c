@@ -68,7 +68,7 @@ typedef struct pg_array_header_t {
 #define pg_array_t(Type) Type *
 
 #ifndef PG_ARRAY_GROW_FORMULA
-#define PG_ARRAY_GROW_FORMULA(x) (1.5 * (x) + 8)
+#define PG_ARRAY_GROW_FORMULA(x) (1.5 * (x))
 #endif
 
 #define PG_ARRAY_HEADER(x) ((pg_array_header_t *)(x)-1)
@@ -98,47 +98,19 @@ typedef struct pg_array_header_t {
     x = NULL;                                       \
   } while (0)
 
-#define pg_array_set_capacity(x, capacity)                                 \
-  do {                                                                     \
-    if (x) {                                                               \
-      void **pg__array_ = (void **)&(x);                                   \
-      *pg__array_ = pg__array_set_capacity((x), (capacity), sizeof(*(x))); \
-    }                                                                      \
-  } while (0)
-
-void *pg__array_set_capacity(void *array, uint64_t capacity,
-                             uint64_t element_size) {
-  pg_array_header_t *h = PG_ARRAY_HEADER(array);
-
-  assert(element_size > 0);
-
-  if (capacity == h->capacity) return array;
-
-  if (capacity < h->count) {
-    if (h->capacity < capacity) {
-      uint64_t new_capacity = PG_ARRAY_GROW_FORMULA(h->capacity);
-      if (new_capacity < capacity) new_capacity = capacity;
-      pg__array_set_capacity(array, new_capacity, element_size);
-    }
-    h->count = capacity;
-  }
-
-  {
-    uint64_t size = sizeof(pg_array_header_t) + element_size * capacity;
-    pg_array_header_t *nh = calloc(1, size);
-    memmove(nh, h, sizeof(pg_array_header_t) + element_size * h->count);
-    nh->count = h->count;
-    nh->capacity = capacity;
-    nh->allocator.free(h);
-    return nh + 1;
-  }
-}
-
-#define pg_array_grow(x, min_capacity)                                   \
-  do {                                                                   \
-    uint64_t new_capacity = PG_ARRAY_GROW_FORMULA(pg_array_capacity(x)); \
-    if (new_capacity < (min_capacity)) new_capacity = (min_capacity);    \
-    pg_array_set_capacity(x, new_capacity);                              \
+#define pg_array_grow(x, min_capacity)                                      \
+  do {                                                                      \
+    uint64_t new_capacity = PG_ARRAY_GROW_FORMULA(pg_array_capacity(x));    \
+    if (new_capacity < (min_capacity)) new_capacity = (min_capacity);       \
+    const uint64_t old_size =                                               \
+        sizeof(pg_array_header_t) + pg_array_capacity(x) * sizeof(*x);      \
+    const uint64_t new_size =                                               \
+        sizeof(pg_array_header_t) + new_capacity * sizeof(*x);              \
+    x = PG_ARRAY_HEADER(x)->allocator.realloc(new_size, PG_ARRAY_HEADER(x), \
+                                              old_size);                    \
+    pg_array_header_t *pg__new_header = (pg_array_header_t *)x;             \
+    pg__new_header->capacity = new_capacity;                                \
+    x = (void *)(pg__new_header + 1);                                       \
   } while (0)
 
 #define pg_array_append(x, item)                                           \
@@ -146,17 +118,6 @@ void *pg__array_set_capacity(void *array, uint64_t capacity,
     if (pg_array_capacity(x) < pg_array_count(x) + 1) pg_array_grow(x, 0); \
     (x)[pg_array_count(x)++] = (item);                                     \
   } while (0)
-
-#define pg_array_appendv(x, items, item_count)                           \
-  do {                                                                   \
-    pg_array_header_t *pg__ah = PG_ARRAY_HEADER(x);                      \
-    if (pg__ah->capacity < pg__ah->count + (item_count))                 \
-      pg_array_grow(x, pg__ah->count + (item_count));                    \
-    memcpy(&(x)[pg__ah->count], (items), sizeof((x)[0]) * (item_count)); \
-    pg__ah->count += (item_count);                                       \
-  } while (0)
-
-#define pg_array_appendv0(x, items0) pg_array_appendv(x, items0, strlen(items0))
 
 #define pg_array_pop(x)                    \
   do {                                     \
@@ -173,18 +134,6 @@ void *pg__array_set_capacity(void *array, uint64_t capacity,
     if (PG_ARRAY_HEADER(x)->capacity < (uint64_t)(new_count)) \
       pg_array_grow(x, (uint64_t)(new_count));                \
     PG_ARRAY_HEADER(x)->count = (uint64_t)(new_count);        \
-  } while (0)
-
-#define pg_array_reserve(x, new_capacity)              \
-  do {                                                 \
-    if (PG_ARRAY_HEADER(x)->capacity < (new_capacity)) \
-      pg_array_set_capacity(x, new_capacity);          \
-  } while (0)
-
-// Set cap(x) == len(x)
-#define pg_array_shrink(x)                       \
-  do {                                           \
-    pg_array_set_capacity(x, pg_array_count(x)); \
   } while (0)
 
 char pg_char_to_lower(char c) {
@@ -214,8 +163,8 @@ bool pg_str_has_prefix(char *haystack0, char *needle0) {
 
 typedef char *pg_string_t;
 
-// NOTE(bill): If you only need a small string, just use a standard c string or
-// change the size from uint64_t to u16, etc.
+// NOTE(bill): If you only need a small string, just use a standard c
+// string or change the size from uint64_t to u16, etc.
 typedef struct pg_string_header_t {
   pg_allocator_t allocator;
   uint64_t length;
