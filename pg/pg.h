@@ -377,7 +377,13 @@ pg_string_t pg_string_appendc(pg_string_t str, char const *other) {
     pg_array_t(V) values;        \
     pg_array_t(uint32_t) hashes; \
     pg_allocator_t allocator;    \
-  } name
+  } name##_t;                    \
+  typedef struct {               \
+    K *key;                      \
+    V *value;                    \
+    int64_t index;               \
+    bool has_next;               \
+  } name##_iter_t
 
 #define pg_hashtable_init(hashtable, cap, my_allocator)         \
   do {                                                          \
@@ -440,6 +446,7 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
            pg_array_count(hashtable.hashes));                      \
                                                                    \
     const uint64_t cap = pg_array_capacity(hashtable.keys);        \
+    assert(cap > 0);                                               \
     const uint64_t len = pg_array_count(hashtable.keys);           \
     if ((double)len / cap >= PG_HASHTABLE_LOAD_FACTOR) {           \
       const uint64_t new_cap = 1.5 * cap;                          \
@@ -450,6 +457,9 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
              pg_array_capacity(hashtable.values));                 \
       assert(pg_array_capacity(hashtable.keys) ==                  \
              pg_array_capacity(hashtable.hashes));                 \
+      assert(pg_array_capacity(hashtable.keys) > cap);             \
+      assert(pg_array_capacity(hashtable.values) > cap);           \
+      assert(pg_array_capacity(hashtable.hashes) > cap);           \
     }                                                              \
     bool found = false;                                            \
     uint64_t index = -1;                                           \
@@ -474,14 +484,22 @@ void pg_hashtable_destroy_kv_noop(void *kv) { (void)kv; }
 
 #define pg_hashtable_destroy(hashtable, free_key, free_value)             \
   do {                                                                    \
+    assert(pg_array_capacity(hashtable.keys) ==                           \
+           pg_array_capacity(hashtable.values));                          \
+    assert(pg_array_capacity(hashtable.keys) ==                           \
+           pg_array_capacity(hashtable.hashes));                          \
+    assert(pg_array_count(hashtable.keys) ==                              \
+           pg_array_count(hashtable.values));                             \
+    assert(pg_array_count(hashtable.keys) ==                              \
+           pg_array_count(hashtable.hashes));                             \
     if (free_key != NULL) {                                               \
-      for (uint64_t i = 0; i < pg_array_count(hashtable.keys); i++)       \
+      for (uint64_t i = 0; i < pg_array_capacity(hashtable.keys); i++)    \
         if (hashtable.hashes[i] != 0) (free_key)(&hashtable.keys[i]);     \
     }                                                                     \
     pg_array_free(hashtable.keys);                                        \
                                                                           \
     if (free_value != NULL) {                                             \
-      for (uint64_t i = 0; i < pg_array_count(hashtable.values); i++)     \
+      for (uint64_t i = 0; i < pg_array_capacity(hashtable.values); i++)  \
         if (hashtable.hashes[i] != 0) (free_value)(&hashtable.values[i]); \
     }                                                                     \
     pg_array_free(hashtable.values);                                      \
@@ -489,17 +507,33 @@ void pg_hashtable_destroy_kv_noop(void *kv) { (void)kv; }
     pg_array_free(hashtable.hashes);                                      \
   } while (0)
 
-#define pg_hashtable_count(hashtable) pg_array_count(hashtable.keys)
+#define pg_hashtable_count(hashtable) pg_array_count((hashtable).keys)
 
-#define pg_hashtable_at(hashtable, index) hashtable.values[index]
+#define pg_hashtable_at(hashtable, index) (hashtable).values[index]
 
-#define pg_hashtable_foreach_begin(hashtable)                           \
-  for (uint64_t it = 0; it < pg_array_capacity(hashtable.keys); it++) { \
-    if (hashtable.hashes[it] != 0) {
-#define pg_hashtable_foreach_end(hashtable) \
-  }                                         \
-  }                                         \
-  while (0)
+#define pg_hashtable_next(hashtable, it)                            \
+  do {                                                              \
+    (it).has_next = false;                                          \
+    for (int64_t i = (it).index + 1;                                \
+         i < (int64_t)pg_array_capacity((hashtable).hashes); i++) { \
+      if ((hashtable).hashes[i] != 0) {                             \
+        (it).index = i;                                             \
+        (it).key = &(hashtable).keys[i];                            \
+        (it).value = &(hashtable).values[i];                        \
+        (it).has_next = true;                                       \
+        break;                                                      \
+      }                                                             \
+    }                                                               \
+  } while (0)
+
+#define pg_hashtable_init_iter(hashtable, it) \
+  do {                                        \
+    (it).index = -1;                          \
+    (it).key = NULL;                          \
+    (it).value = NULL;                        \
+    (it).has_next = false;                    \
+    pg_hashtable_next(hashtable, it);         \
+  } while (0)
 
 // ------------------ Span
 

@@ -41,7 +41,7 @@ SUITE(pg_array) {
 
 TEST test_pg_hashtable() {
   PG_HASHTABLE(pg_string_t, uint64_t, my_hash);
-  my_hash dict = {0};
+  my_hash_t dict = {0};
   pg_hashtable_init(dict, 5, pg_heap_allocator());
 
   bool found = false;
@@ -65,6 +65,15 @@ TEST test_pg_hashtable() {
 
   pg_hashtable_find(dict, key, found, index);
   ASSERT_EQ(found, true);
+
+  my_hash_iter_t it = {0};
+  pg_hashtable_init_iter(dict, it);
+  uint64_t count = 0;
+  while (it.has_next) {
+    count++;
+    pg_hashtable_next(dict, it);
+  }
+  ASSERT_EQ_FMT(2ULL, count, "%llu");
 
   pg_hashtable_destroy(dict, pg_string_free_ptr, pg_hashtable_destroy_kv_noop);
   PASS();

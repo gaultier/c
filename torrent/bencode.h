@@ -30,7 +30,7 @@ const char* bc_value_kind_to_string(int n) {
 
 typedef struct bc_value_t bc_value_t;
 
-PG_HASHTABLE(pg_string_t, bc_value_t, bc_dictionary_t);
+PG_HASHTABLE(pg_string_t, bc_value_t, bc_dictionary);
 
 struct bc_value_t {
   bc_kind_t kind;
@@ -301,7 +301,7 @@ void bc_value_dump(bc_value_t* value, FILE* f, uint64_t indent) {
         fprintf(f, "\"");
         for (uint64_t i = 0; i < pg_string_length(value->v.string); i++) {
           uint8_t c = (uint8_t)value->v.string[i];
-          fprintf(f, "\\x%x", c);
+          fprintf(f, "\\u%04x", c);
         }
         fprintf(f, "\"");
       }
@@ -319,17 +319,33 @@ void bc_value_dump(bc_value_t* value, FILE* f, uint64_t indent) {
       bc_value_dump_indent(f, indent);
       fprintf(f, "]");
       break;
-    case BC_KIND_DICTIONARY:
+    case BC_KIND_DICTIONARY: {
       fprintf(f, "{\n");
-      pg_hashtable_foreach_begin(value->v.dictionary)
-          bc_value_dump_indent(f, indent + 2);
-      fprintf(f, "\"%s\": ", value->v.dictionary.keys[it]);
-      bc_value_dump(&value->v.dictionary.values[it], f, indent + 2);
-      fprintf(f, ",\n");
-      pg_hashtable_foreach_end(value->v.dictionary);
+
+      bc_dictionary_t* dict = &value->v.dictionary;
+      //   bc_dictionary_iter_t it = {0};
+
+      //  pg_hashtable_init_iter(*dict, it);
+
+      uint64_t count = 0;
+      for (uint64_t i = 0; i < pg_array_capacity(dict->keys); i++) {
+        if (dict->hashes[i] == 0) continue;
+        printf("[D009] %llu/%llu\n", count, pg_hashtable_count(*dict));
+
+        bc_value_dump_indent(f, indent + 2);
+        fprintf(f, "\"%s\": ", dict->keys[i]);
+        bc_value_dump(&dict->values[i], f, indent + 2);
+        if (count < pg_hashtable_count(*dict) - 1) fprintf(f, ",");
+
+        fprintf(f, "\n");
+
+        count++;
+        //  pg_hashtable_next(*dict, it);
+      }
 
       bc_value_dump_indent(f, indent);
       fprintf(f, "}");
       break;
+    }
   }
 }
