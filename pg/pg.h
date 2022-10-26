@@ -153,6 +153,15 @@ bool pg_char_is_digit(char c) {
   return false;
 }
 
+bool pg_char_is_alpha(char c) {
+  if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) return true;
+  return false;
+}
+
+bool pg_char_is_alphanumeric(char c) {
+  return pg_char_is_alpha(c) || pg_char_is_digit(c);
+}
+
 bool pg_str_has_prefix(char *haystack0, char *needle0) {
   uint64_t haystack0_len = strlen(haystack0);
   uint64_t needle0_len = strlen(needle0);

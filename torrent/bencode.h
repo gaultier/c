@@ -428,24 +428,15 @@ void bc_value_dump(bc_value_t* value, FILE* f, uint64_t indent) {
       fprintf(f, "%lld", value->v.integer);
       break;
     case BC_KIND_STRING: {
-      bool printable = true;
+      fprintf(f, "\"");
       for (uint64_t i = 0; i < pg_string_length(value->v.string); i++) {
         uint8_t c = (uint8_t)value->v.string[i];
-        if (c < 20 || c > 126) {
-          printable = false;
-          break;
-        }
-      }
-      if (printable) {
-        fprintf(f, "\"%s\"", value->v.string);
-      } else {
-        fprintf(f, "\"");
-        for (uint64_t i = 0; i < pg_string_length(value->v.string); i++) {
-          uint8_t c = (uint8_t)value->v.string[i];
+        if (32 <= c && c < 127)
+          fprintf(f, "%c", c);
+        else
           fprintf(f, "\\u%04x", c);
-        }
-        fprintf(f, "\"");
       }
+      fprintf(f, "\"");
 
       break;
     }
