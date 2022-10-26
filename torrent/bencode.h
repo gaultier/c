@@ -277,7 +277,12 @@ bc_parse_error_t bc_parse_value(pg_allocator_t allocator,
     return bc_parse_string(allocator, span, res);
 }
 
-void bc_value_dump(bc_value_t* value, FILE* f) {
+void bc_value_dump_indent(FILE* f, int64_t indent) {
+  if (indent < 0) indent = 0;
+  for (uint64_t i = 0; i < (uint64_t)indent; i++) fprintf(f, " ");
+}
+
+void bc_value_dump(bc_value_t* value, FILE* f, uint64_t indent) {
   switch (value->kind) {
     case BC_KIND_INTEGER:
       fprintf(f, "%lld", value->v.integer);
@@ -292,32 +297,40 @@ void bc_value_dump(bc_value_t* value, FILE* f) {
         }
       }
       if (printable) {
-        fprintf(f, "%s", value->v.string);
+        fprintf(f, "\"%s\"", value->v.string);
       } else {
+        fprintf(f, "\"");
         for (uint64_t i = 0; i < pg_string_length(value->v.string); i++) {
           uint8_t c = (uint8_t)value->v.string[i];
-          fprintf(f, "%#x ", c);
+          fprintf(f, "\\x%x", c);
         }
+        fprintf(f, "\"");
       }
 
       break;
     }
     case BC_KIND_ARRAY:
-      fprintf(f, "[ ");
+      fprintf(f, "[\n");
       for (uint64_t i = 0; i < pg_array_count(value->v.array); i++) {
-        bc_value_dump(value, f);
-        fprintf(f, " ");
+        bc_value_dump_indent(f, indent + 2);
+        bc_value_dump(&value->v.array[i], f, indent + 2);
+        if (i < pg_array_count(value->v.array) - 1) fprintf(f, ",");
+        fprintf(f, "\n");
       }
-      fprintf(f, " ]");
+      bc_value_dump_indent(f, indent);
+      fprintf(f, "]");
       break;
     case BC_KIND_DICTIONARY:
-      fprintf(f, "{ ");
+      fprintf(f, "{\n");
       pg_hashtable_foreach_begin(value->v.dictionary)
-          fprintf(f, "%s: ", value->v.dictionary.keys[it]);
-      bc_value_dump(&value->v.dictionary.values[it], f);
-      fprintf(f, " ");
+          bc_value_dump_indent(f, indent + 2);
+      fprintf(f, "\"%s\": ", value->v.dictionary.keys[it]);
+      bc_value_dump(&value->v.dictionary.values[it], f, indent + 2);
+      fprintf(f, ",\n");
       pg_hashtable_foreach_end(value->v.dictionary);
-      fprintf(f, " }");
+
+      bc_value_dump_indent(f, indent);
+      fprintf(f, "}");
       break;
   }
 }
