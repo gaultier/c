@@ -293,8 +293,9 @@ bc_parse_error_t bc_parse_number(pg_string_span_t* span, bc_value_t* res) {
 void bc_value_destroy(bc_value_t* value) {
   switch (value->kind) {
     case BC_KIND_INTEGER: {
+      // No-op
       break;
-    }  // No-op
+    }
     case BC_KIND_STRING:
       pg_string_free(value->v.string);
       break;
