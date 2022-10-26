@@ -1,11 +1,13 @@
 #pragma once
 
 #include <assert.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 #ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -368,4 +370,23 @@ void pg_span_consume(pg_string_span_t *span, uint64_t n) {
 
   span->data += n;
   span->len -= n;
+}
+
+// ------------- File utils
+
+int64_t pg_read_file(pg_allocator_t allocator, int fd,
+                     pg_array_t(uint8_t) * buf) {
+  const uint64_t read_buffer_size = 4096;
+  pg_array_init_reserve(*buf, read_buffer_size, allocator);
+  for (;;) {
+    int64_t ret =
+        read(fd, *buf + pg_array_count(*buf), pg_array_available_space(*buf));
+    if (ret == -1) {
+      return errno;
+    }
+    if (ret == 0) return 0;
+    pg_array_resize(*buf, pg_array_count(*buf) + ret);
+    pg_array_grow(*buf, pg_array_capacity(*buf) + read_buffer_size);
+  }
+  return 0;
 }

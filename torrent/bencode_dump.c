@@ -1,10 +1,7 @@
-#include <_types/_uint64_t.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/errno.h>
-#include <unistd.h>
 
 #include "../pg/pg.h"
 #include "bencode.h"
@@ -17,22 +14,14 @@ int main(int argc, char* argv[]) {
     exit(errno);
   }
 
-  pg_array_t(char) buf = {0};
-  const uint64_t read_buffer_size = 4096;
-  pg_array_init_reserve(buf, read_buffer_size, pg_heap_allocator());
-  for (;;) {
-    int64_t ret =
-        read(fd, buf + pg_array_count(buf), pg_array_available_space(buf));
-    if (ret == -1) {
-      fprintf(stderr, "Failed to read(2): %s\n", strerror(errno));
-      exit(errno);
-    }
-    if (ret == 0) break;
-    pg_array_resize(buf, pg_array_count(buf) + ret);
-    pg_array_grow(buf, pg_array_capacity(buf) + read_buffer_size);
+  pg_array_t(uint8_t) buf = {0};
+  int64_t ret = 0;
+  if ((ret = pg_read_file(pg_heap_allocator(), fd, &buf)) != 0) {
+    fprintf(stderr, "Failed to read(2): %s\n", strerror(ret));
+    exit(ret);
   }
 
-  pg_string_span_t span = {.data = buf, .len = pg_array_count(buf)};
+  pg_string_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
   bc_value_t bencode = {0};
   {
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &bencode);
