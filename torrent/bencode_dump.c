@@ -1,3 +1,4 @@
+#include <_types/_uint64_t.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <string.h>
@@ -16,7 +17,8 @@ int main(int argc, char* argv[]) {
   }
 
   pg_array_t(char) buf = {0};
-  pg_array_init_reserve(buf, 4096, pg_heap_allocator());
+  const uint64_t read_buffer_size = 4096;
+  pg_array_init_reserve(buf, read_buffer_size, pg_heap_allocator());
   for (;;) {
     int64_t ret =
         read(fd, buf + pg_array_count(buf), pg_array_available_space(buf));
@@ -26,7 +28,7 @@ int main(int argc, char* argv[]) {
     }
     if (ret == 0) break;
     pg_array_resize(buf, pg_array_count(buf) + ret);
-    pg_array_grow(buf, pg_array_capacity(buf));
+    pg_array_grow(buf, pg_array_capacity(buf) + read_buffer_size);
   }
 
   pg_string_span_t span = {.data = buf, .len = pg_array_count(buf)};

@@ -100,6 +100,7 @@ typedef struct pg_array_header_t {
 
 #define pg_array_grow(x, min_capacity)                                      \
   do {                                                                      \
+    if (min_capacity < pg_array_capacity(x)) break;                         \
     uint64_t new_capacity = PG_ARRAY_GROW_FORMULA(pg_array_capacity(x));    \
     if (new_capacity < (min_capacity)) new_capacity = (min_capacity);       \
     const uint64_t old_size =                                               \
