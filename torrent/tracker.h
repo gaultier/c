@@ -1,10 +1,35 @@
 #pragma once
 
+#include <_types/_uint16_t.h>
+#include <_types/_uint32_t.h>
+#include <_types/_uint64_t.h>
 #include <curl/curl.h>
 #include <curl/easy.h>
 
 #include "../pg/pg.h"
 #include "bencode.h"
+
+typedef enum {
+  TK_ERR_NONE,
+  TK_ERR_CURL,
+  TK_ERR_BENCODE_PARSE,
+  TK_ERR_INVALID_PEERS,
+} tracker_error_t;
+
+const char* tracker_error_to_string(int err) {
+  switch (err) {
+    case TK_ERR_NONE:
+      return "TK_ERR_NONE";
+    case TK_ERR_CURL:
+      return "TK_ERR_CURL";
+    case TK_ERR_BENCODE_PARSE:
+      return "TK_ERR_BENCODE_PARSE";
+    case TK_ERR_INVALID_PEERS:
+      return "TK_ERR_INVALID_PEERS";
+    default:
+      __builtin_unreachable();
+  }
+}
 
 typedef struct {
   pg_span_t url;
@@ -15,6 +40,37 @@ typedef struct {
   uint64_t downloaded;
   uint64_t left;
 } tracker_query_t;
+
+typedef struct {
+  uint32_t ip;
+  uint16_t port;
+} tracker_peer_address_t;
+
+tracker_error_t tracker_parse_peer_addresses(
+    bc_value_t* value, pg_array_t(tracker_peer_address_t) * peer_addresses) {
+  if (value->kind != BC_KIND_DICTIONARY) return TK_ERR_INVALID_PEERS;
+
+  bc_dictionary_t* dict = &value->v.dictionary;
+  pg_string_t key = pg_string_make(pg_stack_allocator(), "peers");
+  uint64_t index = -1;
+  if (!pg_hashtable_find(dict, key, &index)) return TK_ERR_INVALID_PEERS;
+
+  bc_value_t peers_val = dict->values[index];
+  if (peers_val.kind != BC_KIND_STRING) return TK_ERR_INVALID_PEERS;
+
+  pg_string_t peers_string = peers_val.v.string;
+  if (pg_string_length(peers_string) % 6 != 0) return TK_ERR_INVALID_PEERS;
+
+  for (uint64_t i = 0; i < pg_string_length(peers_string); i += 6) {
+    tracker_peer_address_t addr = {
+        .ip = *(uint32_t*)(&peers_string[i]),
+        .port = *(uint16_t*)(&peers_string[i + 4]),
+    };
+    pg_array_append(*peer_addresses, addr);
+  }
+
+  return TK_ERR_NONE;
+}
 
 pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
                                          tracker_query_t* q) {
@@ -38,25 +94,6 @@ pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
   return res;
 }
 
-typedef enum {
-  TK_ERR_NONE,
-  TK_ERR_CURL,
-  TK_ERR_BENCODE_PARSE,
-} tracker_error_t;
-
-const char* tracker_error_to_string(int err) {
-  switch (err) {
-    case TK_ERR_NONE:
-      return "TK_ERR_NONE";
-    case TK_ERR_CURL:
-      return "TK_ERR_CURL";
-    case TK_ERR_BENCODE_PARSE:
-      return "TK_ERR_BENCODE_PARSE";
-    default:
-      __builtin_unreachable();
-  }
-}
-
 uint64_t tracker_on_response_chunk(void* ptr, uint64_t size, uint64_t nmemb,
                                    void* user_data) {
   const uint64_t ptr_len = size * nmemb;
@@ -73,7 +110,9 @@ uint64_t tracker_on_response_chunk(void* ptr, uint64_t size, uint64_t nmemb,
 }
 
 tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
-                                    tracker_query_t* q) {
+                                    tracker_query_t* q,
+                                    pg_array_t(tracker_peer_address_t) *
+                                        peer_addresses) {
   tracker_error_t err = TK_ERR_NONE;
 
   pg_string_t url = tracker_build_url_from_query(allocator, q);
@@ -107,7 +146,9 @@ tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
     goto end;
   }
 
-  bc_value_dump(&bencode, stdout, 0);
+  if ((err = tracker_parse_peer_addresses(&bencode, peer_addresses)) !=
+      TK_ERR_NONE)
+    goto end;
 
 end:
   if (bencode.kind != BC_KIND_NONE) bc_value_destroy(&bencode);

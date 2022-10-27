@@ -49,8 +49,11 @@ int main(int argc, char* argv[]) {
   assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len,
                       tracker_query.info_hash) == 0);
 
+  pg_array_t(tracker_peer_address_t) peer_addresses = {0};
+  pg_array_init_reserve(peer_addresses, 10, pg_heap_allocator());
+
   tracker_error_t tracker_err =
-      tracker_fetch_peers(pg_heap_allocator(), &tracker_query);
+      tracker_fetch_peers(pg_heap_allocator(), &tracker_query, &peer_addresses);
   if (tracker_err != TK_ERR_NONE) {
     fprintf(stderr, "Failed to contact tracker: %s\n",
             tracker_error_to_string(tracker_err));
