@@ -15,6 +15,11 @@
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
 #endif
 
+typedef struct {
+  char *data;
+  uint64_t len;
+} pg_span_t;
+
 typedef struct pg_allocator_t pg_allocator_t;
 struct pg_allocator_t {
   //  void *backing_memory;
@@ -347,17 +352,11 @@ pg_string_t pg_string_appendc(pg_string_t str, char const *other) {
   return pg_string_append_length(str, other, strlen(other));
 }
 
+pg_string_t pg_span_url_encode(pg_allocator_t allocator, pg_span_t src);
+
 pg_string_t pg_string_url_encode(pg_allocator_t allocator, pg_string_t src) {
-  pg_string_t res =
-      pg_string_make_reserve(allocator, 3 * pg_string_length(src));
-
-  for (uint64_t i = 0; i < pg_string_length(src); i++) {
-    char buf[4] = {0};
-    const uint64_t len = snprintf(buf, sizeof(buf), "%%%02X", src[i]);
-    res = pg_string_append_length(res, buf, len);
-  }
-
-  return res;
+  pg_span_t span = {.data = src, .len = pg_string_length(src)};
+  return pg_span_url_encode(allocator, span);
 }
 
 // ---------------- Hashtable
@@ -372,11 +371,6 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
   return hash;
 }
 // ------------------ Span
-
-typedef struct {
-  char *data;
-  uint64_t len;
-} pg_span_t;
 
 void pg_span_consume(pg_span_t *span, uint64_t n) {
   assert(span != NULL);
@@ -406,6 +400,19 @@ bool pg_span_split(pg_span_t span, char needle, pg_span_t *left,
     right->len = span.len - left->len - 1;
   }
   return true;
+}
+
+pg_string_t pg_span_url_encode(pg_allocator_t allocator, pg_span_t src) {
+  pg_string_t res = pg_string_make_reserve(allocator, 3 * src.len);
+
+  for (uint64_t i = 0; i < src.len; i++) {
+    char buf[4] = {0};
+    const uint64_t len =
+        snprintf(buf, sizeof(buf), "%%%02X", (uint8_t)src.data[i]);
+    res = pg_string_append_length(res, buf, len);
+  }
+
+  return res;
 }
 
 // ------------- File utils

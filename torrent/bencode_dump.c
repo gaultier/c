@@ -6,6 +6,7 @@
 #include "../pg/pg.h"
 #include "bencode.h"
 #include "sha1.h"
+#include "tracker.h"
 
 int main(int argc, char* argv[]) {
   assert(argc == 2);
@@ -50,4 +51,14 @@ int main(int argc, char* argv[]) {
     printf("%02x ", sha1[i]);
   }
   puts("");
+
+  tracker_query_t tracker_query = {
+      .port = 6881,
+      .url = pg_string_make(pg_heap_allocator(), metainfo.announce),
+      .left = metainfo.length,
+  };
+  memcpy(&tracker_query.info_hash, sha1, sizeof(sha1));
+  pg_string_t tracker_url =
+      tracker_build_url_from_query(pg_heap_allocator(), &tracker_query);
+  puts(tracker_url);
 }
