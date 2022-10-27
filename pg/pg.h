@@ -6,6 +6,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -371,6 +372,27 @@ void pg_span_consume(pg_string_span_t *span, uint64_t n) {
 
   span->data += n;
   span->len -= n;
+}
+
+bool pg_span_split(pg_string_span_t span, char needle, pg_string_span_t *left,
+                   pg_string_span_t *right) {
+  char *end = memchr(span.data, needle, span.len);
+  *left = (pg_string_span_t){0};
+  *right = (pg_string_span_t){0};
+
+  if (end == NULL) {
+    *left = span;
+    return false;
+  }
+
+  left->data = span.data;
+  left->len = end - span.data;
+
+  if ((uint64_t)(end - span.data) < span.len - 1) {
+    right->data = end + 1;
+    right->len = span.len - left->len - 1;
+  }
+  return true;
 }
 
 // ------------- File utils

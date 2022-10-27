@@ -1,7 +1,5 @@
 #include "bencode.h"
 
-#include <fcntl.h>
-
 #include "vendor/greatest/greatest.h"
 
 TEST test_bc_parse_i64() {
@@ -342,8 +340,9 @@ TEST test_bc_dictionary_words() {
     FAIL();
   }
 
+  pg_string_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
   for (uint64_t i = 0; i < pg_array_count(buf); i++) {
-    // TODO
+    char* newline = memchr(span.data, '\n', span.len);
   }
 
   PASS();
@@ -351,7 +350,7 @@ TEST test_bc_dictionary_words() {
 
 GREATEST_MAIN_DEFS();
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
   GREATEST_MAIN_BEGIN(); /* command-line options, initialization. */
 
   RUN_TEST(test_bc_parse_i64);
