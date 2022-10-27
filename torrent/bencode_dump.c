@@ -5,6 +5,7 @@
 
 #include "../pg/pg.h"
 #include "bencode.h"
+#include "sha1.h"
 
 int main(int argc, char* argv[]) {
   assert(argc == 2);
@@ -41,5 +42,12 @@ int main(int argc, char* argv[]) {
   }
   __builtin_dump_struct(&metainfo, &printf);
   puts("");
-  printf("info: %.*s\n", (int)info_span.len, info_span.data);
+
+  uint8_t sha1[20] = {0};
+  assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len, sha1) == 0);
+  printf("info_hash: ");
+  for (uint64_t i = 0; i < sizeof(sha1); i++) {
+    printf("%02x ", sha1[i]);
+  }
+  puts("");
 }
