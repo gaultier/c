@@ -50,7 +50,7 @@ int main(int argc, char* argv[]) {
                       tracker_query.info_hash) == 0);
 
   pg_array_t(tracker_peer_address_t) peer_addresses = {0};
-  pg_array_init_reserve(peer_addresses, 10, pg_heap_allocator());
+  pg_array_init_reserve(peer_addresses, 15, pg_heap_allocator());
 
   tracker_error_t tracker_err =
       tracker_fetch_peers(pg_heap_allocator(), &tracker_query, &peer_addresses);
