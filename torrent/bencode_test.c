@@ -366,7 +366,7 @@ TEST test_bc_dictionary_words() {
   PASS();
 }
 
-TEST test_bc_marshal() {
+TEST test_bc_value_marshal() {
   {
     bc_value_t value = {0};
     char* s = "li-23e5:hellolee";
@@ -406,7 +406,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_bc_parse_array);
   RUN_TEST(test_bc_parse_dictionary);
   RUN_TEST(test_bc_dictionary_words);
-  RUN_TEST(test_bc_marshal);
+  RUN_TEST(test_bc_value_marshal);
 
   GREATEST_MAIN_END(); /* display results */
 }
