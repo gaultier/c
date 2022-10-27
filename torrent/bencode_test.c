@@ -360,6 +360,7 @@ TEST test_bc_dictionary_words() {
   }
 
   ASSERT_EQ_FMT(235886ULL, pg_hashtable_count(&dict), "%llu");
+  ASSERT_LTE(235886ULL, pg_array_capacity(dict.keys));
 
   pg_hashtable_destroy(&dict);
   PASS();
