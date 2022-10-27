@@ -1,5 +1,4 @@
 #include <errno.h>
-#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -54,7 +53,7 @@ int main(int argc, char* argv[]) {
 
   tracker_query_t tracker_query = {
       .port = 6881,
-      .url = pg_string_make(pg_heap_allocator(), metainfo.announce),
+      .url = pg_span_make(metainfo.announce),
       .left = metainfo.length,
   };
   memcpy(&tracker_query.info_hash, sha1, sizeof(sha1));

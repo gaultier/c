@@ -8,6 +8,7 @@
 #include "../pg/pg.h"
 
 typedef enum {
+  BC_KIND_NONE,
   BC_KIND_INTEGER,
   BC_KIND_STRING,
   BC_KIND_ARRAY,
@@ -16,6 +17,8 @@ typedef enum {
 
 const char* bc_value_kind_to_string(int n) {
   switch (n) {
+    case BC_KIND_NONE:
+      return "BC_KIND_NONE";
     case BC_KIND_INTEGER:
       return "BC_KIND_INTEGER";
     case BC_KIND_STRING:
@@ -523,6 +526,8 @@ void bc_value_dump(bc_value_t* value, FILE* f, uint64_t indent) {
       fprintf(f, "}");
       break;
     }
+    default:
+      __builtin_unreachable();
   }
 }
 

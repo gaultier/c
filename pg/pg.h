@@ -415,6 +415,10 @@ pg_string_t pg_span_url_encode(pg_allocator_t allocator, pg_span_t src) {
   return res;
 }
 
+pg_span_t pg_span_make(pg_string_t s) {
+  return (pg_span_t){.data = s, .len = pg_string_length(s)};
+}
+
 // ------------- File utils
 
 int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
