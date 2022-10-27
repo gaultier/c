@@ -66,6 +66,7 @@ tracker_error_t tracker_parse_peer_addresses(
         .ip = *(uint32_t*)(&peers_string[i]),
         .port = *(uint16_t*)(&peers_string[i + 4]),
     };
+    __builtin_dump_struct(&addr, &printf);
     pg_array_append(*peer_addresses, addr);
   }
 
@@ -97,14 +98,14 @@ pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
 uint64_t tracker_on_response_chunk(void* ptr, uint64_t size, uint64_t nmemb,
                                    void* user_data) {
   const uint64_t ptr_len = size * nmemb;
-  pg_array_t(char) response = user_data;
+  pg_array_t(char)* response = user_data;
 
-  const uint64_t new_len = pg_array_count(response) + ptr_len;
-  pg_array_grow(response, new_len);
-  assert(pg_array_capacity(response) >= ptr_len);
+  const uint64_t new_len = pg_array_count(*response) + ptr_len;
+  pg_array_grow(*response, new_len);
+  assert(pg_array_capacity(*response) >= ptr_len);
 
-  memcpy(response + pg_array_count(response), ptr, ptr_len);
-  pg_array_resize(response, new_len);
+  memcpy(*response + pg_array_count(*response), ptr, ptr_len);
+  pg_array_resize(*response, new_len);
 
   return new_len;
 }
@@ -125,7 +126,7 @@ tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
   bc_value_t bencode = {0};
   pg_array_t(char) response = {0};
   pg_array_init_reserve(response, 512, allocator);
-  assert(curl_easy_setopt(curl, CURLOPT_WRITEDATA, response) == 0);
+  assert(curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response) == 0);
   assert(curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
                           tracker_on_response_chunk) == 0);
 

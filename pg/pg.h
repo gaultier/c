@@ -122,20 +122,18 @@ typedef struct pg_array_header_t {
     x = NULL;                                       \
   } while (0)
 
-#define pg_array_grow(x, min_capacity)                                      \
-  do {                                                                      \
-    if (min_capacity < pg_array_capacity(x)) break;                         \
-    uint64_t new_capacity = PG_ARRAY_GROW_FORMULA(pg_array_capacity(x));    \
-    if (new_capacity < (min_capacity)) new_capacity = (min_capacity);       \
-    const uint64_t old_size =                                               \
-        sizeof(pg_array_header_t) + pg_array_capacity(x) * sizeof(*x);      \
-    const uint64_t new_size =                                               \
-        sizeof(pg_array_header_t) + new_capacity * sizeof(*x);              \
-    x = PG_ARRAY_HEADER(x)->allocator.realloc(new_size, PG_ARRAY_HEADER(x), \
-                                              old_size);                    \
-    pg_array_header_t *pg__new_header = (pg_array_header_t *)x;             \
-    pg__new_header->capacity = new_capacity;                                \
-    x = (void *)(pg__new_header + 1);                                       \
+#define pg_array_grow(x, min_capacity)                                         \
+  do {                                                                         \
+    uint64_t new_capacity = PG_ARRAY_GROW_FORMULA(pg_array_capacity(x));       \
+    if (new_capacity < (min_capacity)) new_capacity = (min_capacity);          \
+    const uint64_t old_size =                                                  \
+        sizeof(pg_array_header_t) + pg_array_capacity(x) * sizeof(*x);         \
+    const uint64_t new_size =                                                  \
+        sizeof(pg_array_header_t) + new_capacity * sizeof(*x);                 \
+    pg_array_header_t *pg__new_header = PG_ARRAY_HEADER(x)->allocator.realloc( \
+        new_size, PG_ARRAY_HEADER(x), old_size);                               \
+    pg__new_header->capacity = new_capacity;                                   \
+    x = (void *)(pg__new_header + 1);                                          \
   } while (0)
 
 #define pg_array_append(x, item)                                           \
