@@ -455,7 +455,7 @@ TEST test_bc_parse_value_info_span() {
         bc_parse_value(pg_heap_allocator(), &span, &value, &info_span),
         bc_parse_error_to_string);
 
-    ASSERT_EQ_FMT(11ULL, info_span.len, "%llu");
+    ASSERT_EQ_FMT((uint64_t)strlen("d3:foo4:truee"), info_span.len, "%llu");
     ASSERT_STRN_EQ("d3:foo4:truee", info_span.data, info_span.len);
   }
   PASS();

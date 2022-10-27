@@ -2,19 +2,29 @@
 
 #include "vendor/greatest/greatest.h"
 
+static void foo(pg_array_t(int) * arr) { pg_array_append(*arr, 1); }
+
 TEST test_pg_array_append() {
-  pg_array_t(int) array;
-  pg_array_init_reserve(array, 10, pg_heap_allocator());
+  {
+    pg_array_t(int) array;
+    pg_array_init_reserve(array, 10, pg_heap_allocator());
 
-  pg_array_append(array, 1);
-  pg_array_append(array, 2);
+    pg_array_append(array, 1);
+    pg_array_append(array, 2);
 
-  ASSERT_EQ(pg_array_count(array), 2);
-  ASSERT_EQ(array[0], 1);
-  ASSERT_EQ(array[1], 2);
+    ASSERT_EQ(pg_array_count(array), 2);
+    ASSERT_EQ(array[0], 1);
+    ASSERT_EQ(array[1], 2);
 
-  pg_array_free(array);
-  ASSERT_EQ(array, NULL);
+    pg_array_free(array);
+    ASSERT_EQ(array, NULL);
+  }
+  {
+    pg_array_t(int) array;
+    pg_array_init(array, pg_heap_allocator());
+    foo(&array);
+    ASSERT_EQ(1, array[0]);
+  }
 
   PASS();
 }
