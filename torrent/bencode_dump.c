@@ -11,11 +11,11 @@ int main(int argc, char* argv[]) {
   pg_array_t(uint8_t) buf = {0};
   int64_t ret = 0;
   if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &buf)) != 0) {
-    fprintf(stderr, "Failed to read(2): %s\n", strerror(ret));
+    fprintf(stderr, "Failed to read file: %s\n", strerror(ret));
     exit(ret);
   }
 
-  pg_string_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
+  pg_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
   bc_value_t bencode = {0};
   {
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &bencode);

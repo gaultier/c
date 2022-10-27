@@ -38,8 +38,8 @@ SUITE(pg_array) {
 
 TEST test_pg_span_split() {
   {
-    pg_string_span_t span = {.data = "foo\nhello", .len = strlen("foo\nhello")};
-    pg_string_span_t left = {0}, right = {0};
+    pg_span_t span = {.data = "foo\nhello", .len = strlen("foo\nhello")};
+    pg_span_t left = {0}, right = {0};
 
     ASSERT_EQ(true, pg_span_split(span, '\n', &left, &right));
     ASSERT_EQ_FMT(3ULL, left.len, "%llu");
@@ -48,8 +48,8 @@ TEST test_pg_span_split() {
     ASSERT_STRN_EQ("hello", right.data, right.len);
   }
   {
-    pg_string_span_t span = {.data = "", .len = strlen("")};
-    pg_string_span_t left = {0}, right = {0};
+    pg_span_t span = {.data = "", .len = strlen("")};
+    pg_span_t left = {0}, right = {0};
 
     ASSERT_EQ(false, pg_span_split(span, '\n', &left, &right));
     ASSERT_EQ_FMT(span.len, left.len, "%llu");
@@ -58,8 +58,8 @@ TEST test_pg_span_split() {
     ASSERT_EQ_FMT(NULL, right.data, "%p");
   }
   {
-    pg_string_span_t span = {.data = "z", .len = strlen("z")};
-    pg_string_span_t left = {0}, right = {0};
+    pg_span_t span = {.data = "z", .len = strlen("z")};
+    pg_span_t left = {0}, right = {0};
 
     ASSERT_EQ(false, pg_span_split(span, '\n', &left, &right));
     ASSERT_EQ_FMT(1ULL, left.len, "%llu");
@@ -68,8 +68,8 @@ TEST test_pg_span_split() {
     ASSERT_EQ_FMT(NULL, right.data, "%p");
   }
   {
-    pg_string_span_t span = {.data = "z\n", .len = strlen("z\n")};
-    pg_string_span_t left = {0}, right = {0};
+    pg_span_t span = {.data = "z\n", .len = strlen("z\n")};
+    pg_span_t left = {0}, right = {0};
 
     ASSERT_EQ(true, pg_span_split(span, '\n', &left, &right));
     ASSERT_EQ_FMT(1ULL, left.len, "%llu");

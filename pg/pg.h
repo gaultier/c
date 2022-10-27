@@ -363,9 +363,9 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
 typedef struct {
   char *data;
   uint64_t len;
-} pg_string_span_t;
+} pg_span_t;
 
-void pg_span_consume(pg_string_span_t *span, uint64_t n) {
+void pg_span_consume(pg_span_t *span, uint64_t n) {
   assert(span != NULL);
   assert(span->data != NULL);
   assert(span->len >= n);
@@ -374,11 +374,11 @@ void pg_span_consume(pg_string_span_t *span, uint64_t n) {
   span->len -= n;
 }
 
-bool pg_span_split(pg_string_span_t span, char needle, pg_string_span_t *left,
-                   pg_string_span_t *right) {
+bool pg_span_split(pg_span_t span, char needle, pg_span_t *left,
+                   pg_span_t *right) {
   char *end = memchr(span.data, needle, span.len);
-  *left = (pg_string_span_t){0};
-  *right = (pg_string_span_t){0};
+  *left = (pg_span_t){0};
+  *right = (pg_span_t){0};
 
   if (end == NULL) {
     *left = span;

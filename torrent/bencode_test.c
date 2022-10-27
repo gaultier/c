@@ -4,7 +4,7 @@
 
 TEST test_bc_parse_i64() {
   {
-    pg_string_span_t span = {.data = "-23", .len = 3};
+    pg_span_t span = {.data = "-23", .len = 3};
     int64_t res = 0;
     bc_parse_error_t err = bc_parse_i64(&span, &res);
 
@@ -12,7 +12,7 @@ TEST test_bc_parse_i64() {
     ASSERT_EQ_FMT(-23LL, res, "%lld");
   }
   {
-    pg_string_span_t span = {.data = "0", .len = 1};
+    pg_span_t span = {.data = "0", .len = 1};
     int64_t res = 0;
     bc_parse_error_t err = bc_parse_i64(&span, &res);
 
@@ -20,7 +20,7 @@ TEST test_bc_parse_i64() {
     ASSERT_EQ_FMT(0LL, res, "%lld");
   }
   {
-    pg_string_span_t span = {.data = "130foo", .len = 4};
+    pg_span_t span = {.data = "130foo", .len = 4};
     int64_t res = 0;
     bc_parse_error_t err = bc_parse_i64(&span, &res);
 
@@ -30,7 +30,7 @@ TEST test_bc_parse_i64() {
     ASSERT_STR_EQ("foo", span.data);
   }
   {
-    pg_string_span_t span = {.data = "-", .len = 1};
+    pg_span_t span = {.data = "-", .len = 1};
     int64_t res = 0;
     bc_parse_error_t err = bc_parse_i64(&span, &res);
 
@@ -38,7 +38,7 @@ TEST test_bc_parse_i64() {
     ASSERT_EQ_FMT(0LL, res, "%lld");
   }
   {
-    pg_string_span_t span = {.data = "", .len = 0};
+    pg_span_t span = {.data = "", .len = 0};
     int64_t res = 0;
     bc_parse_error_t err = bc_parse_i64(&span, &res);
 
@@ -51,7 +51,7 @@ TEST test_bc_parse_i64() {
 TEST test_bc_parse_string() {
   const bc_value_t zero = {0};
   {
-    pg_string_span_t span = {.data = "", .len = 0};
+    pg_span_t span = {.data = "", .len = 0};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -60,7 +60,7 @@ TEST test_bc_parse_string() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "x", .len = 1};
+    pg_span_t span = {.data = "x", .len = 1};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -69,7 +69,7 @@ TEST test_bc_parse_string() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "2", .len = 1};
+    pg_span_t span = {.data = "2", .len = 1};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -78,7 +78,7 @@ TEST test_bc_parse_string() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "2.", .len = 2};
+    pg_span_t span = {.data = "2.", .len = 2};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -87,7 +87,7 @@ TEST test_bc_parse_string() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "2:", .len = 2};
+    pg_span_t span = {.data = "2:", .len = 2};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -96,7 +96,7 @@ TEST test_bc_parse_string() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "-2:", .len = 3};
+    pg_span_t span = {.data = "-2:", .len = 3};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -105,7 +105,7 @@ TEST test_bc_parse_string() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "2:ab", .len = 4};
+    pg_span_t span = {.data = "2:ab", .len = 4};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -121,7 +121,7 @@ TEST test_bc_parse_string() {
 TEST test_bc_parse_number() {
   const bc_value_t zero = {0};
   {
-    pg_string_span_t span = {.data = "", .len = 0};
+    pg_span_t span = {.data = "", .len = 0};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_null_allocator(), &span, &res);
 
@@ -130,7 +130,7 @@ TEST test_bc_parse_number() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "x", .len = 1};
+    pg_span_t span = {.data = "x", .len = 1};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -139,7 +139,7 @@ TEST test_bc_parse_number() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "i", .len = 1};
+    pg_span_t span = {.data = "i", .len = 1};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -148,7 +148,7 @@ TEST test_bc_parse_number() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "i2", .len = 2};
+    pg_span_t span = {.data = "i2", .len = 2};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -157,7 +157,7 @@ TEST test_bc_parse_number() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "ie", .len = 2};
+    pg_span_t span = {.data = "ie", .len = 2};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -166,7 +166,7 @@ TEST test_bc_parse_number() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "i-", .len = 2};
+    pg_span_t span = {.data = "i-", .len = 2};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -175,7 +175,7 @@ TEST test_bc_parse_number() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "i-987e", .len = 6};
+    pg_span_t span = {.data = "i-987e", .len = 6};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -191,7 +191,7 @@ TEST test_bc_parse_number() {
 TEST test_bc_parse_array() {
   const bc_value_t zero = {0};
   {
-    pg_string_span_t span = {.data = "", .len = 0};
+    pg_span_t span = {.data = "", .len = 0};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_null_allocator(), &span, &res);
 
@@ -200,7 +200,7 @@ TEST test_bc_parse_array() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "l", .len = 1};
+    pg_span_t span = {.data = "l", .len = 1};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -209,7 +209,7 @@ TEST test_bc_parse_array() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "le", .len = 2};
+    pg_span_t span = {.data = "le", .len = 2};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -219,7 +219,7 @@ TEST test_bc_parse_array() {
     ASSERT_EQ_FMT(0ULL, pg_array_count(res.v.array), "%llu");
   }
   {
-    pg_string_span_t span = {.data = "li3e", .len = 4};
+    pg_span_t span = {.data = "li3e", .len = 4};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -228,7 +228,7 @@ TEST test_bc_parse_array() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "li3e_", .len = 5};
+    pg_span_t span = {.data = "li3e_", .len = 5};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -237,7 +237,7 @@ TEST test_bc_parse_array() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "li3e3:fooe", .len = 10};
+    pg_span_t span = {.data = "li3e3:fooe", .len = 10};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -260,7 +260,7 @@ TEST test_bc_parse_array() {
 TEST test_bc_parse_dictionary() {
   const bc_value_t zero = {0};
   {
-    pg_string_span_t span = {.data = "", .len = 0};
+    pg_span_t span = {.data = "", .len = 0};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_null_allocator(), &span, &res);
 
@@ -269,7 +269,7 @@ TEST test_bc_parse_dictionary() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "d", .len = 1};
+    pg_span_t span = {.data = "d", .len = 1};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -278,7 +278,7 @@ TEST test_bc_parse_dictionary() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "de", .len = 2};
+    pg_span_t span = {.data = "de", .len = 2};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -288,7 +288,7 @@ TEST test_bc_parse_dictionary() {
     ASSERT_EQ_FMT(0ULL, pg_hashtable_count(&res.v.dictionary), "%llu");
   }
   {
-    pg_string_span_t span = {.data = "d2:ab", .len = 5};
+    pg_span_t span = {.data = "d2:ab", .len = 5};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -297,7 +297,7 @@ TEST test_bc_parse_dictionary() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "d2:abi3e_", .len = 9};
+    pg_span_t span = {.data = "d2:abi3e_", .len = 9};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -306,7 +306,7 @@ TEST test_bc_parse_dictionary() {
     ASSERT_MEM_EQ(&zero, &res, sizeof(bc_value_t));
   }
   {
-    pg_string_span_t span = {.data = "d3:abci3ee", .len = 10};
+    pg_span_t span = {.data = "d3:abci3ee", .len = 10};
     bc_value_t res = {0};
     bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
 
@@ -340,9 +340,10 @@ TEST test_bc_dictionary_words() {
     FAIL();
   }
 
-  pg_string_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
+  pg_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
   for (uint64_t i = 0; i < pg_array_count(buf); i++) {
     char* newline = memchr(span.data, '\n', span.len);
+    if (newline == NULL) break;
   }
 
   PASS();

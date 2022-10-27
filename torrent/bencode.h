@@ -198,7 +198,7 @@ uint64_t pg_hashtable_count(bc_dictionary_t* hashtable) {
   return pg_array_count(hashtable->keys);
 }
 
-char bc_peek(pg_string_span_t span) {
+char bc_peek(pg_span_t span) {
   if (span.len > 0)
     return span.data[0];
   else
@@ -233,7 +233,7 @@ const char* bc_parse_error_to_string(int e) {
   }
 }
 
-bc_parse_error_t bc_consume_char(pg_string_span_t* span, char c) {
+bc_parse_error_t bc_consume_char(pg_span_t* span, char c) {
   assert(span != NULL);
   assert(span->data != NULL);
 
@@ -244,7 +244,7 @@ bc_parse_error_t bc_consume_char(pg_string_span_t* span, char c) {
   return BC_PE_NONE;
 }
 
-bc_parse_error_t bc_parse_i64(pg_string_span_t* span, int64_t* res) {
+bc_parse_error_t bc_parse_i64(pg_span_t* span, int64_t* res) {
   assert(span != NULL);
   assert(span->data != NULL);
 
@@ -271,11 +271,11 @@ bc_parse_error_t bc_parse_i64(pg_string_span_t* span, int64_t* res) {
   return BC_PE_NONE;
 }
 
-bc_parse_error_t bc_parse_string(pg_allocator_t allocator,
-                                 pg_string_span_t* span, bc_value_t* value) {
+bc_parse_error_t bc_parse_string(pg_allocator_t allocator, pg_span_t* span,
+                                 bc_value_t* value) {
   bc_parse_error_t err = BC_PE_NONE;
   int64_t len = 0;
-  pg_string_span_t res_span = *span;
+  pg_span_t res_span = *span;
   if ((err = bc_parse_i64(&res_span, &len)) != BC_PE_NONE) return err;
   if ((err = bc_consume_char(&res_span, ':')) != BC_PE_NONE) return err;
   if (len <= 0 || (uint64_t)len > res_span.len)
@@ -291,9 +291,9 @@ bc_parse_error_t bc_parse_string(pg_allocator_t allocator,
   return BC_PE_NONE;
 }
 
-bc_parse_error_t bc_parse_number(pg_string_span_t* span, bc_value_t* res) {
+bc_parse_error_t bc_parse_number(pg_span_t* span, bc_value_t* res) {
   bc_parse_error_t err = BC_PE_NONE;
-  pg_string_span_t res_span = *span;
+  pg_span_t res_span = *span;
 
   if ((err = bc_consume_char(&res_span, 'i')) != BC_PE_NONE) return err;
   int64_t val = 0;
@@ -330,13 +330,13 @@ void bc_value_destroy(bc_value_t* value) {
   }
 }
 
-bc_parse_error_t bc_parse_value(pg_allocator_t allocator,
-                                pg_string_span_t* span, bc_value_t* res);
+bc_parse_error_t bc_parse_value(pg_allocator_t allocator, pg_span_t* span,
+                                bc_value_t* res);
 
-bc_parse_error_t bc_parse_array(pg_allocator_t allocator,
-                                pg_string_span_t* span, bc_value_t* res) {
+bc_parse_error_t bc_parse_array(pg_allocator_t allocator, pg_span_t* span,
+                                bc_value_t* res) {
   bc_parse_error_t err = BC_PE_NONE;
-  pg_string_span_t res_span = *span;
+  pg_span_t res_span = *span;
 
   if ((err = bc_consume_char(&res_span, 'l')) != BC_PE_NONE) return err;
 
@@ -375,10 +375,10 @@ fail:
   return err;
 }
 
-bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator,
-                                     pg_string_span_t* span, bc_value_t* res) {
+bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator, pg_span_t* span,
+                                     bc_value_t* res) {
   bc_parse_error_t err = BC_PE_NONE;
-  pg_string_span_t res_span = *span;
+  pg_span_t res_span = *span;
 
   if ((err = bc_consume_char(&res_span, 'd')) != BC_PE_NONE) return err;
 
@@ -422,8 +422,8 @@ fail:
   return err;
 }
 
-bc_parse_error_t bc_parse_value(pg_allocator_t allocator,
-                                pg_string_span_t* span, bc_value_t* res) {
+bc_parse_error_t bc_parse_value(pg_allocator_t allocator, pg_span_t* span,
+                                bc_value_t* res) {
   const char c = bc_peek(*span);
   if (c == 'i')
     return bc_parse_number(span, res);
