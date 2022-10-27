@@ -341,11 +341,27 @@ TEST test_bc_dictionary_words() {
   }
 
   pg_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
+  bc_dictionary_t dict = {0};
+  pg_hashtable_init(&dict, 10, pg_heap_allocator());
+
   for (uint64_t i = 0; i < pg_array_count(buf); i++) {
-    char* newline = memchr(span.data, '\n', span.len);
-    if (newline == NULL) break;
+    pg_span_t left = {0}, right = {0};
+
+    if (!pg_span_split(span, '\n', &left, &right)) break;
+    span = right;
+
+    pg_string_t key =
+        pg_string_make_length(pg_heap_allocator(), left.data, left.len);
+    bc_value_t* val = pg_heap_allocator().realloc(sizeof(bc_value_t), NULL, 0);
+    val->kind = BC_KIND_INTEGER;
+    val->v.integer = i;
+
+    pg_hashtable_upsert(&dict, key, val);
   }
 
+  ASSERT_EQ_FMT(235886ULL, pg_hashtable_count(&dict), "%llu");
+
+  pg_hashtable_destroy(&dict);
   PASS();
 }
 
