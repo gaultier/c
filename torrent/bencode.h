@@ -341,7 +341,7 @@ bc_parse_error_t bc_parse_array(pg_allocator_t allocator,
   if ((err = bc_consume_char(&res_span, 'l')) != BC_PE_NONE) return err;
 
   pg_array_t(bc_value_t) values = {0};
-  pg_array_init_reserve(values, 8, allocator);
+  pg_array_init_reserve(values, 20, allocator);
 
   for (uint64_t i = 0; i < res_span.len; i++) {
     const char c = bc_peek(res_span);
@@ -383,7 +383,7 @@ bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator,
   if ((err = bc_consume_char(&res_span, 'd')) != BC_PE_NONE) return err;
 
   bc_dictionary_t dict = {0};
-  pg_hashtable_init(&dict, 2, allocator);
+  pg_hashtable_init(&dict, 30, allocator);
 
   for (uint64_t i = 0; i < res_span.len; i++) {
     const char c = bc_peek(res_span);
