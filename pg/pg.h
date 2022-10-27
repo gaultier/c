@@ -347,6 +347,19 @@ pg_string_t pg_string_appendc(pg_string_t str, char const *other) {
   return pg_string_append_length(str, other, strlen(other));
 }
 
+pg_string_t pg_string_url_encode(pg_allocator_t allocator, pg_string_t src) {
+  pg_string_t res =
+      pg_string_make_reserve(allocator, 3 * pg_string_length(src));
+
+  for (uint64_t i = 0; i < pg_string_length(src); i++) {
+    char buf[4] = {0};
+    const uint64_t len = snprintf(buf, sizeof(buf), "%%%02X", src[i]);
+    res = pg_string_append_length(res, buf, len);
+  }
+
+  return res;
+}
+
 // ---------------- Hashtable
 
 // FNV-1a

@@ -81,6 +81,16 @@ TEST test_pg_span_split() {
   PASS();
 }
 
+TEST test_pg_string_url_encode() {
+  pg_string_t src = pg_string_make(pg_stack_allocator(), "foo?_. ");
+
+  pg_string_t res = pg_string_url_encode(pg_stack_allocator(), src);
+  ASSERT_EQ_FMT(21ULL, pg_string_length(res), "%llu");
+  ASSERT_STRN_EQ("%66%6F%6F%3F%5F%2E%20", res, pg_string_length(res));
+
+  PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv) {
@@ -92,6 +102,7 @@ int main(int argc, char **argv) {
   /* Tests can also be gathered into test suites. */
   RUN_SUITE(pg_array);
   RUN_TEST(test_pg_span_split);
+  RUN_TEST(test_pg_string_url_encode);
 
   GREATEST_MAIN_END(); /* display results */
 }
