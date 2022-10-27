@@ -53,7 +53,9 @@ TEST test_bc_parse_string() {
   {
     pg_span_t span = {.data = "", .len = 0};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
@@ -62,7 +64,10 @@ TEST test_bc_parse_string() {
   {
     pg_span_t span = {.data = "x", .len = 1};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(1ULL, span.len, "%llu");
@@ -71,7 +76,10 @@ TEST test_bc_parse_string() {
   {
     pg_span_t span = {.data = "2", .len = 1};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(1ULL, span.len, "%llu");
@@ -80,7 +88,10 @@ TEST test_bc_parse_string() {
   {
     pg_span_t span = {.data = "2.", .len = 2};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_UNEXPECTED_CHARACTER, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(2ULL, span.len, "%llu");
@@ -89,7 +100,10 @@ TEST test_bc_parse_string() {
   {
     pg_span_t span = {.data = "2:", .len = 2};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_INVALID_STRING_LENGTH, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(2ULL, span.len, "%llu");
@@ -98,7 +112,10 @@ TEST test_bc_parse_string() {
   {
     pg_span_t span = {.data = "-2:", .len = 3};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_INVALID_STRING_LENGTH, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(3ULL, span.len, "%llu");
@@ -107,7 +124,10 @@ TEST test_bc_parse_string() {
   {
     pg_span_t span = {.data = "2:ab", .len = 4};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
@@ -123,7 +143,10 @@ TEST test_bc_parse_number() {
   {
     pg_span_t span = {.data = "", .len = 0};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_null_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_null_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
@@ -132,7 +155,10 @@ TEST test_bc_parse_number() {
   {
     pg_span_t span = {.data = "x", .len = 1};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(1ULL, span.len, "%llu");
@@ -141,7 +167,10 @@ TEST test_bc_parse_number() {
   {
     pg_span_t span = {.data = "i", .len = 1};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(1ULL, span.len, "%llu");
@@ -150,7 +179,10 @@ TEST test_bc_parse_number() {
   {
     pg_span_t span = {.data = "i2", .len = 2};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(2ULL, span.len, "%llu");
@@ -159,7 +191,10 @@ TEST test_bc_parse_number() {
   {
     pg_span_t span = {.data = "ie", .len = 2};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(2ULL, span.len, "%llu");
@@ -168,7 +203,10 @@ TEST test_bc_parse_number() {
   {
     pg_span_t span = {.data = "i-", .len = 2};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(2ULL, span.len, "%llu");
@@ -177,7 +215,10 @@ TEST test_bc_parse_number() {
   {
     pg_span_t span = {.data = "i-987e", .len = 6};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
@@ -193,7 +234,10 @@ TEST test_bc_parse_array() {
   {
     pg_span_t span = {.data = "", .len = 0};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_null_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_null_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
@@ -202,7 +246,10 @@ TEST test_bc_parse_array() {
   {
     pg_span_t span = {.data = "l", .len = 1};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(1ULL, span.len, "%llu");
@@ -211,7 +258,10 @@ TEST test_bc_parse_array() {
   {
     pg_span_t span = {.data = "le", .len = 2};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
@@ -221,7 +271,10 @@ TEST test_bc_parse_array() {
   {
     pg_span_t span = {.data = "li3e", .len = 4};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(4ULL, span.len, "%llu");
@@ -230,7 +283,10 @@ TEST test_bc_parse_array() {
   {
     pg_span_t span = {.data = "li3e_", .len = 5};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_UNEXPECTED_CHARACTER, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(5ULL, span.len, "%llu");
@@ -239,7 +295,10 @@ TEST test_bc_parse_array() {
   {
     pg_span_t span = {.data = "li3e3:fooe", .len = 10};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
@@ -262,7 +321,10 @@ TEST test_bc_parse_dictionary() {
   {
     pg_span_t span = {.data = "", .len = 0};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_null_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_null_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
@@ -271,7 +333,10 @@ TEST test_bc_parse_dictionary() {
   {
     pg_span_t span = {.data = "d", .len = 1};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(1ULL, span.len, "%llu");
@@ -280,7 +345,10 @@ TEST test_bc_parse_dictionary() {
   {
     pg_span_t span = {.data = "de", .len = 2};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
@@ -290,7 +358,10 @@ TEST test_bc_parse_dictionary() {
   {
     pg_span_t span = {.data = "d2:ab", .len = 5};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(5ULL, span.len, "%llu");
@@ -299,7 +370,10 @@ TEST test_bc_parse_dictionary() {
   {
     pg_span_t span = {.data = "d2:abi3e_", .len = 9};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_UNEXPECTED_CHARACTER, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(9ULL, span.len, "%llu");
@@ -308,7 +382,10 @@ TEST test_bc_parse_dictionary() {
   {
     pg_span_t span = {.data = "d3:abci3ee", .len = 10};
     bc_value_t res = {0};
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &res);
+    pg_span_t info_span = {0};
+
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &res, &info_span);
 
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
     ASSERT_EQ_FMT(0ULL, span.len, "%llu");
@@ -366,32 +443,21 @@ TEST test_bc_dictionary_words() {
   PASS();
 }
 
-TEST test_bc_value_marshal() {
+TEST test_bc_parse_value_info_span() {
   {
     bc_value_t value = {0};
-    char* s = "li-23e5:hellolee";
+    char* s = "d8:announce3:foo4:infod3:foo4:trueee";
     pg_span_t span = {.data = s, .len = strlen(s)};
+    pg_span_t info_span = {0};
 
-    ASSERT_ENUM_EQ(BC_PE_NONE,
-                   bc_parse_value(pg_heap_allocator(), &span, &value),
-                   bc_parse_error_to_string);
+    ASSERT_ENUM_EQ(
+        BC_PE_NONE,
+        bc_parse_value(pg_heap_allocator(), &span, &value, &info_span),
+        bc_parse_error_to_string);
 
-    pg_string_t marshalled = bc_value_marshal(pg_heap_allocator(), &value);
-    ASSERT_STR_EQ(s, marshalled);
+    ASSERT_EQ_FMT(11ULL, info_span.len, "%llu");
+    ASSERT_STRN_EQ("d3:foo4:truee", info_span.data, info_span.len);
   }
-  {
-    bc_value_t value = {0};
-    char* s = "d2:ab3:fooe";
-    pg_span_t span = {.data = s, .len = strlen(s)};
-
-    ASSERT_ENUM_EQ(BC_PE_NONE,
-                   bc_parse_value(pg_heap_allocator(), &span, &value),
-                   bc_parse_error_to_string);
-
-    pg_string_t marshalled = bc_value_marshal(pg_heap_allocator(), &value);
-    ASSERT_STR_EQ(s, marshalled);
-  }
-
   PASS();
 }
 
@@ -406,7 +472,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_bc_parse_array);
   RUN_TEST(test_bc_parse_dictionary);
   RUN_TEST(test_bc_dictionary_words);
-  RUN_TEST(test_bc_value_marshal);
+  RUN_TEST(test_bc_parse_value_info_span);
 
   GREATEST_MAIN_END(); /* display results */
 }

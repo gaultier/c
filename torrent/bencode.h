@@ -273,6 +273,9 @@ bc_parse_error_t bc_parse_i64(pg_span_t* span, int64_t* res) {
 
 bc_parse_error_t bc_parse_string(pg_allocator_t allocator, pg_span_t* span,
                                  bc_value_t* value) {
+  assert(span != NULL);
+  assert(value != NULL);
+
   bc_parse_error_t err = BC_PE_NONE;
   int64_t len = 0;
   pg_span_t res_span = *span;
@@ -291,7 +294,10 @@ bc_parse_error_t bc_parse_string(pg_allocator_t allocator, pg_span_t* span,
   return BC_PE_NONE;
 }
 
-bc_parse_error_t bc_parse_number(pg_span_t* span, bc_value_t* res) {
+bc_parse_error_t bc_parse_number(pg_span_t* span, bc_value_t* value) {
+  assert(span != NULL);
+  assert(value != NULL);
+
   bc_parse_error_t err = BC_PE_NONE;
   pg_span_t res_span = *span;
 
@@ -300,8 +306,8 @@ bc_parse_error_t bc_parse_number(pg_span_t* span, bc_value_t* res) {
   if ((err = bc_parse_i64(&res_span, &val)) != BC_PE_NONE) return err;
   if ((err = bc_consume_char(&res_span, 'e')) != BC_PE_NONE) return err;
 
-  res->kind = BC_KIND_INTEGER;
-  res->v.integer = val;
+  value->kind = BC_KIND_INTEGER;
+  value->v.integer = val;
 
   *span = res_span;
   return BC_PE_NONE;
@@ -331,10 +337,14 @@ void bc_value_destroy(bc_value_t* value) {
 }
 
 bc_parse_error_t bc_parse_value(pg_allocator_t allocator, pg_span_t* span,
-                                bc_value_t* res);
+                                bc_value_t* value, pg_span_t* info_span);
 
 bc_parse_error_t bc_parse_array(pg_allocator_t allocator, pg_span_t* span,
-                                bc_value_t* res) {
+                                bc_value_t* value, pg_span_t* info_span) {
+  assert(span != NULL);
+  assert(value != NULL);
+  assert(info_span != NULL);
+
   bc_parse_error_t err = BC_PE_NONE;
   pg_span_t res_span = *span;
 
@@ -353,7 +363,8 @@ bc_parse_error_t bc_parse_array(pg_allocator_t allocator, pg_span_t* span,
 
     bc_value_t value = {0};
 
-    if ((err = bc_parse_value(allocator, &res_span, &value)) != BC_PE_NONE)
+    if ((err = bc_parse_value(allocator, &res_span, &value, info_span)) !=
+        BC_PE_NONE)
       goto fail;
 
     pg_array_append(values, value);
@@ -361,8 +372,8 @@ bc_parse_error_t bc_parse_array(pg_allocator_t allocator, pg_span_t* span,
 
   if ((err = bc_consume_char(&res_span, 'e')) != BC_PE_NONE) goto fail;
 
-  res->kind = BC_KIND_ARRAY;
-  res->v.array = values;
+  value->kind = BC_KIND_ARRAY;
+  value->v.array = values;
 
   *span = res_span;
 
@@ -376,7 +387,11 @@ fail:
 }
 
 bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator, pg_span_t* span,
-                                     bc_value_t* res) {
+                                     bc_value_t* value, pg_span_t* info_span) {
+  assert(span != NULL);
+  assert(value != NULL);
+  assert(info_span != NULL);
+
   bc_parse_error_t err = BC_PE_NONE;
   pg_span_t res_span = *span;
 
@@ -394,7 +409,8 @@ bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator, pg_span_t* span,
     if (c == 'e') break;
 
     bc_value_t key = {0};
-    if ((err = bc_parse_value(allocator, &res_span, &key)) != BC_PE_NONE)
+    if ((err = bc_parse_value(allocator, &res_span, &key, info_span)) !=
+        BC_PE_NONE)
       goto fail;
 
     if (key.kind != BC_KIND_STRING) {
@@ -402,16 +418,27 @@ bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator, pg_span_t* span,
       goto fail;
     }
 
+    // TODO: check that depth == 1?
+    const char info_key[] = "info";
+    if (pg_string_length(key.v.string) == sizeof(info_key) - 1 &&
+        memcmp(key.v.string, info_key, pg_string_length(key.v.string)) == 0) {
+      *info_span = res_span;
+    }
+
     bc_value_t value = {0};
-    if ((err = bc_parse_value(allocator, &res_span, &value)) != BC_PE_NONE)
+    if ((err = bc_parse_value(allocator, &res_span, &value, info_span)) !=
+        BC_PE_NONE)
       goto fail;
+
+    if (value.kind == BC_KIND_DICTIONARY)
+      info_span->len -= res_span.len + /* d[...]e */ 2;
 
     pg_hashtable_upsert(&dict, key.v.string, &value);
   }
   if ((err = bc_consume_char(&res_span, 'e')) != BC_PE_NONE) goto fail;
 
-  res->kind = BC_KIND_DICTIONARY;
-  res->v.dictionary = dict;
+  value->kind = BC_KIND_DICTIONARY;
+  value->v.dictionary = dict;
 
   *span = res_span;
 
@@ -423,16 +450,20 @@ fail:
 }
 
 bc_parse_error_t bc_parse_value(pg_allocator_t allocator, pg_span_t* span,
-                                bc_value_t* res) {
+                                bc_value_t* value, pg_span_t* info_span) {
+  assert(span != NULL);
+  assert(value != NULL);
+  assert(info_span != NULL);
+
   const char c = bc_peek(*span);
   if (c == 'i')
-    return bc_parse_number(span, res);
+    return bc_parse_number(span, value);
   else if (c == 'l')
-    return bc_parse_array(allocator, span, res);
+    return bc_parse_array(allocator, span, value, info_span);
   else if (c == 'd')
-    return bc_parse_dictionary(allocator, span, res);
+    return bc_parse_dictionary(allocator, span, value, info_span);
   else
-    return bc_parse_string(allocator, span, res);
+    return bc_parse_string(allocator, span, value);
 }
 
 void bc_value_dump_indent(FILE* f, uint64_t indent) {
@@ -718,59 +749,4 @@ bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
 end:
   if (err != BC_MI_NONE) bc_metainfo_destroy(metainfo);
   return err;
-}
-
-pg_string_t bc_value_marshal(pg_allocator_t allocator, bc_value_t* value) {
-  switch (value->kind) {
-    case BC_KIND_INTEGER: {
-      char buf[28] = "";
-      const uint64_t len =
-          snprintf(buf, sizeof(buf), "i%llde", value->v.integer);
-      return pg_string_make_length(allocator, buf, len);
-    }
-    case BC_KIND_STRING: {
-      char buf[27] = "";
-      const uint64_t len = snprintf(buf, sizeof(buf),
-                                    "%lld:", pg_string_length(value->v.string));
-      pg_string_t res = pg_string_make_reserve(
-          allocator, pg_string_length(value->v.string) + sizeof(buf));
-      res = pg_string_append_length(res, buf, len);
-      return pg_string_append(res, value->v.string);
-    }
-    case BC_KIND_DICTIONARY: {
-      bc_dictionary_t* dict = &value->v.dictionary;
-      pg_string_t res =
-          pg_string_make_reserve(allocator, pg_hashtable_count(dict) * 10);
-      res = pg_string_appendc(res, "d");
-
-      for (uint64_t i = 0; i < pg_array_capacity(dict->keys); i++) {
-        if (dict->hashes[i] == 0) continue;
-
-        char buf[27] = "";
-        const uint64_t len = snprintf(buf, sizeof(buf),
-                                      "%lld:", pg_string_length(dict->keys[i]));
-        res = pg_string_append_length(res, buf, len);
-        res = pg_string_append(res, dict->keys[i]);
-
-        res = pg_string_append(res,
-                               bc_value_marshal(allocator, &dict->values[i]));
-      }
-      res = pg_string_appendc(res, "e");
-      return res;
-    }
-    case BC_KIND_ARRAY: {
-      pg_string_t res = pg_string_make_reserve(
-          allocator, pg_array_count(value->v.array) * 10);
-      res = pg_string_appendc(res, "l");
-      for (uint64_t i = 0; i < pg_array_count(value->v.array); i++) {
-        res = pg_string_append(res,
-                               bc_value_marshal(allocator, &value->v.array[i]));
-      }
-      res = pg_string_appendc(res, "e");
-
-      return res;
-    }
-    default:
-      __builtin_unreachable();
-  }
 }

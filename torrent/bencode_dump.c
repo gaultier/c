@@ -16,9 +16,11 @@ int main(int argc, char* argv[]) {
   }
 
   pg_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
+  pg_span_t info_span = {0};
   bc_value_t bencode = {0};
   {
-    bc_parse_error_t err = bc_parse_value(pg_heap_allocator(), &span, &bencode);
+    bc_parse_error_t err =
+        bc_parse_value(pg_heap_allocator(), &span, &bencode, &info_span);
     if (err != BC_PE_NONE) {
       fprintf(stderr, "Failed to parse: %s\n", bc_parse_error_to_string(err));
       exit(EINVAL);
@@ -38,4 +40,6 @@ int main(int argc, char* argv[]) {
     }
   }
   __builtin_dump_struct(&metainfo, &printf);
+  puts("");
+  printf("info: %.*s\n", (int)info_span.len, info_span.data);
 }
