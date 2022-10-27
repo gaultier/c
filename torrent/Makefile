@@ -2,7 +2,7 @@ bencode_test: bencode_test.c
 	$(CC) -Wall -Wextra -g $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 bencode_dump: bencode_dump.c
-	$(CC) -Wall -Wextra -g $(CFLAGS) $^ -o $@ $(LDFLAGS)
+	$(CC) -Wall -Wextra -g $(CFLAGS) $^ -o $@ $(LDFLAGS) -lcurl
 
 torrent: main.c
 	$(CC) -Wall -Wextra -g $(CFLAGS) $^ -o $@ $(LDFLAGS) -lcurl

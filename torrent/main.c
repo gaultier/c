@@ -1,6 +1,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/errno.h>
 
 #include "../pg/pg.h"
 #include "bencode.h"
@@ -27,9 +28,6 @@ int main(int argc, char* argv[]) {
       exit(EINVAL);
     }
   }
-  bc_value_dump(&bencode, stdout, 0);
-  puts("");
-
   bc_metainfo_t metainfo = {0};
   {
     bc_metainfo_error_t err = BC_MI_NONE;
@@ -40,16 +38,6 @@ int main(int argc, char* argv[]) {
       exit(EINVAL);
     }
   }
-  __builtin_dump_struct(&metainfo, &printf);
-  puts("");
-
-  uint8_t sha1[20] = {0};
-  assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len, sha1) == 0);
-  printf("info_hash: ");
-  for (uint64_t i = 0; i < sizeof(sha1); i++) {
-    printf("%02x ", sha1[i]);
-  }
-  puts("");
 
   tracker_query_t tracker_query = {
       .peer_id = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
@@ -58,8 +46,14 @@ int main(int argc, char* argv[]) {
       .url = pg_span_make(metainfo.announce),
       .left = metainfo.length,
   };
-  memcpy(&tracker_query.info_hash, sha1, sizeof(sha1));
-  pg_string_t tracker_url =
-      tracker_build_url_from_query(pg_heap_allocator(), &tracker_query);
-  puts(tracker_url);
+  assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len,
+                      tracker_query.info_hash) == 0);
+
+  tracker_error_t tracker_err =
+      tracker_fetch_peers(pg_heap_allocator(), &tracker_query);
+  if (tracker_err != TK_ERR_NONE) {
+    fprintf(stderr, "Failed to contact tracker: %s\n",
+            tracker_error_to_string(tracker_err));
+    exit(EINVAL);
+  }
 }
