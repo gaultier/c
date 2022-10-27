@@ -433,8 +433,11 @@ bc_parse_error_t bc_parse_dictionary(pg_allocator_t allocator, pg_span_t* span,
         BC_PE_NONE)
       goto fail;
 
-    if (value.kind == BC_KIND_DICTIONARY)
-      info_span->len -= res_span.len + /* d[...]e */ 2;
+    if (value.kind == BC_KIND_DICTIONARY) {
+      info_span->len -= res_span.len;
+      assert(info_span->data[0] == 'd');
+      assert(info_span->data[info_span->len - 1] == 'e');
+    }
 
     pg_hashtable_upsert(&dict, key.v.string, &value);
   }
