@@ -719,3 +719,58 @@ end:
   if (err != BC_MI_NONE) bc_metainfo_destroy(metainfo);
   return err;
 }
+
+pg_string_t bc_value_marshal(pg_allocator_t allocator, bc_value_t* value) {
+  switch (value->kind) {
+    case BC_KIND_INTEGER: {
+      char buf[28] = "";
+      const uint64_t len =
+          snprintf(buf, sizeof(buf), "i%llde", value->v.integer);
+      return pg_string_make_length(allocator, buf, len);
+    }
+    case BC_KIND_STRING: {
+      char buf[27] = "";
+      const uint64_t len = snprintf(buf, sizeof(buf),
+                                    "%lld:", pg_string_length(value->v.string));
+      pg_string_t res = pg_string_make_reserve(
+          allocator, pg_string_length(value->v.string) + sizeof(buf));
+      res = pg_string_append_length(res, buf, len);
+      return pg_string_append(res, value->v.string);
+    }
+    case BC_KIND_DICTIONARY: {
+      bc_dictionary_t* dict = &value->v.dictionary;
+      pg_string_t res =
+          pg_string_make_reserve(allocator, pg_hashtable_count(dict) * 10);
+      res = pg_string_appendc(res, "d");
+
+      for (uint64_t i = 0; i < pg_array_capacity(dict->keys); i++) {
+        if (dict->hashes[i] == 0) continue;
+
+        char buf[27] = "";
+        const uint64_t len = snprintf(buf, sizeof(buf),
+                                      "%lld:", pg_string_length(dict->keys[i]));
+        res = pg_string_append_length(res, buf, len);
+        res = pg_string_append(res, dict->keys[i]);
+
+        res = pg_string_append(res,
+                               bc_value_marshal(allocator, &dict->values[i]));
+      }
+      res = pg_string_appendc(res, "e");
+      return res;
+    }
+    case BC_KIND_ARRAY: {
+      pg_string_t res = pg_string_make_reserve(
+          allocator, pg_array_count(value->v.array) * 10);
+      res = pg_string_appendc(res, "l");
+      for (uint64_t i = 0; i < pg_array_count(value->v.array); i++) {
+        res = pg_string_append(res,
+                               bc_value_marshal(allocator, &value->v.array[i]));
+      }
+      res = pg_string_appendc(res, "e");
+
+      return res;
+    }
+    default:
+      __builtin_unreachable();
+  }
+}

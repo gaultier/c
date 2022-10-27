@@ -366,6 +366,35 @@ TEST test_bc_dictionary_words() {
   PASS();
 }
 
+TEST test_bc_marshal() {
+  {
+    bc_value_t value = {0};
+    char* s = "li-23e5:hellolee";
+    pg_span_t span = {.data = s, .len = strlen(s)};
+
+    ASSERT_ENUM_EQ(BC_PE_NONE,
+                   bc_parse_value(pg_heap_allocator(), &span, &value),
+                   bc_parse_error_to_string);
+
+    pg_string_t marshalled = bc_value_marshal(pg_heap_allocator(), &value);
+    ASSERT_STR_EQ(s, marshalled);
+  }
+  {
+    bc_value_t value = {0};
+    char* s = "d2:ab3:fooe";
+    pg_span_t span = {.data = s, .len = strlen(s)};
+
+    ASSERT_ENUM_EQ(BC_PE_NONE,
+                   bc_parse_value(pg_heap_allocator(), &span, &value),
+                   bc_parse_error_to_string);
+
+    pg_string_t marshalled = bc_value_marshal(pg_heap_allocator(), &value);
+    ASSERT_STR_EQ(s, marshalled);
+  }
+
+  PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char** argv) {
@@ -377,6 +406,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_bc_parse_array);
   RUN_TEST(test_bc_parse_dictionary);
   RUN_TEST(test_bc_dictionary_words);
+  RUN_TEST(test_bc_marshal);
 
   GREATEST_MAIN_END(); /* display results */
 }
