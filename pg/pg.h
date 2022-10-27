@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -374,8 +375,8 @@ void pg_span_consume(pg_string_span_t *span, uint64_t n) {
 
 // ------------- File utils
 
-int64_t pg_read_file(pg_allocator_t allocator, int fd,
-                     pg_array_t(uint8_t) * buf) {
+int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
+                        pg_array_t(uint8_t) * buf) {
   const uint64_t read_buffer_size = 4096;
   pg_array_init_reserve(*buf, read_buffer_size, allocator);
   for (;;) {
@@ -390,3 +391,15 @@ int64_t pg_read_file(pg_allocator_t allocator, int fd,
   }
   return 0;
 }
+
+int64_t pg_read_file(pg_allocator_t allocator, char *path,
+                     pg_array_t(uint8_t) * buf) {
+  int fd = open(path, O_RDONLY);
+  if (fd == -1) {
+    return errno;
+  }
+  int ret = pg_read_file_fd(allocator, fd, buf);
+  close(fd);
+  return ret;
+}
+

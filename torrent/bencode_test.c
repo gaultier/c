@@ -334,17 +334,11 @@ TEST test_bc_parse_dictionary() {
 TEST test_bc_dictionary_words() {
   // Stress-test the hashtable
 
-  int fd = open("/usr/share/dict/words", O_RDONLY);
-  if (fd == -1) {
-    fprintf(stderr, "Failed to open(2) %s: %s\n", "/usr/share/dict/words",
-            strerror(errno));
-    FAIL();
-  }
-
   pg_array_t(uint8_t) buf = {0};
   int64_t ret = 0;
-  if ((ret = pg_read_file(pg_heap_allocator(), fd, &buf)) != 0) {
-    fprintf(stderr, "Failed to read(2): %s\n", strerror(ret));
+  if ((ret = pg_read_file(pg_heap_allocator(), "/usr/share/dict/words",
+                          &buf)) != 0) {
+    fprintf(stderr, "Failed to read file: %s\n", strerror(ret));
     FAIL();
   }
 

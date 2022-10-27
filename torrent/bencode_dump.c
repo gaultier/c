@@ -8,15 +8,9 @@
 
 int main(int argc, char* argv[]) {
   assert(argc == 2);
-  int fd = open(argv[1], O_RDONLY);
-  if (fd == -1) {
-    fprintf(stderr, "Failed to open(2) %s: %s\n", argv[1], strerror(errno));
-    exit(errno);
-  }
-
   pg_array_t(uint8_t) buf = {0};
   int64_t ret = 0;
-  if ((ret = pg_read_file(pg_heap_allocator(), fd, &buf)) != 0) {
+  if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &buf)) != 0) {
     fprintf(stderr, "Failed to read(2): %s\n", strerror(ret));
     exit(ret);
   }
