@@ -5,6 +5,7 @@
 
 #include "../pg/pg.h"
 #include "bencode.h"
+#include "peer.h"
 #include "sha1.h"
 #include "tracker.h"
 
@@ -58,5 +59,13 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "Failed to contact tracker: %s\n",
             tracker_error_to_string(tracker_err));
     exit(EINVAL);
+  }
+  if (pg_array_count(peer_addresses) == 0) {
+    fprintf(stderr, "No peers returned from tracker\n");
+    exit(EINVAL);
+  }
+
+  for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
+    peer_connect(&peer_addresses[i], &metainfo);
   }
 }

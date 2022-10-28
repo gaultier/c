@@ -1,5 +1,5 @@
 -std=c99
 -g
 -Wall
--isystem ./vendor 
--Wno-system-headers
+-Wextra
+-I/usr/local/include
