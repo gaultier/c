@@ -8,6 +8,12 @@
 #include "bencode.h"
 #include "tracker.h"
 
+#define PEER_HANDSHAKE_LENGTH ((uint64_t)68)
+
+typedef struct {
+  uint8_t info_hash[20];
+} download_t;
+
 typedef enum {
   PEK_NONE,
   PEK_UV,
@@ -24,6 +30,7 @@ typedef struct {
   pg_allocator_t allocator;
   pg_logger_t* logger;
 
+  download_t* download;
   bc_metainfo_t* metainfo;
   bool me_choked, me_interested, them_choked, them_interested, handshaked;
   uint8_t in_flight_requests;
@@ -44,11 +51,46 @@ void peer_alloc(uv_handle_t* handle, size_t nread, uv_buf_t* buf) {
 
 void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   peer_t* peer = stream->data;
-  pg_log_debug(peer->logger, "[%s] peer_on_read: %zd", peer->addr_s, nread);
+  pg_log_debug(peer->logger, "[%s] peer_on_read: %ld", peer->addr_s, nread);
 
   if (nread >= 0 && buf != NULL && buf->base != NULL) {
     peer->allocator.free((void*)buf);
   }
+}
+
+peer_error_t peer_send_handshake(peer_t* peer) {
+  peer_error_t err = {0};
+
+  uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
+  buf->base = peer->allocator.realloc(PEER_HANDSHAKE_LENGTH, NULL, 0);
+  buf->len = PEER_HANDSHAKE_LENGTH;
+
+  const uint8_t handshake_header[PEER_HANDSHAKE_LENGTH] = {
+      19,  'B', 'i', 't', 'T', 'o', 'r', 'r', 'e', 'n', 't', ' ', 'p', 'r',
+      'o', 't', 'o', 'c', 'o', 'l', 0,   0,   0,   0,   0,   0,   0,   0};
+  memcpy(buf->base, handshake_header, sizeof(handshake_header));
+  memcpy(buf->base + sizeof(handshake_header), peer->download->info_hash,
+         sizeof(peer->download->info_hash));
+
+  return err;
+}
+
+peer_error_t peer_send_choke(peer_t* peer) {
+  peer_error_t err = {0};
+  return err;
+}
+
+peer_error_t peer_send_interested(peer_t* peer) {
+  peer_error_t err = {0};
+  return err;
+}
+
+peer_error_t peer_send_prologue(peer_t* peer) {
+  peer_error_t err = {0};
+  err = peer_send_handshake(peer);
+  if (err.kind != PEK_NONE) return err;
+
+  return err;
 }
 
 void peer_on_connect(uv_connect_t* handle, int status) {
@@ -71,13 +113,21 @@ void peer_on_connect(uv_connect_t* handle, int status) {
     peer_close(peer);
     return;
   }
+
+  peer_error_t err = peer_send_prologue(peer);
+  if (err.kind != PEK_NONE) {
+    peer_close(peer);
+    return;
+  }
 }
 
 peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
-                  bc_metainfo_t* metainfo, tracker_peer_address_t address) {
+                  download_t* download, bc_metainfo_t* metainfo,
+                  tracker_peer_address_t address) {
   peer_t* peer = allocator.realloc(sizeof(peer_t), NULL, 0);
   peer->allocator = allocator;
   peer->logger = logger;
+  peer->download = download;
   peer->metainfo = metainfo;
   peer->connect_req.data = peer;
   peer->connection.data = peer;

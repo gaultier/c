@@ -66,9 +66,14 @@ int main(int argc, char* argv[]) {
     pg_log_fatal(&logger, EINVAL, "No peers returned from tracker");
   }
 
+  download_t download = {0};
+  memcpy(download.info_hash, tracker_query.info_hash,
+         sizeof(download.info_hash));
+
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
     const tracker_peer_address_t addr = peer_addresses[i];
-    peer_t* peer = peer_make(pg_heap_allocator(), &logger, &metainfo, addr);
+    peer_t* peer =
+        peer_make(pg_heap_allocator(), &logger, &download, &metainfo, addr);
     peer_connect(peer, addr);
   }
   uv_run(uv_default_loop(), 0);
