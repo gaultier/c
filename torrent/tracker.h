@@ -51,7 +51,7 @@ tracker_error_t tracker_parse_peer_addresses(
   if (value->kind != BC_KIND_DICTIONARY) return TK_ERR_INVALID_PEERS;
 
   bc_dictionary_t* dict = &value->v.dictionary;
-  pg_string_t key = pg_string_make(pg_stack_allocator(), "peers");
+  pg_span_t key = pg_span_make_c("peers");
   uint64_t index = -1;
   if (!pg_hashtable_find(dict, key, &index)) return TK_ERR_INVALID_PEERS;
 

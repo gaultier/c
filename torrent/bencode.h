@@ -72,7 +72,7 @@ void pg_hashtable_init(bc_dictionary_t* hashtable, uint64_t cap,
   assert(pg_array_count(hashtable->keys) == pg_array_count(hashtable->hashes));
 }
 
-bool pg_hashtable_find(bc_dictionary_t* hashtable, pg_string_t key,
+bool pg_hashtable_find(bc_dictionary_t* hashtable, pg_span_t key,
                        uint64_t* index) {
   assert(hashtable != NULL);
   assert(hashtable->keys != NULL);
@@ -85,15 +85,15 @@ bool pg_hashtable_find(bc_dictionary_t* hashtable, pg_string_t key,
   assert(pg_array_count(hashtable->keys) == pg_array_count(hashtable->values));
   assert(pg_array_count(hashtable->keys) == pg_array_count(hashtable->hashes));
 
-  const uint32_t hash = pg_hash((uint8_t*)key, pg_string_length(key));
+  const uint32_t hash = pg_hash((uint8_t*)key.data, key.len);
   *index = hash % pg_array_capacity(hashtable->keys);
 
   for (;;) {
     const uint32_t index_hash = hashtable->hashes[*index];
     if (index_hash == 0) return false; /* Not found but suitable empty slot */
     if (index_hash == hash &&
-        pg_string_length(key) == pg_string_length(hashtable->keys[*index]) &&
-        memcmp(key, hashtable->keys[*index], pg_string_length(key)) == 0) {
+        key.len == pg_string_length(hashtable->keys[*index]) &&
+        memcmp(key.data, hashtable->keys[*index], key.len) == 0) {
       /* Found after checking for collision */
       return true;
     }
@@ -156,7 +156,8 @@ void pg_hashtable_upsert(bc_dictionary_t* hashtable, pg_string_t key,
     pg_hashtable_grow(hashtable, new_cap);
   }
   uint64_t index = -1;
-  if (pg_hashtable_find(hashtable, key, &index)) { /* Update */
+  const pg_span_t key_span = pg_span_make(key);
+  if (pg_hashtable_find(hashtable, key_span, &index)) { /* Update */
     hashtable->values[index] = *val;
   } else {
     hashtable->keys[index] = key;
@@ -625,7 +626,7 @@ bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
   // Announce
   {
     uint64_t index = -1;
-    pg_string_t announce_key = pg_string_make(pg_stack_allocator(), "announce");
+    pg_span_t announce_key = pg_span_make_c("announce");
     if (!pg_hashtable_find(root, announce_key, &index)) {
       err = BC_ME_ANNOUNCE_NOT_FOUND;
       goto end;
@@ -643,7 +644,7 @@ bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
   // Info
   {
     uint64_t index = -1;
-    pg_string_t info_key = pg_string_make(pg_stack_allocator(), "info");
+    pg_span_t info_key = pg_span_make_c("info");
     if (!pg_hashtable_find(root, info_key, &index)) {
       err = BC_ME_INFO_NOT_FOUND;
       goto end;
@@ -660,8 +661,7 @@ bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
     // Piece length
     {
       index = -1;
-      pg_string_t piece_length_key =
-          pg_string_make(pg_stack_allocator(), "piece length");
+      pg_span_t piece_length_key = pg_span_make_c("piece length");
       if (!pg_hashtable_find(info, piece_length_key, &index)) {
         err = BC_ME_PIECE_LENGTH_NOT_FOUND;
         goto end;
@@ -684,7 +684,7 @@ bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
     // Name
     {
       index = -1;
-      pg_string_t name_key = pg_string_make(pg_stack_allocator(), "name");
+      pg_span_t name_key = pg_span_make_c("name");
       if (!pg_hashtable_find(info, name_key, &index)) {
         err = BC_ME_NAME_NOT_FOUND;
         goto end;
@@ -708,7 +708,7 @@ bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
     // Length
     {
       index = -1;
-      pg_string_t length_key = pg_string_make(pg_stack_allocator(), "length");
+      pg_span_t length_key = pg_span_make_c("length");
       if (!pg_hashtable_find(info, length_key, &index)) {
         err = BC_ME_LENGTH_NOT_FOUND;
         goto end;
@@ -731,7 +731,7 @@ bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
     // Pieces
     {
       index = -1;
-      pg_string_t pieces_key = pg_string_make(pg_stack_allocator(), "pieces");
+      pg_span_t pieces_key = pg_span_make_c("pieces");
       if (!pg_hashtable_find(info, pieces_key, &index)) {
         err = BC_ME_PIECES_NOT_FOUND;
         goto end;
