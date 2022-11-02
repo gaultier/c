@@ -67,9 +67,9 @@ int main(int argc, char* argv[]) {
   }
 
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
-    peer_t* peer =
-        peer_make(pg_heap_allocator(), &metainfo, &peer_addresses[i]);
-    peer_connect(peer);
+    const tracker_peer_address_t addr = peer_addresses[i];
+    peer_t* peer = peer_make(pg_heap_allocator(), &metainfo, addr);
+    peer_connect(peer, addr);
   }
   uv_run(uv_default_loop(), 0);
 }

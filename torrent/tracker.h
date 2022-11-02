@@ -66,7 +66,6 @@ tracker_error_t tracker_parse_peer_addresses(
         .ip = *(uint32_t*)(&peers_string[i]),
         .port = *(uint16_t*)(&peers_string[i + 4]),
     };
-    __builtin_dump_struct(&addr, &printf);
     pg_array_append(*peer_addresses, addr);
   }
 
