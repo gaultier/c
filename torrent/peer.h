@@ -18,7 +18,9 @@ typedef struct {
 
 typedef enum {
   PEK_NONE,
+  PEK_NEED_MORE,
   PEK_UV,
+  PEK_WRONG_HANDSHAKE
 } peer_error_kind_t;
 
 typedef struct {
@@ -51,9 +53,35 @@ void peer_alloc(uv_handle_t* handle, size_t nread, uv_buf_t* buf) {
   buf->len = nread;
 }
 
+peer_error_t peer_check_handshaked(peer_t* peer, const uv_buf_t* buf) {
+  if (peer->handshaked) return (peer_error_t){0};
+  if (buf == NULL || buf->base == NULL || buf->len < PEER_HANDSHAKE_LENGTH)
+    return (peer_error_t){.kind = PEK_NEED_MORE};
+
+  if (buf->base[0] != 19) return (peer_error_t){.kind = PEK_WRONG_HANDSHAKE};
+
+  const char handshake[] = "BitTorrent protocol";
+  if (memcmp(buf->base + 1, handshake, sizeof(handshake) - 1) != 0)
+    return (peer_error_t){.kind = PEK_WRONG_HANDSHAKE};
+
+  if (memcmp(buf->base + 28, peer->download->info_hash, 20) != 0)
+    return (peer_error_t){.kind = PEK_WRONG_HANDSHAKE};
+
+  peer->handshaked = true;
+
+  pg_log_debug(peer->logger, "[%s] Handshaked", peer->addr_s);
+
+  return (peer_error_t){0};
+}
+
 void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   peer_t* peer = stream->data;
   pg_log_debug(peer->logger, "[%s] peer_on_read: %ld", peer->addr_s, nread);
+
+  peer_error_t err = peer_check_handshaked(peer, buf);
+  if (err.kind != PEK_NONE && err.kind != PEK_NEED_MORE) {
+    peer_close(peer);
+  }
 
   if (nread >= 0 && buf != NULL && buf->base != NULL) {
     peer->allocator.free(buf->base);
