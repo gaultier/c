@@ -8,6 +8,7 @@
 #include "peer.h"
 #include "sha1.h"
 #include "tracker.h"
+#include "uv.h"
 
 int main(int argc, char* argv[]) {
   assert(argc == 2);
@@ -66,6 +67,8 @@ int main(int argc, char* argv[]) {
   }
 
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
-    peer_connect(pg_heap_allocator(), &peer_addresses[i], &metainfo);
+    peer_t* peer = peer_make(pg_heap_allocator(), &metainfo);
+    peer_connect(peer, &peer_addresses[i]);
   }
+  uv_run(uv_default_loop(), 0);
 }
