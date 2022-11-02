@@ -2,6 +2,7 @@
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <uv.h>
 
@@ -12,6 +13,7 @@
 
 typedef struct {
   uint8_t info_hash[20];
+  uint8_t peer_id[20];
 } download_t;
 
 typedef enum {
@@ -54,25 +56,55 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   pg_log_debug(peer->logger, "[%s] peer_on_read: %ld", peer->addr_s, nread);
 
   if (nread >= 0 && buf != NULL && buf->base != NULL) {
-    peer->allocator.free((void*)buf);
+    peer->allocator.free(buf->base);
+  }
+}
+
+void peer_on_write(uv_write_t* req, int status) {
+  peer_t* peer = req->data;
+  // TODO: free bufs
+
+  if (req->bufs != NULL && req->bufs[0].base != NULL)
+    peer->allocator.free(req->bufs[0].base);
+
+  peer->allocator.free(req);
+
+  if (status != 0) {
+    pg_log_error(peer->logger, "[%s] on_write failed: %d %s", peer->addr_s,
+                 -status, strerror(-status));
+    peer_close(peer);
   }
 }
 
 peer_error_t peer_send_handshake(peer_t* peer) {
-  peer_error_t err = {0};
-
   uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
   buf->base = peer->allocator.realloc(PEER_HANDSHAKE_LENGTH, NULL, 0);
   buf->len = PEER_HANDSHAKE_LENGTH;
 
-  const uint8_t handshake_header[PEER_HANDSHAKE_LENGTH] = {
+  const uint8_t handshake_header[] = {
       19,  'B', 'i', 't', 'T', 'o', 'r', 'r', 'e', 'n', 't', ' ', 'p', 'r',
       'o', 't', 'o', 'c', 'o', 'l', 0,   0,   0,   0,   0,   0,   0,   0};
   memcpy(buf->base, handshake_header, sizeof(handshake_header));
   memcpy(buf->base + sizeof(handshake_header), peer->download->info_hash,
          sizeof(peer->download->info_hash));
+  memcpy(
+      buf->base + sizeof(handshake_header) + sizeof(peer->download->info_hash),
+      peer->download->peer_id, sizeof(peer->download->peer_id));
 
-  return err;
+  uv_write_t* write_req = peer->allocator.realloc(sizeof(uv_write_t), NULL, 0);
+  write_req->data = peer;
+
+  int ret = 0;
+  if ((ret = uv_write(write_req, (uv_stream_t*)&peer->connection, buf, 1,
+                      peer_on_write)) != 0) {
+    pg_log_error(peer->logger, "[%s] uv_write failed: %d", peer->addr_s, ret);
+
+    peer->allocator.free(write_req);
+
+    return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
+  }
+
+  return (peer_error_t){0};
 }
 
 peer_error_t peer_send_choke(peer_t* peer) {
