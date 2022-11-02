@@ -466,28 +466,28 @@ typedef struct {
 
 #define pg_log_debug(logger, fmt, ...)                                   \
   do {                                                                   \
-    if (logger->level <= PG_LOG_DEBUG)                                   \
+    if (logger != NULL && logger->level <= PG_LOG_DEBUG)                 \
       printf("%s[DEBUG] " fmt "%s", (isatty(1) ? "\x1b[38:5:240m" : ""), \
              ##__VA_ARGS__, (isatty(1) ? "\x1b[0m" : ""));               \
   } while (0)
 
 #define pg_log_info(logger, fmt, ...)                             \
   do {                                                            \
-    if (logger->level <= PG_LOG_INFO)                             \
+    if (logger != NULL && logger->level <= PG_LOG_INFO)           \
       printf("%s[INFO] " fmt "%s", (isatty(1) ? "\x1b[32m" : ""), \
              ##__VA_ARGS__, (isatty(1) ? "\x1b[0m" : ""));        \
   } while (0)
 
 #define pg_log_error(logger, fmt, ...)                             \
   do {                                                             \
-    if (logger->level <= PG_LOG_ERROR)                             \
+    if (logger != NULL && logger->level <= PG_LOG_ERROR)           \
       printf("%s[ERROR] " fmt "%s", (isatty(1) ? "\x1b[31m" : ""), \
              ##__VA_ARGS__, (isatty(1) ? "\x1b[0m" : ""));         \
   } while (0)
 
 #define pg_log_critical(logger, fmt, ...)                                   \
   do {                                                                      \
-    if (logger->level <= PG_LOG_DEBUG)                                      \
+    if (logger != NULL && logger->level <= PG_LOG_DEBUG)                    \
       printf("%s[CRITICAL] " fmt "%s", (isatty(1) ? "\x1b[38:5:124m" : ""), \
              ##__VA_ARGS__, (isatty(1) ? "\x1b[0m" : ""));                  \
   } while (0)
