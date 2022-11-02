@@ -18,7 +18,8 @@ int main(int argc, char* argv[]) {
   pg_array_t(uint8_t) buf = {0};
   int64_t ret = 0;
   if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &buf)) != 0) {
-    pg_log_fatal(&logger, ret, "Failed to read file: %s\n", strerror(ret));
+    pg_log_fatal(&logger, ret, "Failed to read file %s: %s\n", argv[1],
+                 strerror(ret));
   }
 
   pg_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
