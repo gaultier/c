@@ -18,8 +18,7 @@ int main(int argc, char* argv[]) {
   pg_array_t(uint8_t) buf = {0};
   int64_t ret = 0;
   if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &buf)) != 0) {
-    fprintf(stderr, "Failed to read file: %s\n", strerror(ret));
-    exit(ret);
+    pg_log_fatal(&logger, ret, "Failed to read file: %s\n", strerror(ret));
   }
 
   pg_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
@@ -29,8 +28,8 @@ int main(int argc, char* argv[]) {
     bc_parse_error_t err =
         bc_parse_value(pg_heap_allocator(), &span, &bencode, &info_span);
     if (err != BC_PE_NONE) {
-      fprintf(stderr, "Failed to parse: %s\n", bc_parse_error_to_string(err));
-      exit(EINVAL);
+      pg_log_fatal(&logger, EINVAL, "Failed to parse: %s\n",
+                   bc_parse_error_to_string(err));
     }
   }
   bc_metainfo_t metainfo = {0};
@@ -38,9 +37,9 @@ int main(int argc, char* argv[]) {
     bc_metainfo_error_t err = BC_MI_NONE;
     if ((err = bc_metainfo_init_from_value(pg_heap_allocator(), &bencode,
                                            &metainfo)) != BC_MI_NONE) {
-      fprintf(stderr, "Failed to bc_metainfo_init_from_value: %s\n",
-              bc_metainfo_error_to_string(err));
-      exit(EINVAL);
+      pg_log_fatal(&logger, EINVAL,
+                   "Failed to bc_metainfo_init_from_value: %s\n",
+                   bc_metainfo_error_to_string(err));
     }
   }
 
@@ -60,13 +59,11 @@ int main(int argc, char* argv[]) {
   tracker_error_t tracker_err =
       tracker_fetch_peers(pg_heap_allocator(), &tracker_query, &peer_addresses);
   if (tracker_err != TK_ERR_NONE) {
-    fprintf(stderr, "Failed to contact tracker: %s\n",
-            tracker_error_to_string(tracker_err));
-    exit(EINVAL);
+    pg_log_fatal(&logger, EINVAL, "Failed to contact tracker: %s\n",
+                 tracker_error_to_string(tracker_err));
   }
   if (pg_array_count(peer_addresses) == 0) {
-    fprintf(stderr, "No peers returned from tracker\n");
-    exit(EINVAL);
+    pg_log_fatal(&logger, EINVAL, "No peers returned from tracker\n");
   }
 
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
