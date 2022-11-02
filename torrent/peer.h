@@ -36,17 +36,41 @@ typedef struct {
 
 void peer_close(peer_t* peer);
 
+void peer_alloc(uv_handle_t* handle, size_t nread, uv_buf_t* buf) {
+  peer_t* peer = handle->data;
+  buf->base = peer->allocator.realloc(nread, NULL, 0);
+  buf->len = nread;
+}
+
+void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
+  peer_t* peer = stream->data;
+  pg_log_debug(peer->logger, "[%s] peer_on_read: %zd", peer->addr_s, nread);
+
+  if (nread >= 0 && buf != NULL && buf->base != NULL) {
+    peer->allocator.free((void*)buf);
+  }
+}
+
 void peer_on_connect(uv_connect_t* handle, int status) {
   peer_t* peer = handle->data;
   assert(peer != NULL);
 
   if (status != 0) {
-    pg_log_error(peer->logger, "[%s] on_connect: %d %s\n", peer->addr_s,
-                 -status, strerror(-status));
+    pg_log_error(peer->logger, "[%s] on_connect: %d %s", peer->addr_s, -status,
+                 strerror(-status));
     peer_close(peer);
     return;
   }
-  pg_log_info(peer->logger, "[%s] Connected\n", peer->addr_s);
+  pg_log_info(peer->logger, "[%s] Connected", peer->addr_s);
+
+  int ret = 0;
+  if ((ret = uv_read_start((uv_stream_t*)&peer->connection, peer_alloc,
+                           peer_on_read)) != 0) {
+    pg_log_error(peer->logger, "[%s] uv_read_start failed: %d", peer->addr_s,
+                 ret);
+    peer_close(peer);
+    return;
+  }
 }
 
 peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
@@ -66,7 +90,7 @@ peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
 peer_error_t peer_connect(peer_t* peer, tracker_peer_address_t address) {
   int ret = 0;
   if ((ret = uv_tcp_init(uv_default_loop(), &peer->connection)) != 0) {
-    pg_log_error(peer->logger, "[%s] Failed to uv_tcp_init: %d %s\n",
+    pg_log_error(peer->logger, "[%s] Failed to uv_tcp_init: %d %s",
                  peer->addr_s, ret, strerror(ret));
     return (peer_error_t){.kind = PEK_UV, .v = {.uv_err = -ret}};
   }
@@ -79,7 +103,7 @@ peer_error_t peer_connect(peer_t* peer, tracker_peer_address_t address) {
 
   if ((ret = uv_tcp_connect(&peer->connect_req, &peer->connection,
                             (struct sockaddr*)&addr, peer_on_connect)) != 0) {
-    pg_log_error(peer->logger, "[%s] Failed to uv_tcp_connect: %d %s\n",
+    pg_log_error(peer->logger, "[%s] Failed to uv_tcp_connect: %d %s",
                  peer->addr_s, ret, strerror(ret));
     return (peer_error_t){.kind = PEK_UV, .v = {.uv_err = -ret}};
   }
@@ -92,7 +116,7 @@ void peer_on_close(uv_handle_t* handle) {
   peer_t* peer = handle->data;
   assert(peer != NULL);
 
-  pg_log_debug(peer->logger, "[%s] Closing peer\n", peer->addr_s);
+  pg_log_debug(peer->logger, "[%s] Closing peer", peer->addr_s);
 
   peer_destroy(peer);
 }

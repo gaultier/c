@@ -464,33 +464,35 @@ typedef struct {
   pg_log_level_t level;
 } pg_logger_t;
 
-#define pg_log_debug(logger, fmt, ...)                                   \
-  do {                                                                   \
-    if ((logger) != NULL && (logger)->level <= PG_LOG_DEBUG)             \
-      printf("%s[DEBUG] " fmt "%s", (isatty(1) ? "\x1b[38:5:240m" : ""), \
-             ##__VA_ARGS__, (isatty(1) ? "\x1b[0m" : ""));               \
-  } while (0)
-
-#define pg_log_info(logger, fmt, ...)                             \
+#define pg_log_debug(logger, fmt, ...)                            \
   do {                                                            \
-    if ((logger) != NULL && (logger)->level <= PG_LOG_INFO)       \
-      printf("%s[INFO] " fmt "%s", (isatty(1) ? "\x1b[32m" : ""), \
-             ##__VA_ARGS__, (isatty(1) ? "\x1b[0m" : ""));        \
+    if ((logger) != NULL && (logger)->level <= PG_LOG_DEBUG)      \
+      fprintf(stderr, "%s[DEBUG] " fmt "%s\n",                    \
+              (isatty(2) ? "\x1b[38:5:240m" : ""), ##__VA_ARGS__, \
+              (isatty(2) ? "\x1b[0m" : ""));                      \
   } while (0)
 
-#define pg_log_error(logger, fmt, ...)                             \
-  do {                                                             \
-    if ((logger) != NULL && (logger)->level <= PG_LOG_ERROR)       \
-      printf("%s[ERROR] " fmt "%s", (isatty(1) ? "\x1b[31m" : ""), \
-             ##__VA_ARGS__, (isatty(1) ? "\x1b[0m" : ""));         \
+#define pg_log_info(logger, fmt, ...)                                        \
+  do {                                                                       \
+    if ((logger) != NULL && (logger)->level <= PG_LOG_INFO)                  \
+      fprintf(stderr, "%s[INFO] " fmt "%s\n", (isatty(2) ? "\x1b[32m" : ""), \
+              ##__VA_ARGS__, (isatty(2) ? "\x1b[0m" : ""));                  \
   } while (0)
 
-#define pg_log_fatal(logger, exit_code, fmt, ...)                        \
-  do {                                                                   \
-    if ((logger) != NULL && (logger)->level <= PG_LOG_FATAL) {           \
-      printf("%s[FATAL] " fmt "%s", (isatty(1) ? "\x1b[38:5:124m" : ""), \
-             ##__VA_ARGS__, (isatty(1) ? "\x1b[0m" : ""));               \
-      exit(exit_code);                                                   \
-    }                                                                    \
+#define pg_log_error(logger, fmt, ...)                                        \
+  do {                                                                        \
+    if ((logger) != NULL && (logger)->level <= PG_LOG_ERROR)                  \
+      fprintf(stderr, "%s[ERROR] " fmt "%s\n", (isatty(2) ? "\x1b[31m" : ""), \
+              ##__VA_ARGS__, (isatty(2) ? "\x1b[0m" : ""));                   \
+  } while (0)
+
+#define pg_log_fatal(logger, exit_code, fmt, ...)                 \
+  do {                                                            \
+    if ((logger) != NULL && (logger)->level <= PG_LOG_FATAL) {    \
+      fprintf(stderr, "%s[FATAL] " fmt "%s\n",                    \
+              (isatty(2) ? "\x1b[38:5:124m" : ""), ##__VA_ARGS__, \
+              (isatty(2) ? "\x1b[0m" : ""));                      \
+      exit(exit_code);                                            \
+    }                                                             \
   } while (0)
 

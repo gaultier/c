@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
   pg_array_t(uint8_t) buf = {0};
   int64_t ret = 0;
   if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &buf)) != 0) {
-    pg_log_fatal(&logger, ret, "Failed to read file %s: %s\n", argv[1],
+    pg_log_fatal(&logger, ret, "Failed to read file %s: %s", argv[1],
                  strerror(ret));
   }
 
@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
     bc_parse_error_t err =
         bc_parse_value(pg_heap_allocator(), &span, &bencode, &info_span);
     if (err != BC_PE_NONE) {
-      pg_log_fatal(&logger, EINVAL, "Failed to parse: %s\n",
+      pg_log_fatal(&logger, EINVAL, "Failed to parse: %s",
                    bc_parse_error_to_string(err));
     }
   }
@@ -38,8 +38,7 @@ int main(int argc, char* argv[]) {
     bc_metainfo_error_t err = BC_MI_NONE;
     if ((err = bc_metainfo_init_from_value(pg_heap_allocator(), &bencode,
                                            &metainfo)) != BC_MI_NONE) {
-      pg_log_fatal(&logger, EINVAL,
-                   "Failed to bc_metainfo_init_from_value: %s\n",
+      pg_log_fatal(&logger, EINVAL, "Failed to bc_metainfo_init_from_value: %s",
                    bc_metainfo_error_to_string(err));
     }
   }
@@ -60,11 +59,11 @@ int main(int argc, char* argv[]) {
   tracker_error_t tracker_err =
       tracker_fetch_peers(pg_heap_allocator(), &tracker_query, &peer_addresses);
   if (tracker_err != TK_ERR_NONE) {
-    pg_log_fatal(&logger, EINVAL, "Failed to contact tracker: %s\n",
+    pg_log_fatal(&logger, EINVAL, "Failed to contact tracker: %s",
                  tracker_error_to_string(tracker_err));
   }
   if (pg_array_count(peer_addresses) == 0) {
-    pg_log_fatal(&logger, EINVAL, "No peers returned from tracker\n");
+    pg_log_fatal(&logger, EINVAL, "No peers returned from tracker");
   }
 
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
