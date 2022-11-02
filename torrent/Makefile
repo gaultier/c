@@ -4,8 +4,8 @@ bencode_test: bencode_test.c
 bencode_dump: bencode_dump.c
 	$(CC) -Wall -Wextra -g $(CFLAGS) $^ -o $@ $(LDFLAGS) -lcurl
 
-torrent: main.c
-	$(CC) -Wall -Wextra -g $(CFLAGS) $^ -o $@ $(LDFLAGS) -lcurl -luv
+torrent: main.c bencode.h peer.h sha1.h tracker.h
+	$(CC) -Wall -Wextra -g $(CFLAGS) $< -o $@ $(LDFLAGS) -lcurl -luv
 
 test: bencode_test
 	./$^

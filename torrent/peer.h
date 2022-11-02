@@ -29,7 +29,7 @@ typedef struct {
   uv_connect_t connect_req;
 
   struct sockaddr_in addr;
-  char addr_s[INET_ADDRSTRLEN];  // TODO: INET6_ADDRSTRLEN
+  char addr_s[INET_ADDRSTRLEN + /* port */ 6];  // TODO: INET6_ADDRSTRLEN
 } peer_t;
 
 void peer_on_connect(uv_connect_t* handle, int status) {
@@ -56,8 +56,9 @@ peer_t* peer_make(pg_allocator_t allocator, bc_metainfo_t* metainfo,
       .sin_family = AF_INET,
       .sin_addr = {.s_addr = address->ip},
   };
-  assert(inet_ntop(AF_INET, &peer->addr, peer->addr_s, sizeof(peer->addr_s)) !=
-         NULL);
+  snprintf(peer->addr_s, sizeof(peer->addr_s), "%s:%hu",
+           inet_ntoa(*(struct in_addr*)&address->ip),
+           htons(peer->addr.sin_port));
   return peer;
 }
 
