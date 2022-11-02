@@ -12,6 +12,9 @@
 
 int main(int argc, char* argv[]) {
   assert(argc == 2);
+
+  pg_logger_t logger = {.level = PG_LOG_DEBUG};
+
   pg_array_t(uint8_t) buf = {0};
   int64_t ret = 0;
   if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &buf)) != 0) {
@@ -68,7 +71,7 @@ int main(int argc, char* argv[]) {
 
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
     const tracker_peer_address_t addr = peer_addresses[i];
-    peer_t* peer = peer_make(pg_heap_allocator(), &metainfo, addr);
+    peer_t* peer = peer_make(pg_heap_allocator(), &logger, &metainfo, addr);
     peer_connect(peer, addr);
   }
   uv_run(uv_default_loop(), 0);
