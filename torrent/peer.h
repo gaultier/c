@@ -30,7 +30,7 @@ typedef struct {
   uv_tcp_t connection;
   uv_connect_t connect_req;
 
-  char addr_s[INET_ADDRSTRLEN + /* :port */ 6];  // TODO: INET6_ADDRSTRLEN
+  char addr_s[INET_ADDRSTRLEN + /* :port */ 6];  // TODO: ipv6
 } peer_t;
 
 void peer_close(peer_t* peer);
@@ -96,6 +96,7 @@ void peer_on_close(uv_handle_t* handle) {
 }
 
 void peer_close(peer_t* peer) {
+  // `peer_close` is thus idempotent
   if (!uv_is_closing((uv_handle_t*)&peer->connection)) {
     uv_tcp_close_reset(&peer->connection, peer_on_close);
   }
