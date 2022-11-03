@@ -25,7 +25,7 @@
 typedef struct {
   uint8_t info_hash[20];
   uint8_t peer_id[20];
-  uint32_t pieces_downloaded_count;
+  uint32_t pieces_downloaded_count, pieces_count;
   uint64_t blocks_per_piece, last_piece_length, last_piece_block_count;
   pg_bitarray_t pieces_downloaded, pieces_downloading, pieces_to_download;
 } download_t;
@@ -121,7 +121,8 @@ typedef struct {
   bc_metainfo_t* metainfo;
   bool me_choked, me_interested, them_choked, them_interested, handshaked;
   uint8_t in_flight_requests;
-  pg_bitarray_t them_have_pieces;
+  pg_bitarray_t them_have_pieces, blocks_for_piece_downloaded,
+      blocks_for_piece_downloading, blocks_for_piece_to_download;
   uint32_t downloading_piece;
 
   uv_tcp_t connection;
@@ -356,8 +357,8 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       // TODO
       return (peer_error_t){0};
     case PMK_BITFIELD: {
-      const uint64_t expected_length = (uint64_t)ceil(
-          (double)pg_array_count(peer->metainfo->pieces) / 20 / 8);
+      const uint64_t expected_length =
+          (uint64_t)ceil((double)peer->download->pieces_count / 8);
 
       pg_array_t(uint8_t) bitfield = msg->v.bitfield.bitfield;
       if (pg_array_count(bitfield) != expected_length) {
@@ -566,12 +567,12 @@ uint8_t* peer_write_u8(uint8_t* buf, uint64_t* buf_len, uint8_t x) {
   return buf + *buf_len;
 }
 
-bool peer_is_last_piece(bc_metainfo_t* metainfo, uint32_t piece) {
-  return piece == pg_array_count(metainfo->pieces) / 20;
+bool peer_is_last_piece(peer_t* peer, uint32_t piece) {
+  return piece == peer->download->pieces_count;
 }
 
 uint32_t peer_block_count_per_piece(peer_t* peer, uint32_t piece) {
-  if (peer_is_last_piece(peer->metainfo, piece))
+  if (peer_is_last_piece(peer, piece))
     return peer->download->last_piece_block_count;
   else
     return peer->download->blocks_per_piece;
@@ -587,7 +588,7 @@ peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
 
   const uint32_t begin = block_for_piece * PEER_BLOCK_LENGTH;
   uint32_t length = 0;
-  if (peer_is_last_piece(peer->metainfo, peer->downloading_piece)) {
+  if (peer_is_last_piece(peer, peer->downloading_piece)) {
     if (block_for_piece <
         peer_block_count_per_piece(peer, peer->downloading_piece) - 1) {
       length = PEER_BLOCK_LENGTH;
@@ -678,7 +679,13 @@ peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
   peer->download = download;
   peer->metainfo = metainfo;
   pg_bitarray_init(allocator, &peer->them_have_pieces,
-                   pg_array_count(metainfo->pieces));
+                   peer->download->pieces_count);
+  pg_bitarray_init(allocator, &peer->blocks_for_piece_downloaded,
+                   peer->download->blocks_per_piece);
+  pg_bitarray_init(allocator, &peer->blocks_for_piece_downloading,
+                   peer->download->blocks_per_piece);
+  pg_bitarray_init(allocator, &peer->blocks_for_piece_to_download,
+                   peer->download->blocks_per_piece);
   peer->downloading_piece = -1;
   peer->connect_req.data = peer;
   peer->connection.data = peer;
@@ -737,19 +744,22 @@ void peer_close(peer_t* peer) {
 void download_init(pg_allocator_t allocator, download_t* download,
                    bc_metainfo_t* metainfo, uint8_t* info_hash,
                    uint8_t* peer_id) {
-  const uint32_t pieces_count = pg_array_count(metainfo->pieces) / 20;
+  download->pieces_count = pg_array_count(metainfo->pieces) / 20;
 
   download->blocks_per_piece = metainfo->piece_length / PEER_BLOCK_LENGTH;
   download->last_piece_length =
-      metainfo->length - (pieces_count - 1) * metainfo->piece_length;
+      metainfo->length - (download->pieces_count - 1) * metainfo->piece_length;
   download->last_piece_block_count =
       (uint64_t)ceil((double)download->last_piece_length / PEER_BLOCK_LENGTH);
   memcpy(download->info_hash, info_hash, 20);
   memcpy(download->peer_id, peer_id, 20);
 
-  pg_bitarray_init(allocator, &download->pieces_downloaded, pieces_count);
-  pg_bitarray_init(allocator, &download->pieces_downloading, pieces_count);
-  pg_bitarray_init(allocator, &download->pieces_to_download, pieces_count);
+  pg_bitarray_init(allocator, &download->pieces_downloaded,
+                   download->pieces_count);
+  pg_bitarray_init(allocator, &download->pieces_downloading,
+                   download->pieces_count);
+  pg_bitarray_init(allocator, &download->pieces_to_download,
+                   download->pieces_count);
 }
 
 void download_destroy(download_t* download) {
