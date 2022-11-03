@@ -617,3 +617,15 @@ void pg_ring_clear(pg_ring_t *ring) {
   ring->offset = 0;
   ring->len = 0;
 }
+
+void pg_ring_push_backv(pg_ring_t *ring, uint8_t *data, uint64_t len) {
+  if (ring->cap <= ring->len + len) {
+    pg_ring_grow(ring, ring->len + len);
+  }
+
+  const uint64_t index =
+      ring->cap == 0 ? ring->offset : (ring->offset + ring->len) % ring->cap;
+  assert(index + len <= ring->cap);
+  memcpy(ring->data + index, data, len);
+  ring->len += len;
+}

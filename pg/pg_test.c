@@ -215,6 +215,12 @@ TEST test_pg_ring() {
   pg_ring_clear(&ring);
   ASSERT_EQ_FMT(0ULL, pg_ring_len(&ring), "%llu");
 
+  const char buf[] = "hello world!";
+  pg_ring_push_backv(&ring, (uint8_t *)buf, sizeof(buf) - 1);
+  ASSERT_EQ_FMT((uint64_t)(sizeof(buf) - 1), pg_ring_len(&ring), "%llu");
+  ASSERT_EQ_FMT('h', pg_ring_front(&ring), "%c");
+  ASSERT_EQ_FMT('!', pg_ring_back(&ring), "%c");
+
   pg_ring_destroy(&ring);
 
   PASS();
