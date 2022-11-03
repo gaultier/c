@@ -197,7 +197,6 @@ peer_error_t peer_parse_message(peer_t* peer, peer_message_t* msg) {
       const uint32_t have = peer_read_u32(&peer->recv_data);
       msg->kind = PMK_HAVE;
       msg->v.have = (peer_message_have_t){have};
-      pg_ring_consume_front(&peer->recv_data, 1 + 4);
       break;
     }
     case PT_BITFIELD: {
@@ -233,8 +232,15 @@ peer_error_t peer_parse_message(peer_t* peer, peer_message_t* msg) {
 
       msg->kind = PMK_PIECE;
       msg->v.piece = (peer_message_piece_t){
-          .begin = 0, .index = 0, .data = NULL};  // FIXME
-      pg_ring_consume_front(&peer->recv_data, announced_len);
+          .index = peer_read_u32(&peer->recv_data),
+          .begin = peer_read_u32(&peer->recv_data),
+      };
+      pg_array_init_reserve(msg->v.piece.data, announced_len - (1 + 2 * 4),
+                            peer->allocator);
+      for (uint64_t i = 0; i < announced_len - (1 + 2 * 4); i++) {
+        msg->v.piece.data[i] = pg_ring_pop_front(&peer->recv_data);
+      }
+
       break;
     }
     case PT_CANCEL: {
