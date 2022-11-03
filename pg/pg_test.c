@@ -182,6 +182,18 @@ TEST test_pg_ring() {
   ASSERT_EQ_FMT(91, pg_ring_front(&ring), "%d");
   ASSERT_EQ_FMT(6, pg_ring_back(&ring), "%d");
 
+  ASSERT_EQ_FMT(6, pg_ring_pop_back(&ring), "%d");
+  ASSERT_EQ_FMT(5, pg_ring_back(&ring), "%d");
+  ASSERT_EQ_FMT(91, pg_ring_front(&ring), "%d");
+
+  ASSERT_EQ_FMT(5, pg_ring_pop_back(&ring), "%d");
+  ASSERT_EQ_FMT(91, pg_ring_front(&ring), "%d");
+  ASSERT_EQ_FMT(4, pg_ring_back(&ring), "%d");
+
+  ASSERT_EQ_FMT(91, pg_ring_pop_front(&ring), "%d");
+  ASSERT_EQ_FMT(90, pg_ring_front(&ring), "%d");
+  ASSERT_EQ_FMT(4, pg_ring_back(&ring), "%d");
+
   pg_ring_destroy(&ring);
 
   PASS();

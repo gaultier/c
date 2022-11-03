@@ -551,6 +551,7 @@ void pg_ring_grow(pg_ring_t *ring, uint64_t min_cap) {
   const uint64_t new_cap = MAX(MAX(min_cap, 8), ring->cap * 1.5);
   assert(new_cap > ring->cap);
   ring->data = ring->allocator.realloc(new_cap, ring->data, ring->cap);
+  ring->cap = new_cap;
 
   // TODO: improve
   if (ring->len < ring->offset) {
