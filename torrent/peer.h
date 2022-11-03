@@ -376,22 +376,38 @@ peer_error_t peer_send_handshake(peer_t* peer) {
   return peer_send_buf(peer, buf);
 }
 
+uint8_t* peer_write_u32(uint8_t* buf, uint64_t* buf_len, uint32_t x) {
+  *(uint32_t*)buf = htonl(x);
+  *buf_len += 4;
+  return buf + *buf_len;
+}
+
+uint8_t* peer_write_u8(uint8_t* buf, uint64_t* buf_len, uint8_t x) {
+  buf[0] = x;
+  *buf_len += 1;
+  return buf + *buf_len;
+}
+
 peer_error_t peer_send_choke(peer_t* peer) {
   uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
   buf->base = peer->allocator.realloc(4 + 1, NULL, 0);
-  buf->len = 4 + 1;
-  buf->base[0] = 0;
-  buf->base[1] = 0;
-  buf->base[2] = 0;
-  buf->base[3] = 1;
-  buf->base[4] = PT_CHOKE;
+
+  uint8_t* bytes = (uint8_t*)buf->base;
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, 1);
+  bytes = peer_write_u8(bytes, (uint64_t*)&buf->len, PT_CHOKE);
 
   return peer_send_buf(peer, buf);
 }
 
 peer_error_t peer_send_interested(peer_t* peer) {
-  peer_error_t err = {0};
-  return err;
+  uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
+  buf->base = peer->allocator.realloc(4 + 1, NULL, 0);
+
+  uint8_t* bytes = (uint8_t*)buf->base;
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, 1);
+  bytes = peer_write_u8(bytes, (uint64_t*)&buf->len, PT_INTERESTED);
+
+  return peer_send_buf(peer, buf);
 }
 
 peer_error_t peer_send_prologue(peer_t* peer) {
@@ -400,6 +416,9 @@ peer_error_t peer_send_prologue(peer_t* peer) {
   if (err.kind != PEK_NONE) return err;
 
   err = peer_send_choke(peer);
+  if (err.kind != PEK_NONE) return err;
+
+  err = peer_send_interested(peer);
   if (err.kind != PEK_NONE) return err;
 
   return err;
