@@ -11,6 +11,7 @@
 
 #define PEER_HANDSHAKE_LENGTH ((uint64_t)68)
 #define PEER_HANDSHAKE_HEADER_LENGTH ((uint64_t)19)
+#define PEER_MAX_MESSAGE_LENGTH ((uint64_t)1 << 27)
 
 typedef struct {
   uint8_t info_hash[20];
@@ -23,6 +24,7 @@ typedef enum {
   PEK_UV,
   PEK_WRONG_HANDSHAKE_HEADER,
   PEK_WRONG_HANDSHAKE_HASH,
+  PEK_INVALID_ANNOUNCED_LENGTH,
 } peer_error_kind_t;
 
 typedef struct {
@@ -31,6 +33,26 @@ typedef struct {
     int uv_err;
   } v;
 } peer_error_t;
+
+typedef enum {
+  PMK_NONE,
+  PMK_HEARTBEAT,
+  PMK_CHOKE,
+  PMK_UNCHOKE,
+  PMK_INTERESTED,
+  PMK_UNINTERESTED,
+  PMK_BITFIELD,
+  PMK_HAVE,
+  PMK_REQUEST,
+  PMK_PIECE,
+  PMK_CANCEL,
+} peer_message_kind_t;
+
+typedef struct {
+  peer_message_kind_t kind;
+  union {
+  } v;
+} peer_message_t;
 
 typedef struct {
   pg_allocator_t allocator;
@@ -83,9 +105,35 @@ peer_error_t peer_check_handshaked(peer_t* peer) {
   return (peer_error_t){0};
 }
 
-peer_error_t peer_parse_message(peer_t* peer) {
-  // TODO
-  return peer_check_handshaked(peer);
+peer_error_t peer_parse_message(peer_t* peer, peer_message_t* msg) {
+  peer_error_t err = peer_check_handshaked(peer);
+  if (err.kind > PEK_NEED_MORE) return err;
+
+  if (pg_ring_len(&peer->recv_data) < sizeof(uint32_t))
+    return (peer_error_t){.kind = PEK_NEED_MORE};
+
+  const uint8_t announced_size_parts[] = {
+      pg_ring_pop_front(&peer->recv_data),
+      pg_ring_pop_front(&peer->recv_data),
+      pg_ring_pop_front(&peer->recv_data),
+      pg_ring_pop_front(&peer->recv_data),
+  };
+  const uint32_t announced_len = ntohl(*(uint32_t*)announced_size_parts);
+  if (announced_len == 0) {
+    // Heartbeat
+    msg->kind = PMK_HEARTBEAT;
+    return err;
+  }
+  if (announced_len > PEER_MAX_MESSAGE_LENGTH) {
+    return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
+  }
+
+  const uint8_t tag = pg_ring_front(&peer->recv_data);
+  pg_log_debug(peer->logger, "[%s] msg tag=%d", peer->addr_s, tag);
+
+  return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};  // FIXME
+
+  // return err;
 }
 
 void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
@@ -101,7 +149,8 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
   peer->allocator.free(buf->base);
 
-  peer_error_t err = peer_parse_message(peer);
+  peer_message_t msg = {0};
+  peer_error_t err = peer_parse_message(peer, &msg);
   if (err.kind != PEK_NONE && err.kind != PEK_NEED_MORE) {
     pg_log_error(peer->logger, "[%s] peer_parse_message failed: %d\n",
                  peer->addr_s, err.kind);
