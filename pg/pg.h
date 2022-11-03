@@ -503,23 +503,27 @@ typedef struct {
 // -------------------------- Ring buffer of bytes
 
 typedef struct {
-  pg_array_t(uint8_t) data;
-  uint64_t len, offset;
+  uint8_t *data;
+  uint64_t len, offset, cap;
+  pg_allocator_t allocator;
 } pg_ring_t;
 
 void pg_ring_init(pg_allocator_t allocator, pg_ring_t *ring, uint64_t cap) {
   ring->len = ring->offset = 0;
-  pg_array_init_reserve(ring->data, cap, allocator);
-  pg_array_resize(ring->data, cap);
+  ring->data = allocator.realloc(cap, NULL, 0);
+  ring->cap = cap;
+  ring->allocator = allocator;
 }
 
 uint64_t pg_ring_len(pg_ring_t *ring) { return ring->len; }
 
-void pg_ring_destroy(pg_ring_t *ring) { pg_array_free(ring->data); }
+void pg_ring_destroy(pg_ring_t *ring) { ring->allocator.free(ring->data); }
 
 uint8_t *pg_ring_get_ptr(pg_ring_t *ring, uint64_t i) {
-  assert(i < pg_array_count(ring->data));
-  const uint64_t index = (i + ring->offset) % pg_array_count(ring->data);
+  if (ring->cap == 0) return NULL;
+
+  assert(i < ring->cap);
+  const uint64_t index = (i + ring->offset) % ring->cap;
   return &ring->data[index];
 }
 
@@ -528,23 +532,25 @@ uint8_t pg_ring_get(pg_ring_t *ring, uint64_t i) {
 }
 
 uint8_t *pg_ring_front_ptr(pg_ring_t *ring) {
+  assert(ring->offset < ring->cap);
   return &ring->data[ring->offset];
 }
 
 uint8_t pg_ring_front(pg_ring_t *ring) { return *pg_ring_front_ptr(ring); }
 
 uint8_t *pg_ring_back_ptr(pg_ring_t *ring) {
-  const uint64_t index =
-      (ring->offset + ring->len) % pg_array_count(ring->data);
+  if (ring->cap == 0) return NULL;
+
+  const uint64_t index = (ring->offset + ring->len - 1) % ring->cap;
   return &ring->data[index];
 }
 
 uint8_t pg_ring_back(pg_ring_t *ring) { return *pg_ring_back_ptr(ring); }
 
 void pg_ring_grow(pg_ring_t *ring, uint64_t min_cap) {
-  const uint64_t n = pg_array_count(ring->data);
-  const uint64_t new_cap = MAX(MAX(min_cap, 8), n * 1.5);
-  pg_array_resize(ring->data, new_cap);
+  const uint64_t new_cap = MAX(MAX(min_cap, 8), ring->cap * 1.5);
+  assert(new_cap > ring->cap);
+  ring->data = ring->allocator.realloc(new_cap, ring->data, ring->cap);
 
   // TODO: improve
   if (ring->len < ring->offset) {
@@ -554,24 +560,24 @@ void pg_ring_grow(pg_ring_t *ring, uint64_t min_cap) {
 }
 
 void pg_ring_push_back(pg_ring_t *ring, uint8_t x) {
-  if (pg_array_available_space(ring->data) == 0) {
+  if (ring->cap == ring->len) {
     pg_ring_grow(ring, 0);
   }
 
-  const uint64_t data_len = pg_array_count(ring->data);
   const uint64_t index =
-      data_len == 0 ? ring->offset : (ring->offset + ring->len) % data_len;
+      ring->cap == 0 ? ring->offset : (ring->offset + ring->len) % ring->cap;
+  assert(index < ring->cap);
   ring->data[index] = x;
   ring->len += 1;
 }
 
 void pg_ring_push_front(pg_ring_t *ring, uint8_t x) {
-  if (pg_array_available_space(ring->data) == 0) {
+  if (ring->cap == ring->len) {
     pg_ring_grow(ring, 0);
   }
 
-  ring->offset = (ring->offset - 1 + pg_array_count(ring->data)) %
-                 pg_array_count(ring->data);
+  ring->offset = (ring->offset - 1 + ring->cap) % ring->cap;
+  assert(ring->offset < ring->cap);
   ring->data[ring->offset] = x;
   ring->len += 1;
 }
@@ -579,16 +585,17 @@ void pg_ring_push_front(pg_ring_t *ring, uint8_t x) {
 uint8_t pg_ring_pop_back(pg_ring_t *ring) {
   assert(ring->len > 0);
   ring->len -= 1;
-  const uint64_t index =
-      (ring->offset + ring->len) % pg_array_count(ring->data);
+  const uint64_t index = (ring->offset + ring->len) % ring->cap;
+  assert(index < ring->cap);
   return ring->data[index];
 }
 
 uint8_t pg_ring_pop_front(pg_ring_t *ring) {
   assert(ring->len > 0);
+  assert(ring->offset < ring->cap);
   const uint8_t res = ring->data[ring->offset];
 
-  ring->offset = (ring->offset + 1) % pg_array_count(ring->data);
+  ring->offset = (ring->offset + 1) % ring->cap;
   ring->len -= 1;
 
   return res;
@@ -596,7 +603,7 @@ uint8_t pg_ring_pop_front(pg_ring_t *ring) {
 
 void pg_ring_consume_front(pg_ring_t *ring, uint64_t n) {
   assert(n <= ring->len);
-  ring->offset = (ring->offset - n) % pg_array_count(ring->data);
+  ring->offset = (ring->offset - n) % ring->cap;
   ring->len -= n;
 }
 
@@ -606,7 +613,6 @@ void pg_ring_consume_back(pg_ring_t *ring, uint64_t n) {
 }
 
 void pg_ring_clear(pg_ring_t *ring) {
-  pg_array_clear(ring->data);
   ring->offset = 0;
   ring->len = 0;
 }
