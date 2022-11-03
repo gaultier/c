@@ -604,7 +604,7 @@ uint8_t pg_ring_pop_front(pg_ring_t *ring) {
 
 void pg_ring_consume_front(pg_ring_t *ring, uint64_t n) {
   assert(n <= ring->len);
-  ring->offset = (ring->offset - n) % ring->cap;
+  ring->offset = (ring->offset + n) % ring->cap;
   ring->len -= n;
 }
 

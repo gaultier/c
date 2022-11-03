@@ -185,14 +185,35 @@ TEST test_pg_ring() {
   ASSERT_EQ_FMT(6, pg_ring_pop_back(&ring), "%d");
   ASSERT_EQ_FMT(5, pg_ring_back(&ring), "%d");
   ASSERT_EQ_FMT(91, pg_ring_front(&ring), "%d");
+  ASSERT_EQ_FMT(7ULL, pg_ring_len(&ring), "%llu");
 
   ASSERT_EQ_FMT(5, pg_ring_pop_back(&ring), "%d");
   ASSERT_EQ_FMT(91, pg_ring_front(&ring), "%d");
   ASSERT_EQ_FMT(4, pg_ring_back(&ring), "%d");
+  ASSERT_EQ_FMT(6ULL, pg_ring_len(&ring), "%llu");
 
   ASSERT_EQ_FMT(91, pg_ring_pop_front(&ring), "%d");
   ASSERT_EQ_FMT(90, pg_ring_front(&ring), "%d");
   ASSERT_EQ_FMT(4, pg_ring_back(&ring), "%d");
+  ASSERT_EQ_FMT(5ULL, pg_ring_len(&ring), "%llu");
+
+  ASSERT_EQ_FMT(90, pg_ring_pop_front(&ring), "%d");
+  ASSERT_EQ_FMT(1, pg_ring_front(&ring), "%d");
+  ASSERT_EQ_FMT(4, pg_ring_back(&ring), "%d");
+  ASSERT_EQ_FMT(4ULL, pg_ring_len(&ring), "%llu");
+
+  pg_ring_consume_back(&ring, 2);
+  ASSERT_EQ_FMT(2ULL, pg_ring_len(&ring), "%llu");
+  ASSERT_EQ_FMT(1, pg_ring_front(&ring), "%d");
+  ASSERT_EQ_FMT(2, pg_ring_back(&ring), "%d");
+
+  pg_ring_consume_front(&ring, 1);
+  ASSERT_EQ_FMT(1ULL, pg_ring_len(&ring), "%llu");
+  ASSERT_EQ_FMT(2, pg_ring_front(&ring), "%d");
+  ASSERT_EQ_FMT(2, pg_ring_back(&ring), "%d");
+
+  pg_ring_clear(&ring);
+  ASSERT_EQ_FMT(0ULL, pg_ring_len(&ring), "%llu");
 
   pg_ring_destroy(&ring);
 
