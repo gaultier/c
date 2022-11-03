@@ -149,6 +149,14 @@ TEST test_pg_ring() {
   ASSERT_EQ_FMT(7ULL, pg_ring_len(&ring), "%llu");
   ASSERT_GT(pg_array_count(ring.data), 0);
 
+  pg_ring_push_front(&ring, 91);
+  ASSERT_EQ_FMT(8ULL, pg_ring_len(&ring), "%llu");
+  ASSERT_GT(pg_array_count(ring.data), 0);
+
+  ASSERT_EQ_FMT(91, pg_ring_get(&ring, 0), "%d");
+  ASSERT_EQ_FMT(90, pg_ring_get(&ring, 1), "%d");
+  ASSERT_EQ_FMT(1, pg_ring_get(&ring, 2), "%d");
+
   pg_ring_destroy(&ring);
 
   PASS();
