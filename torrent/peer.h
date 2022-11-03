@@ -158,7 +158,7 @@ uint32_t peer_read_u32(pg_ring_t* ring) {
   return ntohl(*(uint32_t*)parts);
 }
 
-peer_error_t peer_parse_message(peer_t* peer, peer_message_t* msg) {
+peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
   peer_error_t err = peer_check_handshaked(peer);
   if (err.kind > PEK_NEED_MORE) return err;
 
@@ -331,9 +331,9 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   peer->allocator.free(buf->base);
 
   peer_message_t msg = {0};
-  peer_error_t err = peer_parse_message(peer, &msg);
+  peer_error_t err = peer_message_parse(peer, &msg);
   if (err.kind != PEK_NONE && err.kind != PEK_NEED_MORE) {
-    pg_log_error(peer->logger, "[%s] peer_parse_message failed: %d\n",
+    pg_log_error(peer->logger, "[%s] peer_message_parse failed: %d\n",
                  peer->addr_s, err.kind);
     peer_close(peer);
     return;
@@ -342,8 +342,14 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   pg_log_debug(peer->logger, "[%s] msg=%s", peer->addr_s,
                peer_message_kind_to_string(msg.kind));
 
-  peer_message_handle(peer, &msg);
+  err = peer_message_handle(peer, &msg);
   peer_message_destroy(&msg);
+
+  if (err.kind != PEK_NONE) {
+    pg_log_error(peer->logger, "[%s] peer_message_handle failed: %d\n",
+                 peer->addr_s, err.kind);
+    peer_close(peer);
+  }
 }
 
 void peer_on_write(uv_write_t* req, int status) {
