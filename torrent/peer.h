@@ -10,6 +10,7 @@
 #include "tracker.h"
 
 #define PEER_HANDSHAKE_LENGTH ((uint64_t)68)
+#define PEER_HANDSHAKE_HEADER_LENGTH ((uint64_t)19)
 
 typedef struct {
   uint8_t info_hash[20];
@@ -20,7 +21,8 @@ typedef enum {
   PEK_NONE,
   PEK_NEED_MORE,
   PEK_UV,
-  PEK_WRONG_HANDSHAKE
+  PEK_WRONG_HANDSHAKE_HEADER,
+  PEK_WRONG_HANDSHAKE_HASH,
 } peer_error_kind_t;
 
 typedef struct {
@@ -54,25 +56,35 @@ void peer_alloc(uv_handle_t* handle, size_t nread, uv_buf_t* buf) {
   buf->len = nread;
 }
 
-peer_error_t peer_check_handshaked(peer_t* peer, const uv_buf_t* buf) {
+peer_error_t peer_check_handshaked(peer_t* peer) {
   if (peer->handshaked) return (peer_error_t){0};
-  if (buf == NULL || buf->base == NULL || buf->len < PEER_HANDSHAKE_LENGTH)
+  if (pg_ring_len(&peer->recv_data) < PEER_HANDSHAKE_LENGTH)
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
-  if (buf->base[0] != 19) return (peer_error_t){.kind = PEK_WRONG_HANDSHAKE};
+  const char handshake_header_expected[] =
+      "\x13"
+      "BitTorrent protocol";
+  char handshake_got[PEER_HANDSHAKE_LENGTH] = "";
+  for (uint64_t i = 0; i < PEER_HANDSHAKE_LENGTH; i++)
+    handshake_got[i] = pg_ring_pop_front(&peer->recv_data);
 
-  const char handshake[] = "BitTorrent protocol";
-  if (memcmp(buf->base + 1, handshake, sizeof(handshake) - 1) != 0)
-    return (peer_error_t){.kind = PEK_WRONG_HANDSHAKE};
+  if (memcmp(handshake_got, handshake_header_expected,
+             sizeof(handshake_header_expected) - 1) != 0)
+    return (peer_error_t){.kind = PEK_WRONG_HANDSHAKE_HEADER};
 
-  if (memcmp(buf->base + 28, peer->download->info_hash, 20) != 0)
-    return (peer_error_t){.kind = PEK_WRONG_HANDSHAKE};
+  if (memcmp(handshake_got + 28, peer->download->info_hash, 20) != 0)
+    return (peer_error_t){.kind = PEK_WRONG_HANDSHAKE_HASH};
 
   peer->handshaked = true;
 
   pg_log_debug(peer->logger, "[%s] Handshaked", peer->addr_s);
 
   return (peer_error_t){0};
+}
+
+peer_error_t peer_parse_message(peer_t* peer) {
+  // TODO
+  return peer_check_handshaked(peer);
 }
 
 void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
@@ -85,7 +97,15 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   assert(buf->base != NULL);
   assert(buf->len > 0);
 
+  pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, buf->len);
   peer->allocator.free(buf->base);
+
+  peer_error_t err = peer_parse_message(peer);
+  if (err.kind != PEK_NONE && err.kind != PEK_NEED_MORE) {
+    pg_log_error(peer->logger, "[%s] peer_parse_message failed: %d\n",
+                 peer->addr_s, err.kind);
+    peer_close(peer);
+  }
 }
 
 void peer_on_write(uv_write_t* req, int status) {
@@ -109,9 +129,34 @@ peer_error_t peer_send_handshake(peer_t* peer) {
   buf->base = peer->allocator.realloc(PEER_HANDSHAKE_LENGTH, NULL, 0);
   buf->len = PEER_HANDSHAKE_LENGTH;
 
-  const uint8_t handshake_header[] = {
-      19,  'B', 'i', 't', 'T', 'o', 'r', 'r', 'e', 'n', 't', ' ', 'p', 'r',
-      'o', 't', 'o', 'c', 'o', 'l', 0,   0,   0,   0,   0,   0,   0,   0};
+  const uint8_t handshake_header[] = {PEER_HANDSHAKE_HEADER_LENGTH,
+                                      'B',
+                                      'i',
+                                      't',
+                                      'T',
+                                      'o',
+                                      'r',
+                                      'r',
+                                      'e',
+                                      'n',
+                                      't',
+                                      ' ',
+                                      'p',
+                                      'r',
+                                      'o',
+                                      't',
+                                      'o',
+                                      'c',
+                                      'o',
+                                      'l',
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0,
+                                      0};
   memcpy(buf->base, handshake_header, sizeof(handshake_header));
   memcpy(buf->base + sizeof(handshake_header), peer->download->info_hash,
          sizeof(peer->download->info_hash));
