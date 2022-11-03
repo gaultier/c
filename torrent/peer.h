@@ -71,6 +71,10 @@ typedef struct {
 } peer_message_request_t;
 
 typedef struct {
+  pg_array_t(uint8_t) bitfield;
+} peer_message_bitfield_t;
+
+typedef struct {
   uint32_t index, begin;
   pg_array_t(uint8_t) data;
 } peer_message_piece_t;
@@ -81,6 +85,7 @@ typedef struct {
     peer_message_have_t have;
     peer_message_request_t request;
     peer_message_piece_t piece;
+    peer_message_bitfield_t bitfield;
   } v;
 } peer_message_t;
 
@@ -185,19 +190,19 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
   switch (tag) {
     case PT_CHOKE:
       msg->kind = PMK_CHOKE;
-      pg_ring_pop_front(&peer->recv_data);
+      pg_ring_pop_front(&peer->recv_data);  // consume tag
       break;
     case PT_UNCHOKE:
       msg->kind = PMK_UNCHOKE;
-      pg_ring_pop_front(&peer->recv_data);
+      pg_ring_pop_front(&peer->recv_data);  // consume tag
       break;
     case PT_INTERESTED:
       msg->kind = PMK_INTERESTED;
-      pg_ring_pop_front(&peer->recv_data);
+      pg_ring_pop_front(&peer->recv_data);  // consume tag
       break;
     case PT_UNINTERESTED:
       msg->kind = PMK_UNINTERESTED;
-      pg_ring_pop_front(&peer->recv_data);
+      pg_ring_pop_front(&peer->recv_data);  // consume tag
       break;
     case PT_HAVE: {
       if (announced_len != 5)
@@ -205,6 +210,8 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
 
       if (pg_ring_len(&peer->recv_data) < announced_len)
         return (peer_error_t){.kind = PEK_NEED_MORE};
+
+      pg_ring_pop_front(&peer->recv_data);  // consume tag
 
       const uint32_t have = peer_read_u32(&peer->recv_data);
       msg->kind = PMK_HAVE;
@@ -219,8 +226,16 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
         return (peer_error_t){.kind = PEK_NEED_MORE};
 
       msg->kind = PMK_BITFIELD;
-      // TODO msg->v.have = have;
-      pg_ring_consume_front(&peer->recv_data, announced_len);
+      msg->v.bitfield = (peer_message_bitfield_t){0};
+      pg_array_init_reserve(msg->v.bitfield.bitfield, announced_len - 1,
+                            peer->allocator);
+
+      pg_ring_pop_front(&peer->recv_data);  // consume tag
+
+      for (uint64_t i = 0; i < announced_len - 1; i++) {
+        pg_array_append(msg->v.bitfield.bitfield,
+                        pg_ring_pop_front(&peer->recv_data));
+      }
       break;
     }
     case PT_REQUEST: {
@@ -326,9 +341,9 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg) {
     case PMK_HAVE:
       // TODO
       return (peer_error_t){0};
-    case PMK_BITFIELD:
-      // TODO
+    case PMK_BITFIELD: {
       return (peer_error_t){0};
+    }
     case PMK_PIECE:
       // TODO
       return (peer_error_t){0};

@@ -632,3 +632,21 @@ void pg_ring_push_backv(pg_ring_t *ring, uint8_t *data, uint64_t len) {
   memcpy(ring->data + index, data, len);
   ring->len += len;
 }
+
+// -------------------------- bitarray
+
+typedef struct {
+  pg_array_t(uint8_t) data;
+} pg_bitarray_t;
+
+void pg_bitarray_init(pg_allocator_t allocator, pg_bitarray_t *bitarr,
+                      uint64_t cap) {
+  pg_array_init_reserve(bitarr, cap, allocator);
+}
+
+void pg_bitarray_setv(pg_bitarray_t *bitarr, uint8_t *data, uint64_t len) {
+  if (pg_array_capacity(bitarr->data) < len) pg_array_grow(bitarr->data, len);
+
+  memcpy(bitarr->data, data, len);
+  pg_array_resize(bitarr->data, len);
+}
