@@ -107,6 +107,49 @@ TEST test_pg_string_url_encode() {
   PASS();
 }
 
+TEST test_pg_ring() {
+  pg_ring_t ring = {0};
+  pg_ring_init(pg_heap_allocator(), &ring, 5);
+
+  ASSERT_EQ_FMT(0ULL, pg_ring_len(&ring), "%llu");
+  ASSERT_GT(pg_array_count(ring.data), 0);
+
+  pg_ring_push_back(&ring, 1);
+  ASSERT_EQ_FMT(1ULL, pg_ring_len(&ring), "%llu");
+  ASSERT_GT(pg_array_count(ring.data), 0);
+
+  pg_ring_push_back(&ring, 2);
+  ASSERT_EQ_FMT(2ULL, pg_ring_len(&ring), "%llu");
+  ASSERT_GT(pg_array_count(ring.data), 0);
+
+  pg_ring_push_back(&ring, 3);
+  ASSERT_EQ_FMT(3ULL, pg_ring_len(&ring), "%llu");
+  ASSERT_GT(pg_array_count(ring.data), 0);
+
+  pg_ring_push_back(&ring, 4);
+  ASSERT_EQ_FMT(4ULL, pg_ring_len(&ring), "%llu");
+  ASSERT_GT(pg_array_count(ring.data), 0);
+
+  pg_ring_push_back(&ring, 5);
+  ASSERT_EQ_FMT(5ULL, pg_ring_len(&ring), "%llu");
+  ASSERT_GT(pg_array_count(ring.data), 0);
+
+  pg_ring_push_back(&ring, 6);
+  ASSERT_EQ_FMT(6ULL, pg_ring_len(&ring), "%llu");
+  ASSERT_GT(pg_array_count(ring.data), 0);
+
+  ASSERT_EQ_FMT(1, pg_ring_get(&ring, 0), "%d");
+  ASSERT_EQ_FMT(2, pg_ring_get(&ring, 1), "%d");
+  ASSERT_EQ_FMT(3, pg_ring_get(&ring, 2), "%d");
+  ASSERT_EQ_FMT(4, pg_ring_get(&ring, 3), "%d");
+  ASSERT_EQ_FMT(5, pg_ring_get(&ring, 4), "%d");
+  ASSERT_EQ_FMT(6, pg_ring_get(&ring, 5), "%d");
+
+  pg_ring_destroy(&ring);
+
+  PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv) {
@@ -119,6 +162,7 @@ int main(int argc, char **argv) {
   RUN_SUITE(pg_array);
   RUN_TEST(test_pg_span_split);
   RUN_TEST(test_pg_string_url_encode);
+  RUN_TEST(test_pg_ring);
 
   GREATEST_MAIN_END(); /* display results */
 }

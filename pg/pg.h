@@ -510,7 +510,10 @@ typedef struct {
 void pg_ring_init(pg_allocator_t allocator, pg_ring_t *ring, uint64_t cap) {
   ring->len = ring->offset = 0;
   pg_array_init_reserve(ring->data, cap, allocator);
+  pg_array_resize(ring->data, cap);
 }
+
+uint64_t pg_ring_len(pg_ring_t *ring) { return ring->len; }
 
 void pg_ring_destroy(pg_ring_t *ring) { pg_array_free(ring->data); }
 
@@ -541,7 +544,7 @@ uint8_t pg_ring_back(pg_ring_t *ring) { return *pg_ring_back_ptr(ring); }
 void pg_ring_grow(pg_ring_t *ring, uint64_t min_cap) {
   const uint64_t n = pg_array_count(ring->data);
   const uint64_t new_cap = MAX(MAX(min_cap, 8), n * 1.5);
-  pg_array_grow(ring->data, new_cap);
+  pg_array_resize(ring->data, new_cap);
 
   // TODO: improve
   if (ring->len < ring->offset) {
@@ -551,19 +554,20 @@ void pg_ring_grow(pg_ring_t *ring, uint64_t min_cap) {
 }
 
 void pg_ring_push_back(pg_ring_t *ring, uint8_t x) {
-  if (pg_array_available_space(ring) == 0) {
-    pg_array_grow(ring, 0);
+  if (pg_array_available_space(ring->data) == 0) {
+    pg_ring_grow(ring, 0);
   }
 
+  const uint64_t data_len = pg_array_count(ring->data);
   const uint64_t index =
-      (ring->offset + ring->len) % pg_array_count(ring->data);
+      data_len == 0 ? ring->offset : (ring->offset + ring->len) % data_len;
   ring->data[index] = x;
   ring->len += 1;
 }
 
 void pg_ring_push_front(pg_ring_t *ring, uint8_t x) {
   if (pg_array_available_space(ring) == 0) {
-    pg_array_grow(ring, 0);
+    pg_ring_grow(ring, 0);
   }
 
   ring->offset = (ring->offset - 1 + pg_array_count(ring->data)) %
