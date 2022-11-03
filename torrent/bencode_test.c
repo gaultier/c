@@ -392,8 +392,7 @@ TEST test_bc_parse_dictionary() {
     ASSERT_ENUM_EQ(BC_KIND_DICTIONARY, res.kind, bc_value_kind_to_string);
     ASSERT_EQ_FMT(1ULL, pg_hashtable_count(&res.v.dictionary), "%llu");
 
-    pg_string_t key =
-        pg_string_make_length(pg_heap_allocator(), "abc", strlen("abc"));
+    pg_span_t key = pg_span_make_c("abc");
     uint64_t index = -1;
     bool found = pg_hashtable_find(&res.v.dictionary, key, &index);
 

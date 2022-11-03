@@ -42,6 +42,7 @@ typedef struct {
   uv_tcp_t connection;
   uv_connect_t connect_req;
 
+  pg_ring_t recv_data;
   char addr_s[INET_ADDRSTRLEN + /* :port */ 6];  // TODO: ipv6
 } peer_t;
 
@@ -78,14 +79,13 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   peer_t* peer = stream->data;
   pg_log_debug(peer->logger, "[%s] peer_on_read: %ld", peer->addr_s, nread);
 
-  peer_error_t err = peer_check_handshaked(peer, buf);
-  if (err.kind != PEK_NONE && err.kind != PEK_NEED_MORE) {
-    peer_close(peer);
-  }
+  if (nread <= 0) return;  // Nothing to do
 
-  if (nread >= 0 && buf != NULL && buf->base != NULL) {
-    peer->allocator.free(buf->base);
-  }
+  assert(buf != NULL);
+  assert(buf->base != NULL);
+  assert(buf->len > 0);
+
+  peer->allocator.free(buf->base);
 }
 
 void peer_on_write(uv_write_t* req, int status) {
@@ -191,6 +191,7 @@ peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
   peer->metainfo = metainfo;
   peer->connect_req.data = peer;
   peer->connection.data = peer;
+  pg_ring_init(allocator, &peer->recv_data, /* arbitrary */ 512);
 
   snprintf(peer->addr_s, sizeof(peer->addr_s), "%s:%hu",
            inet_ntoa(*(struct in_addr*)&address.ip), htons(address.port));
