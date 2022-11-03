@@ -721,6 +721,9 @@ peer_error_t peer_connect(peer_t* peer, tracker_peer_address_t address) {
 
 void peer_destroy(peer_t* peer) {
   pg_bitarray_destroy(&peer->them_have_pieces);
+  pg_bitarray_destroy(&peer->blocks_for_piece_downloaded);
+  pg_bitarray_destroy(&peer->blocks_for_piece_downloading);
+  pg_bitarray_destroy(&peer->blocks_for_piece_to_download);
   pg_ring_destroy(&peer->recv_data);
   peer->allocator.free(peer);
 }
