@@ -84,7 +84,7 @@ typedef struct {
   } v;
 } peer_message_t;
 
-void message_destroy(peer_message_t* msg) {
+void peer_message_destroy(peer_message_t* msg) {
   switch (msg->kind) {
     case PMK_BITFIELD:
       // TODO
@@ -333,6 +333,8 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
   pg_log_debug(peer->logger, "[%s] msg=%s", peer->addr_s,
                peer_message_kind_to_string(msg.kind));
+
+  peer_message_destroy(&msg);
 }
 
 void peer_on_write(uv_write_t* req, int status) {
