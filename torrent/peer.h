@@ -50,10 +50,10 @@ typedef struct {
 
 void peer_close(peer_t* peer);
 
-void peer_alloc(uv_handle_t* handle, size_t nread, uv_buf_t* buf) {
+void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   peer_t* peer = handle->data;
-  buf->base = peer->allocator.realloc(nread, NULL, 0);
-  buf->len = nread;
+  buf->base = peer->allocator.realloc(suggested_size / 8, NULL, 0);
+  buf->len = suggested_size / 8;
 }
 
 peer_error_t peer_check_handshaked(peer_t* peer) {
@@ -97,7 +97,7 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   assert(buf->base != NULL);
   assert(buf->len > 0);
 
-  pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, buf->len);
+  pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
   peer->allocator.free(buf->base);
 
   peer_error_t err = peer_parse_message(peer);
