@@ -84,6 +84,18 @@ typedef struct {
   } v;
 } peer_message_t;
 
+void message_destroy(peer_message_t* msg) {
+  switch (msg->kind) {
+    case PMK_BITFIELD:
+      // TODO
+      break;
+    case PMK_PIECE:
+      pg_array_free(msg->v.piece.data);
+
+    default:;  // no-op
+  }
+}
+
 typedef struct {
   pg_allocator_t allocator;
   pg_logger_t* logger;
