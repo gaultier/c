@@ -50,6 +50,7 @@ typedef struct {
 
 void peer_close(peer_t* peer);
 
+// TODO: use pool allocator?
 void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   peer_t* peer = handle->data;
   buf->base = peer->allocator.realloc(suggested_size, NULL, 0);
