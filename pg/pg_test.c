@@ -238,7 +238,19 @@ TEST test_pg_bitarray() {
 
   uint64_t index = 0;
   ASSERT_EQ(true, pg_bitarray_first_set_index(&bitarr, &index));
-  ASSERT_EQ_FMT(14ULL, index, "%llu");
+  ASSERT_EQ_FMT(10ULL, index, "%llu");
+
+  pg_bitarray_clear(&bitarr);
+
+  pg_bitarray_set(&bitarr, 5);
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 0));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 1));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 2));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 3));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 4));
+  ASSERT_EQ(true, pg_bitarray_get(&bitarr, 5));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 6));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 7));
 
   pg_bitarray_destroy(&bitarr);
 

@@ -3,13 +3,13 @@
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #ifndef MIN
@@ -662,8 +662,29 @@ bool pg_bitarray_first_set_index(pg_bitarray_t *bitarr, uint64_t *index) {
   for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
     if (bitarr->data[i] == 0) continue;
 
-    *index = (i * 8) + (8 - __builtin_ffs(bitarr->data[i]));
+    *index = (i * 8) + __builtin_ffs(bitarr->data[i]);
     return true;
   }
   return false;
+}
+
+void pg_bitarray_clear(pg_bitarray_t *bitarr) {
+  memset(bitarr->data, 0, pg_array_count(bitarr->data));
+  pg_array_clear(bitarr->data);
+}
+
+void pg_bitarray_set(pg_bitarray_t *bitarr, uint64_t i) {
+  const uint64_t index = i / 8.0;
+  if (index >= pg_array_count(bitarr->data)) {
+    pg_array_resize(bitarr->data, 1 + index);
+  }
+
+  bitarr->data[index] |= 1 << (i % 8);
+}
+
+bool pg_bitarray_get(pg_bitarray_t *bitarr, uint64_t i) {
+  const uint64_t index = i / 8.0;
+
+  assert(index < pg_array_count(bitarr->data));
+  return bitarr->data[index] & 1 << (i % 8);
 }
