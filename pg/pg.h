@@ -620,7 +620,7 @@ void pg_ring_clear(pg_ring_t *ring) {
 
 void pg_ring_push_backv(pg_ring_t *ring, uint8_t *data, uint64_t len) {
   if (ring->cap <= ring->len + len) {
-    pg_ring_grow(ring, ring->len + len);
+    pg_ring_grow(ring, ring->cap + ring->offset + ring->len + len);
   }
 
   const uint64_t index =
