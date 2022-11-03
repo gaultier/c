@@ -566,7 +566,7 @@ void pg_ring_push_back(pg_ring_t *ring, uint8_t x) {
 }
 
 void pg_ring_push_front(pg_ring_t *ring, uint8_t x) {
-  if (pg_array_available_space(ring) == 0) {
+  if (pg_array_available_space(ring->data) == 0) {
     pg_ring_grow(ring, 0);
   }
 
