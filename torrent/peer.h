@@ -1,5 +1,8 @@
 #pragma once
 
+#include <_types/_uint32_t.h>
+#include <_types/_uint64_t.h>
+#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -7,6 +10,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <uv.h>
 
 #include "bencode.h"
@@ -21,6 +25,7 @@
 typedef struct {
   uint8_t info_hash[20];
   uint8_t peer_id[20];
+  uint64_t blocks_per_piece, last_piece_length, last_piece_block_count;
 } download_t;
 
 typedef enum {
@@ -559,6 +564,17 @@ uint8_t* peer_write_u8(uint8_t* buf, uint64_t* buf_len, uint8_t x) {
   return buf + *buf_len;
 }
 
+bool peer_is_last_piece(bc_metainfo_t* metainfo, uint32_t piece) {
+  return piece == pg_array_count(metainfo->pieces) / 20;
+}
+
+uint32_t peer_block_count_per_piece(peer_t* peer, uint32_t piece) {
+  if (peer_is_last_piece(peer->metainfo, piece))
+    return peer->download->last_piece_block_count;
+  else
+    return peer->download->blocks_per_piece;
+}
+
 peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
   uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
   buf->base = peer->allocator.realloc(4 + 1 + 3 * 4, NULL, 0);
@@ -568,7 +584,19 @@ peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
   bytes = peer_write_u8(bytes, (uint64_t*)&buf->len, PT_REQUEST);
 
   const uint32_t begin = block_for_piece * PEER_BLOCK_LENGTH;
-  const uint32_t length = PEER_BLOCK_LENGTH;  // FIXME
+  uint32_t length = 0;
+  if (peer_is_last_piece(peer->metainfo, peer->downloading_piece)) {
+    if (block_for_piece <
+        peer_block_count_per_piece(peer, peer->downloading_piece) - 1) {
+      length = PEER_BLOCK_LENGTH;
+    } else {
+      // Last block of last piece
+      length = peer->metainfo->length -
+               (peer->downloading_piece * peer->metainfo->piece_length + begin);
+    }
+  } else {
+    length = PEER_BLOCK_LENGTH;
+  }
 
   bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, begin);
   bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, length);
@@ -702,4 +730,17 @@ void peer_close(peer_t* peer) {
   if (!uv_is_closing((uv_handle_t*)&peer->connection)) {
     uv_tcp_close_reset(&peer->connection, peer_on_close);
   }
+}
+
+void peer_download_init(download_t* download, bc_metainfo_t* metainfo,
+                        uint8_t* info_hash, uint8_t* peer_id) {
+  const uint32_t pieces_count = pg_array_count(metainfo->pieces) / 20;
+
+  download->blocks_per_piece = metainfo->piece_length / PEER_BLOCK_LENGTH;
+  download->last_piece_length =
+      metainfo->length - (pieces_count - 1) * metainfo->piece_length;
+  download->last_piece_block_count =
+      (uint64_t)ceil((double)download->last_piece_length / PEER_BLOCK_LENGTH);
+  memcpy(download->info_hash, info_hash, 20);
+  memcpy(download->peer_id, peer_id, 20);
 }
