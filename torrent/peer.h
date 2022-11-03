@@ -1,6 +1,7 @@
 #pragma once
 
 #include <arpa/inet.h>
+#include <inttypes.h>
 #include <netinet/in.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -62,9 +63,24 @@ typedef enum {
 } peer_message_kind_t;
 
 typedef struct {
+  uint32_t have;
+} peer_message_have_t;
+
+typedef struct {
+  uint32_t index, begin, length;
+} peer_message_request_t;
+
+typedef struct {
+  uint32_t index, begin;
+  pg_array_t(uint8_t) data;
+} peer_message_piece_t;
+
+typedef struct {
   peer_message_kind_t kind;
   union {
-    uint32_t have;
+    peer_message_have_t have;
+    peer_message_request_t request;
+    peer_message_piece_t piece;
   } v;
 } peer_message_t;
 
@@ -180,7 +196,7 @@ peer_error_t peer_parse_message(peer_t* peer, peer_message_t* msg) {
 
       const uint32_t have = peer_read_u32(&peer->recv_data);
       msg->kind = PMK_HAVE;
-      msg->v.have = have;
+      msg->v.have = (peer_message_have_t){have};
       pg_ring_consume_front(&peer->recv_data, 1 + 4);
       break;
     }
