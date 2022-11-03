@@ -316,6 +316,23 @@ void peer_on_write(uv_write_t* req, int status) {
   }
 }
 
+peer_error_t peer_send_buf(peer_t* peer, uv_buf_t* buf) {
+  uv_write_t* write_req = peer->allocator.realloc(sizeof(uv_write_t), NULL, 0);
+  write_req->data = peer;
+
+  int ret = 0;
+  if ((ret = uv_write(write_req, (uv_stream_t*)&peer->connection, buf, 1,
+                      peer_on_write)) != 0) {
+    pg_log_error(peer->logger, "[%s] uv_write failed: %d", peer->addr_s, ret);
+
+    peer->allocator.free(write_req);
+
+    return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
+  }
+
+  return (peer_error_t){0};
+}
+
 peer_error_t peer_send_handshake(peer_t* peer) {
   uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
   buf->base = peer->allocator.realloc(PEER_HANDSHAKE_LENGTH, NULL, 0);
@@ -356,25 +373,10 @@ peer_error_t peer_send_handshake(peer_t* peer) {
       buf->base + sizeof(handshake_header) + sizeof(peer->download->info_hash),
       peer->download->peer_id, sizeof(peer->download->peer_id));
 
-  uv_write_t* write_req = peer->allocator.realloc(sizeof(uv_write_t), NULL, 0);
-  write_req->data = peer;
-
-  int ret = 0;
-  if ((ret = uv_write(write_req, (uv_stream_t*)&peer->connection, buf, 1,
-                      peer_on_write)) != 0) {
-    pg_log_error(peer->logger, "[%s] uv_write failed: %d", peer->addr_s, ret);
-
-    peer->allocator.free(write_req);
-
-    return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
-  }
-
-  return (peer_error_t){0};
+  return peer_send_buf(peer, buf);
 }
 
 peer_error_t peer_send_choke(peer_t* peer) {
-  peer_error_t err = {0};
-  int ret = 0;
   uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
   buf->base = peer->allocator.realloc(4 + 1, NULL, 0);
   buf->len = 4 + 1;
@@ -384,18 +386,7 @@ peer_error_t peer_send_choke(peer_t* peer) {
   buf->base[3] = 1;
   buf->base[4] = PT_CHOKE;
 
-  uv_write_t* write_req = peer->allocator.realloc(sizeof(uv_write_t), NULL, 0);
-  write_req->data = peer;
-
-  if ((ret = uv_write(write_req, (uv_stream_t*)&peer->connection, buf, 1,
-                      peer_on_write)) != 0) {
-    pg_log_error(peer->logger, "[%s] uv_write failed: %d", peer->addr_s, ret);
-
-    peer->allocator.free(write_req);
-
-    return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
-  }
-  return err;
+  return peer_send_buf(peer, buf);
 }
 
 peer_error_t peer_send_interested(peer_t* peer) {
