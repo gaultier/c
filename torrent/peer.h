@@ -1,10 +1,10 @@
 #pragma once
 
-#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
 #include <netinet/in.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <uv.h>
@@ -15,6 +15,8 @@
 #define PEER_HANDSHAKE_LENGTH ((uint64_t)68)
 #define PEER_HANDSHAKE_HEADER_LENGTH ((uint64_t)19)
 #define PEER_MAX_MESSAGE_LENGTH ((uint64_t)1 << 27)
+#define PEER_MAX_INFLIGHT_REQUESTS ((uint64_t)50)
+#define PEER_BLOCK_LENGTH ((uint32_t)1 << 14)
 
 typedef struct {
   uint8_t info_hash[20];
@@ -113,6 +115,7 @@ typedef struct {
   bool me_choked, me_interested, them_choked, them_interested, handshaked;
   uint8_t in_flight_requests;
   pg_bitarray_t them_have_pieces;
+  uint32_t downloading_piece;
 
   uv_tcp_t connection;
   uv_connect_t connect_req;
@@ -325,7 +328,8 @@ const char* peer_message_kind_to_string(int k) {
 
 peer_error_t peer_send_heartbeat(peer_t* peer);
 
-peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg) {
+peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
+                                 bool* request_more) {
   switch (msg->kind) {
     case PMK_HEARTBEAT:
       return peer_send_heartbeat(peer);
@@ -359,6 +363,7 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg) {
       pg_bitarray_setv(&peer->them_have_pieces, bitfield,
                        pg_array_count(bitfield));
 
+      *request_more = true;
       return (peer_error_t){0};
     }
     case PMK_PIECE:
@@ -374,6 +379,47 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg) {
     default:
       __builtin_unreachable();
   }
+}
+
+uint32_t peer_pick_next_piece_to_download(peer_t* peer) {
+  return UINT32_MAX;  // FIXME
+}
+
+peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece);
+
+peer_error_t peer_request_more_blocks(peer_t* peer) {
+  if (peer->in_flight_requests >= PEER_MAX_INFLIGHT_REQUESTS ||
+      peer->them_choked) {
+    pg_log_debug(peer->logger,
+                 "[%s] request_more_blocks stop: in_flight_requests=%hhu "
+                 "downloading_piece=%u them_choked=%d",
+                 peer->addr_s, peer->in_flight_requests,
+                 peer->downloading_piece, peer->them_choked);
+    return (peer_error_t){0};
+  }
+
+  peer->downloading_piece = peer_pick_next_piece_to_download(peer);
+
+  // Nothing to download anymore
+  if (peer->downloading_piece == UINT32_MAX) {
+    pg_log_debug(peer->logger,
+                 "[%s] request_more_blocks no more pieces to download: "
+                 "in_flight_requests=%hhu "
+                 "downloading_piece=%u them_choked=%d",
+                 peer->addr_s, peer->in_flight_requests,
+                 peer->downloading_piece, peer->them_choked);
+    return (peer_error_t){0};
+  }
+
+  const uint32_t block = 0;  // FIXME
+  peer_error_t err = peer_send_request(peer, block);
+  if (err.kind != PEK_NONE) return err;
+  // while(peer->in_flight_requests < PEER_MAX_INFLIGHT_REQUESTS) {
+  //   bool ok = false;
+  //   const uint32_t block = peer_pick_next_block_to_download();
+  // }
+
+  return (peer_error_t){0};
 }
 
 void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
@@ -403,13 +449,18 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
                peer_message_kind_to_string(msg.kind));
   assert(msg.kind != PMK_NONE);
 
-  err = peer_message_handle(peer, &msg);
+  bool request_more = false;
+  err = peer_message_handle(peer, &msg, &request_more);
   peer_message_destroy(&msg);
 
   if (err.kind != PEK_NONE) {
     pg_log_error(peer->logger, "[%s] peer_message_handle failed: %d\n",
                  peer->addr_s, err.kind);
     peer_close(peer);
+  }
+
+  if (request_more) {
+    peer_request_more_blocks(peer);
   }
 }
 
@@ -508,6 +559,22 @@ uint8_t* peer_write_u8(uint8_t* buf, uint64_t* buf_len, uint8_t x) {
   return buf + *buf_len;
 }
 
+peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
+  uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
+  buf->base = peer->allocator.realloc(4 + 1 + 3 * 4, NULL, 0);
+
+  uint8_t* bytes = (uint8_t*)buf->base;
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, 1 + 3 * 4);
+  bytes = peer_write_u8(bytes, (uint64_t*)&buf->len, PT_REQUEST);
+
+  const uint32_t begin = block_for_piece * PEER_BLOCK_LENGTH;
+  const uint32_t length = PEER_BLOCK_LENGTH;  // FIXME
+
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, begin);
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, length);
+
+  return peer_send_buf(peer, buf);
+}
 peer_error_t peer_send_choke(peer_t* peer) {
   uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
   buf->base = peer->allocator.realloc(4 + 1, NULL, 0);
@@ -582,6 +649,7 @@ peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
   peer->metainfo = metainfo;
   pg_bitarray_init(allocator, &peer->them_have_pieces,
                    pg_array_count(metainfo->pieces));
+  peer->downloading_piece = -1;
   peer->connect_req.data = peer;
   peer->connection.data = peer;
   pg_ring_init(allocator, &peer->recv_data, /* arbitrary */ 512);
