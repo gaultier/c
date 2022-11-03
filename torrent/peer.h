@@ -96,7 +96,7 @@ void peer_message_destroy(peer_message_t* msg) {
   switch (msg->kind) {
     case PMK_BITFIELD:
       pg_array_free(msg->v.bitfield.bitfield);
-      break;
+      return;
     case PMK_PIECE:
       pg_array_free(msg->v.piece.data);
 
@@ -195,19 +195,19 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
     case PT_CHOKE:
       msg->kind = PMK_CHOKE;
       pg_ring_pop_front(&peer->recv_data);  // consume tag
-      break;
+      return (peer_error_t){0};
     case PT_UNCHOKE:
       msg->kind = PMK_UNCHOKE;
       pg_ring_pop_front(&peer->recv_data);  // consume tag
-      break;
+      return (peer_error_t){0};
     case PT_INTERESTED:
       msg->kind = PMK_INTERESTED;
       pg_ring_pop_front(&peer->recv_data);  // consume tag
-      break;
+      return (peer_error_t){0};
     case PT_UNINTERESTED:
       msg->kind = PMK_UNINTERESTED;
       pg_ring_pop_front(&peer->recv_data);  // consume tag
-      break;
+      return (peer_error_t){0};
     case PT_HAVE: {
       if (announced_len != 5)
         return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
@@ -220,7 +220,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       const uint32_t have = peer_read_u32(&peer->recv_data);
       msg->kind = PMK_HAVE;
       msg->v.have = (peer_message_have_t){have};
-      break;
+      return (peer_error_t){0};
     }
     case PT_BITFIELD: {
       if (announced_len < 1)
@@ -240,7 +240,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
         pg_array_append(msg->v.bitfield.bitfield,
                         pg_ring_pop_front(&peer->recv_data));
       }
-      break;
+      return (peer_error_t){0};
     }
     case PT_REQUEST: {
       if (announced_len != 1 + 3 * 4)
@@ -252,7 +252,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       msg->kind = PMK_REQUEST;
       // TODO msg->v.have = have;
       pg_ring_consume_front(&peer->recv_data, announced_len);
-      break;
+      return (peer_error_t){0};
     }
     case PT_PIECE: {
       if (announced_len < 1 + 2 * 4 + /* Require at least 1 byte of data */ 1)
@@ -272,7 +272,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
         msg->v.piece.data[i] = pg_ring_pop_front(&peer->recv_data);
       }
 
-      break;
+      return (peer_error_t){0};
     }
     case PT_CANCEL: {
       if (announced_len != 1 + 3 * 4)
@@ -284,14 +284,13 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       msg->kind = PMK_CANCEL;
       // TODO msg->v.have = have;
       pg_ring_consume_front(&peer->recv_data, announced_len);
-      break;
+      return (peer_error_t){0};
     }
 
     default:
       return (peer_error_t){.kind = PEK_INVALID_MESSAGE_TAG};
   }
-
-  return (peer_error_t){0};
+  __builtin_unreachable();
 }
 
 const char* peer_message_kind_to_string(int k) {
@@ -346,8 +345,8 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg) {
       // TODO
       return (peer_error_t){0};
     case PMK_BITFIELD: {
-      const uint64_t expected_length =
-          (uint64_t)ceil((double)pg_array_count(peer->metainfo->pieces) / 8);
+      const uint64_t expected_length = (uint64_t)ceil(
+          (double)pg_array_count(peer->metainfo->pieces) / 20 / 8);
 
       pg_array_t(uint8_t) bitfield = msg->v.bitfield.bitfield;
       if (pg_array_count(bitfield) != expected_length) {
@@ -392,8 +391,9 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
   peer_message_t msg = {0};
   peer_error_t err = peer_message_parse(peer, &msg);
-  if (err.kind != PEK_NONE && err.kind != PEK_NEED_MORE) {
-    pg_log_error(peer->logger, "[%s] peer_message_parse failed: %d\n",
+  if (err.kind == PEK_NEED_MORE) return;
+  if (err.kind != PEK_NONE) {
+    pg_log_error(peer->logger, "[%s] peer_message_parse failed: %d",
                  peer->addr_s, err.kind);
     peer_close(peer);
     return;
@@ -401,6 +401,7 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
   pg_log_debug(peer->logger, "[%s] msg=%s", peer->addr_s,
                peer_message_kind_to_string(msg.kind));
+  assert(msg.kind != PMK_NONE);
 
   err = peer_message_handle(peer, &msg);
   peer_message_destroy(&msg);
