@@ -305,8 +305,16 @@ const char* peer_message_kind_to_string(int k) {
   }
 }
 
-void peer_message_handle(peer_t* peer, peer_message_t* msg) {
-  // TODO
+peer_error_t peer_send_heartbeat(peer_t* peer);
+
+peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg) {
+  switch (msg->kind) {
+    case PMK_HEARTBEAT:
+      return peer_send_heartbeat(peer);
+    default:
+      return (peer_error_t){0};
+  }
+  __builtin_unreachable();
 }
 
 void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
@@ -369,6 +377,13 @@ peer_error_t peer_send_buf(peer_t* peer, uv_buf_t* buf) {
   }
 
   return (peer_error_t){0};
+}
+
+peer_error_t peer_send_heartbeat(peer_t* peer) {
+  uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
+  buf->base = peer->allocator.realloc(sizeof(uint32_t), NULL, 0);
+  buf->len = sizeof(uint32_t);
+  return peer_send_buf(peer, buf);
 }
 
 peer_error_t peer_send_handshake(peer_t* peer) {
