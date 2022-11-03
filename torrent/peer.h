@@ -10,7 +10,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <sys/socket.h>
-#include <sys/types.h>
 #include <uv.h>
 
 #include "bencode.h"
@@ -391,6 +390,10 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
 
 uint32_t peer_pick_next_piece_to_download(peer_t* peer) {
   return UINT32_MAX;  // FIXME
+}
+
+uint32_t peer_pick_next_block_to_download(peer_t* peer, bool* found) {
+  return UINT32_MAX;
 }
 
 peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece);

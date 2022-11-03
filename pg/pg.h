@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #ifndef MIN
@@ -652,3 +653,17 @@ void pg_bitarray_setv(pg_bitarray_t *bitarr, uint8_t *data, uint64_t len) {
 }
 
 void pg_bitarray_destroy(pg_bitarray_t *bitarr) { pg_array_free(bitarr->data); }
+
+uint64_t pg_bitarray_len(pg_bitarray_t *bitarr) {
+  return pg_array_count(bitarr->data);
+}
+
+bool pg_bitarray_first_set_index(pg_bitarray_t *bitarr, uint64_t *index) {
+  for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
+    if (bitarr->data[i] == 0) continue;
+
+    *index = (i * 8) + (8 - __builtin_ffs(bitarr->data[i]));
+    return true;
+  }
+  return false;
+}

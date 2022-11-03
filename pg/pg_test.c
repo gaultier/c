@@ -1,5 +1,8 @@
 #include "pg.h"
 
+#include <_types/_uint64_t.h>
+#include <_types/_uint8_t.h>
+
 #include "vendor/greatest/greatest.h"
 
 static void foo(pg_array_t(int) * arr) { pg_array_append(*arr, 1); }
@@ -226,6 +229,22 @@ TEST test_pg_ring() {
   PASS();
 }
 
+TEST test_pg_bitarray() {
+  pg_bitarray_t bitarr = {0};
+  pg_bitarray_init(pg_heap_allocator(), &bitarr, 10);
+
+  uint8_t bits[] = {0, 2};
+  pg_bitarray_setv(&bitarr, bits, 2);
+
+  uint64_t index = 0;
+  ASSERT_EQ(true, pg_bitarray_first_set_index(&bitarr, &index));
+  ASSERT_EQ_FMT(14ULL, index, "%llu");
+
+  pg_bitarray_destroy(&bitarr);
+
+  PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv) {
@@ -239,6 +258,7 @@ int main(int argc, char **argv) {
   RUN_TEST(test_pg_span_split);
   RUN_TEST(test_pg_string_url_encode);
   RUN_TEST(test_pg_ring);
+  RUN_TEST(test_pg_bitarray);
 
   GREATEST_MAIN_END(); /* display results */
 }
