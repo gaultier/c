@@ -232,7 +232,8 @@ peer_error_t peer_parse_message(peer_t* peer, peer_message_t* msg) {
         return (peer_error_t){.kind = PEK_NEED_MORE};
 
       msg->kind = PMK_PIECE;
-      // TODO msg->v.have = have;
+      msg->v.piece = (peer_message_piece_t){
+          .begin = 0, .index = 0, .data = NULL};  // FIXME
       pg_ring_consume_front(&peer->recv_data, announced_len);
       break;
     }
