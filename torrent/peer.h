@@ -311,10 +311,37 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg) {
   switch (msg->kind) {
     case PMK_HEARTBEAT:
       return peer_send_heartbeat(peer);
-    default:
+    case PMK_CHOKE:
+      peer->them_choked = true;
       return (peer_error_t){0};
+    case PMK_UNCHOKE:
+      peer->them_choked = false;
+      return (peer_error_t){0};
+    case PMK_INTERESTED:
+      peer->them_interested = false;
+      return (peer_error_t){0};
+    case PMK_UNINTERESTED:
+      peer->them_interested = false;
+      return (peer_error_t){0};
+    case PMK_HAVE:
+      // TODO
+      return (peer_error_t){0};
+    case PMK_BITFIELD:
+      // TODO
+      return (peer_error_t){0};
+    case PMK_PIECE:
+      // TODO
+      return (peer_error_t){0};
+    case PMK_REQUEST:
+      // TODO
+      return (peer_error_t){0};
+    case PMK_CANCEL:
+      // TODO
+      return (peer_error_t){0};
+
+    default:
+      __builtin_unreachable();
   }
-  __builtin_unreachable();
 }
 
 void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
