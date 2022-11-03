@@ -641,7 +641,7 @@ typedef struct {
 
 void pg_bitarray_init(pg_allocator_t allocator, pg_bitarray_t *bitarr,
                       uint64_t cap) {
-  pg_array_init_reserve(bitarr, cap, allocator);
+  pg_array_init_reserve(bitarr->data, cap, allocator);
 }
 
 void pg_bitarray_setv(pg_bitarray_t *bitarr, uint8_t *data, uint64_t len) {
@@ -650,3 +650,5 @@ void pg_bitarray_setv(pg_bitarray_t *bitarr, uint8_t *data, uint64_t len) {
   memcpy(bitarr->data, data, len);
   pg_array_resize(bitarr->data, len);
 }
+
+void pg_bitarray_destroy(pg_bitarray_t *bitarr) { pg_array_free(bitarr->data); }

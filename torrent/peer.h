@@ -1,7 +1,9 @@
 #pragma once
 
+#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
+#include <math.h>
 #include <netinet/in.h>
 #include <string.h>
 #include <sys/socket.h>
@@ -27,6 +29,7 @@ typedef enum {
   PEK_WRONG_HANDSHAKE_HASH,
   PEK_INVALID_ANNOUNCED_LENGTH,
   PEK_INVALID_MESSAGE_TAG,
+  PEK_INVALID_BITFIELD,
 } peer_error_kind_t;
 
 typedef struct {
@@ -92,7 +95,7 @@ typedef struct {
 void peer_message_destroy(peer_message_t* msg) {
   switch (msg->kind) {
     case PMK_BITFIELD:
-      // TODO
+      pg_array_free(msg->v.bitfield.bitfield);
       break;
     case PMK_PIECE:
       pg_array_free(msg->v.piece.data);
@@ -109,6 +112,7 @@ typedef struct {
   bc_metainfo_t* metainfo;
   bool me_choked, me_interested, them_choked, them_interested, handshaked;
   uint8_t in_flight_requests;
+  pg_bitarray_t them_have_pieces;
 
   uv_tcp_t connection;
   uv_connect_t connect_req;
@@ -342,6 +346,20 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg) {
       // TODO
       return (peer_error_t){0};
     case PMK_BITFIELD: {
+      const uint64_t expected_length =
+          (uint64_t)ceil((double)pg_array_count(peer->metainfo->pieces) / 8);
+
+      pg_array_t(uint8_t) bitfield = msg->v.bitfield.bitfield;
+      if (pg_array_count(bitfield) != expected_length) {
+        pg_log_error(peer->logger,
+                     "[%s] Invalid bitfield length: expected=%llu got=%llu",
+                     peer->addr_s, expected_length, pg_array_count(bitfield));
+        return (peer_error_t){.kind = PEK_INVALID_BITFIELD};
+      }
+
+      pg_bitarray_setv(&peer->them_have_pieces, bitfield,
+                       pg_array_count(bitfield));
+
       return (peer_error_t){0};
     }
     case PMK_PIECE:
@@ -561,6 +579,8 @@ peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
   peer->logger = logger;
   peer->download = download;
   peer->metainfo = metainfo;
+  pg_bitarray_init(allocator, &peer->them_have_pieces,
+                   pg_array_count(metainfo->pieces));
   peer->connect_req.data = peer;
   peer->connection.data = peer;
   pg_ring_init(allocator, &peer->recv_data, /* arbitrary */ 512);
@@ -593,7 +613,11 @@ peer_error_t peer_connect(peer_t* peer, tracker_peer_address_t address) {
   return (peer_error_t){.kind = PEK_NONE};
 }
 
-void peer_destroy(peer_t* peer) { peer->allocator.free(peer); }
+void peer_destroy(peer_t* peer) {
+  pg_bitarray_destroy(&peer->them_have_pieces);
+  pg_ring_destroy(&peer->recv_data);
+  peer->allocator.free(peer);
+}
 
 void peer_on_close(uv_handle_t* handle) {
   peer_t* peer = handle->data;
