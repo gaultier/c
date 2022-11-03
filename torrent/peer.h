@@ -25,7 +25,9 @@
 typedef struct {
   uint8_t info_hash[20];
   uint8_t peer_id[20];
+  uint32_t pieces_downloaded_count;
   uint64_t blocks_per_piece, last_piece_length, last_piece_block_count;
+  pg_bitarray_t pieces_downloaded, pieces_downloading, pieces_to_download;
 } download_t;
 
 typedef enum {
@@ -732,8 +734,9 @@ void peer_close(peer_t* peer) {
   }
 }
 
-void peer_download_init(download_t* download, bc_metainfo_t* metainfo,
-                        uint8_t* info_hash, uint8_t* peer_id) {
+void download_init(pg_allocator_t allocator, download_t* download,
+                   bc_metainfo_t* metainfo, uint8_t* info_hash,
+                   uint8_t* peer_id) {
   const uint32_t pieces_count = pg_array_count(metainfo->pieces) / 20;
 
   download->blocks_per_piece = metainfo->piece_length / PEER_BLOCK_LENGTH;
@@ -743,4 +746,14 @@ void peer_download_init(download_t* download, bc_metainfo_t* metainfo,
       (uint64_t)ceil((double)download->last_piece_length / PEER_BLOCK_LENGTH);
   memcpy(download->info_hash, info_hash, 20);
   memcpy(download->peer_id, peer_id, 20);
+
+  pg_bitarray_init(allocator, &download->pieces_downloaded, pieces_count);
+  pg_bitarray_init(allocator, &download->pieces_downloading, pieces_count);
+  pg_bitarray_init(allocator, &download->pieces_to_download, pieces_count);
+}
+
+void download_destroy(download_t* download) {
+  pg_bitarray_destroy(&download->pieces_downloaded);
+  pg_bitarray_destroy(&download->pieces_downloading);
+  pg_bitarray_destroy(&download->pieces_to_download);
 }

@@ -67,8 +67,8 @@ int main(int argc, char* argv[]) {
   }
 
   download_t download = {0};
-  peer_download_init(&download, &metainfo, tracker_query.info_hash,
-                     tracker_query.peer_id);
+  download_init(pg_heap_allocator(), &download, &metainfo,
+                tracker_query.info_hash, tracker_query.peer_id);
 
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
     const tracker_peer_address_t addr = peer_addresses[i];
