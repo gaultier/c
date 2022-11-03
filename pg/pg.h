@@ -625,6 +625,9 @@ void pg_ring_push_backv(pg_ring_t *ring, uint8_t *data, uint64_t len) {
 
   const uint64_t index =
       ring->cap == 0 ? ring->offset : (ring->offset + ring->len) % ring->cap;
+  if (index + len > ring->cap) {
+    pg_ring_grow(ring, index + ring->cap + len);
+  }
   assert(index + len <= ring->cap);
   memcpy(ring->data + index, data, len);
   ring->len += len;
