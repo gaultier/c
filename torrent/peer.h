@@ -52,8 +52,8 @@ void peer_close(peer_t* peer);
 
 void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   peer_t* peer = handle->data;
-  buf->base = peer->allocator.realloc(suggested_size / 8, NULL, 0);
-  buf->len = suggested_size / 8;
+  buf->base = peer->allocator.realloc(suggested_size, NULL, 0);
+  buf->len = suggested_size;
 }
 
 peer_error_t peer_check_handshaked(peer_t* peer) {
