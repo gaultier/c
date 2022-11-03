@@ -252,6 +252,34 @@ TEST test_pg_bitarray() {
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 6));
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 7));
 
+  pg_bitarray_set(&bitarr, 9);
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 8));
+  ASSERT_EQ(true, pg_bitarray_get(&bitarr, 9));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 10));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 11));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 12));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 13));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 14));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 15));
+
+  pg_bitarray_unset(&bitarr, 9);
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 0));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 1));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 2));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 3));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 4));
+  ASSERT_EQ(true, pg_bitarray_get(&bitarr, 5));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 6));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 7));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 8));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 9));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 10));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 11));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 12));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 13));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 14));
+  ASSERT_EQ(false, pg_bitarray_get(&bitarr, 15));
+
   pg_bitarray_destroy(&bitarr);
 
   PASS();

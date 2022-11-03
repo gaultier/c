@@ -686,5 +686,14 @@ bool pg_bitarray_get(pg_bitarray_t *bitarr, uint64_t i) {
   const uint64_t index = i / 8.0;
 
   assert(index < pg_array_count(bitarr->data));
-  return bitarr->data[index] & 1 << (i % 8);
+  return bitarr->data[index] & (1 << (i % 8));
+}
+
+void pg_bitarray_unset(pg_bitarray_t *bitarr, uint64_t i) {
+  const uint64_t index = i / 8.0;
+  if (index >= pg_array_count(bitarr->data)) {
+    pg_array_resize(bitarr->data, 1 + index);
+  }
+
+  bitarr->data[index] &= ~(1 << (i % 8));
 }
