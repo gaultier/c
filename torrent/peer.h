@@ -305,6 +305,10 @@ const char* peer_message_kind_to_string(int k) {
   }
 }
 
+void peer_message_handle(peer_t* peer, peer_message_t* msg) {
+  // TODO
+}
+
 void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   peer_t* peer = stream->data;
   pg_log_debug(peer->logger, "[%s] peer_on_read: %ld", peer->addr_s, nread);
@@ -334,6 +338,7 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   pg_log_debug(peer->logger, "[%s] msg=%s", peer->addr_s,
                peer_message_kind_to_string(msg.kind));
 
+  peer_message_handle(peer, &msg);
   peer_message_destroy(&msg);
 }
 
