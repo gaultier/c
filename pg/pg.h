@@ -510,6 +510,8 @@ typedef struct {
 } pg_ring_t;
 
 void pg_ring_init(pg_allocator_t allocator, pg_ring_t *ring, uint64_t cap) {
+  assert(cap > 0);
+
   ring->len = ring->offset = 0;
   ring->data = allocator.realloc(cap, NULL, 0);
   ring->cap = cap;
@@ -550,35 +552,17 @@ uint8_t *pg_ring_back_ptr(pg_ring_t *ring) {
 
 uint8_t pg_ring_back(pg_ring_t *ring) { return *pg_ring_back_ptr(ring); }
 
-void pg_ring_grow(pg_ring_t *ring, uint64_t min_cap) {
-  const uint64_t new_cap = MAX(MAX(min_cap, 8), ring->cap * 1.5);
-  assert(new_cap > ring->cap);
-  ring->data = ring->allocator.realloc(new_cap, ring->data, ring->cap);
-  ring->cap = new_cap;
-
-  // TODO: improve
-  if (ring->len < ring->offset) {
-    memmove(ring->data, ring->data + ring->offset, ring->len);
-    ring->offset = 0;
-  }
-}
-
 void pg_ring_push_back(pg_ring_t *ring, uint8_t x) {
-  if (ring->cap == ring->len) {
-    pg_ring_grow(ring, 0);
-  }
+  assert(ring->len < ring->cap);
 
-  const uint64_t index =
-      ring->cap == 0 ? ring->offset : (ring->offset + ring->len) % ring->cap;
+  const uint64_t index = (ring->offset + ring->len) % ring->cap;
   assert(index < ring->cap);
   ring->data[index] = x;
   ring->len += 1;
 }
 
 void pg_ring_push_front(pg_ring_t *ring, uint8_t x) {
-  if (ring->cap == ring->len) {
-    pg_ring_grow(ring, 0);
-  }
+  assert(ring->len < ring->cap);
 
   ring->offset = (ring->offset - 1 + ring->cap) % ring->cap;
   assert(ring->offset < ring->cap);
@@ -622,15 +606,9 @@ void pg_ring_clear(pg_ring_t *ring) {
 }
 
 void pg_ring_push_backv(pg_ring_t *ring, uint8_t *data, uint64_t len) {
-  if (ring->cap <= ring->len + len) {
-    pg_ring_grow(ring, ring->cap + ring->offset + ring->len + len);
-  }
+  assert(ring->len + len <= ring->cap);
 
-  const uint64_t index =
-      ring->cap == 0 ? ring->offset : (ring->offset + ring->len) % ring->cap;
-  if (index + len > ring->cap) {
-    pg_ring_grow(ring, index + ring->cap + len);
-  }
+  const uint64_t index = (ring->offset + ring->len) % ring->cap;
   assert(index + len <= ring->cap);
   memcpy(ring->data + index, data, len);
   ring->len += len;

@@ -109,7 +109,7 @@ TEST test_pg_string_url_encode() {
 
 TEST test_pg_ring() {
   pg_ring_t ring = {0};
-  pg_ring_init(pg_heap_allocator(), &ring, 5);
+  pg_ring_init(pg_heap_allocator(), &ring, 100);
 
   ASSERT_EQ_FMT(0ULL, pg_ring_len(&ring), "%llu");
   ASSERT_GT(ring.cap, 0);
