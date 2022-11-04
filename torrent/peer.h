@@ -125,6 +125,7 @@ typedef struct {
 
   uv_tcp_t connection;
   uv_connect_t connect_req;
+  uv_idle_t idle_handle;
 
   pg_ring_t recv_data;
   char addr_s[INET_ADDRSTRLEN + /* :port */ 6];  // TODO: ipv6
@@ -570,7 +571,7 @@ uint32_t peer_pick_next_block_to_download(peer_t* peer, bool* found) {
 
 peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece);
 
-peer_error_t peer_request_more_blocks(peer_t* peer) {
+peer_error_t peer_request_more_blocks(peer_t* peer, bool* stop_requesting) {
   if (peer->in_flight_requests >= PEER_MAX_IN_FLIGHT_REQUESTS ||
       peer->them_choked) {
     pg_log_debug(peer->logger,
@@ -578,6 +579,8 @@ peer_error_t peer_request_more_blocks(peer_t* peer) {
                  "downloading_piece=%u them_choked=%d",
                  peer->addr_s, peer->in_flight_requests,
                  peer->downloading_piece, peer->them_choked);
+
+    *stop_requesting = true;
     return (peer_error_t){0};
   }
 
@@ -592,6 +595,7 @@ peer_error_t peer_request_more_blocks(peer_t* peer) {
                  "downloading_piece=%u them_choked=%d",
                  peer->addr_s, peer->in_flight_requests,
                  peer->downloading_piece, peer->them_choked);
+    *stop_requesting = true;
     return (peer_error_t){0};
   }
 
@@ -603,6 +607,7 @@ peer_error_t peer_request_more_blocks(peer_t* peer) {
           peer->logger,
           "[%s] peer_request_more_blocks stop: no next block to download",
           peer->addr_s);
+      *stop_requesting = true;
       return (peer_error_t){0};
     }
 
@@ -614,6 +619,23 @@ peer_error_t peer_request_more_blocks(peer_t* peer) {
   }
 
   return (peer_error_t){0};
+}
+
+void peer_on_idle(uv_idle_t* handle) {
+  peer_t* peer = handle->data;
+
+  bool stop_requesting = false;
+  peer_error_t err = peer_request_more_blocks(peer, &stop_requesting);
+  if (err.kind != PEK_NONE) {
+    pg_log_error(peer->logger, "[%s] failed to request more blocks: %d",
+                 peer->addr_s, err.kind);
+    peer_close(peer);
+    return;
+  }
+
+  if (stop_requesting) {
+    uv_idle_stop(&peer->idle_handle);
+  }
 }
 
 void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
@@ -653,9 +675,10 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     peer_close(peer);
   }
 
-  if (request_more) {
-    peer_request_more_blocks(peer);
-  }
+  if (request_more)
+    uv_idle_start(&peer->idle_handle, peer_on_idle);
+  else
+    uv_idle_stop(&peer->idle_handle);
 }
 
 void peer_on_write(uv_write_t* req, int status) {
@@ -849,6 +872,8 @@ void peer_on_connect(uv_connect_t* handle, int status) {
     peer_close(peer);
     return;
   }
+
+  uv_idle_init(uv_default_loop(), &peer->idle_handle);
 }
 
 peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
@@ -870,6 +895,7 @@ peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
   peer->downloading_piece = -1;
   peer->connect_req.data = peer;
   peer->connection.data = peer;
+  peer->idle_handle.data = peer;
   pg_ring_init(allocator, &peer->recv_data, /* arbitrary */ 512);
 
   snprintf(peer->addr_s, sizeof(peer->addr_s), "%s:%hu",
@@ -916,6 +942,8 @@ void peer_on_close(uv_handle_t* handle) {
   pg_log_debug(peer->logger, "[%s] Closing peer", peer->addr_s);
 
   peer_mark_piece_as_to_download(peer, peer->downloading_piece);
+
+  uv_idle_stop(&peer->idle_handle);
 
   peer_destroy(peer);
 }
