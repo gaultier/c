@@ -41,6 +41,7 @@ typedef enum {
   PEK_INVALID_MESSAGE_TAG,
   PEK_INVALID_BITFIELD,
   PEK_INVALID_HAVE,
+  PEK_INVALID_PIECE,
   PEK_OS,
 } peer_error_kind_t;
 
@@ -613,6 +614,13 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       assert(peer->in_flight_requests > 0);
 
       const peer_message_piece_t piece_msg = msg->v.piece;
+
+      if (piece_msg.index >= peer->download->pieces_count ||
+          piece_msg.index != peer->downloading_piece ||
+          piece_msg.begin >= peer->metainfo->piece_length ||
+          pg_array_count(piece_msg.data) > PEER_BLOCK_LENGTH)
+        return (peer_error_t){.kind = PEK_INVALID_PIECE};
+
       const uint32_t block_for_piece = piece_msg.begin / PEER_BLOCK_LENGTH;
       const pg_span_t span =
           (pg_span_t){.data = (char*)piece_msg.data, .len = PEER_BLOCK_LENGTH};
@@ -805,8 +813,10 @@ void peer_on_write(uv_write_t* req, int status) {
   peer_t* peer = req->data;
   // TODO: free bufs
 
-  if (req->bufs != NULL && req->bufs[0].base != NULL)
+  if (req->bufs != NULL && req->bufs[0].base != NULL) {
     peer->allocator.free(req->bufs[0].base);
+    peer->allocator.free(&req->bufs[0]);
+  }
 
   peer->allocator.free(req);
 
