@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -724,4 +723,10 @@ bool pg_bitarray_is_all_unset(pg_bitarray_t *bitarr) {
     if (pg_bitarray_get(bitarr, i)) return false;
   }
   return true;
+}
+
+void pg_bitarray_set_all(pg_bitarray_t *bitarr) {
+  for (uint64_t i = 0; i < pg_array_count(bitarr->data); i++) {
+    bitarr->data[i] = 0xff;
+  }
 }

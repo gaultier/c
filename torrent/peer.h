@@ -161,9 +161,23 @@ void peer_mark_block_as_downloaded(peer_t* peer, uint32_t block) {
 }
 
 void peer_mark_piece_as_to_download(peer_t* peer, uint32_t piece) {
+  if (piece == UINT32_MAX) return;
+
   pg_bitarray_set(&peer->download->pieces_to_download, piece);
   pg_bitarray_unset(&peer->download->pieces_downloading, piece);
   assert(pg_bitarray_get(&peer->download->pieces_downloaded, piece) == false);
+}
+
+void peer_mark_piece_as_downloading(peer_t* peer, uint32_t piece) {
+  assert(pg_bitarray_get(&peer->download->pieces_downloading, piece) == false);
+  assert(pg_bitarray_get(&peer->download->pieces_downloaded, piece) == false);
+
+  peer->downloading_piece = piece;
+
+  pg_bitarray_unset(&peer->download->pieces_to_download, piece);
+  pg_bitarray_set(&peer->download->pieces_downloading, piece);
+
+  pg_bitarray_set_all(&peer->blocks_for_piece_to_download);
 }
 
 void peer_mark_piece_as_downloaded(peer_t* peer, uint32_t piece) {
@@ -505,6 +519,7 @@ uint32_t peer_pick_next_piece_to_download(peer_t* peer, bool* found) {
                  "[%s] pick_next_piece_to_download: found piece %u",
                  peer->addr_s, piece);
     *found = true;
+    peer_mark_piece_as_downloading(peer, piece);
     return piece;
   }
   return UINT32_MAX;
@@ -730,6 +745,7 @@ peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
     length = PEER_BLOCK_LENGTH;
   }
 
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, peer->downloading_piece);
   bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, begin);
   bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, length);
 
@@ -808,13 +824,13 @@ peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
   peer->download = download;
   peer->metainfo = metainfo;
   pg_bitarray_init(allocator, &peer->them_have_pieces,
-                   peer->download->pieces_count);
+                   peer->download->pieces_count - 1);
   pg_bitarray_init(allocator, &peer->blocks_for_piece_downloaded,
-                   peer->download->blocks_per_piece);
+                   peer->download->blocks_per_piece - 1);
   pg_bitarray_init(allocator, &peer->blocks_for_piece_downloading,
-                   peer->download->blocks_per_piece);
+                   peer->download->blocks_per_piece - 1);
   pg_bitarray_init(allocator, &peer->blocks_for_piece_to_download,
-                   peer->download->blocks_per_piece);
+                   peer->download->blocks_per_piece - 1);
   peer->downloading_piece = -1;
   peer->connect_req.data = peer;
   peer->connection.data = peer;
@@ -889,11 +905,11 @@ void download_init(pg_allocator_t allocator, download_t* download,
   memcpy(download->peer_id, peer_id, 20);
 
   pg_bitarray_init(allocator, &download->pieces_downloaded,
-                   download->pieces_count);
+                   download->pieces_count - 1);
   pg_bitarray_init(allocator, &download->pieces_downloading,
-                   download->pieces_count);
+                   download->pieces_count - 1);
   pg_bitarray_init(allocator, &download->pieces_to_download,
-                   download->pieces_count);
+                   download->pieces_count - 1);
 }
 
 void download_destroy(download_t* download) {
