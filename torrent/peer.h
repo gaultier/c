@@ -157,6 +157,9 @@ void peer_mark_block_as_downloading(peer_t* peer, uint32_t block) {
   assert(peer->in_flight_requests < PEER_MAX_IN_FLIGHT_REQUESTS);
 
   peer->in_flight_requests += 1;
+
+  pg_log_debug(peer->logger, "[%s] peer_mark_block_as_downloading: block=%u",
+               peer->addr_s, block);
 }
 
 void peer_mark_block_as_downloaded(peer_t* peer, uint32_t block) {
@@ -409,6 +412,9 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       for (uint64_t i = 0; i < announced_len - (1 + 2 * 4); i++) {
         msg->v.piece.data[i] = pg_ring_pop_front(&peer->recv_data);
       }
+      pg_log_debug(peer->logger, "[%s] piece: begin=%u index=%u len=%llu",
+                   peer->addr_s, msg->v.piece.begin, msg->v.piece.index,
+                   pg_array_count(msg->v.piece.data));
 
       return (peer_error_t){0};
     }
@@ -468,6 +474,14 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
 
   pg_log_debug(peer->logger, "[%s] peer_put_block: piece=%u block_for_piece=%u",
                peer->addr_s, piece, block_for_piece);
+
+  if (pg_bitarray_get(&peer->blocks_for_piece_downloaded, block_for_piece)) {
+    pg_log_debug(peer->logger,
+                 "[%s] peer_put_block already have block, duplicate?: piece=%u "
+                 "block_for_piece=%u",
+                 peer->addr_s, piece, block_for_piece);
+    return (peer_error_t){0};
+  }
 
   const uint64_t offset =
       (uint64_t)piece * (uint64_t)peer->metainfo->piece_length +
@@ -550,6 +564,11 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       const uint32_t block_for_piece = piece_msg.begin / PEER_BLOCK_LENGTH;
       const pg_span_t span =
           (pg_span_t){.data = (char*)piece_msg.data, .len = PEER_BLOCK_LENGTH};
+
+      pg_log_debug(peer->logger,
+                   "[%s] piece: begin=%u index=%u len=%llu block_for_piece=%u",
+                   peer->addr_s, piece_msg.begin, piece_msg.index,
+                   pg_array_count(piece_msg.data), block_for_piece);
       peer_put_block(peer, block_for_piece, span);
 
       *request_more = true;
@@ -703,28 +722,30 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
   peer->allocator.free(buf->base);
 
-  peer_message_t msg = {0};
-  peer_error_t err = peer_message_parse(peer, &msg);
-  if (err.kind == PEK_NEED_MORE) return;
-  if (err.kind != PEK_NONE) {
-    pg_log_error(peer->logger, "[%s] peer_message_parse failed: %d",
-                 peer->addr_s, err.kind);
-    peer_close(peer);
-    return;
-  }
-
-  pg_log_debug(peer->logger, "[%s] msg=%s", peer->addr_s,
-               peer_message_kind_to_string(msg.kind));
-  assert(msg.kind != PMK_NONE);
-
   bool request_more = false;
-  err = peer_message_handle(peer, &msg, &request_more);
-  peer_message_destroy(&msg);
+  while (true) {  // Parse as many messages as available in the recv_data
+    peer_message_t msg = {0};
+    peer_error_t err = peer_message_parse(peer, &msg);
+    if (err.kind == PEK_NEED_MORE) break;
+    if (err.kind != PEK_NONE) {
+      pg_log_error(peer->logger, "[%s] peer_message_parse failed: %d",
+                   peer->addr_s, err.kind);
+      peer_close(peer);
+      return;
+    }
 
-  if (err.kind != PEK_NONE) {
-    pg_log_error(peer->logger, "[%s] peer_message_handle failed: %d\n",
-                 peer->addr_s, err.kind);
-    peer_close(peer);
+    pg_log_debug(peer->logger, "[%s] msg=%s", peer->addr_s,
+                 peer_message_kind_to_string(msg.kind));
+    assert(msg.kind != PMK_NONE);
+
+    err = peer_message_handle(peer, &msg, &request_more);
+    peer_message_destroy(&msg);
+
+    if (err.kind != PEK_NONE) {
+      pg_log_error(peer->logger, "[%s] peer_message_handle failed: %d\n",
+                   peer->addr_s, err.kind);
+      peer_close(peer);
+    }
   }
 
   if (request_more)
