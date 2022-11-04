@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/errno.h>
+#include <sys/fcntl.h>
 
 #include "../pg/pg.h"
 #include "bencode.h"
@@ -66,9 +67,15 @@ int main(int argc, char* argv[]) {
     pg_log_fatal(&logger, EINVAL, "No peers returned from tracker");
   }
 
+  int fd = open(metainfo.name, O_RDWR | O_CREAT, 0666);
+  if (fd == -1) {
+    pg_log_fatal(&logger, errno, "Failed to open file: path=%s err=%s",
+                 metainfo.name, strerror(errno));
+  }
+
   download_t download = {0};
   download_init(pg_heap_allocator(), &download, &metainfo,
-                tracker_query.info_hash, tracker_query.peer_id);
+                tracker_query.info_hash, tracker_query.peer_id, fd);
 
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
     const tracker_peer_address_t addr = peer_addresses[i];

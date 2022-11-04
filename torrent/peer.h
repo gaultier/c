@@ -21,6 +21,7 @@
 #define PEER_BLOCK_LENGTH ((uint32_t)1 << 14)
 
 typedef struct {
+  int fd;
   uint8_t info_hash[20];
   uint8_t peer_id[20];
   uint32_t pieces_downloaded_count, pieces_count;
@@ -1034,7 +1035,10 @@ void peer_close(peer_t* peer) {
 
 void download_init(pg_allocator_t allocator, download_t* download,
                    bc_metainfo_t* metainfo, uint8_t* info_hash,
-                   uint8_t* peer_id) {
+                   uint8_t* peer_id, int fd) {
+  assert(fd >= 0);
+
+  download->fd = fd;
   download->pieces_count = pg_array_count(metainfo->pieces) / 20;
 
   download->blocks_per_piece = metainfo->piece_length / PEER_BLOCK_LENGTH;
