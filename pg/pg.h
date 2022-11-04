@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -644,8 +645,9 @@ typedef struct {
 void pg_bitarray_init(pg_allocator_t allocator, pg_bitarray_t *bitarr,
                       uint64_t max_index) {
   bitarr->max_index = max_index;
-  pg_array_init_reserve(bitarr->data, max_index + 1, allocator);
-  pg_array_resize(bitarr->data, (uint64_t)ceil(((double)max_index + 1) / 8.0));
+  const uint64_t len = (uint64_t)ceil(((double)max_index) / 8.0);
+  pg_array_init_reserve(bitarr->data, len, allocator);
+  pg_array_resize(bitarr->data, len);
 }
 
 void pg_bitarray_setv(pg_bitarray_t *bitarr, uint8_t *data, uint64_t len) {
@@ -662,7 +664,6 @@ uint64_t pg_bitarray_len(pg_bitarray_t *bitarr) {
 
 void pg_bitarray_clear(pg_bitarray_t *bitarr) {
   memset(bitarr->data, 0, pg_array_count(bitarr->data));
-  pg_array_clear(bitarr->data);
 }
 
 void pg_bitarray_set(pg_bitarray_t *bitarr, uint64_t index) {
