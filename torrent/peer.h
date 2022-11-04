@@ -727,11 +727,6 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   assert(buf->base != NULL);
   assert(buf->len > 0);
 
-  fprintf(stderr, "[D001] ");
-  for (uint64_t i = 0; i < MIN(nread, 150); i++)
-    fprintf(stderr, "%#x ", (uint8_t)buf->base[i]);
-  fprintf(stderr, "\n");
-
   pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
   peer->allocator.free(buf->base);
 
