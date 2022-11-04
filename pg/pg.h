@@ -605,12 +605,23 @@ void pg_ring_clear(pg_ring_t *ring) {
   ring->len = 0;
 }
 
+uint64_t pg_ring_space(pg_ring_t *ring) { return ring->cap - ring->len; }
+
 void pg_ring_push_backv(pg_ring_t *ring, uint8_t *data, uint64_t len) {
   assert(ring->len + len <= ring->cap);
 
   const uint64_t index = (ring->offset + ring->len) % ring->cap;
-  assert(index + len <= ring->cap);
-  memcpy(ring->data + index, data, len);
+
+  // Fill the tail
+  const uint64_t space_tail = ring->cap - index;
+  uint64_t to_write_tail_count = len;
+  if (to_write_tail_count > space_tail) to_write_tail_count = space_tail;
+  assert(index + to_write_tail_count <= ring->cap);
+  memcpy(ring->data + index, data, to_write_tail_count);
+
+  // Fill the head
+  const uint64_t remain = len - to_write_tail_count;
+  memcpy(ring->data, data + to_write_tail_count, remain);
   ring->len += len;
 }
 

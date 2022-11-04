@@ -342,9 +342,10 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
   pg_log_debug(
       peer->logger,
       "[%s] msg tag=%d announced_len=%u recv_data.len=%llu recv_data.cap=%llu "
+      "recv_data.space=%llu "
       "recv_data[0..7]=%#x %#x %#x %#x %#x %#x %#x ",
       peer->addr_s, tag, announced_len, pg_ring_len(&peer->recv_data),
-      pg_ring_cap(&peer->recv_data),
+      pg_ring_cap(&peer->recv_data), pg_ring_space(&peer->recv_data),
       pg_ring_len(&peer->recv_data) > 0 ? pg_ring_get(&peer->recv_data, 0) : 0,
       pg_ring_len(&peer->recv_data) > 1 ? pg_ring_get(&peer->recv_data, 1) : 0,
       pg_ring_len(&peer->recv_data) > 2 ? pg_ring_get(&peer->recv_data, 2) : 0,
