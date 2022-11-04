@@ -813,6 +813,7 @@ void peer_on_write(uv_write_t* req, int status) {
   peer_t* peer = req->data;
   // TODO: free bufs
 
+  assert(req->nbufs == 1);
   if (req->bufs != NULL && req->bufs[0].base != NULL) {
     peer->allocator.free(req->bufs[0].base);
     peer->allocator.free(&req->bufs[0]);
@@ -837,6 +838,8 @@ peer_error_t peer_send_buf(peer_t* peer, uv_buf_t* buf) {
     pg_log_error(peer->logger, "[%s] uv_write failed: %d", peer->addr_s, ret);
 
     peer->allocator.free(write_req);
+    peer->allocator.free(buf->base);
+    peer->allocator.free(buf);
 
     return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
   }
