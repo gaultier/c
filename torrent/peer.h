@@ -22,7 +22,8 @@ typedef struct {
   uint8_t info_hash[20];
   uint8_t peer_id[20];
   uint32_t pieces_downloaded_count, pieces_count;
-  uint64_t blocks_per_piece, last_piece_length, last_piece_block_count;
+  uint64_t blocks_per_piece, last_piece_length, last_piece_block_count,
+      downloaded_bytes;
   pg_bitarray_t pieces_downloaded, pieces_downloading, pieces_to_download;
 } download_t;
 
@@ -135,6 +136,46 @@ void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   peer_t* peer = handle->data;
   buf->base = peer->allocator.realloc(suggested_size, NULL, 0);
   buf->len = suggested_size;
+}
+
+void peer_mark_block_as_downloading(peer_t* peer, uint32_t block) {
+  pg_bitarray_unset(&peer->blocks_for_piece_to_download, block);
+  pg_bitarray_set(&peer->blocks_for_piece_downloading, block);
+
+  assert(peer->in_flight_requests < PEER_MAX_INFLIGHT_REQUESTS);
+
+  peer->in_flight_requests += 1;
+}
+
+void peer_mark_block_as_downloaded(peer_t* peer, uint32_t block) {
+  pg_bitarray_unset(&peer->blocks_for_piece_to_download, block);
+  pg_bitarray_set(&peer->blocks_for_piece_downloading, block);
+
+  assert(peer->in_flight_requests < PEER_MAX_INFLIGHT_REQUESTS);
+
+  peer->in_flight_requests += 1;
+}
+
+void peer_mark_piece_as_to_download(peer_t* peer, uint32_t piece) {
+  pg_bitarray_set(&peer->download->pieces_to_download, piece);
+  pg_bitarray_unset(&peer->download->pieces_downloading, piece);
+  assert(pg_bitarray_get(&peer->download->pieces_downloaded, piece) == false);
+}
+
+void peer_mark_piece_as_downloaded(peer_t* peer, uint32_t piece) {
+  assert(pg_bitarray_get(&peer->download->pieces_to_download, piece) == false);
+  pg_bitarray_unset(&peer->download->pieces_downloading, piece);
+  pg_bitarray_set(&peer->download->pieces_downloaded, piece);
+
+  peer->download->pieces_downloaded_count += 1;
+  assert(peer->download->pieces_downloaded_count <=
+         peer->download->pieces_count);
+
+  pg_bitarray_clear(&peer->blocks_for_piece_downloaded);
+  pg_bitarray_clear(&peer->blocks_for_piece_downloading);
+  pg_bitarray_clear(&peer->blocks_for_piece_to_download);
+
+  peer->downloading_piece = UINT32_MAX;
 }
 
 peer_error_t peer_check_handshaked(peer_t* peer) {
@@ -427,15 +468,6 @@ uint32_t peer_pick_next_block_to_download(peer_t* peer, bool* found) {
 }
 
 peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece);
-
-void peer_mark_block_as_downloading(peer_t* peer, uint32_t block) {
-  pg_bitarray_unset(&peer->blocks_for_piece_to_download, block);
-  pg_bitarray_set(&peer->blocks_for_piece_downloading, block);
-
-  assert(peer->in_flight_requests < PEER_MAX_INFLIGHT_REQUESTS);
-
-  peer->in_flight_requests += 1;
-}
 
 peer_error_t peer_request_more_blocks(peer_t* peer) {
   if (peer->in_flight_requests >= PEER_MAX_INFLIGHT_REQUESTS ||
@@ -785,7 +817,46 @@ void peer_on_close(uv_handle_t* handle) {
 
   pg_log_debug(peer->logger, "[%s] Closing peer", peer->addr_s);
 
+  peer_mark_piece_as_to_download(peer, peer->downloading_piece);
+
   peer_destroy(peer);
+}
+
+bool peer_have_all_blocks_for_downloading_piece(peer_t* peer) {}
+
+peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
+                            pg_span_t data) {
+  const uint32_t piece = peer->downloading_piece;
+
+  pg_log_debug(peer->logger, "[%s] peer_put_block: piece=%u block_for_piece=%u",
+               peer->addr_s, piece, block_for_piece);
+
+  const uint64_t offset =
+      (uint64_t)piece * (uint64_t)peer->metainfo->piece_length +
+      (uint64_t)block_for_piece * PEER_BLOCK_LENGTH;
+
+  // TODO: seek + write + seek
+
+  peer_mark_block_as_downloaded(peer, block_for_piece);
+  peer->download->downloaded_bytes += data.len;
+
+  if (peer_have_all_blocks_for_downloading_piece(peer)) {
+    pg_log_debug(
+        peer->logger,
+        "[%s] peer_put_block: have all blocks: piece=%u block_for_piece=%u",
+        peer->addr_s, piece, block_for_piece);
+    // TODO: checksum piece
+
+    peer_mark_piece_as_downloaded(peer, peer->downloading_piece);
+  }
+
+  pg_log_info(peer->logger, "[%s] Downloaded %u/%u pieces, %.2f MiB / %.2f MiB",
+              peer->addr_s, peer->download->pieces_downloaded_count,
+              peer->download->pieces_count,
+              (double)peer->download->downloaded_bytes / 1024 / 1024,
+              (double)peer->metainfo->length / 1024 / 1024);
+
+  return (peer_error_t){0};
 }
 
 void peer_close(peer_t* peer) {
