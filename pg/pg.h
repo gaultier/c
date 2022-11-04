@@ -696,6 +696,22 @@ void pg_bitarray_unset(pg_bitarray_t *bitarr, uint64_t index) {
   bitarr->data[i] &= ~(1 << (index % 8));
 }
 
+uint64_t pg_bitarray_count_set(pg_bitarray_t *bitarr) {
+  uint64_t res = 0;
+  for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
+    res += pg_bitarray_get(bitarr, i);
+  }
+  return res;
+}
+
+uint64_t pg_bitarray_count_unset(pg_bitarray_t *bitarr) {
+  uint64_t res = 0;
+  for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
+    res += !pg_bitarray_get(bitarr, i);
+  }
+  return res;
+}
+
 bool pg_bitarray_is_all_set(pg_bitarray_t *bitarr) {
   for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
     if (!pg_bitarray_get(bitarr, i)) return false;

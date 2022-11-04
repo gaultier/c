@@ -138,6 +138,10 @@ void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   buf->len = suggested_size;
 }
 
+bool peer_is_last_piece(peer_t* peer, uint32_t piece) {
+  return piece == peer->download->pieces_count;
+}
+
 void peer_mark_block_as_downloading(peer_t* peer, uint32_t block) {
   pg_bitarray_unset(&peer->blocks_for_piece_to_download, block);
   pg_bitarray_set(&peer->blocks_for_piece_downloading, block);
@@ -650,10 +654,6 @@ uint8_t* peer_write_u8(uint8_t* buf, uint64_t* buf_len, uint8_t x) {
   return buf + *buf_len;
 }
 
-bool peer_is_last_piece(peer_t* peer, uint32_t piece) {
-  return piece == peer->download->pieces_count;
-}
-
 uint32_t peer_block_count_per_piece(peer_t* peer, uint32_t piece) {
   if (peer_is_last_piece(peer, piece))
     return peer->download->last_piece_block_count;
@@ -822,7 +822,13 @@ void peer_on_close(uv_handle_t* handle) {
   peer_destroy(peer);
 }
 
-bool peer_have_all_blocks_for_downloading_piece(peer_t* peer) {}
+bool peer_have_all_blocks_for_downloading_piece(peer_t* peer) {
+  if (peer_is_last_piece(peer, peer->downloading_piece)) {
+    // TODO
+  } else {
+    return pg_bitarray_is_all_set(&peer->blocks_for_piece_downloaded);
+  }
+}
 
 peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
                             pg_span_t data) {

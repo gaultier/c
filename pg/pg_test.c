@@ -263,6 +263,9 @@ TEST test_pg_bitarray() {
   ASSERT_EQ(true, pg_bitarray_get(&bitarr, 9));
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 10));
 
+  ASSERT_EQ_FMT(2ULL, pg_bitarray_count_set(&bitarr), "%llu");
+  ASSERT_EQ_FMT(9ULL, pg_bitarray_count_unset(&bitarr), "%llu");
+
   pg_bitarray_unset(&bitarr, 9);
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 0));
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 1));
@@ -277,6 +280,9 @@ TEST test_pg_bitarray() {
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 10));
 
   ASSERT_EQ_FMT(11ULL, pg_bitarray_len(&bitarr), "%llu");
+  ASSERT_EQ_FMT(1ULL, pg_bitarray_count_set(&bitarr), "%llu");
+  ASSERT_EQ_FMT(10ULL, pg_bitarray_count_unset(&bitarr), "%llu");
+
   // Iterate
   int64_t i = -1;
   bool is_set = false;
@@ -296,12 +302,16 @@ TEST test_pg_bitarray() {
     pg_bitarray_setv(&bitarr, bits, 2);
     ASSERT_EQ(true, pg_bitarray_is_all_set(&bitarr));
     ASSERT_EQ(false, pg_bitarray_is_all_unset(&bitarr));
+    ASSERT_EQ_FMT(11ULL, pg_bitarray_count_set(&bitarr), "%llu");
+    ASSERT_EQ_FMT(0ULL, pg_bitarray_count_unset(&bitarr), "%llu");
   }
   {
     uint8_t bits[] = {0, 0};
     pg_bitarray_setv(&bitarr, bits, 2);
     ASSERT_EQ(false, pg_bitarray_is_all_set(&bitarr));
     ASSERT_EQ(true, pg_bitarray_is_all_unset(&bitarr));
+    ASSERT_EQ_FMT(0ULL, pg_bitarray_count_set(&bitarr), "%llu");
+    ASSERT_EQ_FMT(11ULL, pg_bitarray_count_unset(&bitarr), "%llu");
   }
   pg_bitarray_destroy(&bitarr);
 
