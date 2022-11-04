@@ -1036,7 +1036,8 @@ peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
   peer->connect_req.data = peer;
   peer->connection.data = peer;
   peer->idle_handle.data = peer;
-  pg_ring_init(allocator, &peer->recv_data, /* arbitrary */ 2 * UINT16_MAX);
+  pg_ring_init(allocator, &peer->recv_data,
+               /* semi-arbitrary */ 2 * UINT16_MAX);
 
   snprintf(peer->addr_s, sizeof(peer->addr_s), "%s:%hu",
            inet_ntoa(*(struct in_addr*)&address.ip), htons(address.port));
