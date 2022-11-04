@@ -518,6 +518,8 @@ void pg_ring_init(pg_allocator_t allocator, pg_ring_t *ring, uint64_t cap) {
 
 uint64_t pg_ring_len(pg_ring_t *ring) { return ring->len; }
 
+uint64_t pg_ring_cap(pg_ring_t *ring) { return ring->cap; }
+
 void pg_ring_destroy(pg_ring_t *ring) { ring->allocator.free(ring->data); }
 
 uint8_t *pg_ring_get_ptr(pg_ring_t *ring, uint64_t i) {

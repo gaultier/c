@@ -5,6 +5,7 @@
 #include <math.h>
 #include <netinet/in.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <uv.h>
@@ -12,10 +13,11 @@
 #include "bencode.h"
 #include "tracker.h"
 
-#define PEER_HANDSHAKE_LENGTH ((uint64_t)68)
 #define PEER_HANDSHAKE_HEADER_LENGTH ((uint64_t)19)
+#define PEER_HANDSHAKE_LENGTH \
+  ((uint64_t)(1 + PEER_HANDSHAKE_HEADER_LENGTH + 8 + 20 + 20))
 #define PEER_MAX_MESSAGE_LENGTH ((uint64_t)1 << 27)
-#define PEER_MAX_IN_FLIGHT_REQUESTS ((uint64_t)10)
+#define PEER_MAX_IN_FLIGHT_REQUESTS ((uint64_t)5)
 #define PEER_BLOCK_LENGTH ((uint32_t)1 << 14)
 
 typedef struct {
@@ -221,7 +223,9 @@ bool peer_have_all_blocks_for_downloading_piece(peer_t* peer) {
 
 peer_error_t peer_check_handshaked(peer_t* peer) {
   if (peer->handshaked) return (peer_error_t){0};
-  if (pg_ring_len(&peer->recv_data) < PEER_HANDSHAKE_LENGTH)
+
+  const uint64_t recv_data_len = pg_ring_len(&peer->recv_data);
+  if (recv_data_len < PEER_HANDSHAKE_LENGTH)
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
   const char handshake_header_expected[] =
@@ -241,6 +245,9 @@ peer_error_t peer_check_handshaked(peer_t* peer) {
   peer->handshaked = true;
 
   pg_log_debug(peer->logger, "[%s] Handshaked", peer->addr_s);
+
+  assert(pg_ring_len(&peer->recv_data) + PEER_HANDSHAKE_LENGTH ==
+         recv_data_len);
 
   return (peer_error_t){0};
 }
@@ -277,8 +284,19 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
   const uint8_t tag = pg_ring_front(&peer->recv_data);
-  pg_log_debug(peer->logger, "[%s] msg tag=%d announced_len=%u", peer->addr_s,
-               tag, announced_len);
+  pg_log_debug(
+      peer->logger,
+      "[%s] msg tag=%d announced_len=%u recv_data.len=%llu recv_data.cap=%llu "
+      "recv_data[0..7]=%#x %#x %#x %#x %#x %#x %#x ",
+      peer->addr_s, tag, announced_len, pg_ring_len(&peer->recv_data),
+      pg_ring_cap(&peer->recv_data),
+      pg_ring_len(&peer->recv_data) > 0 ? pg_ring_get(&peer->recv_data, 0) : 0,
+      pg_ring_len(&peer->recv_data) > 1 ? pg_ring_get(&peer->recv_data, 1) : 0,
+      pg_ring_len(&peer->recv_data) > 2 ? pg_ring_get(&peer->recv_data, 2) : 0,
+      pg_ring_len(&peer->recv_data) > 3 ? pg_ring_get(&peer->recv_data, 3) : 0,
+      pg_ring_len(&peer->recv_data) > 4 ? pg_ring_get(&peer->recv_data, 4) : 0,
+      pg_ring_len(&peer->recv_data) > 5 ? pg_ring_get(&peer->recv_data, 5) : 0,
+      pg_ring_len(&peer->recv_data) > 6 ? pg_ring_get(&peer->recv_data, 6) : 0);
 
   switch (tag) {
     case PT_CHOKE:
@@ -351,7 +369,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
         return (peer_error_t){.kind = PEK_NEED_MORE};
 
       pg_ring_pop_front(&peer->recv_data);  // consume tag
-                                            //
+
       msg->kind = PMK_PIECE;
       msg->v.piece = (peer_message_piece_t){
           .index = peer_read_u32(&peer->recv_data),
@@ -647,6 +665,11 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   assert(buf != NULL);
   assert(buf->base != NULL);
   assert(buf->len > 0);
+
+  fprintf(stderr, "[D001] ");
+  for (uint64_t i = 0; i < MIN(nread, 150); i++)
+    fprintf(stderr, "%#x ", (uint8_t)buf->base[i]);
+  fprintf(stderr, "\n");
 
   pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
   peer->allocator.free(buf->base);
