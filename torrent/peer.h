@@ -783,6 +783,7 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   if (buf != NULL && buf->base != NULL) peer->allocator.free(buf->base);
   if (nread <= 0) return;
 
+  bool idle_started = false;
   while (true) {  // Parse as many messages as available in the recv_data
     peer_message_t msg = {0};
     peer_error_t err = peer_message_parse(peer, &msg);
@@ -808,16 +809,16 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
       peer_close(peer);
     }
 
-    if (action == PEER_ACTION_REQUEST_MORE)
+    if (action == PEER_ACTION_REQUEST_MORE && !idle_started) {
+      idle_started = true;
       uv_idle_start(&peer->idle_handle, peer_on_idle);
-    else if (action == PEER_ACTION_STOP_REQUESTING)
+    } else if (action == PEER_ACTION_STOP_REQUESTING)
       uv_idle_stop(&peer->idle_handle);
   }
 }
 
 void peer_on_write(uv_write_t* req, int status) {
   peer_t* peer = req->data;
-  // TODO: free bufs
 
   assert(req->nbufs == 1);
   if (req->bufs != NULL && req->bufs[0].base != NULL) {
