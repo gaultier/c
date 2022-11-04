@@ -24,7 +24,8 @@ typedef struct {
   int fd;
   uint8_t info_hash[20];
   uint8_t peer_id[20];
-  uint32_t pieces_downloaded_count, pieces_count;
+  uint32_t pieces_downloaded_count, pieces_count, blocks_downloaded_count,
+      blocks_count;
   uint64_t blocks_per_piece, last_piece_length, last_piece_block_count,
       downloaded_bytes;
   pg_bitarray_t pieces_downloaded, pieces_downloading, pieces_to_download;
@@ -42,6 +43,12 @@ typedef enum {
   PEK_INVALID_HAVE,
   PEK_OS,
 } peer_error_kind_t;
+
+typedef enum {
+  PEER_ACTION_NONE,
+  PEER_ACTION_REQUEST_MORE,
+  PEER_ACTION_STOP_REQUESTING,
+} peer_action_t;
 
 typedef struct {
   peer_error_kind_t kind;
@@ -150,6 +157,19 @@ bool peer_is_last_piece(peer_t* peer, uint32_t piece) {
 }
 
 void peer_mark_block_as_downloading(peer_t* peer, uint32_t block) {
+  if (pg_bitarray_get(&peer->blocks_for_piece_to_download, block) != true) {
+    fprintf(stderr, "[D001] %u\n",
+            peer->blocks_for_piece_to_download.data[block / 8]);
+  }
+  if (pg_bitarray_get(&peer->blocks_for_piece_downloading, block) != false) {
+    fprintf(stderr, "[D002] %u\n",
+            peer->blocks_for_piece_downloading.data[block / 8]);
+  }
+  if (pg_bitarray_get(&peer->blocks_for_piece_downloaded, block) != false) {
+    fprintf(stderr, "[D003] %u\n",
+            peer->blocks_for_piece_downloaded.data[block / 8]);
+  }
+
   assert(pg_bitarray_get(&peer->blocks_for_piece_to_download, block) == true);
   assert(pg_bitarray_get(&peer->blocks_for_piece_downloading, block) == false);
   assert(pg_bitarray_get(&peer->blocks_for_piece_downloaded, block) == false);
@@ -166,6 +186,18 @@ void peer_mark_block_as_downloading(peer_t* peer, uint32_t block) {
 }
 
 void peer_mark_block_as_downloaded(peer_t* peer, uint32_t block) {
+  if (pg_bitarray_get(&peer->blocks_for_piece_to_download, block) != false) {
+    fprintf(stderr, "[D011] %u\n",
+            peer->blocks_for_piece_to_download.data[block / 8]);
+  }
+  if (pg_bitarray_get(&peer->blocks_for_piece_downloading, block) != true) {
+    fprintf(stderr, "[D012] %u\n",
+            peer->blocks_for_piece_downloading.data[block / 8]);
+  }
+  if (pg_bitarray_get(&peer->blocks_for_piece_downloaded, block) != false) {
+    fprintf(stderr, "[D013] %u\n",
+            peer->blocks_for_piece_downloaded.data[block / 8]);
+  }
   assert(pg_bitarray_get(&peer->blocks_for_piece_to_download, block) == false);
   assert(pg_bitarray_get(&peer->blocks_for_piece_downloading, block) == true);
   assert(pg_bitarray_get(&peer->blocks_for_piece_downloaded, block) == false);
@@ -176,6 +208,8 @@ void peer_mark_block_as_downloaded(peer_t* peer, uint32_t block) {
   assert(peer->in_flight_requests <= PEER_MAX_IN_FLIGHT_REQUESTS);
 
   peer->in_flight_requests -= 1;
+
+  peer->download->blocks_downloaded_count += 1;
 }
 
 void peer_mark_piece_as_to_download(peer_t* peer, uint32_t piece) {
@@ -515,9 +549,12 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
     peer_mark_piece_as_downloaded(peer, peer->downloading_piece);
   }
 
-  pg_log_info(peer->logger, "[%s] Downloaded %u/%u pieces, %.2f MiB / %.2f MiB",
+  pg_log_info(peer->logger,
+              "[%s] Downloaded %u/%u pieces, %u/%u blocks, %.2f MiB / %.2f MiB",
               peer->addr_s, peer->download->pieces_downloaded_count,
               peer->download->pieces_count,
+              peer->download->blocks_downloaded_count,
+              peer->download->blocks_count,
               (double)peer->download->downloaded_bytes / 1024 / 1024,
               (double)peer->metainfo->length / 1024 / 1024);
 
@@ -525,15 +562,17 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
 }
 
 peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
-                                 bool* request_more) {
+                                 peer_action_t* action) {
   switch (msg->kind) {
     case PMK_HEARTBEAT:
       return peer_send_heartbeat(peer);
     case PMK_CHOKE:
       peer->them_choked = true;
+      *action = PEER_ACTION_STOP_REQUESTING;
       return (peer_error_t){0};
     case PMK_UNCHOKE:
       peer->them_choked = false;
+      *action = PEER_ACTION_REQUEST_MORE;
       return (peer_error_t){0};
     case PMK_INTERESTED:
       peer->them_interested = false;
@@ -549,7 +588,7 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       }
       pg_bitarray_set(&peer->them_have_pieces, have);
 
-      *request_more = true;
+      *action = PEER_ACTION_REQUEST_MORE;
       return (peer_error_t){0};
     }
     case PMK_BITFIELD: {
@@ -567,7 +606,7 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       pg_bitarray_setv(&peer->them_have_pieces, bitfield,
                        pg_array_count(bitfield));
 
-      *request_more = true;
+      *action = PEER_ACTION_REQUEST_MORE;
       return (peer_error_t){0};
     }
     case PMK_PIECE: {
@@ -584,7 +623,7 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
                    pg_array_count(piece_msg.data), block_for_piece);
       peer_put_block(peer, block_for_piece, span);
 
-      *request_more = true;
+      *action = PEER_ACTION_REQUEST_MORE;
       return (peer_error_t){0};
     }
     case PMK_REQUEST:
@@ -650,7 +689,7 @@ uint32_t peer_pick_next_block_to_download(peer_t* peer, bool* found) {
 
 peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece);
 
-peer_error_t peer_request_more_blocks(peer_t* peer, bool* stop_requesting) {
+peer_error_t peer_request_more_blocks(peer_t* peer, peer_action_t* action) {
   if (peer->in_flight_requests >= PEER_MAX_IN_FLIGHT_REQUESTS ||
       peer->them_choked) {
     pg_log_debug(peer->logger,
@@ -659,7 +698,7 @@ peer_error_t peer_request_more_blocks(peer_t* peer, bool* stop_requesting) {
                  peer->addr_s, peer->in_flight_requests,
                  peer->downloading_piece, peer->them_choked);
 
-    *stop_requesting = true;
+    *action = PEER_ACTION_STOP_REQUESTING;
     return (peer_error_t){0};
   }
 
@@ -674,7 +713,7 @@ peer_error_t peer_request_more_blocks(peer_t* peer, bool* stop_requesting) {
                  "downloading_piece=%u them_choked=%d",
                  peer->addr_s, peer->in_flight_requests,
                  peer->downloading_piece, peer->them_choked);
-    *stop_requesting = true;
+    *action = PEER_ACTION_STOP_REQUESTING;
     return (peer_error_t){0};
   }
 
@@ -686,7 +725,7 @@ peer_error_t peer_request_more_blocks(peer_t* peer, bool* stop_requesting) {
           peer->logger,
           "[%s] peer_request_more_blocks stop: no next block to download",
           peer->addr_s);
-      *stop_requesting = true;
+      *action = PEER_ACTION_STOP_REQUESTING;
       return (peer_error_t){0};
     }
 
@@ -703,8 +742,8 @@ peer_error_t peer_request_more_blocks(peer_t* peer, bool* stop_requesting) {
 void peer_on_idle(uv_idle_t* handle) {
   peer_t* peer = handle->data;
 
-  bool stop_requesting = false;
-  peer_error_t err = peer_request_more_blocks(peer, &stop_requesting);
+  peer_action_t action = PEER_ACTION_NONE;
+  peer_error_t err = peer_request_more_blocks(peer, &action);
   if (err.kind != PEK_NONE) {
     pg_log_error(peer->logger, "[%s] failed to request more blocks: %d",
                  peer->addr_s, err.kind);
@@ -712,7 +751,7 @@ void peer_on_idle(uv_idle_t* handle) {
     return;
   }
 
-  if (stop_requesting) {
+  if (action == PEER_ACTION_STOP_REQUESTING) {
     uv_idle_stop(&peer->idle_handle);
   }
 }
@@ -730,7 +769,6 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
   peer->allocator.free(buf->base);
 
-  bool request_more = false;
   while (true) {  // Parse as many messages as available in the recv_data
     peer_message_t msg = {0};
     peer_error_t err = peer_message_parse(peer, &msg);
@@ -746,7 +784,8 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
                  peer_message_kind_to_string(msg.kind));
     assert(msg.kind != PMK_NONE);
 
-    err = peer_message_handle(peer, &msg, &request_more);
+    peer_action_t action = PEER_ACTION_NONE;
+    err = peer_message_handle(peer, &msg, &action);
     peer_message_destroy(&msg);
 
     if (err.kind != PEK_NONE) {
@@ -754,12 +793,12 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
                    peer->addr_s, err.kind);
       peer_close(peer);
     }
-  }
 
-  if (request_more)
-    uv_idle_start(&peer->idle_handle, peer_on_idle);
-  else
-    uv_idle_stop(&peer->idle_handle);
+    if (action == PEER_ACTION_REQUEST_MORE)
+      uv_idle_start(&peer->idle_handle, peer_on_idle);
+    else if (action == PEER_ACTION_STOP_REQUESTING)
+      uv_idle_stop(&peer->idle_handle);
+  }
 }
 
 void peer_on_write(uv_write_t* req, int status) {
@@ -1055,6 +1094,8 @@ void download_init(pg_allocator_t allocator, download_t* download,
       metainfo->length - (download->pieces_count - 1) * metainfo->piece_length;
   download->last_piece_block_count =
       (uint64_t)ceil((double)download->last_piece_length / PEER_BLOCK_LENGTH);
+  download->blocks_count =
+      (uint64_t)ceil((double)metainfo->length / PEER_BLOCK_LENGTH);
   memcpy(download->info_hash, info_hash, 20);
   memcpy(download->peer_id, peer_id, 20);
 
