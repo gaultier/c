@@ -385,9 +385,12 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
   }
 }
 
-uint32_t peer_pick_next_piece_to_download(peer_t* peer) {
+uint32_t peer_pick_next_piece_to_download(peer_t* peer, bool* found) {
+  *found = false;
+
   if (peer->downloading_piece !=
       UINT32_MAX) {  // Already downloading a piece, and not finished with it
+    *found = true;
     return peer->downloading_piece;
   }
 
@@ -403,12 +406,15 @@ uint32_t peer_pick_next_piece_to_download(peer_t* peer) {
     pg_log_debug(peer->logger,
                  "[%s] pick_next_piece_to_download: found piece %u",
                  peer->addr_s, piece);
+    *found = true;
     return piece;
   }
   return UINT32_MAX;
 }
 
 uint32_t peer_pick_next_block_to_download(peer_t* peer, bool* found) {
+  *found = false;
+
   int64_t i = -1;
   bool is_set = false;
   while (pg_bitarray_next(&peer->blocks_for_piece_to_download, &i, &is_set)) {
@@ -422,6 +428,15 @@ uint32_t peer_pick_next_block_to_download(peer_t* peer, bool* found) {
 
 peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece);
 
+void peer_mark_block_as_downloading(peer_t* peer, uint32_t block) {
+  pg_bitarray_unset(&peer->blocks_for_piece_to_download, block);
+  pg_bitarray_set(&peer->blocks_for_piece_downloading, block);
+
+  assert(peer->in_flight_requests < PEER_MAX_INFLIGHT_REQUESTS);
+
+  peer->in_flight_requests += 1;
+}
+
 peer_error_t peer_request_more_blocks(peer_t* peer) {
   if (peer->in_flight_requests >= PEER_MAX_INFLIGHT_REQUESTS ||
       peer->them_choked) {
@@ -433,10 +448,11 @@ peer_error_t peer_request_more_blocks(peer_t* peer) {
     return (peer_error_t){0};
   }
 
-  peer->downloading_piece = peer_pick_next_piece_to_download(peer);
+  bool found = false;
+  peer->downloading_piece = peer_pick_next_piece_to_download(peer, &found);
 
   // Nothing to download anymore
-  if (peer->downloading_piece == UINT32_MAX) {
+  if (!found) {
     pg_log_debug(peer->logger,
                  "[%s] request_more_blocks no more pieces to download: "
                  "in_flight_requests=%hhu "
@@ -446,13 +462,21 @@ peer_error_t peer_request_more_blocks(peer_t* peer) {
     return (peer_error_t){0};
   }
 
-  const uint32_t block = 0;  // FIXME
-  peer_error_t err = peer_send_request(peer, block);
-  if (err.kind != PEK_NONE) return err;
-  // while(peer->in_flight_requests < PEER_MAX_INFLIGHT_REQUESTS) {
-  //   bool ok = false;
-  //   const uint32_t block = peer_pick_next_block_to_download();
-  // }
+  while (peer->in_flight_requests < PEER_MAX_INFLIGHT_REQUESTS) {
+    const uint32_t block = peer_pick_next_block_to_download(peer, &found);
+    if (!found) {
+      pg_log_debug(
+          peer->logger,
+          "[%s] peer_request_more_blocks stop: no next block to download",
+          peer->addr_s);
+      return (peer_error_t){0};
+    }
+
+    peer_mark_block_as_downloading(peer, block);
+
+    peer_error_t err = peer_send_request(peer, block);
+    if (err.kind != PEK_NONE) return err;
+  }
 
   return (peer_error_t){0};
 }
