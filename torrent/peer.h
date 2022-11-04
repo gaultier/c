@@ -40,12 +40,14 @@ typedef enum {
   PEK_INVALID_MESSAGE_TAG,
   PEK_INVALID_BITFIELD,
   PEK_INVALID_HAVE,
+  PEK_OS,
 } peer_error_kind_t;
 
 typedef struct {
   peer_error_kind_t kind;
   union {
     int uv_err;
+    int errno_err;
   } v;
 } peer_error_t;
 
@@ -488,7 +490,17 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
       (uint64_t)piece * (uint64_t)peer->metainfo->piece_length +
       (uint64_t)block_for_piece * PEER_BLOCK_LENGTH;
 
-  // TODO: seek + write + seek
+  if (lseek(peer->download->fd, offset, SEEK_SET) == -1) {
+    pg_log_error(peer->logger, "[%s] Failed to lseek(2): err=%s", peer->addr_s,
+                 strerror(errno));
+    return (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
+  }
+  ssize_t ret = write(peer->download->fd, data.data, data.len);
+  if (ret <= 0) {
+    pg_log_error(peer->logger, "[%s] Failed to write(2): err=%s", peer->addr_s,
+                 strerror(errno));
+    return (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
+  }
 
   peer_mark_block_as_downloaded(peer, block_for_piece);
   peer->download->downloaded_bytes += data.len;
