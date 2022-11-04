@@ -230,8 +230,10 @@ TEST test_pg_bitarray() {
   pg_bitarray_t bitarr = {0};
   pg_bitarray_init(pg_heap_allocator(), &bitarr, 10);
 
-  uint8_t bits[] = {0, 1};
-  pg_bitarray_setv(&bitarr, bits, 2);
+  {
+    uint8_t bits[] = {0, 1};
+    pg_bitarray_setv(&bitarr, bits, 2);
+  }
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 0));
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 1));
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 2));
@@ -289,6 +291,18 @@ TEST test_pg_bitarray() {
   ASSERT_EQ(false, pg_bitarray_is_all_set(&bitarr));
   ASSERT_EQ(false, pg_bitarray_is_all_unset(&bitarr));
 
+  {
+    uint8_t bits[] = {0xff, 15};
+    pg_bitarray_setv(&bitarr, bits, 2);
+    ASSERT_EQ(true, pg_bitarray_is_all_set(&bitarr));
+    ASSERT_EQ(false, pg_bitarray_is_all_unset(&bitarr));
+  }
+  {
+    uint8_t bits[] = {0, 0};
+    pg_bitarray_setv(&bitarr, bits, 2);
+    ASSERT_EQ(false, pg_bitarray_is_all_set(&bitarr));
+    ASSERT_EQ(true, pg_bitarray_is_all_unset(&bitarr));
+  }
   pg_bitarray_destroy(&bitarr);
 
   PASS();
