@@ -445,14 +445,18 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
           .index = peer_read_u32(&peer->recv_data),
           .begin = peer_read_u32(&peer->recv_data),
       };
-      pg_array_init_reserve(msg->v.piece.data, announced_len - (1 + 2 * 4),
-                            peer->allocator);
-      for (uint64_t i = 0; i < announced_len - (1 + 2 * 4); i++) {
+
+      const uint64_t data_len = announced_len - (1 + 2 * 4);
+      pg_array_init_reserve(msg->v.piece.data, data_len, peer->allocator);
+      pg_array_resize(msg->v.piece.data, data_len);
+      for (uint64_t i = 0; i < data_len; i++) {
         msg->v.piece.data[i] = pg_ring_pop_front(&peer->recv_data);
       }
       pg_log_debug(peer->logger, "[%s] piece: begin=%u index=%u len=%llu",
                    peer->addr_s, msg->v.piece.begin, msg->v.piece.index,
                    pg_array_count(msg->v.piece.data));
+
+      assert(pg_array_count(msg->v.piece.data) <= PEER_BLOCK_LENGTH);
 
       return (peer_error_t){0};
     }
@@ -1031,7 +1035,7 @@ peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
   peer->connect_req.data = peer;
   peer->connection.data = peer;
   peer->idle_handle.data = peer;
-  pg_ring_init(allocator, &peer->recv_data, /* arbitrary */ 512);
+  pg_ring_init(allocator, &peer->recv_data, /* arbitrary */ UINT16_MAX);
 
   snprintf(peer->addr_s, sizeof(peer->addr_s), "%s:%hu",
            inet_ntoa(*(struct in_addr*)&address.ip), htons(address.port));
