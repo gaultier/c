@@ -773,14 +773,15 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   peer_t* peer = stream->data;
   pg_log_debug(peer->logger, "[%s] peer_on_read: %ld", peer->addr_s, nread);
 
-  if (nread <= 0) return;  // Nothing to do
+  if (nread > 0) {
+    assert(buf != NULL);
+    assert(buf->base != NULL);
+    assert(buf->len > 0);
 
-  assert(buf != NULL);
-  assert(buf->base != NULL);
-  assert(buf->len > 0);
-
-  pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
-  peer->allocator.free(buf->base);
+    pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
+  }
+  if (buf != NULL && buf->base != NULL) peer->allocator.free(buf->base);
+  if (nread <= 0) return;
 
   while (true) {  // Parse as many messages as available in the recv_data
     peer_message_t msg = {0};
