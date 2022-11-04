@@ -655,7 +655,8 @@ void pg_bitarray_setv(pg_bitarray_t *bitarr, uint8_t *data, uint64_t len) {
 void pg_bitarray_destroy(pg_bitarray_t *bitarr) { pg_array_free(bitarr->data); }
 
 uint64_t pg_bitarray_len(pg_bitarray_t *bitarr) {
-  return pg_array_count(bitarr->data);
+  const uint64_t len = pg_array_count(bitarr->data);
+  return len * 8;
 }
 
 bool pg_bitarray_first_set_index(pg_bitarray_t *bitarr, uint64_t *index) {
@@ -687,6 +688,15 @@ bool pg_bitarray_get(pg_bitarray_t *bitarr, uint64_t i) {
 
   assert(index < pg_array_count(bitarr->data));
   return bitarr->data[index] & (1 << (i % 8));
+}
+
+bool pg_bitarray_next(pg_bitarray_t *bitarr, int64_t *index, bool *is_set) {
+  if (*index > 0 && (uint64_t)*index >= pg_bitarray_len(bitarr) - 1)
+    return false;
+
+  *index += 1;
+  *is_set = pg_bitarray_get(bitarr, *index);
+  return true;
 }
 
 void pg_bitarray_unset(pg_bitarray_t *bitarr, uint64_t i) {

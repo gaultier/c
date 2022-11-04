@@ -1,8 +1,5 @@
 #include "pg.h"
 
-#include <_types/_uint64_t.h>
-#include <_types/_uint8_t.h>
-
 #include "vendor/greatest/greatest.h"
 
 static void foo(pg_array_t(int) * arr) { pg_array_append(*arr, 1); }
@@ -279,6 +276,18 @@ TEST test_pg_bitarray() {
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 13));
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 14));
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 15));
+
+  ASSERT_EQ_FMT(16ULL, pg_bitarray_len(&bitarr), "%llu");
+  // Iterate
+  int64_t i = -1;
+  bool is_set = false;
+  while (pg_bitarray_next(&bitarr, &i, &is_set)) {
+    if (i == 5)
+      ASSERT_EQ(true, is_set);
+    else
+      ASSERT_EQ(false, is_set);
+  }
+  ASSERT_EQ_FMT(15LL, i, "%lld");
 
   pg_bitarray_destroy(&bitarr);
 
