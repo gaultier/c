@@ -386,10 +386,37 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
 }
 
 uint32_t peer_pick_next_piece_to_download(peer_t* peer) {
-  return UINT32_MAX;  // FIXME
+  if (peer->downloading_piece !=
+      UINT32_MAX) {  // Already downloading a piece, and not finished with it
+    return peer->downloading_piece;
+  }
+
+  int64_t i = -1;
+  bool is_set = false;
+  while (pg_bitarray_next(&peer->download->pieces_to_download, &i, &is_set)) {
+    const bool them_have = pg_bitarray_get(&peer->them_have_pieces, i);
+    if (!them_have) {
+      continue;
+    }
+
+    const uint32_t piece = (uint32_t)i;
+    pg_log_debug(peer->logger,
+                 "[%s] pick_next_piece_to_download: found piece %u",
+                 peer->addr_s, piece);
+    return piece;
+  }
+  return UINT32_MAX;
 }
 
 uint32_t peer_pick_next_block_to_download(peer_t* peer, bool* found) {
+  int64_t i = -1;
+  bool is_set = false;
+  while (pg_bitarray_next(&peer->blocks_for_piece_to_download, &i, &is_set)) {
+    if (is_set) {
+      *found = true;
+      return (uint32_t)i;
+    }
+  }
   return UINT32_MAX;
 }
 
