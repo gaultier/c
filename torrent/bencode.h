@@ -540,7 +540,7 @@ typedef struct {
   uint64_t piece_length;
   uint64_t length;
   pg_string_t name;
-  pg_array_t(uint8_t*) pieces;
+  pg_array_t(uint8_t) pieces;
 } bc_metainfo_t;
 
 typedef enum {

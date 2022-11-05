@@ -11,6 +11,7 @@
 #include <uv.h>
 
 #include "bencode.h"
+#include "sha1.h"
 #include "tracker.h"
 
 #define PEER_HANDSHAKE_HEADER_LENGTH ((uint64_t)19)
@@ -43,6 +44,7 @@ typedef enum {
   PEK_INVALID_HAVE,
   PEK_INVALID_PIECE,
   PEK_OS,
+  PEK_CHECKSUM_FAILED,
 } peer_error_kind_t;
 
 typedef enum {
@@ -511,12 +513,44 @@ const char* peer_message_kind_to_string(int k) {
 }
 
 peer_error_t peer_checksum_piece(peer_t* peer, uint32_t piece) {
-  const uint64_t start = piece * peer->metainfo->piece_length;
+  const uint64_t offset = piece * peer->metainfo->piece_length;
   const uint64_t length = peer_is_last_piece(peer, piece)
                               ? peer->download->last_piece_length
                               : peer->metainfo->piece_length;
 
-  return (peer_error_t){0};
+  if (lseek(peer->download->fd, offset, SEEK_SET) == -1) {
+    pg_log_error(peer->logger, "[%s] Failed to lseek(2): err=%s", peer->addr_s,
+                 strerror(errno));
+    return (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
+  }
+
+  pg_array_t(uint8_t) data = {0};
+  pg_array_init_reserve(data, length, peer->allocator);
+
+  peer_error_t err = {0};
+  // TODO: handle partial reads
+  ssize_t ret = read(peer->download->fd, data, length);
+  if (ret <= 0) {
+    pg_log_error(peer->logger, "[%s] Failed to write(2): err=%s", peer->addr_s,
+                 strerror(errno));
+    err = (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
+    goto end;
+  }
+
+  uint8_t hash[20] = {0};
+  assert(mbedtls_sha1(data, length, hash) == 0);
+
+  assert(piece * 20 + 20 < pg_array_count(peer->metainfo->pieces));
+  const uint8_t* const expected = peer->metainfo->pieces + 20 * piece;
+
+  if (memcmp(hash, expected, sizeof(hash)) != 0) {
+    err = (peer_error_t){.kind = PEK_CHECKSUM_FAILED};
+    goto end;
+  }
+
+end:
+  pg_array_free(data);
+  return err;
 }
 
 peer_error_t peer_send_heartbeat(peer_t* peer);
