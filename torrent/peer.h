@@ -1210,10 +1210,10 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
                                 ? download->last_piece_length
                                 : metainfo->piece_length;
     uint8_t hash[20] = {0};
-    assert(offset + length < pg_array_count(file_data));
+    assert(offset + length <= pg_array_count(file_data));
     assert(mbedtls_sha1(file_data + offset, length, hash) == 0);
 
-    assert(piece * 20 + 20 < pg_array_count(metainfo->pieces));
+    assert(piece * 20 + 20 <= pg_array_count(metainfo->pieces));
     const uint8_t* const expected = metainfo->pieces + 20 * piece;
 
     if (memcmp(hash, expected, sizeof(hash)) != 0) {
@@ -1222,11 +1222,14 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
                    "download_checksum_all: piece failed checksum: piece=%u "
                    " err=%d",
                    piece, err.kind);
-      goto end;
+    } else {
+      pg_log_debug(logger,
+                   "download_checksum_all: piece passed checksum: piece=%u ",
+                   piece);
+      pg_bitarray_set(&download->pieces_downloaded, piece);
     }
   }
 
-end:
   pg_array_free(file_data);
   return err;
 }
