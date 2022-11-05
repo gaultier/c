@@ -156,7 +156,7 @@ void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
 }
 
 bool download_is_last_piece(download_t* download, uint32_t piece) {
-  return piece == download->pieces_count;
+  return piece == download->pieces_count - 1;
 }
 
 void peer_mark_block_as_downloading(peer_t* peer, uint32_t block) {
@@ -1205,11 +1205,15 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
 
   peer_error_t err = {0};
   for (uint32_t piece = 0; piece < download->pieces_count; piece++) {
-    const uint64_t offset = piece * metainfo->piece_length;
     const uint64_t length = download_is_last_piece(download, piece)
                                 ? download->last_piece_length
                                 : metainfo->piece_length;
+    const uint64_t offset = piece * length;
     uint8_t hash[20] = {0};
+    pg_log_debug(logger,
+                 "download_checksum_all: checksumming: piece=%u length=%llu "
+                 "offset=%llu file_length=%llu",
+                 piece, length, offset, pg_array_count(file_data));
     assert(offset + length <= pg_array_count(file_data));
     assert(mbedtls_sha1(file_data + offset, length, hash) == 0);
 
@@ -1217,15 +1221,17 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
     const uint8_t* const expected = metainfo->pieces + 20 * piece;
 
     if (memcmp(hash, expected, sizeof(hash)) != 0) {
-      err = (peer_error_t){.kind = PEK_CHECKSUM_FAILED};
       pg_log_error(logger,
                    "download_checksum_all: piece failed checksum: piece=%u "
                    " err=%d",
                    piece, err.kind);
+      pg_bitarray_set(&download->pieces_to_download, piece);
     } else {
       pg_log_debug(logger,
                    "download_checksum_all: piece passed checksum: piece=%u ",
                    piece);
+      pg_bitarray_unset(&download->pieces_to_download, piece);
+      pg_bitarray_unset(&download->pieces_downloading, piece);
       pg_bitarray_set(&download->pieces_downloaded, piece);
     }
   }

@@ -72,6 +72,10 @@ int main(int argc, char* argv[]) {
     pg_log_fatal(&logger, errno, "Failed to open file: path=%s err=%s",
                  metainfo.name, strerror(errno));
   }
+  if (ftruncate(fd, metainfo.length) == -1) {
+    pg_log_fatal(&logger, errno, "Failed to truncate(2) file: path=%s err=%s",
+                 metainfo.name, strerror(errno));
+  }
 
   download_t download = {0};
   download_init(pg_heap_allocator(), &download, &metainfo,
