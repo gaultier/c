@@ -598,8 +598,8 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
     if (err.kind != PEK_NONE) {
       pg_log_error(peer->logger,
                    "[%s] peer_put_block: piece failed checksum: piece=%u "
-                   "block_for_piece=%u",
-                   peer->addr_s, piece, block_for_piece);
+                   "block_for_piece=%u err=%d",
+                   peer->addr_s, piece, block_for_piece, err.kind);
       peer_mark_piece_as_to_download(peer, peer->downloading_piece);
       const uint64_t length = peer_is_last_piece(peer, piece)
                                   ? peer->download->last_piece_length

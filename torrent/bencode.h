@@ -1,7 +1,5 @@
 #pragma once
 
-#include <_types/_uint32_t.h>
-#include <_types/_uint64_t.h>
 #include <stdio.h>
 #include <sys/types.h>
 
@@ -749,7 +747,7 @@ bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
         goto end;
       }
       pg_array_init_reserve(metainfo->pieces, pg_string_length(s), allocator);
-      memcpy(s, metainfo->pieces, pg_string_length(s));
+      memcpy(metainfo->pieces, (uint8_t*)s, pg_string_length(s));
       pg_array_resize(metainfo->pieces, pg_string_length(s));
     }
   }
