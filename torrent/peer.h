@@ -510,6 +510,15 @@ const char* peer_message_kind_to_string(int k) {
   }
 }
 
+peer_error_t peer_checksum_piece(peer_t* peer, uint32_t piece) {
+  const uint64_t start = piece * peer->metainfo->piece_length;
+  const uint64_t length = peer_is_last_piece(peer, piece)
+                              ? peer->download->last_piece_length
+                              : peer->metainfo->piece_length;
+
+  return (peer_error_t){0};
+}
+
 peer_error_t peer_send_heartbeat(peer_t* peer);
 peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
                             pg_span_t data) {
@@ -550,7 +559,16 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
         peer->logger,
         "[%s] peer_put_block: have all blocks: piece=%u block_for_piece=%u",
         peer->addr_s, piece, block_for_piece);
-    // TODO: checksum piece
+
+    peer_error_t err = peer_checksum_piece(peer, piece);
+    if (err.kind != PEK_NONE) {
+      pg_log_error(peer->logger,
+                   "[%s] peer_put_block: piece failed checksum: piece=%u "
+                   "block_for_piece=%u",
+                   peer->addr_s, piece, block_for_piece);
+      peer_mark_piece_as_to_download(peer, peer->downloading_piece);
+      return err;
+    }
 
     peer_mark_piece_as_downloaded(peer, peer->downloading_piece);
   }
