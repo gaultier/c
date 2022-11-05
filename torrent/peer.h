@@ -25,7 +25,7 @@ typedef struct {
   int fd;
   uint8_t info_hash[20];
   uint8_t peer_id[20];
-  uint32_t pieces_downloaded_count, pieces_count, blocks_downloaded_count,
+  uint32_t pieces_downloaded_count, pieces_count, downloaded_blocks_count,
       blocks_count;
   uint64_t blocks_per_piece, last_piece_length, last_piece_block_count,
       downloaded_bytes;
@@ -212,7 +212,7 @@ void peer_mark_block_as_downloaded(peer_t* peer, uint32_t block) {
 
   peer->in_flight_requests -= 1;
 
-  peer->download->blocks_downloaded_count += 1;
+  peer->download->downloaded_blocks_count += 1;
 }
 
 void peer_mark_piece_as_to_download(peer_t* peer, uint32_t piece) {
@@ -601,6 +601,12 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
                    "block_for_piece=%u",
                    peer->addr_s, piece, block_for_piece);
       peer_mark_piece_as_to_download(peer, peer->downloading_piece);
+      const uint64_t length = peer_is_last_piece(peer, piece)
+                                  ? peer->download->last_piece_length
+                                  : peer->metainfo->piece_length;
+      peer->download->downloaded_bytes -= length;
+      peer->download->downloaded_blocks_count -=
+          peer_block_count_per_piece(peer, peer->downloading_piece);
       return err;
     }
 
@@ -611,7 +617,7 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
               "[%s] Downloaded %u/%u pieces, %u/%u blocks, %.2f MiB / %.2f MiB",
               peer->addr_s, peer->download->pieces_downloaded_count,
               peer->download->pieces_count,
-              peer->download->blocks_downloaded_count,
+              peer->download->downloaded_blocks_count,
               peer->download->blocks_count,
               (double)peer->download->downloaded_bytes / 1024 / 1024,
               (double)peer->metainfo->length / 1024 / 1024);
