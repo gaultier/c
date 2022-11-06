@@ -110,7 +110,7 @@ uint64_t tracker_on_response_chunk(void* ptr, uint64_t size, uint64_t nmemb,
 }
 
 tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
-                                    pg_logger_t* logger, tracker_query_t* q,
+                                    tracker_query_t* q,
                                     pg_array_t(tracker_peer_address_t) *
                                         peer_addresses) {
   tracker_error_t err = TK_ERR_NONE;
@@ -137,8 +137,6 @@ tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
     goto end;
   }
 
-  pg_log_debug(logger, "Tracker response: %.*s", (int)pg_array_count(response),
-               response);
   pg_span_t span = {.data = response, .len = pg_array_count(response)};
   pg_span_t info_span = {0};
   bc_parse_error_t bc_err =

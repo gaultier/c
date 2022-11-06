@@ -34,8 +34,6 @@ int main(int argc, char* argv[]) {
                    bc_parse_error_to_string(err));
     }
   }
-  pg_log_debug(&logger, "info_span: %.*s", (int)info_span.len, info_span.data);
-
   bc_metainfo_t metainfo = {0};
   {
     bc_metainfo_error_t err = BC_MI_NONE;
@@ -59,8 +57,8 @@ int main(int argc, char* argv[]) {
   pg_array_t(tracker_peer_address_t) peer_addresses = {0};
   pg_array_init_reserve(peer_addresses, 15, pg_heap_allocator());
 
-  tracker_error_t tracker_err = tracker_fetch_peers(
-      pg_heap_allocator(), &logger, &tracker_query, &peer_addresses);
+  tracker_error_t tracker_err =
+      tracker_fetch_peers(pg_heap_allocator(), &tracker_query, &peer_addresses);
   if (tracker_err != TK_ERR_NONE) {
     pg_log_fatal(&logger, EINVAL, "Failed to contact tracker: %s",
                  tracker_error_to_string(tracker_err));
