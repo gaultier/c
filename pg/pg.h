@@ -80,6 +80,8 @@ pg_allocator_t pg_null_allocator() {
   return (pg_allocator_t){.realloc = pg_null_realloc, .free = pg_null_free};
 }
 
+// -------------------------- Pool
+
 typedef struct pg_pool_free_node_t {
   struct pg_pool_free_node_t *next;
 } pg_pool_free_node_t;
@@ -93,7 +95,7 @@ typedef struct {
 
 void pg_pool_free_all(pg_pool_t *pool) {
   for (uint64_t i = 0; i < pool->buf_len / pool->chunk_size; i++) {
-    void *ptr = &pool->buf[i];
+    void *ptr = &pool->buf[i * pool->chunk_size];
     pg_pool_free_node_t *node = (pg_pool_free_node_t *)ptr;
     node->next = pool->head;
     pool->head = node;
@@ -111,24 +113,34 @@ void *pg_pool_alloc(pg_pool_t *pool) {
 
 void pg_pool_free(pg_pool_t *pool, void *ptr) {
   assert(ptr != NULL);
+  assert(ptr >= (void *)pool->buf);
+  assert(ptr <
+         (void *)pool->buf + pool->buf_len - sizeof(pg_pool_free_node_t *));
 
   pg_pool_free_node_t *node = (pg_pool_free_node_t *)ptr;
-  pool->head->next = node;
   node->next = pool->head;
+  pool->head = node;
 }
 
 void pg_pool_init(pg_pool_t *pool, uint64_t chunk_size,
                   uint64_t max_items_count) {
   // TODO: allow using existing chunk of mem
+  // TODO: alignement
+
+  assert(chunk_size >= sizeof(pg_pool_free_node_t));
 
   pool->chunk_size = chunk_size;
-  pool->buf_len = 0;
+  pool->buf_len = max_items_count * chunk_size;
   pool->buf = calloc(max_items_count, chunk_size);
   assert(pool->buf);
   pool->head = NULL;
 
   pg_pool_free_all(pool);
 }
+
+void pg_pool_destroy(pg_pool_t *pool) { free(pool->buf); }
+
+// --------------------------- Array
 
 typedef struct pg_array_header_t {
   uint64_t count;

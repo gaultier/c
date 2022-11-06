@@ -354,6 +354,52 @@ TEST test_pg_bitarray() {
   PASS();
 }
 
+TEST test_pg_pool() {
+  pg_pool_t pool = {0};
+
+  typedef struct {
+    int a, b, c;
+  } bar_t;
+  pg_pool_init(&pool, sizeof(bar_t), 5);
+
+  bar_t *b0 = pg_pool_alloc(&pool);
+  ASSERT_EQ(0, b0->a);
+  ASSERT(b0 != NULL);
+  b0->a = 1;
+  pg_pool_free(&pool, b0);
+
+  bar_t *b1 = pg_pool_alloc(&pool);
+  ASSERT(b1 != NULL);
+  ASSERT_EQ(0, b1->a);
+
+  bar_t *b2 = pg_pool_alloc(&pool);
+  ASSERT(b2 != NULL);
+  ASSERT_EQ(0, b2->a);
+
+  bar_t *b3 = pg_pool_alloc(&pool);
+  ASSERT(b3 != NULL);
+  ASSERT_EQ(0, b3->a);
+
+  bar_t *b4 = pg_pool_alloc(&pool);
+  ASSERT(b4 != NULL);
+  ASSERT_EQ(0, b4->a);
+
+  bar_t *b5 = pg_pool_alloc(&pool);
+  ASSERT(b5 != NULL);
+  ASSERT_EQ(0, b5->a);
+
+  ASSERT_EQ(NULL, pg_pool_alloc(&pool));
+
+  pg_pool_free_all(&pool);
+  bar_t *b10 = pg_pool_alloc(&pool);
+  ASSERT(b10 != NULL);
+  ASSERT_EQ(0, b10->a);
+
+  pg_pool_destroy(&pool);
+
+  PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char **argv) {
@@ -368,6 +414,7 @@ int main(int argc, char **argv) {
   RUN_TEST(test_pg_string_url_encode);
   RUN_TEST(test_pg_ring);
   RUN_TEST(test_pg_bitarray);
+  RUN_TEST(test_pg_pool);
 
   GREATEST_MAIN_END(); /* display results */
 }
