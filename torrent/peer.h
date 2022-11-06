@@ -932,20 +932,8 @@ void peer_on_write(uv_write_t* req, int status) {
   pg_log_debug(peer->logger, "[%s] peer_on_write status=%d buf=%p",
                peer->addr_s, status, req->bufs);
 
-  assert(req->nbufs == 1);
-  if (req->bufs != NULL && req->bufs->base != NULL) {
-    peer->allocator.free(req->bufs->base);
-    pg_log_debug(peer->logger,
-                 "[%s] free buf=%p %llu chunk_size=%llu pool_len=%llu",
-                 peer->addr_s, req->bufs,
-                 ((void*)req->bufs - (void*)peer->buf_pool->buf) /
-                     peer->buf_pool->chunk_size,
-                 peer->buf_pool->chunk_size,
-                 peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
-    pg_pool_free(peer->buf_pool, req->bufs);
-  }
-
   peer->allocator.free(req);
+  // TODO: free buf->data
 
   if (status != 0) {
     pg_log_error(peer->logger, "[%s] on_write failed: %d %s", peer->addr_s,
@@ -954,24 +942,17 @@ void peer_on_write(uv_write_t* req, int status) {
   }
 }
 
-peer_error_t peer_send_buf(peer_t* peer, uv_buf_t* buf) {
+peer_error_t peer_send_buf(peer_t* peer, uv_buf_t buf) {
   uv_write_t* write_req = peer->allocator.realloc(sizeof(uv_write_t), NULL, 0);
   write_req->data = peer;
 
   int ret = 0;
-  if ((ret = uv_write(write_req, (uv_stream_t*)&peer->connection, buf, 1,
+  if ((ret = uv_write(write_req, (uv_stream_t*)&peer->connection, &buf, 1,
                       peer_on_write)) != 0) {
     pg_log_error(peer->logger, "[%s] uv_write failed: %d", peer->addr_s, ret);
 
     peer->allocator.free(write_req);
-    peer->allocator.free(buf->base);
-    pg_log_debug(
-        peer->logger, "[%s] free buf (err) =%llu chunk_size=%llu pool_len=%llu",
-        peer->addr_s,
-        ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
-        peer->buf_pool->chunk_size,
-        peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
-    pg_pool_free(peer->buf_pool, buf);
+    peer->allocator.free(buf.base);
 
     return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
   }
@@ -980,34 +961,15 @@ peer_error_t peer_send_buf(peer_t* peer, uv_buf_t* buf) {
 }
 
 peer_error_t peer_send_heartbeat(peer_t* peer) {
-  uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
-  assert(buf != NULL);
-  pg_log_debug(
-      peer->logger,
-      "[%s] new buf (heartbeat)=%llu chunk_size=%llu pool_len=%llu",
-      peer->addr_s,
-      ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
-      peer->buf_pool->chunk_size,
-      peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
-
-  buf->base = peer->allocator.realloc(sizeof(uint32_t), NULL, 0);
-  buf->len = sizeof(uint32_t);
+  uv_buf_t buf = uv_buf_init(peer->allocator.realloc(sizeof(uint32_t), NULL, 0),
+                             sizeof(uint32_t));
   return peer_send_buf(peer, buf);
 }
 
 peer_error_t peer_send_handshake(peer_t* peer) {
-  uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
-  assert(buf != NULL);
-  pg_log_debug(
-      peer->logger,
-      "[%s] new buf (handshake) =%llu chunk_size=%llu pool_len=%llu",
-      peer->addr_s,
-      ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
-      peer->buf_pool->chunk_size,
-      peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
-
-  buf->base = peer->allocator.realloc(PEER_HANDSHAKE_LENGTH, NULL, 0);
-  buf->len = PEER_HANDSHAKE_LENGTH;
+  uv_buf_t buf =
+      uv_buf_init(peer->allocator.realloc(PEER_HANDSHAKE_LENGTH, NULL, 0),
+                  PEER_HANDSHAKE_LENGTH);
 
   const uint8_t handshake_header[] = {
       PEER_HANDSHAKE_HEADER_LENGTH,
@@ -1039,11 +1001,11 @@ peer_error_t peer_send_handshake(peer_t* peer) {
       0,
       0,
   };
-  memcpy(buf->base, handshake_header, sizeof(handshake_header));
-  memcpy(buf->base + sizeof(handshake_header), peer->download->info_hash,
+  memcpy(buf.base, handshake_header, sizeof(handshake_header));
+  memcpy(buf.base + sizeof(handshake_header), peer->download->info_hash,
          sizeof(peer->download->info_hash));
   memcpy(
-      buf->base + sizeof(handshake_header) + sizeof(peer->download->info_hash),
+      buf.base + sizeof(handshake_header) + sizeof(peer->download->info_hash),
       peer->download->peer_id, sizeof(peer->download->peer_id));
 
   return peer_send_buf(peer, buf);
@@ -1062,29 +1024,20 @@ uint8_t* peer_write_u8(uint8_t* buf, uint64_t* buf_len, uint8_t x) {
 }
 
 peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
-  uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
-  assert(buf != NULL);
-  pg_log_debug(
-      peer->logger,
-      "[%s] new buf (request) =%llu chunk_size=%llu pool_len=%llu",
-      peer->addr_s,
-      ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
-      peer->buf_pool->chunk_size,
-      peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
-
-  buf->base = peer->allocator.realloc(4 + 1 + 3 * 4, NULL, 0);
-
-  uint8_t* bytes = (uint8_t*)buf->base;
-  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, 1 + 3 * 4);
-  bytes = peer_write_u8(bytes, (uint64_t*)&buf->len, PT_REQUEST);
-
   const uint32_t begin = block_for_piece * PEER_BLOCK_LENGTH;
   const uint32_t length = download_block_length(
       peer->download, peer->metainfo, peer->downloading_piece, block_for_piece);
 
-  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, peer->downloading_piece);
-  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, begin);
-  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, length);
+  uv_buf_t buf =
+      uv_buf_init(peer->allocator.realloc(4 + 1 + 3 * 4, NULL, 0), 0);
+
+  uint8_t* bytes = (uint8_t*)buf.base;
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf.len, 1 + 3 * 4);
+  bytes = peer_write_u8(bytes, (uint64_t*)&buf.len, PT_REQUEST);
+
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf.len, peer->downloading_piece);
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf.len, begin);
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf.len, length);
 
   pg_log_debug(
       peer->logger,
@@ -1093,41 +1046,23 @@ peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
       peer->in_flight_requests);
   return peer_send_buf(peer, buf);
 }
+
 peer_error_t peer_send_choke(peer_t* peer) {
-  uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
-  pg_log_debug(
-      peer->logger, "[%s] new buf (choke) =%llu chunk_size=%llu pool_len=%llu",
-      peer->addr_s,
-      ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
-      peer->buf_pool->chunk_size,
-      peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
-  assert(buf != NULL);
+  uv_buf_t buf = uv_buf_init(peer->allocator.realloc(4 + 1, NULL, 0), 0);
 
-  buf->base = peer->allocator.realloc(4 + 1, NULL, 0);
-
-  uint8_t* bytes = (uint8_t*)buf->base;
-  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, 1);
-  bytes = peer_write_u8(bytes, (uint64_t*)&buf->len, PT_CHOKE);
+  uint8_t* bytes = (uint8_t*)buf.base;
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf.len, 1);
+  bytes = peer_write_u8(bytes, (uint64_t*)&buf.len, PT_CHOKE);
 
   return peer_send_buf(peer, buf);
 }
 
 peer_error_t peer_send_interested(peer_t* peer) {
-  uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
-  pg_log_debug(
-      peer->logger,
-      "[%s] new buf (interested) =%llu chunk_size=%llu pool_len=%llu",
-      peer->addr_s,
-      ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
-      peer->buf_pool->chunk_size,
-      peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
-  assert(buf != NULL);
+  uv_buf_t buf = uv_buf_init(peer->allocator.realloc(4 + 1, NULL, 0), 0);
 
-  buf->base = peer->allocator.realloc(4 + 1, NULL, 0);
-
-  uint8_t* bytes = (uint8_t*)buf->base;
-  bytes = peer_write_u32(bytes, (uint64_t*)&buf->len, 1);
-  bytes = peer_write_u8(bytes, (uint64_t*)&buf->len, PT_INTERESTED);
+  uint8_t* bytes = (uint8_t*)buf.base;
+  bytes = peer_write_u32(bytes, (uint64_t*)&buf.len, 1);
+  bytes = peer_write_u8(bytes, (uint64_t*)&buf.len, PT_INTERESTED);
 
   return peer_send_buf(peer, buf);
 }
