@@ -133,6 +133,7 @@ void peer_message_destroy(peer_message_t* msg) {
 typedef struct {
   pg_allocator_t allocator;
   pg_logger_t* logger;
+  pg_pool_t* buf_pool;
 
   download_t* download;
   bc_metainfo_t* metainfo;
@@ -963,14 +964,18 @@ peer_error_t peer_send_buf(peer_t* peer, uv_buf_t* buf) {
 }
 
 peer_error_t peer_send_heartbeat(peer_t* peer) {
-  uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
+  uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
+  assert(buf != NULL);
+
   buf->base = peer->allocator.realloc(sizeof(uint32_t), NULL, 0);
   buf->len = sizeof(uint32_t);
   return peer_send_buf(peer, buf);
 }
 
 peer_error_t peer_send_handshake(peer_t* peer) {
-  uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
+  uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
+  assert(buf != NULL);
+
   buf->base = peer->allocator.realloc(PEER_HANDSHAKE_LENGTH, NULL, 0);
   buf->len = PEER_HANDSHAKE_LENGTH;
 
@@ -1027,7 +1032,9 @@ uint8_t* peer_write_u8(uint8_t* buf, uint64_t* buf_len, uint8_t x) {
 }
 
 peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
-  uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
+  uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
+  assert(buf != NULL);
+
   buf->base = peer->allocator.realloc(4 + 1 + 3 * 4, NULL, 0);
 
   uint8_t* bytes = (uint8_t*)buf->base;
@@ -1050,7 +1057,9 @@ peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
   return peer_send_buf(peer, buf);
 }
 peer_error_t peer_send_choke(peer_t* peer) {
-  uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
+  uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
+  assert(buf != NULL);
+
   buf->base = peer->allocator.realloc(4 + 1, NULL, 0);
 
   uint8_t* bytes = (uint8_t*)buf->base;
@@ -1061,7 +1070,9 @@ peer_error_t peer_send_choke(peer_t* peer) {
 }
 
 peer_error_t peer_send_interested(peer_t* peer) {
-  uv_buf_t* buf = peer->allocator.realloc(sizeof(uv_buf_t), NULL, 0);
+  uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
+  assert(buf != NULL);
+
   buf->base = peer->allocator.realloc(4 + 1, NULL, 0);
 
   uint8_t* bytes = (uint8_t*)buf->base;
@@ -1116,10 +1127,11 @@ void peer_on_connect(uv_connect_t* handle, int status) {
 }
 
 peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
-                  download_t* download, bc_metainfo_t* metainfo,
-                  tracker_peer_address_t address) {
+                  pg_pool_t* buf_pool, download_t* download,
+                  bc_metainfo_t* metainfo, tracker_peer_address_t address) {
   peer_t* peer = allocator.realloc(sizeof(peer_t), NULL, 0);
   peer->allocator = allocator;
+  peer->buf_pool = buf_pool;
   peer->logger = logger;
   peer->download = download;
   peer->metainfo = metainfo;
