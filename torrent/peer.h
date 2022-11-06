@@ -223,11 +223,11 @@ void peer_mark_piece_as_to_download(peer_t* peer, uint32_t piece) {
   assert(pg_bitarray_get(&peer->download->pieces_downloaded, piece) == false);
 }
 
-uint32_t peer_block_count_per_piece(peer_t* peer, uint32_t piece) {
-  if (download_is_last_piece(peer->download, piece))
-    return peer->download->last_piece_block_count;
+uint32_t download_block_count_per_piece(download_t* download, uint32_t piece) {
+  if (download_is_last_piece(download, piece))
+    return download->last_piece_block_count;
   else
-    return peer->download->blocks_per_piece;
+    return download->blocks_per_piece;
 }
 
 uint32_t download_block_length(download_t* download, bc_metainfo_t* metainfo,
@@ -260,7 +260,7 @@ void peer_mark_piece_as_downloading(peer_t* peer, uint32_t piece) {
   pg_bitarray_set(&peer->download->pieces_downloading, piece);
 
   pg_bitarray_resize(&peer->blocks_for_piece_to_download,
-                     peer_block_count_per_piece(peer, piece) - 1);
+                     download_block_count_per_piece(peer->download, piece) - 1);
   pg_bitarray_set_all(&peer->blocks_for_piece_to_download);
 }
 
@@ -282,7 +282,8 @@ void peer_mark_piece_as_downloaded(peer_t* peer, uint32_t piece) {
 
 bool peer_have_all_blocks_for_downloading_piece(peer_t* peer) {
   return pg_bitarray_count_set(&peer->blocks_for_piece_downloaded) ==
-         peer_block_count_per_piece(peer, peer->downloading_piece);
+         download_block_count_per_piece(peer->download,
+                                        peer->downloading_piece);
 }
 
 peer_error_t peer_check_handshaked(peer_t* peer) {
@@ -625,8 +626,8 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
           download_piece_length(peer->download, peer->metainfo, piece);
 
       peer->download->downloaded_bytes -= length;
-      peer->download->downloaded_blocks_count -=
-          peer_block_count_per_piece(peer, peer->downloading_piece);
+      peer->download->downloaded_blocks_count -= download_block_count_per_piece(
+          peer->download, peer->downloading_piece);
       return err;
     }
 
@@ -773,7 +774,8 @@ uint32_t peer_pick_next_block_to_download(peer_t* peer, bool* found) {
                    "[%s] peer_pick_next_block_to_download: found block=%u",
                    peer->addr_s, (uint32_t)i);
 
-      assert(i < peer_block_count_per_piece(peer, peer->downloading_piece));
+      assert(i < download_block_count_per_piece(peer->download,
+                                                peer->downloading_piece));
       return (uint32_t)i;
     }
   }
@@ -825,7 +827,8 @@ peer_error_t peer_request_more_blocks(peer_t* peer, peer_action_t* action) {
       return (peer_error_t){0};
     }
 
-    assert(block < peer_block_count_per_piece(peer, peer->downloading_piece));
+    assert(block < download_block_count_per_piece(peer->download,
+                                                  peer->downloading_piece));
     peer_mark_block_as_downloading(peer, block);
 
     peer_error_t err = peer_send_request(peer, block);
@@ -1246,6 +1249,10 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
       pg_bitarray_unset(&download->pieces_to_download, piece);
       pg_bitarray_unset(&download->pieces_downloading, piece);
       pg_bitarray_set(&download->pieces_downloaded, piece);
+      download->pieces_downloaded_count += 1;
+      download->downloaded_bytes += length;
+      download->downloaded_blocks_count +=
+          download_block_count_per_piece(download, piece);
     }
   }
 
