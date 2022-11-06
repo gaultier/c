@@ -929,10 +929,20 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 void peer_on_write(uv_write_t* req, int status) {
   peer_t* peer = req->data;
 
+  pg_log_debug(peer->logger, "[%s] peer_on_write status=%d buf=%p",
+               peer->addr_s, status, req->bufs);
+
   assert(req->nbufs == 1);
-  if (req->bufs != NULL && req->bufs[0].base != NULL) {
-    peer->allocator.free(req->bufs[0].base);
-    peer->allocator.free(&req->bufs[0]);
+  if (req->bufs != NULL && req->bufs->base != NULL) {
+    peer->allocator.free(req->bufs->base);
+    pg_log_debug(peer->logger,
+                 "[%s] free buf=%p %llu chunk_size=%llu pool_len=%llu",
+                 peer->addr_s, req->bufs,
+                 ((void*)req->bufs - (void*)peer->buf_pool->buf) /
+                     peer->buf_pool->chunk_size,
+                 peer->buf_pool->chunk_size,
+                 peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
+    pg_pool_free(peer->buf_pool, req->bufs);
   }
 
   peer->allocator.free(req);
@@ -955,7 +965,13 @@ peer_error_t peer_send_buf(peer_t* peer, uv_buf_t* buf) {
 
     peer->allocator.free(write_req);
     peer->allocator.free(buf->base);
-    peer->allocator.free(buf);
+    pg_log_debug(
+        peer->logger, "[%s] free buf (err) =%llu chunk_size=%llu pool_len=%llu",
+        peer->addr_s,
+        ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
+        peer->buf_pool->chunk_size,
+        peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
+    pg_pool_free(peer->buf_pool, buf);
 
     return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
   }
@@ -966,6 +982,13 @@ peer_error_t peer_send_buf(peer_t* peer, uv_buf_t* buf) {
 peer_error_t peer_send_heartbeat(peer_t* peer) {
   uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
   assert(buf != NULL);
+  pg_log_debug(
+      peer->logger,
+      "[%s] new buf (heartbeat)=%llu chunk_size=%llu pool_len=%llu",
+      peer->addr_s,
+      ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
+      peer->buf_pool->chunk_size,
+      peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
 
   buf->base = peer->allocator.realloc(sizeof(uint32_t), NULL, 0);
   buf->len = sizeof(uint32_t);
@@ -975,6 +998,13 @@ peer_error_t peer_send_heartbeat(peer_t* peer) {
 peer_error_t peer_send_handshake(peer_t* peer) {
   uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
   assert(buf != NULL);
+  pg_log_debug(
+      peer->logger,
+      "[%s] new buf (handshake) =%llu chunk_size=%llu pool_len=%llu",
+      peer->addr_s,
+      ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
+      peer->buf_pool->chunk_size,
+      peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
 
   buf->base = peer->allocator.realloc(PEER_HANDSHAKE_LENGTH, NULL, 0);
   buf->len = PEER_HANDSHAKE_LENGTH;
@@ -1034,6 +1064,13 @@ uint8_t* peer_write_u8(uint8_t* buf, uint64_t* buf_len, uint8_t x) {
 peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
   uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
   assert(buf != NULL);
+  pg_log_debug(
+      peer->logger,
+      "[%s] new buf (request) =%llu chunk_size=%llu pool_len=%llu",
+      peer->addr_s,
+      ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
+      peer->buf_pool->chunk_size,
+      peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
 
   buf->base = peer->allocator.realloc(4 + 1 + 3 * 4, NULL, 0);
 
@@ -1058,6 +1095,12 @@ peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
 }
 peer_error_t peer_send_choke(peer_t* peer) {
   uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
+  pg_log_debug(
+      peer->logger, "[%s] new buf (choke) =%llu chunk_size=%llu pool_len=%llu",
+      peer->addr_s,
+      ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
+      peer->buf_pool->chunk_size,
+      peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
   assert(buf != NULL);
 
   buf->base = peer->allocator.realloc(4 + 1, NULL, 0);
@@ -1071,6 +1114,13 @@ peer_error_t peer_send_choke(peer_t* peer) {
 
 peer_error_t peer_send_interested(peer_t* peer) {
   uv_buf_t* buf = pg_pool_alloc(peer->buf_pool);
+  pg_log_debug(
+      peer->logger,
+      "[%s] new buf (interested) =%llu chunk_size=%llu pool_len=%llu",
+      peer->addr_s,
+      ((void*)buf - (void*)peer->buf_pool->buf) / peer->buf_pool->chunk_size,
+      peer->buf_pool->chunk_size,
+      peer->buf_pool->buf_len / peer->buf_pool->chunk_size);
   assert(buf != NULL);
 
   buf->base = peer->allocator.realloc(4 + 1, NULL, 0);
