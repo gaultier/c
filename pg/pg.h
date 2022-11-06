@@ -721,3 +721,9 @@ void pg_bitarray_set_all(pg_bitarray_t *bitarr) {
     bitarr->data[i] = 0xff;
   }
 }
+
+void pg_bitarray_resize(pg_bitarray_t *bitarr, uint64_t max_index) {
+  bitarr->max_index = max_index;
+  const uint64_t len = (uint64_t)ceil(((double)max_index) / 8.0);
+  pg_array_resize(bitarr->data, len);
+}
