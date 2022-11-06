@@ -92,7 +92,12 @@ typedef struct {
 } pg_pool_t;
 
 void pg_pool_free_all(pg_pool_t *pool) {
-  // TODO
+  for (uint64_t i = 0; i < pool->buf_len / pool->chunk_size; i++) {
+    void *ptr = &pool->buf[i];
+    pg_pool_free_node_t *node = (pg_pool_free_node_t *)ptr;
+    node->next = pool->head;
+    pool->head = node;
+  }
 }
 
 void *pg_pool_alloc(pg_pool_t *pool) {
@@ -102,6 +107,14 @@ void *pg_pool_alloc(pg_pool_t *pool) {
   pool->head = pool->head->next;
 
   return memset(node, 0, pool->chunk_size);
+}
+
+void pg_pool_free(pg_pool_t *pool, void *ptr) {
+  assert(ptr != NULL);
+
+  pg_pool_free_node_t *node = (pg_pool_free_node_t *)ptr;
+  pool->head->next = node;
+  node->next = pool->head;
 }
 
 void pg_pool_init(pg_pool_t *pool, uint64_t chunk_size,
