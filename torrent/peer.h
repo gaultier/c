@@ -484,9 +484,8 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
 
       const uint64_t data_len = announced_len - (1 + 2 * 4);
       const uint32_t block_for_piece = msg->v.piece.begin / PEER_BLOCK_LENGTH;
-      if (data_len >= download_block_length(peer->download, peer->metainfo,
-                                            msg->v.piece.index,
-                                            block_for_piece))
+      if (data_len > download_block_length(peer->download, peer->metainfo,
+                                           msg->v.piece.index, block_for_piece))
         return (peer_error_t){.kind = PEK_INVALID_PIECE};
 
       pg_array_init_reserve(msg->v.piece.data, data_len, peer->allocator);
