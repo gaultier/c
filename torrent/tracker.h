@@ -121,6 +121,7 @@ tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
   assert(curl != NULL);
 
   assert(curl_easy_setopt(curl, CURLOPT_URL, url) == 0);
+  assert(curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10) == 0);
 
   bc_value_t bencode = {0};
   pg_array_t(char) response = {0};
