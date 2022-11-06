@@ -1,0 +1,6 @@
+- [ ] Listen on port
+- [ ] Reduce memory usage
+- [ ] Handle multiple torrent files
+- [ ] Handle multiple files in .torrent
+- [ ] UDP
+- [ ] DHT
