@@ -44,6 +44,13 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  if (pg_span_starts_with(pg_span_make(metainfo.announce),
+                          pg_span_make_c("http://"))) {
+    pg_log_fatal(&logger, EINVAL,
+                 "Tracker url is not http, not supported (yet): %s",
+                 metainfo.announce);
+  }
+
   tracker_query_t tracker_query = {
       .peer_id = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
                   11, 12, 13, 14, 15, 16, 17, 18, 19, 20},

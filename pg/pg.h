@@ -426,6 +426,11 @@ pg_span_t pg_span_make_c(char *s) {
   return (pg_span_t){.data = s, .len = strlen(s)};
 }
 
+bool pg_span_starts_with(pg_span_t haystack, pg_span_t needle) {
+  if (needle.len > haystack.len) return false;
+  return memmem(haystack.data, haystack.len, needle.data, needle.len) == 0;
+}
+
 // ------------- File utils
 
 int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
