@@ -90,9 +90,10 @@ int main(int argc, char* argv[]) {
   peer_error_t err =
       download_checksum_all(pg_heap_allocator(), &logger, &download, &metainfo);
   if (err.kind != PEK_NONE) {
-    // TODO: gracefull continue?
-    pg_log_fatal(&logger, errno, "Failed to checksum file: path=%s err=%s",
+    // Gracefully recover
+    pg_log_error(&logger, "Failed to checksum file: path=%s err=%s",
                  metainfo.name, strerror(errno));
+    pg_bitarray_set_all(&download.pieces_to_download);
   }
 
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
