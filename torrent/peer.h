@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -417,12 +416,17 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
                             4 + 1);  // consume announced_len + tag
 
       const uint32_t have = peer_read_u32(&peer->recv_data);
+      if (have > peer->download->pieces_count)
+        return (peer_error_t){.kind = PEK_INVALID_HAVE};
+
       msg->kind = PMK_HAVE;
       msg->v.have = (peer_message_have_t){have};
       return (peer_error_t){0};
     }
     case PT_BITFIELD: {
-      if (announced_len < 1)
+      const uint64_t expected_bitfield_len =
+          (uint64_t)ceil(((double)peer->download->pieces_count - 1) / 8.0);
+      if (announced_len != expected_bitfield_len + /* tag */ 1)
         return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
       if (pg_ring_len(&peer->recv_data) < announced_len + 4)
@@ -430,8 +434,8 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
 
       msg->kind = PMK_BITFIELD;
       msg->v.bitfield = (peer_message_bitfield_t){0};
-      pg_array_init_reserve(msg->v.bitfield.bitfield, announced_len - 1,
-                            peer->allocator);
+      pg_array_init_reserve(msg->v.bitfield.bitfield,
+                            peer->download->pieces_count - 1, peer->allocator);
 
       pg_ring_consume_front(&peer->recv_data,
                             4 + 1);  // consume announced_len + tag
@@ -473,8 +477,18 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
           .index = peer_read_u32(&peer->recv_data),
           .begin = peer_read_u32(&peer->recv_data),
       };
+      if (msg->v.piece.index >= peer->download->pieces_count ||
+          msg->v.piece.index != peer->downloading_piece ||
+          msg->v.piece.begin >= peer->metainfo->piece_length)
+        return (peer_error_t){.kind = PEK_INVALID_PIECE};
 
       const uint64_t data_len = announced_len - (1 + 2 * 4);
+      const uint32_t block_for_piece = msg->v.piece.begin / PEER_BLOCK_LENGTH;
+      if (data_len >= download_block_length(peer->download, peer->metainfo,
+                                            msg->v.piece.index,
+                                            block_for_piece))
+        return (peer_error_t){.kind = PEK_INVALID_PIECE};
+
       pg_array_init_reserve(msg->v.piece.data, data_len, peer->allocator);
       pg_array_resize(msg->v.piece.data, data_len);
       for (uint64_t i = 0; i < data_len; i++) {
@@ -670,26 +684,13 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       return (peer_error_t){0};
     case PMK_HAVE: {
       const uint32_t have = msg->v.have.have;
-
-      if (have >= peer->download->pieces_count) {
-        return (peer_error_t){.kind = PEK_INVALID_HAVE};
-      }
       pg_bitarray_set(&peer->them_have_pieces, have);
 
       *action = PEER_ACTION_REQUEST_MORE;
       return (peer_error_t){0};
     }
     case PMK_BITFIELD: {
-      const uint64_t expected_length =
-          (uint64_t)ceil((double)peer->download->pieces_count / 8);
-
       pg_array_t(uint8_t) bitfield = msg->v.bitfield.bitfield;
-      if (pg_array_count(bitfield) != expected_length) {
-        pg_log_error(peer->logger,
-                     "[%s] Invalid bitfield length: expected=%llu got=%llu",
-                     peer->addr_s, expected_length, pg_array_count(bitfield));
-        return (peer_error_t){.kind = PEK_INVALID_BITFIELD};
-      }
 
       pg_bitarray_setv(&peer->them_have_pieces, bitfield,
                        pg_array_count(bitfield));
@@ -701,12 +702,6 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       assert(peer->in_flight_requests > 0);
 
       const peer_message_piece_t piece_msg = msg->v.piece;
-
-      if (piece_msg.index >= peer->download->pieces_count ||
-          piece_msg.index != peer->downloading_piece ||
-          piece_msg.begin >= peer->metainfo->piece_length ||
-          pg_array_count(piece_msg.data) > PEER_BLOCK_LENGTH)
-        return (peer_error_t){.kind = PEK_INVALID_PIECE};
 
       const uint32_t block_for_piece = piece_msg.begin / PEER_BLOCK_LENGTH;
       const pg_span_t span = (pg_span_t){
