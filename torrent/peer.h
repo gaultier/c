@@ -1224,7 +1224,7 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
   for (uint32_t piece = 0; piece < download->pieces_count; piece++) {
     const uint64_t length = download_piece_length(download, metainfo, piece);
 
-    const uint64_t offset = piece * length;
+    const uint64_t offset = piece * metainfo->piece_length;
     uint8_t hash[20] = {0};
     pg_log_debug(logger,
                  "download_checksum_all: checksumming: piece=%u length=%llu "
