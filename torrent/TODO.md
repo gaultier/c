@@ -4,3 +4,4 @@
 - [ ] Handle multiple files in .torrent
 - [ ] UDP
 - [ ] DHT
+- [ ] Handle Cancel messages
