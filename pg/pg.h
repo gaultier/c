@@ -1,5 +1,7 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
+#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -78,15 +80,42 @@ pg_allocator_t pg_null_allocator() {
   return (pg_allocator_t){.realloc = pg_null_realloc, .free = pg_null_free};
 }
 
-// void *pg_arena_realloc(pg_allocator_t *allocator, uint64_t new_size,
-//                        void *old_memory, uint64_t old_size) {
-//   assert(allocator != NULL);
-//   if (allocator->backing_memory_cap < old_size) return NULL;
-//
-//   return allocator->backing_memory;
-// }
-//
-// void * pg_arena_free(pg_allocator_t* allocator, );
+typedef struct pg_pool_free_node_t {
+  struct pg_pool_free_node_t *next;
+} pg_pool_free_node_t;
+
+typedef struct {
+  uint8_t *buf;
+  uint64_t buf_len;
+  uint64_t chunk_size;
+  pg_pool_free_node_t *head;
+} pg_pool_t;
+
+void pg_pool_free_all(pg_pool_t *pool) {
+  // TODO
+}
+
+void *pg_pool_alloc(pg_pool_t *pool) {
+  pg_pool_free_node_t *node = pool->head;
+  if (node == NULL) return NULL;  // No more space
+
+  pool->head = pool->head->next;
+
+  return memset(node, 0, pool->chunk_size);
+}
+
+void pg_pool_init(pg_pool_t *pool, uint64_t chunk_size,
+                  uint64_t max_items_count) {
+  // TODO: allow using existing chunk of mem
+
+  pool->chunk_size = chunk_size;
+  pool->buf_len = 0;
+  pool->buf = calloc(max_items_count, chunk_size);
+  assert(pool->buf);
+  pool->head = NULL;
+
+  pg_pool_free_all(pool);
+}
 
 typedef struct pg_array_header_t {
   uint64_t count;
