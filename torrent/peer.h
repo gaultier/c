@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -436,9 +437,11 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
                             4 + 1);  // consume announced_len + tag
 
       for (uint64_t i = 0; i < announced_len - 1; i++) {
-        pg_array_append(msg->v.bitfield.bitfield,
-                        pg_ring_pop_front(&peer->recv_data));
+        const uint8_t byte = pg_ring_pop_front(&peer->recv_data);
+        pg_array_append(msg->v.bitfield.bitfield, __builtin_bitreverse8(byte));
       }
+      pg_log_debug(peer->logger, "[%s] bitfield: last=%#x", peer->addr_s,
+                   (uint8_t)msg->v.bitfield.bitfield[announced_len - 2]);
       return (peer_error_t){0};
     }
     case PT_REQUEST: {
@@ -739,6 +742,10 @@ uint32_t peer_pick_next_piece_to_download(peer_t* peer, bool* found) {
   if (peer->downloading_piece !=
       UINT32_MAX) {  // Already downloading a piece, and not finished with it
     *found = true;
+    pg_log_debug(
+        peer->logger,
+        "[%s] pick_next_piece_to_download: already downloading piece %u",
+        peer->addr_s, peer->downloading_piece);
     return peer->downloading_piece;
   }
 
@@ -748,6 +755,10 @@ uint32_t peer_pick_next_piece_to_download(peer_t* peer, bool* found) {
     if (!is_set) continue;
     const bool them_have = pg_bitarray_get(&peer->them_have_pieces, i);
     if (!them_have) {
+      pg_log_debug(peer->logger,
+                   "[%s] pick_next_piece_to_download: need piece %lld but they "
+                   "don't have it",
+                   peer->addr_s, i);
       continue;
     }
 
@@ -759,6 +770,9 @@ uint32_t peer_pick_next_piece_to_download(peer_t* peer, bool* found) {
     peer_mark_piece_as_downloading(peer, piece);
     return piece;
   }
+  pg_log_debug(peer->logger,
+               "[%s] pick_next_piece_to_download: exhausted search",
+               peer->addr_s);
   return UINT32_MAX;
 }
 
@@ -1242,6 +1256,8 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
                    " err=%d",
                    piece, err.kind);
       pg_bitarray_set(&download->pieces_to_download, piece);
+      pg_bitarray_unset(&download->pieces_downloading, piece);
+      pg_bitarray_unset(&download->pieces_downloaded, piece);
     } else {
       pg_log_debug(logger,
                    "download_checksum_all: piece passed checksum: piece=%u ",
@@ -1255,6 +1271,9 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
           download_block_count_per_piece(download, piece);
     }
   }
+
+  pg_log_info(logger, "download_checksum_all: have %u/%u pieces",
+              download->pieces_downloaded_count, download->pieces_count);
 
   pg_array_free(file_data);
   return err;
