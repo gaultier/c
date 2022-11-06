@@ -455,11 +455,16 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       if (pg_ring_len(&peer->recv_data) < announced_len + 4)
         return (peer_error_t){.kind = PEK_NEED_MORE};
 
-      msg->kind = PMK_REQUEST;
-      // TODO .v
-
       pg_ring_consume_front(&peer->recv_data,
-                            4 + announced_len);  // consume all
+                            4 + 1);  // consume announced_len + tag
+
+      msg->kind = PMK_REQUEST;
+      msg->v.request = (peer_message_request_t){
+          .index = peer_read_u32(&peer->recv_data),
+          .begin = peer_read_u32(&peer->recv_data),
+          .length = peer_read_u32(&peer->recv_data),
+      };
+
       return (peer_error_t){0};
     }
     case PT_PIECE: {

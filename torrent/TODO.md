@@ -5,3 +5,4 @@
 - [ ] UDP
 - [ ] DHT
 - [ ] Handle Cancel messages
+- [ ] IPv6
