@@ -1222,6 +1222,8 @@ void download_destroy(download_t* download) {
 peer_error_t download_checksum_all(pg_allocator_t allocator,
                                    pg_logger_t* logger, download_t* download,
                                    bc_metainfo_t* metainfo) {
+  pg_log_debug(logger, "Checksumming file");
+
   pg_array_t(uint8_t) file_data = {0};
   const int64_t ret = pg_read_file_fd(allocator, download->fd, &file_data);
   if (ret != 0) {

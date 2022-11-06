@@ -64,6 +64,7 @@ int main(int argc, char* argv[]) {
   pg_array_t(tracker_peer_address_t) peer_addresses = {0};
   pg_array_init_reserve(peer_addresses, 15, pg_heap_allocator());
 
+  pg_log_debug(&logger, "Fetching peers from tracker");
   tracker_error_t tracker_err =
       tracker_fetch_peers(pg_heap_allocator(), &tracker_query, &peer_addresses);
   if (tracker_err != TK_ERR_NONE) {
@@ -73,6 +74,9 @@ int main(int argc, char* argv[]) {
   if (pg_array_count(peer_addresses) == 0) {
     pg_log_fatal(&logger, EINVAL, "No peers returned from tracker");
   }
+
+  pg_log_debug(&logger, "Fetched %llu peers from tracker",
+               pg_array_count(peer_addresses));
 
   int fd = open(metainfo.name, O_RDWR | O_CREAT, 0666);
   if (fd == -1) {
