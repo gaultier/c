@@ -121,10 +121,10 @@ typedef struct {
 typedef struct {
   pg_allocator_t allocator;
   pg_logger_t* logger;
-  pg_pool_t* write_ctx_pool;
   pg_pool_t* peer_pool;
-  pg_pool_t* buf_pool;
-  pg_pool_t* block_pool;
+  pg_pool_t write_ctx_pool;
+  pg_pool_t buf_pool;
+  pg_pool_t block_pool;
 
   download_t* download;
   bc_metainfo_t* metainfo;
@@ -154,24 +154,19 @@ void peer_message_destroy(peer_t* peer, peer_message_t* msg) {
       pg_array_free(msg->v.bitfield.bitfield);
       return;
     case PMK_PIECE:
-      pg_pool_free(peer->block_pool, msg->v.piece.data);
+      pg_pool_free(&peer->block_pool, msg->v.piece.data);
 
     default:;  // no-op
   }
 }
 void peer_close(peer_t* peer);
 
-// TODO: use pool allocator?
 void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   peer_t* peer = handle->data;
 
-  if (suggested_size > peer->buf_pool->chunk_size) {
-    fprintf(stderr, "[D001] %zu %llu\n", suggested_size,
-            peer->buf_pool->chunk_size);
-  }
-  assert(suggested_size <= peer->buf_pool->chunk_size);
-  buf->base = pg_pool_alloc(peer->buf_pool);
-  buf->len = peer->buf_pool->chunk_size;
+  assert(suggested_size <= peer->buf_pool.chunk_size);
+  buf->base = pg_pool_alloc(&peer->buf_pool);
+  buf->len = peer->buf_pool.chunk_size;
 }
 
 bool download_is_last_piece(download_t* download, uint32_t piece) {
@@ -512,7 +507,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
                                            msg->v.piece.index, block_for_piece))
         return (peer_error_t){.kind = PEK_INVALID_PIECE};
 
-      msg->v.piece.data = pg_pool_alloc(peer->block_pool);
+      msg->v.piece.data = pg_pool_alloc(&peer->block_pool);
       for (uint64_t i = 0; i < data_len; i++) {
         msg->v.piece.data[i] = pg_ring_pop_front(&peer->recv_data);
       }
@@ -900,7 +895,8 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
     pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
   }
-  if (buf != NULL && buf->base != NULL) pg_pool_free(peer->buf_pool, buf->base);
+  if (buf != NULL && buf->base != NULL)
+    pg_pool_free(&peer->buf_pool, buf->base);
 
   if (nread <= 0) return;
 
@@ -946,7 +942,7 @@ void peer_on_write(uv_write_t* req, int status) {
                peer->addr_s, status, req->bufs);
 
   peer->allocator.free(ctx->data);
-  pg_pool_free(peer->write_ctx_pool, ctx);
+  pg_pool_free(&peer->write_ctx_pool, ctx);
 
   if (status != 0) {
     pg_log_error(peer->logger, "[%s] on_write failed: %d %s", peer->addr_s,
@@ -956,7 +952,7 @@ void peer_on_write(uv_write_t* req, int status) {
 }
 
 peer_error_t peer_send_buf(peer_t* peer, uv_buf_t buf) {
-  peer_write_ctx_t* ctx = pg_pool_alloc(peer->write_ctx_pool);
+  peer_write_ctx_t* ctx = pg_pool_alloc(&peer->write_ctx_pool);
   assert(ctx != NULL);
   ctx->req.data = ctx;
   ctx->data = buf.base;
@@ -967,7 +963,7 @@ peer_error_t peer_send_buf(peer_t* peer, uv_buf_t buf) {
                       peer_on_write)) != 0) {
     pg_log_error(peer->logger, "[%s] uv_write failed: %d", peer->addr_s, ret);
 
-    pg_pool_free(peer->write_ctx_pool, ctx);
+    pg_pool_free(&peer->write_ctx_pool, ctx);
     peer->allocator.free(buf.base);
 
     return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
@@ -1128,14 +1124,21 @@ void peer_on_connect(uv_connect_t* handle, int status) {
 }
 
 void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
-               pg_pool_t* write_ctx_pool, pg_pool_t* buf_pool,
-               pg_pool_t* block_pool, download_t* download,
-               bc_metainfo_t* metainfo, tracker_peer_address_t address) {
+               download_t* download, bc_metainfo_t* metainfo,
+               tracker_peer_address_t address) {
   peer->allocator = pg_heap_allocator();  // FIXME
-  peer->write_ctx_pool = write_ctx_pool;
+  pg_pool_init(
+      &peer->write_ctx_pool, sizeof(peer_write_ctx_t),
+      (PEER_MAX_IN_FLIGHT_REQUESTS +
+       /* arbitrary, account for handshake, heartbeats and so on */ 20));
+
+  pg_pool_init(&peer->buf_pool, /* suggested size from libuv */ 65536, 30);
+
+  pg_pool_init(&peer->block_pool, PEER_BLOCK_LENGTH,
+               PEER_MAX_IN_FLIGHT_REQUESTS);  // TODO: increase when starting to
+                                              // handle Request msg
+
   peer->peer_pool = peer_pool;
-  peer->buf_pool = buf_pool;
-  peer->block_pool = block_pool;
   peer->logger = logger;
   peer->download = download;
   peer->metainfo = metainfo;
@@ -1190,6 +1193,10 @@ void peer_destroy(peer_t* peer) {
   pg_bitarray_destroy(&peer->blocks_for_piece_downloading);
   pg_bitarray_destroy(&peer->blocks_for_piece_to_download);
   pg_ring_destroy(&peer->recv_data);
+
+  pg_pool_destroy(&peer->write_ctx_pool);
+  pg_pool_destroy(&peer->buf_pool);
+  pg_pool_destroy(&peer->block_pool);
 
   pg_pool_free(peer->peer_pool, peer);
 }
