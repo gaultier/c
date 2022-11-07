@@ -123,7 +123,7 @@ typedef struct {
   pg_logger_t* logger;
   pg_pool_t* peer_pool;
   pg_pool_t write_ctx_pool;
-  pg_pool_t buf_pool;
+  pg_pool_t read_buf_pool;
   pg_pool_t block_pool;
 
   download_t* download;
@@ -164,9 +164,9 @@ void peer_close(peer_t* peer);
 void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   peer_t* peer = handle->data;
 
-  assert(suggested_size <= peer->buf_pool.chunk_size);
-  buf->base = pg_pool_alloc(&peer->buf_pool);
-  buf->len = peer->buf_pool.chunk_size;
+  assert(suggested_size <= peer->read_buf_pool.chunk_size);
+  buf->base = pg_pool_alloc(&peer->read_buf_pool);
+  buf->len = peer->read_buf_pool.chunk_size;
 }
 
 bool download_is_last_piece(download_t* download, uint32_t piece) {
@@ -901,7 +901,7 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
   }
   if (buf != NULL && buf->base != NULL)
-    pg_pool_free(&peer->buf_pool, buf->base);
+    pg_pool_free(&peer->read_buf_pool, buf->base);
 
   if (nread <= 0) {
     pg_log_error(peer->logger, "[%s] peer_on_read failed: %s", peer->addr_s,
@@ -1142,7 +1142,10 @@ void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
       (PEER_MAX_IN_FLIGHT_REQUESTS +
        /* arbitrary, account for handshake, heartbeats and so on */ 20));
 
-  pg_pool_init(&peer->buf_pool, /* suggested size from libuv */ 65536, 30);
+  pg_pool_init(&peer->read_buf_pool,
+               /* suggested size from libuv + embeded linked list */ 65536 +
+                   sizeof(void*),
+               30);
 
   pg_pool_init(&peer->block_pool, PEER_BLOCK_LENGTH,
                PEER_MAX_IN_FLIGHT_REQUESTS);  // TODO: increase when starting to
@@ -1205,7 +1208,7 @@ void peer_destroy(peer_t* peer) {
   pg_ring_destroy(&peer->recv_data);
 
   pg_pool_destroy(&peer->write_ctx_pool);
-  pg_pool_destroy(&peer->buf_pool);
+  pg_pool_destroy(&peer->read_buf_pool);
   pg_pool_destroy(&peer->block_pool);
 
   pg_pool_free(peer->peer_pool, peer);
