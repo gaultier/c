@@ -17,14 +17,16 @@ int main(int argc, char* argv[]) {
 
   pg_logger_t logger = {.level = PG_LOG_DEBUG};
 
-  pg_array_t(uint8_t) buf = {0};
+  pg_array_t(uint8_t) torrent_file_data = {0};
   int64_t ret = 0;
-  if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &buf)) != 0) {
+  if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &torrent_file_data)) !=
+      0) {
     pg_log_fatal(&logger, ret, "Failed to read file %s: %s", argv[1],
                  strerror(ret));
   }
 
-  pg_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
+  pg_span_t span = {.data = (char*)torrent_file_data,
+                    .len = pg_array_count(torrent_file_data)};
   pg_span_t info_span = {0};
   bc_value_t bencode = {0};
   {
@@ -35,6 +37,7 @@ int main(int argc, char* argv[]) {
                    bc_parse_error_to_string(err));
     }
   }
+
   bc_metainfo_t metainfo = {0};
   {
     bc_metainfo_error_t err = BC_MI_NONE;
@@ -62,6 +65,7 @@ int main(int argc, char* argv[]) {
   };
   assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len,
                       tracker_query.info_hash) == 0);
+  pg_array_free(torrent_file_data);
 
   pg_array_t(tracker_peer_address_t) peer_addresses = {0};
   pg_array_init_reserve(peer_addresses, 15, pg_heap_allocator());
