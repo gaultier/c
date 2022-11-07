@@ -2,3 +2,4 @@ bencode_test
 bencode_dump
 torrent
 *.iso
+torrent_test
