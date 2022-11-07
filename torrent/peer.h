@@ -134,6 +134,7 @@ typedef struct {
   pg_allocator_t allocator;
   pg_logger_t* logger;
   pg_pool_t* write_ctx_pool;
+  pg_pool_t* peer_pool;
 
   download_t* download;
   bc_metainfo_t* metainfo;
@@ -1121,28 +1122,28 @@ void peer_on_connect(uv_connect_t* handle, int status) {
   uv_idle_init(uv_default_loop(), &peer->idle_handle);
 }
 
-peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
-                  pg_pool_t* write_ctx_pool, download_t* download,
-                  bc_metainfo_t* metainfo, tracker_peer_address_t address) {
-  peer_t* peer = allocator.realloc(sizeof(peer_t), NULL, 0);
-  peer->allocator = allocator;
+void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
+               pg_pool_t* write_ctx_pool, download_t* download,
+               bc_metainfo_t* metainfo, tracker_peer_address_t address) {
+  peer->allocator = pg_heap_allocator();  // FIXME
   peer->write_ctx_pool = write_ctx_pool;
+  peer->peer_pool = peer_pool;
   peer->logger = logger;
   peer->download = download;
   peer->metainfo = metainfo;
-  pg_bitarray_init(allocator, &peer->them_have_pieces,
+  pg_bitarray_init(peer->allocator, &peer->them_have_pieces,
                    peer->download->pieces_count - 1);
-  pg_bitarray_init(allocator, &peer->blocks_for_piece_downloaded,
+  pg_bitarray_init(peer->allocator, &peer->blocks_for_piece_downloaded,
                    peer->download->blocks_per_piece - 1);
-  pg_bitarray_init(allocator, &peer->blocks_for_piece_downloading,
+  pg_bitarray_init(peer->allocator, &peer->blocks_for_piece_downloading,
                    peer->download->blocks_per_piece - 1);
-  pg_bitarray_init(allocator, &peer->blocks_for_piece_to_download,
+  pg_bitarray_init(peer->allocator, &peer->blocks_for_piece_to_download,
                    peer->download->blocks_per_piece - 1);
   peer->downloading_piece = -1;
   peer->connect_req.data = peer;
   peer->connection.data = peer;
   peer->idle_handle.data = peer;
-  pg_ring_init(allocator, &peer->recv_data,
+  pg_ring_init(peer->allocator, &peer->recv_data,
                /* semi-arbitrary */ 2 * UINT16_MAX);
 
   snprintf(peer->addr_s, sizeof(peer->addr_s), "%s:%hu",
@@ -1150,8 +1151,6 @@ peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
 
   peer->them_choked = true;
   peer->them_interested = false;
-
-  return peer;
 }
 
 peer_error_t peer_connect(peer_t* peer, tracker_peer_address_t address) {
@@ -1183,7 +1182,8 @@ void peer_destroy(peer_t* peer) {
   pg_bitarray_destroy(&peer->blocks_for_piece_downloading);
   pg_bitarray_destroy(&peer->blocks_for_piece_to_download);
   pg_ring_destroy(&peer->recv_data);
-  peer->allocator.free(peer);
+
+  pg_pool_free(peer->peer_pool, peer);
 }
 
 void peer_on_close(uv_handle_t* handle) {
