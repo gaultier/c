@@ -1,8 +1,11 @@
 - [ ] Listen on port
-- [ ] Reduce memory usage
+- [x] Reduce memory usage
 - [ ] Handle multiple torrent files
 - [ ] Handle multiple files in .torrent
 - [ ] UDP
 - [ ] DHT
 - [ ] Handle Cancel messages
+- [ ] Handle Request messages
+- [ ] Send Bitfield message
 - [ ] IPv6
+- [ ] End-game mode
