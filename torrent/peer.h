@@ -135,6 +135,7 @@ typedef struct {
   pg_logger_t* logger;
   pg_pool_t* write_ctx_pool;
   pg_pool_t* peer_pool;
+  pg_pool_t* buf_pool;
 
   download_t* download;
   bc_metainfo_t* metainfo;
@@ -163,8 +164,14 @@ void peer_close(peer_t* peer);
 // TODO: use pool allocator?
 void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   peer_t* peer = handle->data;
-  buf->base = peer->allocator.realloc(suggested_size, NULL, 0);
-  buf->len = suggested_size;
+
+  if (suggested_size > peer->buf_pool->chunk_size) {
+    fprintf(stderr, "[D001] %zu %llu\n", suggested_size,
+            peer->buf_pool->chunk_size);
+  }
+  assert(suggested_size <= peer->buf_pool->chunk_size);
+  buf->base = pg_pool_alloc(peer->buf_pool);
+  buf->len = peer->buf_pool->chunk_size;
 }
 
 bool download_is_last_piece(download_t* download, uint32_t piece) {
@@ -896,7 +903,8 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
     pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
   }
-  if (buf != NULL && buf->base != NULL) peer->allocator.free(buf->base);
+  if (buf != NULL && buf->base != NULL) pg_pool_free(peer->buf_pool, buf->base);
+
   if (nread <= 0) return;
 
   bool idle_started = false;
@@ -1123,11 +1131,13 @@ void peer_on_connect(uv_connect_t* handle, int status) {
 }
 
 void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
-               pg_pool_t* write_ctx_pool, download_t* download,
-               bc_metainfo_t* metainfo, tracker_peer_address_t address) {
+               pg_pool_t* write_ctx_pool, pg_pool_t* buf_pool,
+               download_t* download, bc_metainfo_t* metainfo,
+               tracker_peer_address_t address) {
   peer->allocator = pg_heap_allocator();  // FIXME
   peer->write_ctx_pool = write_ctx_pool;
   peer->peer_pool = peer_pool;
+  peer->buf_pool = buf_pool;
   peer->logger = logger;
   peer->download = download;
   peer->metainfo = metainfo;
