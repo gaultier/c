@@ -80,6 +80,28 @@ pg_allocator_t pg_null_allocator() {
 
 // -------------------------- Pool
 
+bool pg_is_power_of_two(uint64_t x) { return (x & (x - 1)) == 0; }
+
+uint64_t pg_align_forward(uint64_t ptr, uint64_t align) {
+  uint64_t p = 0, a = 0, modulo = 0;
+
+  assert(pg_is_power_of_two(align));
+
+  p = ptr;
+  a = (uintptr_t)align;
+  // Same as (p % a) but faster as 'a' is a power of two
+  modulo = p & (a - 1);
+
+  if (modulo != 0) {
+    // If 'p' address is not aligned, push the address to the
+    // next value which is aligned
+    p += a - modulo;
+  }
+  return p;
+}
+
+#define PG_DEFAULT_ALIGNEMENT 16
+
 typedef struct pg_pool_free_node_t {
   struct pg_pool_free_node_t *next;
 } pg_pool_free_node_t;
@@ -125,6 +147,7 @@ void pg_pool_init(pg_pool_t *pool, uint64_t chunk_size,
   // TODO: allow using existing chunk of mem
   // TODO: alignement
 
+  chunk_size = pg_align_forward(chunk_size, PG_DEFAULT_ALIGNEMENT);
   assert(chunk_size >= sizeof(pg_pool_free_node_t));
 
   pool->chunk_size = chunk_size;
