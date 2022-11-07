@@ -1,5 +1,6 @@
 - [ ] Listen on port
-- [x] Reduce memory usage
+- [x] Use pool of entities
+- [ ] Adaptive queue size for pipelined requests
 - [ ] Handle multiple torrent files
 - [ ] Handle multiple files in .torrent
 - [ ] UDP
@@ -9,3 +10,9 @@
 - [ ] Send Bitfield message
 - [ ] IPv6
 - [ ] End-game mode
+- [ ] Write batching
+- [ ] Keep track of download/upload rates
+- [ ] Non-blocking disk I/O
+- [ ] Retries within a peer
+- [ ] Timeouts
+- [ ] Re-fetch peers on a regular basis
