@@ -122,7 +122,7 @@ typedef struct peer_read_buf_t {
   struct peer_read_buf_t* next;
   uint64_t len;
   // Contiguous memory
-  char* data;
+  char data[];
 } peer_read_buf_t;
 
 typedef struct {
@@ -172,10 +172,10 @@ void peer_close(peer_t* peer);
 void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   peer_t* peer = handle->data;
 
-  assert(suggested_size <= peer->read_buf_pool.chunk_size);
+  assert(suggested_size <= peer->read_buf_pool.chunk_size - 2 * sizeof(void*));
   peer_read_buf_t* read_buf = pg_pool_alloc(&peer->read_buf_pool);
   buf->base = read_buf->data;
-  buf->len = peer->read_buf_pool.chunk_size;
+  buf->len = suggested_size;
 }
 
 bool download_is_last_piece(download_t* download, uint32_t piece) {
@@ -326,7 +326,11 @@ uint64_t peer_recv_data_has_at_least(peer_t* peer, uint64_t count) {
 
 uint8_t peer_recv_data_pop(peer_t* peer) {
   assert(peer->read_bufs_start != NULL);
+  assert(peer->read_bufs_start->data != NULL);
+  assert(peer->read_bufs_start->len > 0);
   assert(peer->read_bufs_end != NULL);
+  assert(peer->read_bufs_end->data != NULL);
+  assert(peer->read_bufs_end->len > 0);
   assert(peer->read_buf_offset < peer->read_bufs_start->len);
 
   const uint8_t res = peer->read_bufs_start->data[peer->read_buf_offset];
@@ -953,8 +957,6 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
       read_buf->next = NULL;
     }
   }
-  if (buf != NULL && buf->base != NULL)
-    pg_pool_free(&peer->read_buf_pool, buf->base);
 
   if (nread <= 0) {
     pg_log_error(peer->logger, "[%s] peer_on_read failed: %s", peer->addr_s,

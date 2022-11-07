@@ -34,11 +34,15 @@ TEST test_read_bufs() {
   assert(peer != NULL);
   peer_init(peer, &logger, &peer_pool, &download, &metainfo, addr);
 
-  const uv_buf_t buf1 = uv_buf_init("Hello", 5);
-  const uv_buf_t buf2 = uv_buf_init(" world", 6);
+  uv_buf_t buf1 = {0};
+  peer_alloc((uv_handle_t*)&peer->connection, 65536, &buf1);
+  ASSERT(buf1.base != NULL);
 
   uv_stream_t stream = {.data = peer};
-  // peer_on_read(&stream, 5, &buf1);
+  peer_on_read(&stream, 5, &buf1);
+
+  ASSERT(peer->read_bufs_start != NULL);
+  ASSERT(peer->read_bufs_start == peer->read_bufs_end);
 
   PASS();
 }
