@@ -102,7 +102,7 @@ int main(int argc, char* argv[]) {
 
   pg_pool_t buf_pool = {0};
   pg_pool_init(
-      &buf_pool, sizeof(uv_buf_t),
+      &buf_pool, sizeof(peer_write_ctx_t),
       pg_array_count(peer_addresses) *
           (PEER_MAX_IN_FLIGHT_REQUESTS +
            /* arbitrary, account for handshake, heartbeats and so on */ 20));

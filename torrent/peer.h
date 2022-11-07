@@ -133,7 +133,7 @@ void peer_message_destroy(peer_message_t* msg) {
 typedef struct {
   pg_allocator_t allocator;
   pg_logger_t* logger;
-  pg_pool_t* buf_pool;
+  pg_pool_t* write_ctx_pool;
 
   download_t* download;
   bc_metainfo_t* metainfo;
@@ -940,7 +940,7 @@ void peer_on_write(uv_write_t* req, int status) {
                peer->addr_s, status, req->bufs);
 
   peer->allocator.free(ctx->data);
-  peer->allocator.free(ctx);
+  pg_pool_free(peer->write_ctx_pool, ctx);
 
   if (status != 0) {
     pg_log_error(peer->logger, "[%s] on_write failed: %d %s", peer->addr_s,
@@ -950,8 +950,8 @@ void peer_on_write(uv_write_t* req, int status) {
 }
 
 peer_error_t peer_send_buf(peer_t* peer, uv_buf_t buf) {
-  peer_write_ctx_t* ctx =
-      peer->allocator.realloc(sizeof(peer_write_ctx_t), NULL, 0);
+  peer_write_ctx_t* ctx = pg_pool_alloc(peer->write_ctx_pool);
+  assert(ctx != NULL);
   ctx->req.data = ctx;
   ctx->data = buf.base;
   ctx->peer = peer;
@@ -1122,11 +1122,11 @@ void peer_on_connect(uv_connect_t* handle, int status) {
 }
 
 peer_t* peer_make(pg_allocator_t allocator, pg_logger_t* logger,
-                  pg_pool_t* buf_pool, download_t* download,
+                  pg_pool_t* write_ctx_pool, download_t* download,
                   bc_metainfo_t* metainfo, tracker_peer_address_t address) {
   peer_t* peer = allocator.realloc(sizeof(peer_t), NULL, 0);
   peer->allocator = allocator;
-  peer->buf_pool = buf_pool;
+  peer->write_ctx_pool = write_ctx_pool;
   peer->logger = logger;
   peer->download = download;
   peer->metainfo = metainfo;
