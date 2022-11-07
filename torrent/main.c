@@ -100,16 +100,16 @@ int main(int argc, char* argv[]) {
     pg_bitarray_set_all(&download.pieces_to_download);
   }
 
-  pg_pool_t buf_pool = {0};
+  pg_pool_t write_ctx_pool = {0};
   pg_pool_init(
-      &buf_pool, sizeof(peer_write_ctx_t),
+      &write_ctx_pool, sizeof(peer_write_ctx_t),
       pg_array_count(peer_addresses) *
           (PEER_MAX_IN_FLIGHT_REQUESTS +
            /* arbitrary, account for handshake, heartbeats and so on */ 20));
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
     const tracker_peer_address_t addr = peer_addresses[i];
-    peer_t* peer = peer_make(pg_heap_allocator(), &logger, &buf_pool, &download,
-                             &metainfo, addr);
+    peer_t* peer = peer_make(pg_heap_allocator(), &logger, &write_ctx_pool,
+                             &download, &metainfo, addr);
     peer_connect(peer, addr);
   }
   uv_run(uv_default_loop(), 0);
