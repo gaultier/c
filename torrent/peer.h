@@ -226,6 +226,8 @@ void peer_mark_block_as_downloaded(peer_t* peer, uint32_t block) {
 
   peer->in_flight_requests -= 1;
 
+  assert(peer->download->downloaded_blocks_count <
+         peer->download->blocks_count);
   peer->download->downloaded_blocks_count += 1;
 }
 
@@ -283,9 +285,9 @@ void peer_mark_piece_as_downloaded(peer_t* peer, uint32_t piece) {
   pg_bitarray_unset(&peer->download->pieces_downloading, piece);
   pg_bitarray_set(&peer->download->pieces_downloaded, piece);
 
-  peer->download->pieces_downloaded_count += 1;
-  assert(peer->download->pieces_downloaded_count <=
+  assert(peer->download->pieces_downloaded_count <
          peer->download->pieces_count);
+  peer->download->pieces_downloaded_count += 1;
 
   pg_bitarray_clear(&peer->blocks_for_piece_downloaded);
   pg_bitarray_clear(&peer->blocks_for_piece_downloading);
@@ -662,9 +664,12 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
       const uint64_t length =
           download_piece_length(peer->download, peer->metainfo, piece);
 
+      assert(peer->download->downloaded_bytes >= length);
       peer->download->downloaded_bytes -= length;
-      peer->download->downloaded_blocks_count -= download_block_count_per_piece(
+      const uint64_t blocks_count = download_block_count_per_piece(
           peer->download, peer->downloading_piece);
+      assert(peer->download->downloaded_blocks_count >= blocks_count);
+      peer->download->downloaded_blocks_count -= blocks_count;
       return err;
     }
 
@@ -1302,8 +1307,14 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
       pg_bitarray_unset(&download->pieces_to_download, piece);
       pg_bitarray_unset(&download->pieces_downloading, piece);
       pg_bitarray_set(&download->pieces_downloaded, piece);
+
+      assert(download->pieces_downloaded_count < download->pieces_count);
       download->pieces_downloaded_count += 1;
+
       download->downloaded_bytes += length;
+      assert(download->downloaded_bytes <= metainfo->length);
+
+      assert(download->downloaded_blocks_count < download->blocks_count);
       download->downloaded_blocks_count +=
           download_block_count_per_piece(download, piece);
     }
