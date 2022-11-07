@@ -898,7 +898,12 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
   if (buf != NULL && buf->base != NULL)
     pg_pool_free(&peer->buf_pool, buf->base);
 
-  if (nread <= 0) return;
+  if (nread <= 0) {
+    pg_log_error(peer->logger, "[%s] peer_on_read failed: %s", peer->addr_s,
+                 strerror(-nread));
+    peer_close(peer);
+    return;
+  }
 
   bool idle_started = false;
   while (true) {  // Parse as many messages as available in the recv_data
@@ -938,8 +943,8 @@ void peer_on_write(uv_write_t* req, int status) {
   peer_write_ctx_t* ctx = req->data;
   peer_t* peer = ctx->peer;
 
-  pg_log_debug(peer->logger, "[%s] peer_on_write status=%d buf=%p",
-               peer->addr_s, status, req->bufs);
+  pg_log_debug(peer->logger, "[%s] peer_on_write status=%d", peer->addr_s,
+               status);
 
   peer->allocator.free(ctx->data);
   pg_pool_free(&peer->write_ctx_pool, ctx);
