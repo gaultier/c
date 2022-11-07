@@ -155,6 +155,6 @@ end:
   if (bencode.kind != BC_KIND_NONE) bc_value_destroy(&bencode);
   pg_array_free(response);
   curl_easy_cleanup(curl);
-  if (err != TK_ERR_NONE) pg_string_free(url);
+  pg_string_free(url);
   return err;
 }
