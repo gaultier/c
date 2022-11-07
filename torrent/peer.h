@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -118,6 +119,13 @@ typedef struct {
   } v;
 } peer_message_t;
 
+typedef struct peer_read_buf_t {
+  struct peer_read_buf_t* next;
+  uint64_t len;
+  // Contiguous memory
+  char* data;
+} peer_read_buf_t;
+
 typedef struct {
   pg_allocator_t allocator;
   pg_logger_t* logger;
@@ -125,6 +133,7 @@ typedef struct {
   pg_pool_t write_ctx_pool;
   pg_pool_t read_buf_pool;
   pg_pool_t block_pool;
+  peer_read_buf_t *read_bufs_start, *read_bufs_end;
 
   download_t* download;
   bc_metainfo_t* metainfo;
@@ -138,7 +147,6 @@ typedef struct {
   uv_connect_t connect_req;
   uv_idle_t idle_handle;
 
-  pg_ring_t recv_data;
   char addr_s[INET_ADDRSTRLEN + /* :port */ 6];  // TODO: ipv6
 } peer_t;
 
@@ -165,7 +173,8 @@ void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   peer_t* peer = handle->data;
 
   assert(suggested_size <= peer->read_buf_pool.chunk_size);
-  buf->base = pg_pool_alloc(&peer->read_buf_pool);
+  peer_read_buf_t* read_buf = pg_pool_alloc(&peer->read_buf_pool);
+  buf->base = read_buf->data;
   buf->len = peer->read_buf_pool.chunk_size;
 }
 
@@ -300,6 +309,20 @@ bool peer_have_all_blocks_for_downloading_piece(peer_t* peer) {
   return pg_bitarray_count_set(&peer->blocks_for_piece_downloaded) ==
          download_block_count_per_piece(peer->download,
                                         peer->downloading_piece);
+}
+
+// TODO: change to `has_at_least(uint64_t len)`
+uint64_t peer_recv_data_len(peer_t* peer) {
+  if (peer->read_bufs_start == NULL) return 0;
+
+  assert(peer->read_bufs_end != NULL);
+  peer_read_buf_t* buf = peer->read_bufs_start;
+  uint64_t len = 0;
+  while (buf != NULL) {
+    len += buf->len;
+    buf = buf->next;
+  }
+  return len;
 }
 
 peer_error_t peer_check_handshaked(peer_t* peer) {
@@ -898,7 +921,17 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     assert(buf->base != NULL);
     assert(buf->len > 0);
 
-    pg_ring_push_backv(&peer->recv_data, (uint8_t*)buf->base, nread);
+    peer_read_buf_t* read_buf =
+        (peer_read_buf_t*)buf->base - sizeof(uint64_t) * 2;
+
+    if (peer->read_bufs_end == NULL) {
+      peer->read_bufs_end = read_buf;
+      peer->read_bufs_start = read_buf;
+    } else {
+      peer->read_bufs_end->next = read_buf;
+      peer->read_bufs_end = read_buf;
+      read_buf->next = NULL;
+    }
   }
   if (buf != NULL && buf->base != NULL)
     pg_pool_free(&peer->read_buf_pool, buf->base);
@@ -1143,18 +1176,22 @@ void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
        /* arbitrary, account for handshake, heartbeats and so on */ 20));
 
   pg_pool_init(&peer->read_buf_pool,
-               /* suggested size from libuv + embeded linked list */ 65536 +
-                   sizeof(void*),
+               /* suggested size from libuv + embedded linked list */ 65536 +
+                   sizeof(peer_read_buf_t),
                30);
 
   pg_pool_init(&peer->block_pool, PEER_BLOCK_LENGTH,
                PEER_MAX_IN_FLIGHT_REQUESTS);  // TODO: increase when starting to
                                               // handle Request msg
 
+  peer->read_bufs_start = NULL;
+  peer->read_bufs_end = NULL;
+
   peer->peer_pool = peer_pool;
   peer->logger = logger;
   peer->download = download;
   peer->metainfo = metainfo;
+
   pg_bitarray_init(peer->allocator, &peer->them_have_pieces,
                    peer->download->pieces_count - 1);
   pg_bitarray_init(peer->allocator, &peer->blocks_for_piece_downloaded,
@@ -1167,8 +1204,6 @@ void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
   peer->connect_req.data = peer;
   peer->connection.data = peer;
   peer->idle_handle.data = peer;
-  pg_ring_init(peer->allocator, &peer->recv_data,
-               /* semi-arbitrary */ 2 * UINT16_MAX);
 
   snprintf(peer->addr_s, sizeof(peer->addr_s), "%s:%hu",
            inet_ntoa(*(struct in_addr*)&address.ip), htons(address.port));
@@ -1205,7 +1240,6 @@ void peer_destroy(peer_t* peer) {
   pg_bitarray_destroy(&peer->blocks_for_piece_downloaded);
   pg_bitarray_destroy(&peer->blocks_for_piece_downloading);
   pg_bitarray_destroy(&peer->blocks_for_piece_to_download);
-  pg_ring_destroy(&peer->recv_data);
 
   pg_pool_destroy(&peer->write_ctx_pool);
   pg_pool_destroy(&peer->read_buf_pool);
