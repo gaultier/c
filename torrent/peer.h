@@ -174,7 +174,7 @@ void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
 
   assert(suggested_size <= peer->read_buf_pool.chunk_size - 2 * sizeof(void*));
   peer_read_buf_t* read_buf = pg_pool_alloc(&peer->read_buf_pool);
-  buf->base = read_buf->data;
+  buf->base = (char*)read_buf + 2 * sizeof(void*);
   buf->len = suggested_size;
 }
 
@@ -336,9 +336,10 @@ uint8_t peer_recv_data_pop(peer_t* peer) {
   const uint8_t res = peer->read_bufs_start->data[peer->read_buf_offset];
   peer->read_buf_offset += 1;
   if (peer->read_buf_offset == peer->read_bufs_start->len) {
+    peer_read_buf_t* buf_to_free = peer->read_bufs_start;
     peer->read_bufs_start = peer->read_bufs_start->next;
 
-    pg_pool_free(&peer->read_buf_pool, peer->read_bufs_start);
+    pg_pool_free(&peer->read_buf_pool, buf_to_free);
   }
 
   return res;
@@ -946,7 +947,8 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
     assert(buf->len > 0);
 
     peer_read_buf_t* read_buf =
-        (peer_read_buf_t*)buf->base - sizeof(uint64_t) * 2;
+        (peer_read_buf_t*)(buf->base - sizeof(uint64_t) * 2);
+    read_buf->len = nread;
 
     if (peer->read_bufs_end == NULL) {
       peer->read_bufs_end = read_buf;

@@ -1,4 +1,6 @@
 #include <_types/_uint8_t.h>
+#include <sys/_types/_uintptr_t.h>
+#include <unistd.h>
 
 #include "bencode.h"
 #include "peer.h"
@@ -8,9 +10,39 @@
 
 static uint8_t peer_id[20] = {0};
 static uint8_t info_hash[20] = {0};
+const uint8_t handshake_header[] = {
+    PEER_HANDSHAKE_HEADER_LENGTH,
+    'B',
+    'i',
+    't',
+    'T',
+    'o',
+    'r',
+    'r',
+    'e',
+    'n',
+    't',
+    ' ',
+    'p',
+    'r',
+    'o',
+    't',
+    'o',
+    'c',
+    'o',
+    'l',
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+};
 
 TEST test_read_bufs() {
-  pg_logger_t logger = {.level = PG_LOG_FATAL};
+  pg_logger_t logger = {.level = PG_LOG_DEBUG};
 
   pg_pool_t peer_pool = {0};
   pg_pool_init(&peer_pool, sizeof(peer_t), 1);
@@ -38,11 +70,29 @@ TEST test_read_bufs() {
   peer_alloc((uv_handle_t*)&peer->connection, 65536, &buf1);
   ASSERT(buf1.base != NULL);
 
-  uv_stream_t stream = {.data = peer};
-  peer_on_read(&stream, 5, &buf1);
+  peer_read_buf_t* read_buf = (peer_read_buf_t*)((uintptr_t*)buf1.base - 2);
+  ASSERT(read_buf != NULL);
 
-  ASSERT(peer->read_bufs_start != NULL);
+  memcpy(buf1.base, handshake_header, sizeof(handshake_header));
+  ASSERT_EQ_FMT((uint8_t)PEER_HANDSHAKE_HEADER_LENGTH, read_buf->data[0], "%d");
+
+  memcpy(buf1.base + sizeof(handshake_header), peer->download->info_hash,
+         sizeof(peer->download->info_hash));
+  memcpy(
+      buf1.base + sizeof(handshake_header) + sizeof(peer->download->info_hash),
+      peer->download->peer_id, sizeof(peer->download->peer_id));
+  buf1.len = PEER_HANDSHAKE_LENGTH;
+
+  uv_stream_t stream = {.data = peer};
+  peer_on_read(&stream, PEER_HANDSHAKE_LENGTH, &buf1);
+
+  ASSERT(peer->read_bufs_start == NULL);
   ASSERT(peer->read_bufs_start == peer->read_bufs_end);
+  ASSERT(peer->read_bufs_start->next == NULL);
+  ASSERT(peer->read_bufs_end->next == NULL);
+  ASSERT_EQ_FMT(5ULL, peer->read_bufs_start->len, "%llu");
+  ASSERT_STRN_EQ("Hello", peer->read_bufs_start->data,
+                 peer->read_bufs_start->len);
 
   PASS();
 }
