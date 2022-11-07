@@ -1,6 +1,7 @@
 #pragma once
 
 #include <_types/_uint64_t.h>
+#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -134,6 +135,7 @@ typedef struct {
   pg_pool_t read_buf_pool;
   pg_pool_t block_pool;
   peer_read_buf_t *read_bufs_start, *read_bufs_end;
+  uint64_t read_buf_offset;
 
   download_t* download;
   bc_metainfo_t* metainfo;
@@ -325,10 +327,26 @@ uint64_t peer_recv_data_len(peer_t* peer) {
   return len;
 }
 
+uint8_t peer_recv_data_pop(peer_t* peer) {
+  assert(peer->read_bufs_start != NULL);
+  assert(peer->read_bufs_end != NULL);
+  assert(peer->read_buf_offset < peer->read_bufs_start->len);
+
+  const uint8_t res = peer->read_bufs_start->data[peer->read_buf_offset];
+  peer->read_buf_offset += 1;
+  if (peer->read_buf_offset == peer->read_bufs_start->len) {
+    peer->read_bufs_start = peer->read_bufs_start->next;
+
+    pg_pool_free(&peer->read_buf_pool, peer->read_bufs_start);
+  }
+
+  return res;
+}
+
 peer_error_t peer_check_handshaked(peer_t* peer) {
   if (peer->handshaked) return (peer_error_t){0};
 
-  const uint64_t recv_data_len = pg_ring_len(&peer->recv_data);
+  const uint64_t recv_data_len = peer_recv_data_len(peer);
   if (recv_data_len < PEER_HANDSHAKE_LENGTH)
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
@@ -337,7 +355,7 @@ peer_error_t peer_check_handshaked(peer_t* peer) {
       "BitTorrent protocol";
   char handshake_got[PEER_HANDSHAKE_LENGTH] = "";
   for (uint64_t i = 0; i < PEER_HANDSHAKE_LENGTH; i++)
-    handshake_got[i] = pg_ring_pop_front(&peer->recv_data);
+    handshake_got[i] = peer_recv_data_pop(peer);
 
   if (memcmp(handshake_got, handshake_header_expected,
              sizeof(handshake_header_expected) - 1) != 0)
@@ -350,25 +368,41 @@ peer_error_t peer_check_handshaked(peer_t* peer) {
 
   pg_log_debug(peer->logger, "[%s] Handshaked", peer->addr_s);
 
-  assert(pg_ring_len(&peer->recv_data) + PEER_HANDSHAKE_LENGTH ==
-         recv_data_len);
-
   return (peer_error_t){0};
 }
 
-uint32_t peer_read_u32(pg_ring_t* ring) {
-  assert(pg_ring_len(ring) >= sizeof(uint32_t));
+uint8_t peer_peek_at(peer_t* peer, uint64_t index) {
+  if (index >= peer_recv_data_len(peer)) return 0;
+
+  assert(peer->read_bufs_end != NULL);
+  peer_read_buf_t* buf = peer->read_bufs_start;
+  uint64_t i = 0;
+  while (buf != NULL) {
+    if (i + buf->len < index) {
+      i += buf->len;
+      buf = buf->next;
+    } else {
+      return buf->data[buf->len - i];
+    }
+  }
+  __builtin_unreachable();
+}
+
+uint32_t peer_read_u32(peer_t* peer) {
+  assert(peer_recv_data_len(peer) >= sizeof(uint32_t));
+
   const uint8_t parts[] = {
-      pg_ring_pop_front(ring),
-      pg_ring_pop_front(ring),
-      pg_ring_pop_front(ring),
-      pg_ring_pop_front(ring),
+      peer_recv_data_pop(peer),
+      peer_recv_data_pop(peer),
+      peer_recv_data_pop(peer),
+      peer_recv_data_pop(peer),
   };
   return ntohl(*(uint32_t*)parts);
 }
 
-uint32_t peer_peek_read_u32(pg_ring_t* ring) {
-  assert(pg_ring_len(ring) >= sizeof(uint32_t));
+uint32_t peer_peek_read_u32(peer_t* peer) {
+  assert(peer_recv_data_len(peer) >= sizeof(uint32_t));
+
   const uint8_t parts[] = {
       pg_ring_get(ring, 0),
       pg_ring_get(ring, 1),
