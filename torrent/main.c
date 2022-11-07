@@ -43,6 +43,7 @@ int main(int argc, char* argv[]) {
                    bc_metainfo_error_to_string(err));
     }
   }
+  bc_value_destroy(&bencode);
 
   if (pg_span_starts_with(pg_span_make(metainfo.announce),
                           pg_span_make_c("http://"))) {
