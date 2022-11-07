@@ -1,7 +1,5 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
-#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -313,14 +311,13 @@ bool peer_have_all_blocks_for_downloading_piece(peer_t* peer) {
                                         peer->downloading_piece);
 }
 
-// TODO: change to `has_at_least(uint64_t len)`
-uint64_t peer_recv_data_len(peer_t* peer) {
+uint64_t peer_recv_data_has_at_least(peer_t* peer, uint64_t count) {
   if (peer->read_bufs_start == NULL) return 0;
 
   assert(peer->read_bufs_end != NULL);
   peer_read_buf_t* buf = peer->read_bufs_start;
   uint64_t len = 0;
-  while (buf != NULL) {
+  while (buf != NULL && len < count) {
     len += buf->len;
     buf = buf->next;
   }
@@ -343,11 +340,14 @@ uint8_t peer_recv_data_pop(peer_t* peer) {
   return res;
 }
 
+void peer_recv_data_consume(peer_t* peer, uint64_t n) {
+  for (uint64_t i = 0; i < n; i++) peer_recv_data_pop(peer);
+}
+
 peer_error_t peer_check_handshaked(peer_t* peer) {
   if (peer->handshaked) return (peer_error_t){0};
 
-  const uint64_t recv_data_len = peer_recv_data_len(peer);
-  if (recv_data_len < PEER_HANDSHAKE_LENGTH)
+  if (!peer_recv_data_has_at_least(peer, PEER_HANDSHAKE_LENGTH))
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
   const char handshake_header_expected[] =
@@ -371,43 +371,46 @@ peer_error_t peer_check_handshaked(peer_t* peer) {
   return (peer_error_t){0};
 }
 
-uint8_t peer_peek_at(peer_t* peer, uint64_t index) {
-  if (index >= peer_recv_data_len(peer)) return 0;
-
+uint8_t peer_peek_u32(peer_t* peer) {
   assert(peer->read_bufs_end != NULL);
+
   peer_read_buf_t* buf = peer->read_bufs_start;
-  uint64_t i = 0;
-  while (buf != NULL) {
-    if (i + buf->len < index) {
-      i += buf->len;
-      buf = buf->next;
-    } else {
-      return buf->data[buf->len - i];
-    }
+
+  if (peer->read_buf_offset + 4 <= buf->len) {
+    // Easy path
+    const uint8_t parts[] = {
+        buf->data[peer->read_buf_offset + 0],
+        buf->data[peer->read_buf_offset + 1],
+        buf->data[peer->read_buf_offset + 2],
+        buf->data[peer->read_buf_offset + 3],
+    };
+    return ntohl(*(uint32_t*)parts);
+  } else {
+    assert(0 && "unimplemented");
   }
-  __builtin_unreachable();
+}
+
+uint8_t peer_peek_u8(peer_t* peer, uint64_t index) {
+  assert(peer->read_bufs_end != NULL);
+
+  peer_read_buf_t* buf = peer->read_bufs_start;
+
+  if (peer->read_buf_offset + index <= buf->len) {
+    // Easy path
+    return buf->data[peer->read_buf_offset + index];
+  } else {
+    assert(0 && "unimplemented");
+  }
 }
 
 uint32_t peer_read_u32(peer_t* peer) {
-  assert(peer_recv_data_len(peer) >= sizeof(uint32_t));
+  assert(peer_recv_data_has_at_least(peer, sizeof(uint32_t)));
 
   const uint8_t parts[] = {
       peer_recv_data_pop(peer),
       peer_recv_data_pop(peer),
       peer_recv_data_pop(peer),
       peer_recv_data_pop(peer),
-  };
-  return ntohl(*(uint32_t*)parts);
-}
-
-uint32_t peer_peek_read_u32(peer_t* peer) {
-  assert(peer_recv_data_len(peer) >= sizeof(uint32_t));
-
-  const uint8_t parts[] = {
-      pg_ring_get(ring, 0),
-      pg_ring_get(ring, 1),
-      pg_ring_get(ring, 2),
-      pg_ring_get(ring, 3),
   };
   return ntohl(*(uint32_t*)parts);
 }
@@ -416,79 +419,64 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
   peer_error_t err = peer_check_handshaked(peer);
   if (err.kind > PEK_NEED_MORE) return err;
 
-  if (pg_ring_len(&peer->recv_data) <
-      sizeof(uint32_t))  // Check there is room for the announced_len
+  if (!peer_recv_data_has_at_least(
+          peer, sizeof(uint32_t)))  // Check there is room for the announced_len
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
-  const uint32_t announced_len = peer_peek_read_u32(&peer->recv_data);
+  const uint32_t announced_len = peer_peek_u32(peer);
   if (announced_len == 0) {
     // Heartbeat
     msg->kind = PMK_HEARTBEAT;
 
-    pg_ring_consume_front(&peer->recv_data, 4);  // Consume the announced_len
+    peer_recv_data_consume(peer, 4);  // Consume the announced_len
     return err;
   }
   if (announced_len > PEER_MAX_MESSAGE_LENGTH)
     return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
-  if (pg_ring_len(&peer->recv_data) <
-      4 + 1)  // Check there is room for the announced_len + tag
+  if (!peer_recv_data_has_at_least(
+          peer, 4 + 1))  // Check there is room for the announced_len + tag
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
-  const uint8_t tag = pg_ring_get(&peer->recv_data, 4);
-  pg_log_debug(
-      peer->logger,
-      "[%s] msg tag=%d announced_len=%u recv_data.len=%llu recv_data.cap=%llu "
-      "recv_data.space=%llu "
-      "recv_data[0..7]=%#x %#x %#x %#x %#x %#x %#x ",
-      peer->addr_s, tag, announced_len, pg_ring_len(&peer->recv_data),
-      pg_ring_cap(&peer->recv_data), pg_ring_space(&peer->recv_data),
-      pg_ring_len(&peer->recv_data) > 0 ? pg_ring_get(&peer->recv_data, 0) : 0,
-      pg_ring_len(&peer->recv_data) > 1 ? pg_ring_get(&peer->recv_data, 1) : 0,
-      pg_ring_len(&peer->recv_data) > 2 ? pg_ring_get(&peer->recv_data, 2) : 0,
-      pg_ring_len(&peer->recv_data) > 3 ? pg_ring_get(&peer->recv_data, 3) : 0,
-      pg_ring_len(&peer->recv_data) > 4 ? pg_ring_get(&peer->recv_data, 4) : 0,
-      pg_ring_len(&peer->recv_data) > 5 ? pg_ring_get(&peer->recv_data, 5) : 0,
-      pg_ring_len(&peer->recv_data) > 6 ? pg_ring_get(&peer->recv_data, 6) : 0);
+  const uint8_t tag = peer_peek_u8(peer, 4);
+  pg_log_debug(peer->logger, "[%s] msg tag=%d announced_len=%u", peer->addr_s,
+               tag, announced_len);
 
   switch (tag) {
     case PT_CHOKE:
       msg->kind = PMK_CHOKE;
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+
+      peer_recv_data_consume(peer, 4 + 1);  // Consume the announced_len + tag
+                                            //
       return (peer_error_t){0};
     case PT_UNCHOKE:
       msg->kind = PMK_UNCHOKE;
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+      peer_recv_data_consume(peer, 4 + 1);  // Consume the announced_len + tag
 
       return (peer_error_t){0};
     case PT_INTERESTED:
       msg->kind = PMK_INTERESTED;
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+      peer_recv_data_consume(peer, 4 + 1);  // Consume the announced_len + tag
 
       return (peer_error_t){0};
     case PT_UNINTERESTED:
       msg->kind = PMK_UNINTERESTED;
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+      peer_recv_data_consume(peer, 4 + 1);  // Consume the announced_len + tag
 
       return (peer_error_t){0};
     case PT_HAVE: {
       if (announced_len != 5)
         return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
-      if (pg_ring_len(&peer->recv_data) < announced_len + 4)
+      if (!peer_recv_data_has_at_least(peer, 4 + 1))
         return (peer_error_t){.kind = PEK_NEED_MORE};
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+      peer_recv_data_consume(peer, 4 + 1);  // Consume the announced_len + tag
 
-      const uint32_t have = peer_read_u32(&peer->recv_data);
+      const uint32_t have = peer_read_u32(peer);
       if (have > peer->download->pieces_count)
         return (peer_error_t){.kind = PEK_INVALID_HAVE};
 
@@ -502,7 +490,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       if (announced_len != expected_bitfield_len + /* tag */ 1)
         return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
-      if (pg_ring_len(&peer->recv_data) < announced_len + 4)
+      if (!peer_recv_data_has_at_least(peer, 4 + announced_len))
         return (peer_error_t){.kind = PEK_NEED_MORE};
 
       msg->kind = PMK_BITFIELD;
@@ -510,11 +498,10 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       pg_array_init_reserve(msg->v.bitfield.bitfield,
                             peer->download->pieces_count - 1, peer->allocator);
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+      peer_recv_data_consume(peer, 4 + 1);  // Consume the announced_len + tag
 
       for (uint64_t i = 0; i < announced_len - 1; i++) {
-        const uint8_t byte = pg_ring_pop_front(&peer->recv_data);
+        const uint8_t byte = peer_recv_data_pop(peer);
         pg_array_append(msg->v.bitfield.bitfield, __builtin_bitreverse8(byte));
       }
       pg_log_debug(peer->logger, "[%s] bitfield: last=%#x", peer->addr_s,
@@ -525,17 +512,16 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       if (announced_len != 1 + 3 * 4)
         return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
-      if (pg_ring_len(&peer->recv_data) < announced_len + 4)
+      if (!peer_recv_data_has_at_least(peer, 4 + announced_len))
         return (peer_error_t){.kind = PEK_NEED_MORE};
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+      peer_recv_data_consume(peer, 4 + 1);  // Consume the announced_len + tag
 
       msg->kind = PMK_REQUEST;
       msg->v.request = (peer_message_request_t){
-          .index = peer_read_u32(&peer->recv_data),
-          .begin = peer_read_u32(&peer->recv_data),
-          .length = peer_read_u32(&peer->recv_data),
+          .index = peer_read_u32(peer),
+          .begin = peer_read_u32(peer),
+          .length = peer_read_u32(peer),
       };
 
       return (peer_error_t){0};
@@ -544,16 +530,15 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       if (announced_len < 1 + 2 * 4 + /* Require at least 1 byte of data */ 1)
         return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
-      if (pg_ring_len(&peer->recv_data) < announced_len + 4)
+      if (!peer_recv_data_has_at_least(peer, 4 + announced_len))
         return (peer_error_t){.kind = PEK_NEED_MORE};
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+      peer_recv_data_consume(peer, 4 + 1);  // Consume the announced_len + tag
 
       msg->kind = PMK_PIECE;
       msg->v.piece = (peer_message_piece_t){
-          .index = peer_read_u32(&peer->recv_data),
-          .begin = peer_read_u32(&peer->recv_data),
+          .index = peer_read_u32(peer),
+          .begin = peer_read_u32(peer),
       };
       if (msg->v.piece.index >= peer->download->pieces_count ||
           msg->v.piece.index != peer->downloading_piece ||
@@ -568,7 +553,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
 
       msg->v.piece.data = pg_pool_alloc(&peer->block_pool);
       for (uint64_t i = 0; i < data_len; i++) {
-        msg->v.piece.data[i] = pg_ring_pop_front(&peer->recv_data);
+        msg->v.piece.data[i] = peer_recv_data_pop(peer);
       }
       pg_log_debug(peer->logger, "[%s] piece: begin=%u index=%u len=%llu",
                    peer->addr_s, msg->v.piece.begin, msg->v.piece.index,
@@ -580,16 +565,17 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       if (announced_len != 1 + 3 * 4)
         return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
-      if (pg_ring_len(&peer->recv_data) < announced_len + 4)
+      if (!peer_recv_data_has_at_least(
+              peer, 4 + announced_len))  // Check there is room for the
+                                         // announced_len + tag
         return (peer_error_t){.kind = PEK_NEED_MORE};
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+      peer_recv_data_consume(peer, 4 + 1);  // Consume the announced_len + tag
       msg->kind = PMK_CANCEL;
       msg->v.request = (peer_message_request_t){
-          .index = peer_read_u32(&peer->recv_data),
-          .begin = peer_read_u32(&peer->recv_data),
-          .length = peer_read_u32(&peer->recv_data),
+          .index = peer_read_u32(peer),
+          .begin = peer_read_u32(peer),
+          .length = peer_read_u32(peer),
       };
       return (peer_error_t){0};
     }
