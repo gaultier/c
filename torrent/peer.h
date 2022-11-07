@@ -338,6 +338,7 @@ uint8_t peer_recv_data_pop(peer_t* peer) {
   if (peer->read_buf_offset == peer->read_bufs_start->len) {
     peer_read_buf_t* buf_to_free = peer->read_bufs_start;
     peer->read_bufs_start = peer->read_bufs_start->next;
+    if (peer->read_bufs_start == NULL) peer->read_bufs_end = NULL;
 
     pg_pool_free(&peer->read_buf_pool, buf_to_free);
   }

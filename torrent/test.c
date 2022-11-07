@@ -87,12 +87,7 @@ TEST test_read_bufs() {
   peer_on_read(&stream, PEER_HANDSHAKE_LENGTH, &buf1);
 
   ASSERT(peer->read_bufs_start == NULL);
-  ASSERT(peer->read_bufs_start == peer->read_bufs_end);
-  ASSERT(peer->read_bufs_start->next == NULL);
-  ASSERT(peer->read_bufs_end->next == NULL);
-  ASSERT_EQ_FMT(5ULL, peer->read_bufs_start->len, "%llu");
-  ASSERT_STRN_EQ("Hello", peer->read_bufs_start->data,
-                 peer->read_bufs_start->len);
+  ASSERT(peer->read_bufs_end == NULL);
 
   PASS();
 }
