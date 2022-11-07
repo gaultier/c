@@ -116,12 +116,16 @@ int main(int argc, char* argv[]) {
   pg_pool_init(&buf_pool, /* suggested size from libuv */ 65536,
                pg_array_count(peer_addresses) * /* arbitrary */ 30);
 
+  pg_pool_t block_pool = {0};
+  pg_pool_init(&block_pool, PEER_BLOCK_LENGTH,
+               pg_array_count(peer_addresses) * PEER_MAX_IN_FLIGHT_REQUESTS);
+
   for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
     const tracker_peer_address_t addr = peer_addresses[i];
     peer_t* peer = pg_pool_alloc(&peer_pool);
     assert(peer != NULL);
-    peer_init(peer, &logger, &peer_pool, &write_ctx_pool, &buf_pool, &download,
-              &metainfo, addr);
+    peer_init(peer, &logger, &peer_pool, &write_ctx_pool, &buf_pool,
+              &block_pool, &download, &metainfo, addr);
     peer_connect(peer, addr);
   }
   uv_run(uv_default_loop(), 0);

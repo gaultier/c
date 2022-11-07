@@ -118,24 +118,13 @@ typedef struct {
   } v;
 } peer_message_t;
 
-void peer_message_destroy(peer_message_t* msg) {
-  switch (msg->kind) {
-    case PMK_BITFIELD:
-      pg_array_free(msg->v.bitfield.bitfield);
-      return;
-    case PMK_PIECE:
-      pg_array_free(msg->v.piece.data);
-
-    default:;  // no-op
-  }
-}
-
 typedef struct {
   pg_allocator_t allocator;
   pg_logger_t* logger;
   pg_pool_t* write_ctx_pool;
   pg_pool_t* peer_pool;
   pg_pool_t* buf_pool;
+  pg_pool_t* block_pool;
 
   download_t* download;
   bc_metainfo_t* metainfo;
@@ -159,6 +148,17 @@ typedef struct {
   uv_write_t req;
 } peer_write_ctx_t;
 
+void peer_message_destroy(peer_t* peer, peer_message_t* msg) {
+  switch (msg->kind) {
+    case PMK_BITFIELD:
+      pg_array_free(msg->v.bitfield.bitfield);
+      return;
+    case PMK_PIECE:
+      pg_pool_free(peer->block_pool, msg->v.piece.data);
+
+    default:;  // no-op
+  }
+}
 void peer_close(peer_t* peer);
 
 // TODO: use pool allocator?
@@ -512,16 +512,13 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
                                            msg->v.piece.index, block_for_piece))
         return (peer_error_t){.kind = PEK_INVALID_PIECE};
 
-      pg_array_init_reserve(msg->v.piece.data, data_len, peer->allocator);
-      pg_array_resize(msg->v.piece.data, data_len);
+      msg->v.piece.data = pg_pool_alloc(peer->block_pool);
       for (uint64_t i = 0; i < data_len; i++) {
         msg->v.piece.data[i] = pg_ring_pop_front(&peer->recv_data);
       }
       pg_log_debug(peer->logger, "[%s] piece: begin=%u index=%u len=%llu",
                    peer->addr_s, msg->v.piece.begin, msg->v.piece.index,
                    pg_array_count(msg->v.piece.data));
-
-      assert(pg_array_count(msg->v.piece.data) <= PEER_BLOCK_LENGTH);
 
       return (peer_error_t){0};
     }
@@ -925,7 +922,7 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 
     peer_action_t action = PEER_ACTION_NONE;
     err = peer_message_handle(peer, &msg, &action);
-    peer_message_destroy(&msg);
+    peer_message_destroy(peer, &msg);
 
     if (err.kind != PEK_NONE) {
       pg_log_error(peer->logger, "[%s] peer_message_handle failed: %d\n",
@@ -970,7 +967,7 @@ peer_error_t peer_send_buf(peer_t* peer, uv_buf_t buf) {
                       peer_on_write)) != 0) {
     pg_log_error(peer->logger, "[%s] uv_write failed: %d", peer->addr_s, ret);
 
-    peer->allocator.free(ctx);
+    pg_pool_free(peer->write_ctx_pool, ctx);
     peer->allocator.free(buf.base);
 
     return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
@@ -1132,12 +1129,13 @@ void peer_on_connect(uv_connect_t* handle, int status) {
 
 void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
                pg_pool_t* write_ctx_pool, pg_pool_t* buf_pool,
-               download_t* download, bc_metainfo_t* metainfo,
-               tracker_peer_address_t address) {
+               pg_pool_t* block_pool, download_t* download,
+               bc_metainfo_t* metainfo, tracker_peer_address_t address) {
   peer->allocator = pg_heap_allocator();  // FIXME
   peer->write_ctx_pool = write_ctx_pool;
   peer->peer_pool = peer_pool;
   peer->buf_pool = buf_pool;
+  peer->block_pool = block_pool;
   peer->logger = logger;
   peer->download = download;
   peer->metainfo = metainfo;
