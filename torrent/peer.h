@@ -311,8 +311,8 @@ bool peer_have_all_blocks_for_downloading_piece(peer_t* peer) {
                                         peer->downloading_piece);
 }
 
-uint64_t peer_recv_data_has_at_least(peer_t* peer, uint64_t count) {
-  if (peer->read_bufs_start == NULL) return 0;
+bool peer_recv_data_has_at_least(peer_t* peer, uint64_t count) {
+  if (peer->read_bufs_start == NULL) return false;
 
   assert(peer->read_bufs_end != NULL);
   peer_read_buf_t* buf = peer->read_bufs_start;
@@ -321,7 +321,7 @@ uint64_t peer_recv_data_has_at_least(peer_t* peer, uint64_t count) {
     len += buf->len;
     buf = buf->next;
   }
-  return len;
+  return len >= count;
 }
 
 uint8_t peer_recv_data_pop(peer_t* peer) {
@@ -341,6 +341,7 @@ uint8_t peer_recv_data_pop(peer_t* peer) {
     if (peer->read_bufs_start == NULL) peer->read_bufs_end = NULL;
 
     pg_pool_free(&peer->read_buf_pool, buf_to_free);
+    peer->read_buf_offset = 0;
   }
 
   return res;
@@ -377,6 +378,25 @@ peer_error_t peer_check_handshaked(peer_t* peer) {
   return (peer_error_t){0};
 }
 
+uint8_t peer_peek_u8(peer_t* peer, uint64_t index) {
+  assert(peer->read_bufs_end != NULL);
+
+  peer_read_buf_t* buf = peer->read_bufs_start;
+
+  if (peer->read_buf_offset + index < buf->len) {
+    // Easy path
+    return buf->data[peer->read_buf_offset + index];
+  } else {
+    peer_read_buf_t* buf = peer->read_bufs_start;
+    uint64_t offset = peer->read_buf_offset;
+    while (buf != NULL && offset < index) {
+      offset += buf->len;
+      buf = buf->next;
+    }
+    return buf->data[offset % buf->len];
+  }
+}
+
 uint8_t peer_peek_u32(peer_t* peer) {
   assert(peer->read_bufs_end != NULL);
 
@@ -392,20 +412,13 @@ uint8_t peer_peek_u32(peer_t* peer) {
     };
     return ntohl(*(uint32_t*)parts);
   } else {
-    assert(0 && "unimplemented");
-  }
-}
-
-uint8_t peer_peek_u8(peer_t* peer, uint64_t index) {
-  assert(peer->read_bufs_end != NULL);
-
-  peer_read_buf_t* buf = peer->read_bufs_start;
-
-  if (peer->read_buf_offset + index <= buf->len) {
-    // Easy path
-    return buf->data[peer->read_buf_offset + index];
-  } else {
-    assert(0 && "unimplemented");
+    const uint8_t parts[] = {
+        peer_peek_u8(peer, 0),
+        peer_peek_u8(peer, 1),
+        peer_peek_u8(peer, 2),
+        peer_peek_u8(peer, 3),
+    };
+    return ntohl(*(uint32_t*)parts);
   }
 }
 
