@@ -151,6 +151,12 @@ typedef struct {
   char addr_s[INET_ADDRSTRLEN + /* :port */ 6];  // TODO: ipv6
 } peer_t;
 
+typedef struct {
+  peer_t* peer;
+  char* data;
+  uv_write_t req;
+} peer_write_ctx_t;
+
 void peer_close(peer_t* peer);
 
 // TODO: use pool allocator?
@@ -927,13 +933,14 @@ void peer_on_read(uv_stream_t* stream, ssize_t nread, const uv_buf_t* buf) {
 }
 
 void peer_on_write(uv_write_t* req, int status) {
-  peer_t* peer = req->data;
+  peer_write_ctx_t* ctx = req->data;
+  peer_t* peer = ctx->peer;
 
   pg_log_debug(peer->logger, "[%s] peer_on_write status=%d buf=%p",
                peer->addr_s, status, req->bufs);
 
-  peer->allocator.free(req);
-  // TODO: free buf->data
+  peer->allocator.free(ctx->data);
+  peer->allocator.free(ctx);
 
   if (status != 0) {
     pg_log_error(peer->logger, "[%s] on_write failed: %d %s", peer->addr_s,
@@ -943,15 +950,18 @@ void peer_on_write(uv_write_t* req, int status) {
 }
 
 peer_error_t peer_send_buf(peer_t* peer, uv_buf_t buf) {
-  uv_write_t* write_req = peer->allocator.realloc(sizeof(uv_write_t), NULL, 0);
-  write_req->data = peer;
+  peer_write_ctx_t* ctx =
+      peer->allocator.realloc(sizeof(peer_write_ctx_t), NULL, 0);
+  ctx->req.data = ctx;
+  ctx->data = buf.base;
+  ctx->peer = peer;
 
   int ret = 0;
-  if ((ret = uv_write(write_req, (uv_stream_t*)&peer->connection, &buf, 1,
+  if ((ret = uv_write(&ctx->req, (uv_stream_t*)&peer->connection, &buf, 1,
                       peer_on_write)) != 0) {
     pg_log_error(peer->logger, "[%s] uv_write failed: %d", peer->addr_s, ret);
 
-    peer->allocator.free(write_req);
+    peer->allocator.free(ctx);
     peer->allocator.free(buf.base);
 
     return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
