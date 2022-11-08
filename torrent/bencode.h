@@ -215,6 +215,7 @@ void bc_dump_value_indent(FILE* f, uint64_t indent) {
 
 uint64_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
                        uint64_t index) {
+  if (index >= pg_array_count(parser->kinds)) return 0;
   assert(index < pg_array_count(parser->kinds));
 
   const bc_kind_t kind = parser->kinds[index];
@@ -254,12 +255,29 @@ uint64_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
     }
     case BC_KIND_DICTIONARY: {
       fprintf(f, "{\n");
-      uint64_t j = 0;
-      for (uint64_t i = 0; i < len; i++) {
+      uint64_t j = index + 1;
+      for (uint64_t i = 0; i < len; i += 2) {
         bc_dump_value_indent(f, indent + 2);
-        j += bc_dump_value(parser, f, indent + 2, index + 1 + j);
+
+        if (j >= pg_array_count(parser->kinds)) {
+          fprintf(stderr, "\n[D001] index=%llu i=%llu j=%llu\n", index, i, j);
+          return 0;
+        }
+
+        j += bc_dump_value(parser, f, indent + 2, j);
+
+        if (j >= pg_array_count(parser->kinds)) {
+          fprintf(stderr, "\n[D002] index=%llu i=%llu j=%llu\n", index, i, j);
+          return 0;
+        }
+
         fprintf(f, ": ");
-        j += bc_dump_value(parser, f, indent + 2, index + 1 + j);
+        j += bc_dump_value(parser, f, indent + 2, j);
+        if (j >= pg_array_count(parser->kinds)) {
+          fprintf(stderr, "\n[D003] index=%llu i=%llu j=%llu count=%llu\n",
+                  index, i, j, pg_array_count(parser->kinds));
+          return 0;
+        }
         // if (*index < len - 1) fprintf(f, ",");
         fprintf(f, "\n");
       }
