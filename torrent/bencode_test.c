@@ -359,6 +359,9 @@ TEST test_bc_parse_value_info_span() {
   ASSERT_EQ_FMT(7ULL, pg_array_count(parser.spans), "%llu");
   ASSERT_EQ_FMT(7ULL, pg_array_count(parser.lengths), "%llu");
   ASSERT_EQ_FMT(7ULL, pg_array_count(parser.kinds), "%llu");
+
+  ASSERT_EQ_FMT(4ULL, parser.lengths[0], "%llu");
+  ASSERT_ENUM_EQ(BC_KIND_DICTIONARY, parser.kinds[0], bc_value_kind_to_string);
   PASS();
 }
 

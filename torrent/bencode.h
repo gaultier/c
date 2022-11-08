@@ -259,25 +259,10 @@ uint64_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
       for (uint64_t i = 0; i < len; i += 2) {
         bc_dump_value_indent(f, indent + 2);
 
-        if (j >= pg_array_count(parser->kinds)) {
-          fprintf(stderr, "\n[D001] index=%llu i=%llu j=%llu\n", index, i, j);
-          return 0;
-        }
-
         j += bc_dump_value(parser, f, indent + 2, j);
-
-        if (j >= pg_array_count(parser->kinds)) {
-          fprintf(stderr, "\n[D002] index=%llu i=%llu j=%llu\n", index, i, j);
-          return 0;
-        }
 
         fprintf(f, ": ");
         j += bc_dump_value(parser, f, indent + 2, j);
-        if (j >= pg_array_count(parser->kinds)) {
-          fprintf(stderr, "\n[D003] index=%llu i=%llu j=%llu count=%llu\n",
-                  index, i, j, pg_array_count(parser->kinds));
-          return 0;
-        }
         // if (*index < len - 1) fprintf(f, ",");
         fprintf(f, "\n");
       }
