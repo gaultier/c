@@ -65,7 +65,6 @@ int main(int argc, char* argv[]) {
   };
   assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len,
                       tracker_query.info_hash) == 0);
-  pg_array_free(torrent_file_data);
 
   pg_array_t(tracker_peer_address_t) peer_addresses = {0};
   pg_array_init_reserve(peer_addresses, 15, pg_heap_allocator());

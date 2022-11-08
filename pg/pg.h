@@ -450,12 +450,20 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
 }
 // ------------------ Span
 
-void pg_span_consume(pg_span_t *span, uint64_t n) {
+void pg_span_consume_left(pg_span_t *span, uint64_t n) {
   assert(span != NULL);
   assert(span->data != NULL);
   assert(span->len >= n);
 
   span->data += n;
+  span->len -= n;
+}
+
+void pg_span_consume_right(pg_span_t *span, uint64_t n) {
+  assert(span != NULL);
+  assert(span->data != NULL);
+  assert(span->len >= n);
+
   span->len -= n;
 }
 
