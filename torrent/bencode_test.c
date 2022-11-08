@@ -247,17 +247,17 @@ TEST test_bc_parse_array() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("li3e2:abe");
+    pg_span_t span = pg_span_make_c("li3e2:abli9eee");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
 
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
-    ASSERT_EQ_FMT(3ULL, pg_array_count(parser.spans), "%llu");
-    ASSERT_EQ_FMT(3ULL, pg_array_count(parser.lengths), "%llu");
-    ASSERT_EQ_FMT(3ULL, pg_array_count(parser.kinds), "%llu");
+    ASSERT_EQ_FMT(5ULL, pg_array_count(parser.spans), "%llu");
+    ASSERT_EQ_FMT(5ULL, pg_array_count(parser.lengths), "%llu");
+    ASSERT_EQ_FMT(5ULL, pg_array_count(parser.kinds), "%llu");
 
-    ASSERT_EQ_FMT(2ULL, parser.lengths[0], "%llu");
+    ASSERT_EQ_FMT(3ULL, parser.lengths[0], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_ARRAY, parser.kinds[0], bc_value_kind_to_string);
 
     ASSERT_EQ_FMT(1ULL, parser.lengths[1], "%llu");
@@ -265,6 +265,12 @@ TEST test_bc_parse_array() {
 
     ASSERT_EQ_FMT(2ULL, parser.lengths[2], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_STRING, parser.kinds[2], bc_value_kind_to_string);
+
+    ASSERT_EQ_FMT(1ULL, parser.lengths[3], "%llu");
+    ASSERT_ENUM_EQ(BC_KIND_ARRAY, parser.kinds[3], bc_value_kind_to_string);
+
+    ASSERT_EQ_FMT(1ULL, parser.lengths[4], "%llu");
+    ASSERT_ENUM_EQ(BC_KIND_INTEGER, parser.kinds[4], bc_value_kind_to_string);
 
     bc_parser_destroy(&parser);
   }

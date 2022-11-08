@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
 #include <stdio.h>
 #include <sys/types.h>
 
@@ -32,9 +31,11 @@ const char* bc_value_kind_to_string(int n) {
 }
 
 typedef struct {
+  // TODO: use uint32_t?
   pg_array_t(pg_span_t) spans;
   pg_array_t(uint64_t) lengths;
   pg_array_t(bc_kind_t) kinds;
+  uint64_t parent;
 } bc_parser_t;
 
 void bc_parser_init(pg_allocator_t allocator, bc_parser_t* parser,
@@ -83,6 +84,8 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
 
   switch (c) {
     case 'i': {
+      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
+
       pg_span_t left = {0}, right = {0};
       const bool found = pg_span_split(*input, 'e', &left, &right);
       if (!found) return BC_PE_INVALID_NUMBER;
@@ -123,6 +126,8 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
     case '7':
     case '8':
     case '9': {
+      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
+
       pg_span_t left = {0}, right = {0};
       const bool found = pg_span_split(*input, ':', &left, &right);
       if (!found) return BC_PE_INVALID_STRING;
@@ -150,13 +155,16 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
       break;
     }
     case 'l': {
+      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
+
       pg_span_consume_left(input, 1);  // Skip 'l'
 
       pg_array_append(parser->spans, (pg_span_t){0});  // Does not matter
       pg_array_append(parser->lengths, 0);  // Will be patched at the end
       pg_array_append(parser->kinds, BC_KIND_ARRAY);
 
-      const uint64_t prev_token_count = pg_array_count(parser->spans);
+      const uint64_t parent = parser->parent;
+      parser->parent = pg_array_count(parser->kinds) - 1;
 
       while (pg_peek(*input) != 'e' && pg_peek(*input) != 0) {
         bc_parse_error_t err = bc_parse(parser, input);
@@ -165,11 +173,12 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
       if (pg_peek(*input) != 'e') return BC_PE_UNEXPECTED_CHARACTER;
       pg_span_consume_left(input, 1);  // Skip 'e'
 
-      parser->lengths[prev_token_count - 1] =
-          pg_array_count(parser->spans) - prev_token_count;
+      parser->parent = parent;
       break;
     }
     case 'd': {
+      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
+
       const pg_span_t original = *input;
 
       pg_span_consume_left(input, 1);  // Skip 'l'
@@ -178,6 +187,10 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
       pg_array_append(parser->lengths, 0);       // Will be patched at the end
       pg_array_append(parser->kinds, BC_KIND_DICTIONARY);
 
+      const uint64_t parent = parser->parent;
+      parser->parent = pg_array_count(parser->kinds) - 1;
+      const uint64_t me = parser->parent;
+
       const uint64_t prev_token_count = pg_array_count(parser->spans);
 
       while (pg_peek(*input) != 'e' && pg_peek(*input) != 0) {
@@ -187,8 +200,8 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
       if (pg_peek(*input) != 'e') return BC_PE_UNEXPECTED_CHARACTER;
       pg_span_consume_left(input, 1);  // Skip 'e'
 
-      const uint64_t kv_count =
-          pg_array_count(parser->spans) - prev_token_count;
+      assert(me < pg_array_count(parser->kinds));
+      const uint64_t kv_count = parser->lengths[me];
       if (kv_count % 2 != 0) return BC_PE_INVALID_DICT;
 
       for (uint64_t i = prev_token_count; i < kv_count; i += 2) {
@@ -196,7 +209,8 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
       }
 
       parser->spans[prev_token_count - 1].len -= input->len;
-      parser->lengths[prev_token_count - 1] = kv_count;
+
+      parser->parent = parent;
 
       break;
     }
