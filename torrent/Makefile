@@ -5,7 +5,7 @@ torrent_test: test.c bencode.h peer.h sha1.h tracker.h
 	$(CC) -Wall -Wextra -g $(CFLAGS) $< -o $@ $(LDFLAGS) -luv -lcurl
 
 bencode_dump: bencode_dump.c
-	$(CC) -Wall -Wextra -g $(CFLAGS) $^ -o $@ $(LDFLAGS) -lcurl
+	$(CC) -Wall -Wextra -g $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 torrent: main.c bencode.h peer.h sha1.h tracker.h
 	$(CC) -Wall -Wextra -g $(CFLAGS) $< -o $@ $(LDFLAGS) -lcurl -luv
