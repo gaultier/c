@@ -349,62 +349,18 @@ TEST test_bc_parse_dictionary() {
   PASS();
 }
 
-#if 0
-TEST test_bc_dictionary_words() {
-  // Stress-test the hashtable
-
-  pg_array_t(uint8_t) buf = {0};
-  int64_t ret = 0;
-  if ((ret = pg_read_file(pg_heap_allocator(), "/usr/share/dict/words",
-                          &buf)) != 0) {
-    fprintf(stderr, "Failed to read file: %s\n", strerror(ret));
-    FAIL();
-  }
-
-  pg_span_t span = {.data = (char*)buf, .len = pg_array_count(buf)};
-  bc_dictionary_t dict = {0};
-  pg_hashtable_init(&dict, 10, pg_heap_allocator());
-
-  for (uint64_t i = 0; i < pg_array_count(buf); i++) {
-    pg_span_t left = {0}, right = {0};
-
-    if (!pg_span_split(span, '\n', &left, &right)) break;
-    span = right;
-
-    pg_string_t key =
-        pg_string_make_length(pg_heap_allocator(), left.data, left.len);
-    bc_value_t* val = pg_heap_allocator().realloc(sizeof(bc_value_t), NULL, 0);
-    val->kind = BC_KIND_INTEGER;
-    val->v.integer = i;
-
-    pg_hashtable_upsert(&dict, key, val);
-  }
-
-  ASSERT_EQ_FMT(235886ULL, pg_hashtable_count(&dict), "%llu");
-  ASSERT_LTE(235886ULL, pg_array_capacity(dict.keys));
-
-  pg_hashtable_destroy(&dict);
-  PASS();
-}
-
 TEST test_bc_parse_value_info_span() {
-  {
-    bc_value_t value = {0};
-    char* s = "d8:announce3:foo4:infod3:foo4:trueee";
-    pg_span_t span = {.data = s, .len = strlen(s)};
-    pg_span_t info_span = {0};
+  pg_span_t span = pg_span_make_c("d8:announce3:foo4:infod3:foo4:trueee");
+  bc_parser_t parser = {0};
+  bc_parser_init(pg_heap_allocator(), &parser, 1);
+  bc_parse_error_t err = bc_parse(&parser, &span);
 
-    ASSERT_ENUM_EQ(
-        BC_PE_NONE,
-        bc_parse_value(pg_heap_allocator(), &span, &value, &info_span),
-        bc_parse_error_to_string);
-
-    ASSERT_EQ_FMT((uint64_t)strlen("d3:foo4:truee"), info_span.len, "%llu");
-    ASSERT_STRN_EQ("d3:foo4:truee", info_span.data, info_span.len);
-  }
+  ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
+  ASSERT_EQ_FMT(7ULL, pg_array_count(parser.tokens), "%llu");
+  ASSERT_EQ_FMT(7ULL, pg_array_count(parser.lengths), "%llu");
+  ASSERT_EQ_FMT(7ULL, pg_array_count(parser.kinds), "%llu");
   PASS();
 }
-#endif
 
 GREATEST_MAIN_DEFS();
 
@@ -415,8 +371,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_bc_parse_string);
   RUN_TEST(test_bc_parse_array);
   RUN_TEST(test_bc_parse_dictionary);
-  //  RUN_TEST(test_bc_dictionary_words);
-  //  RUN_TEST(test_bc_parse_value_info_span);
+  RUN_TEST(test_bc_parse_value_info_span);
 
   GREATEST_MAIN_END(); /* display results */
 }
