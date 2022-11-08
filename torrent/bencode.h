@@ -170,10 +170,12 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
       break;
     }
     case 'd': {
+      const pg_span_t original = *input;
+
       pg_span_consume_left(input, 1);  // Skip 'l'
 
-      pg_array_append(parser->tokens, (pg_span_t){0});  // FIXME
-      pg_array_append(parser->lengths, 0);  // Will be patched at the end
+      pg_array_append(parser->tokens, original);  // Will be patched at the end
+      pg_array_append(parser->lengths, 0);        // Will be patched at the end
       pg_array_append(parser->kinds, BC_KIND_DICTIONARY);
 
       const uint64_t prev_token_count = pg_array_count(parser->tokens);
@@ -193,6 +195,7 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
         if (parser->kinds[i] != BC_KIND_STRING) return BC_PE_INVALID_DICT;
       }
 
+      parser->tokens[prev_token_count - 1].len -= input->len;
       parser->lengths[prev_token_count - 1] = kv_count;
 
       break;
