@@ -50,13 +50,6 @@ void bc_parser_destroy(bc_parser_t* parser) {
   pg_array_free(parser->kinds);
 }
 
-char bc_peek(pg_span_t span) {
-  if (span.len > 0)
-    return span.data[0];
-  else
-    return 0;
-}
-
 typedef enum {
   BC_PE_NONE,
   BC_PE_EOF,
@@ -96,83 +89,105 @@ bc_parse_error_t bc_consume_char(pg_span_t* span, char c) {
   return BC_PE_NONE;
 }
 
-bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t input) {
-  while (true) {
-    const char c = bc_peek(input);
+bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
+  assert(pg_array_count(parser->tokens) == pg_array_count(parser->lengths));
+  assert(pg_array_count(parser->lengths) == pg_array_count(parser->kinds));
 
-    switch (c) {
-      case 'i': {
-        pg_span_t left = {0}, right = {0};
-        const bool found = pg_span_split(input, 'e', &left, &right);
-        if (!found) return BC_PE_INVALID_NUMBER;
+  const char c = pg_peek(*input);
 
-        assert(left.len >= 1);
+  switch (c) {
+    case 'i': {
+      pg_span_t left = {0}, right = {0};
+      const bool found = pg_span_split(*input, 'e', &left, &right);
+      if (!found) return BC_PE_INVALID_NUMBER;
 
-        if (left.len == 1) return BC_PE_INVALID_NUMBER;  // `ie`
-        pg_span_consume_left(&left, 1);                  // Skip 'i'
+      assert(left.len >= 1);
 
-        assert(left.len > 0);
+      if (left.len == 1) return BC_PE_INVALID_NUMBER;  // `ie`
+      pg_span_consume_left(&left, 1);                  // Skip 'i'
 
-        if (left.data[0] == '-' && left.len == 1)
-          return BC_PE_INVALID_NUMBER;  // `i-e`
+      assert(left.len > 0);
 
-        if (!(pg_char_is_digit(left.data[0]) ||
-              left.data[0] == '-'))  // `iae` or `i-e`
-          return BC_PE_INVALID_NUMBER;
+      if (left.data[0] == '-' && left.len == 1)
+        return BC_PE_INVALID_NUMBER;  // `i-e`
 
-        pg_span_consume_left(&right, 1);  // Skip 'e'
+      if (!(pg_char_is_digit(left.data[0]) ||
+            left.data[0] == '-'))  // `iae` or `i-e`
+        return BC_PE_INVALID_NUMBER;
 
-        for (uint64_t i = 1; i < left.len; i++) {
-          if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_NUMBER;
-        }
+      pg_span_consume_left(&right, 1);  // Skip 'e'
 
-        pg_array_append(parser->tokens, left);
-        pg_array_append(parser->lengths, left.len);
-        pg_array_append(parser->kinds, BC_KIND_INTEGER);
-
-        input = right;
-        break;
+      for (uint64_t i = 1; i < left.len; i++) {
+        if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_NUMBER;
       }
-      case '1':
-      case '2':
-      case '3':
-      case '4':
-      case '5':
-      case '6':
-      case '7':
-      case '8':
-      case '9': {
-        pg_span_t left = {0}, right = {0};
-        const bool found = pg_span_split(input, ':', &left, &right);
-        if (!found) return BC_PE_INVALID_STRING;
 
-        assert(left.len >= 1);
+      pg_array_append(parser->tokens, left);
+      pg_array_append(parser->lengths, left.len);
+      pg_array_append(parser->kinds, BC_KIND_INTEGER);
 
-        pg_span_consume_left(&right, 1);  // Skip ':'
-
-        uint64_t len = 0;
-        for (uint64_t i = 0; i < left.len; i++) {
-          if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_STRING;
-          len *= 10;
-          len += left.data[0] - '0';
-        }
-        assert(len > 0);
-        if (right.len < len) return BC_PE_INVALID_STRING;  // `5:a`
-
-        pg_span_t string = {.data = right.data, .len = len};
-        pg_array_append(parser->tokens, string);
-        pg_array_append(parser->lengths, len);
-        pg_array_append(parser->kinds, BC_KIND_STRING);
-
-        input = right;
-        pg_span_consume_left(&input, len);  // Skip over string content
-        break;
-      }
-      case 0:
-        return BC_PE_NONE;
-      default:
-        return BC_PE_UNEXPECTED_CHARACTER;  // FIXME
+      *input = right;
+      break;
     }
+    case '1':
+    case '2':
+    case '3':
+    case '4':
+    case '5':
+    case '6':
+    case '7':
+    case '8':
+    case '9': {
+      pg_span_t left = {0}, right = {0};
+      const bool found = pg_span_split(*input, ':', &left, &right);
+      if (!found) return BC_PE_INVALID_STRING;
+
+      assert(left.len >= 1);
+
+      pg_span_consume_left(&right, 1);  // Skip ':'
+
+      uint64_t len = 0;
+      for (uint64_t i = 0; i < left.len; i++) {
+        if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_STRING;
+        len *= 10;
+        len += left.data[0] - '0';
+      }
+      assert(len > 0);
+      if (right.len < len) return BC_PE_INVALID_STRING;  // `5:a`
+
+      pg_span_t string = {.data = right.data, .len = len};
+      pg_array_append(parser->tokens, string);
+      pg_array_append(parser->lengths, len);
+      pg_array_append(parser->kinds, BC_KIND_STRING);
+
+      *input = right;
+      pg_span_consume_left(input, len);  // Skip over string content
+      break;
+    }
+    case 'l': {
+      pg_span_consume_left(input, 1);  // Skip 'l'
+
+      pg_array_append(parser->tokens, (pg_span_t){0});  // Does not matter
+      pg_array_append(parser->lengths, 0);  // Will be patched at the end
+      pg_array_append(parser->kinds, BC_KIND_ARRAY);
+
+      const uint64_t prev_token_count = pg_array_count(parser->tokens);
+
+      while (pg_peek(*input) != 'e' && pg_peek(*input) != 0) {
+        bc_parse_error_t err = bc_parse(parser, input);
+        if (err != BC_PE_NONE) return err;
+      }
+      if (pg_peek(*input) != 'e') return BC_PE_UNEXPECTED_CHARACTER;
+      pg_span_consume_left(input, 1);  // Skip 'e'
+
+      parser->lengths[prev_token_count - 1] =
+          pg_array_count(parser->tokens) - prev_token_count;
+      break;
+    }
+    case 0:
+      return BC_PE_NONE;
+
+    default:
+      return BC_PE_UNEXPECTED_CHARACTER;  // FIXME
   }
   return BC_PE_NONE;
 }
@@ -287,7 +302,7 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t input) {
 //   pg_array_init_reserve(values, 20, allocator);
 //
 //   for (uint64_t i = 0; i < res_span.len; i++) {
-//     const char c = bc_peek(res_span);
+//     const char c = pg_peek(res_span);
 //     if (c == 0) {
 //       err = BC_PE_EOF;
 //       goto fail;
@@ -336,7 +351,7 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t input) {
 //   pg_hashtable_init(&dict, 30, allocator);
 //
 //   for (uint64_t i = 0; i < res_span.len; i++) {
-//     const char c = bc_peek(res_span);
+//     const char c = pg_peek(res_span);
 //     if (c == 0) {
 //       err = BC_PE_EOF;
 //       goto fail;
@@ -394,7 +409,7 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t input) {
 //   assert(value != NULL);
 //   assert(info_span != NULL);
 //
-//   const char c = bc_peek(*span);
+//   const char c = pg_peek(*span);
 //   if (c == 'i')
 //     return bc_parse_number(span, value);
 //   else if (c == 'l')

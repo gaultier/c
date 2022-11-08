@@ -450,6 +450,13 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
 }
 // ------------------ Span
 
+char pg_peek(pg_span_t span) {
+  if (span.len > 0)
+    return span.data[0];
+  else
+    return 0;
+}
+
 void pg_span_consume_left(pg_span_t *span, uint64_t n) {
   assert(span != NULL);
 
