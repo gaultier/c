@@ -52,41 +52,27 @@ void bc_parser_destroy(bc_parser_t* parser) {
 
 typedef enum {
   BC_PE_NONE,
-  BC_PE_EOF,
   BC_PE_UNEXPECTED_CHARACTER,
   BC_PE_INVALID_NUMBER,
   BC_PE_INVALID_STRING,
-  BC_PE_DICT_KEY_NOT_STRING,
+  BC_PE_INVALID_DICT,
 } bc_parse_error_t;
 
 const char* bc_parse_error_to_string(int e) {
   switch (e) {
     case BC_PE_NONE:
       return "BC_PE_NONE";
-    case BC_PE_EOF:
-      return "BC_PE_EOF";
     case BC_PE_UNEXPECTED_CHARACTER:
       return "BC_PE_UNEXPECTED_CHARACTER";
     case BC_PE_INVALID_NUMBER:
       return "BC_PE_INVALID_NUMBER";
     case BC_PE_INVALID_STRING:
       return "BC_PE_INVALID_STRING";
-    case BC_PE_DICT_KEY_NOT_STRING:
-      return "BC_PE_DICT_KEY_NOT_STRING";
+    case BC_PE_INVALID_DICT:
+      return "BC_PE_INVALID_DICT";
     default:
       __builtin_unreachable();
   }
-}
-
-bc_parse_error_t bc_consume_char(pg_span_t* span, char c) {
-  assert(span != NULL);
-  assert(span->data != NULL);
-
-  if (span->len == 0) return BC_PE_EOF;
-  if (span->data[0] != c) return BC_PE_UNEXPECTED_CHARACTER;
-  pg_span_consume_left(span, 1);
-
-  return BC_PE_NONE;
 }
 
 bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
@@ -181,6 +167,34 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t* input) {
 
       parser->lengths[prev_token_count - 1] =
           pg_array_count(parser->tokens) - prev_token_count;
+      break;
+    }
+    case 'd': {
+      pg_span_consume_left(input, 1);  // Skip 'l'
+
+      pg_array_append(parser->tokens, (pg_span_t){0});  // FIXME
+      pg_array_append(parser->lengths, 0);  // Will be patched at the end
+      pg_array_append(parser->kinds, BC_KIND_DICTIONARY);
+
+      const uint64_t prev_token_count = pg_array_count(parser->tokens);
+
+      while (pg_peek(*input) != 'e' && pg_peek(*input) != 0) {
+        bc_parse_error_t err = bc_parse(parser, input);
+        if (err != BC_PE_NONE) return err;
+      }
+      if (pg_peek(*input) != 'e') return BC_PE_UNEXPECTED_CHARACTER;
+      pg_span_consume_left(input, 1);  // Skip 'e'
+
+      const uint64_t kv_count =
+          pg_array_count(parser->tokens) - prev_token_count;
+      if (kv_count % 2 != 0) return BC_PE_INVALID_DICT;
+
+      for (uint64_t i = prev_token_count; i < kv_count; i += 2) {
+        if (parser->kinds[i] != BC_KIND_STRING) return BC_PE_INVALID_DICT;
+      }
+
+      parser->lengths[prev_token_count - 1] = kv_count;
+
       break;
     }
     case 0:
