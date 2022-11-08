@@ -241,17 +241,17 @@ uint64_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
     }
     case BC_KIND_ARRAY: {
       fprintf(f, "[\n");
-      uint64_t j = 0;
+      uint64_t j = index + 1;
       for (uint64_t i = 0; i < len; i++) {
         bc_dump_value_indent(f, indent + 2);
-        j += bc_dump_value(parser, f, indent + 2, index + 1 + j);
+        j += bc_dump_value(parser, f, indent + 2, j);
         // if (*index < len - 1) fprintf(f, ",");
         fprintf(f, "\n");
       }
       bc_dump_value_indent(f, indent);
       fprintf(f, "]");
 
-      return j + 1;
+      return j - index;
     }
     case BC_KIND_DICTIONARY: {
       fprintf(f, "{\n");
@@ -284,7 +284,7 @@ uint64_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
       bc_dump_value_indent(f, indent);
       fprintf(f, "}");
 
-      return j + 1;
+      return j - index;
     }
     default:
       __builtin_unreachable();
