@@ -229,7 +229,6 @@ void bc_dump_value_indent(FILE* f, uint64_t indent) {
 
 uint64_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
                        uint64_t index) {
-  if (index >= pg_array_count(parser->kinds)) return 0;
   assert(index < pg_array_count(parser->kinds));
 
   const bc_kind_t kind = parser->kinds[index];
@@ -244,7 +243,8 @@ uint64_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
       fprintf(f, "\"");
       for (uint64_t i = 0; i < span.len; i++) {
         uint8_t c = span.data[i];
-        if (32 <= c && c < 127)
+        if (pg_char_is_alphanumeric(c) || c == ' ' || c == '-' || c == '.' ||
+            c == '_' || c == '/')
           fprintf(f, "%c", c);
         else
           fprintf(f, "\\u%04x", c);
@@ -259,7 +259,9 @@ uint64_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
       for (uint64_t i = 0; i < len; i++) {
         bc_dump_value_indent(f, indent + 2);
         j += bc_dump_value(parser, f, indent + 2, j);
-        // if (*index < len - 1) fprintf(f, ",");
+
+        if (i < len - 1) fprintf(f, ",");
+
         fprintf(f, "\n");
       }
       bc_dump_value_indent(f, indent);
@@ -277,7 +279,8 @@ uint64_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
 
         fprintf(f, ": ");
         j += bc_dump_value(parser, f, indent + 2, j);
-        // if (*index < len - 1) fprintf(f, ",");
+        if (i < len - 2) fprintf(f, ",");
+
         fprintf(f, "\n");
       }
       bc_dump_value_indent(f, indent);
