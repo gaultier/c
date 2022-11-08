@@ -117,6 +117,10 @@ TEST test_bc_parse_number() {
     ASSERT_EQ_FMT(1ULL, pg_array_count(parser.lengths), "%llu");
     ASSERT_EQ_FMT(1ULL, pg_array_count(parser.kinds), "%llu");
 
+    ASSERT_STRN_EQ("-123", parser.tokens[0].data, parser.tokens[0].len);
+    ASSERT_EQ_FMT(4ULL, parser.lengths[0], "%llu");
+    ASSERT_ENUM_EQ(BC_KIND_INTEGER, parser.kinds[0], bc_value_kind_to_string);
+
     bc_parser_destroy(&parser);
   }
 

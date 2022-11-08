@@ -129,6 +129,18 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t input) {
         pg_array_append(parser->kinds, BC_KIND_INTEGER);
 
         input = right;
+        break;
+      }
+      case 1:
+      case 2:
+      case 3:
+      case 4:
+      case 5:
+      case 6:
+      case 7:
+      case 8:
+      case 9: {
+        break;
       }
       case 0:
         return BC_PE_NONE;
