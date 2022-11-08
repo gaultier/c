@@ -702,7 +702,7 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       *action = PEER_ACTION_REQUEST_MORE;
       return (peer_error_t){0};
     case PMK_INTERESTED:
-      peer->them_interested = false;
+      peer->them_interested = true;
       return (peer_error_t){0};
     case PMK_UNINTERESTED:
       peer->them_interested = false;
