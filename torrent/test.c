@@ -41,7 +41,7 @@ const uint8_t handshake_header[] = {
     0,
 };
 
-static pg_logger_t logger = {.level = PG_LOG_FATAL};
+static pg_logger_t logger = {.level = PG_LOG_DEBUG};
 
 TEST test_read_bufs() {
   pg_pool_t peer_pool = {0};
@@ -112,6 +112,7 @@ TEST test_read_bufs() {
     ASSERT(peer->read_bufs_start == NULL);
     ASSERT(peer->read_bufs_end == NULL);
     ASSERT_EQ_FMT(0ULL, peer->read_buf_offset, "%llu");
+    ASSERT_EQ(true, peer->handshaked);
   }
   {
     uv_buf_t buf1 = {0};
@@ -145,14 +146,15 @@ TEST test_read_bufs() {
     ASSERT(read_buf1 == peer->read_bufs_start);
     ASSERT(read_buf2 == peer->read_bufs_end);
     ASSERT(read_buf1->next == read_buf2);
-    ASSERT_EQ_FMT(4ULL, peer->read_buf_offset, "%llu");
+    ASSERT_EQ_FMT(0ULL, peer->read_buf_offset,
+                  "%llu");  // NEED_MORE, offset unchanged
 
     uv_buf_t buf3 = {0};
     peer_alloc((uv_handle_t*)&peer->connection, 1, &buf3);
     ASSERT(buf3.base != NULL);
     buf3.base[0] = PT_INTERESTED;
     buf3.len = 1;
-    peer_on_read(&stream, 1, &buf2);
+    peer_on_read(&stream, 1, &buf3);
 
     ASSERT(peer->read_bufs_start == NULL);
     ASSERT(peer->read_bufs_end == NULL);
