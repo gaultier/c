@@ -126,6 +126,88 @@ TEST test_bc_parse_number() {
 
   PASS();
 }
+
+TEST test_bc_parse_string() {
+  {
+    pg_span_t span = pg_span_make_c(":");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_UNEXPECTED_CHARACTER, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("0");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_UNEXPECTED_CHARACTER, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("0:abc");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_UNEXPECTED_CHARACTER, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("2:a");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_STRING, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("1a");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_STRING, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("-3:abc");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_UNEXPECTED_CHARACTER, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("3:abc");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(1ULL, pg_array_count(parser.tokens), "%llu");
+    ASSERT_EQ_FMT(1ULL, pg_array_count(parser.lengths), "%llu");
+    ASSERT_EQ_FMT(1ULL, pg_array_count(parser.kinds), "%llu");
+
+    ASSERT_STRN_EQ("abc", parser.tokens[0].data, parser.tokens[0].len);
+    ASSERT_EQ_FMT(3ULL, parser.lengths[0], "%llu");
+    ASSERT_ENUM_EQ(BC_KIND_STRING, parser.kinds[0], bc_value_kind_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+
+  PASS();
+}
 #if 0
 TEST test_bc_parse_string() {
   const bc_value_t zero = {0};
@@ -546,7 +628,7 @@ int main(int argc, char** argv) {
   GREATEST_MAIN_BEGIN(); /* command-line options, initialization. */
 
   RUN_TEST(test_bc_parse_number);
-  //  RUN_TEST(test_bc_parse_string);
+  RUN_TEST(test_bc_parse_string);
   //  RUN_TEST(test_bc_parse_number);
   //  RUN_TEST(test_bc_parse_array);
   //  RUN_TEST(test_bc_parse_dictionary);

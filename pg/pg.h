@@ -452,6 +452,9 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
 
 void pg_span_consume_left(pg_span_t *span, uint64_t n) {
   assert(span != NULL);
+
+  if (span->len == 0) return;
+
   assert(span->data != NULL);
   assert(span->len >= n);
 
@@ -461,6 +464,9 @@ void pg_span_consume_left(pg_span_t *span, uint64_t n) {
 
 void pg_span_consume_right(pg_span_t *span, uint64_t n) {
   assert(span != NULL);
+
+  if (span->len == 0) return;
+
   assert(span->data != NULL);
   assert(span->len >= n);
 
@@ -479,11 +485,12 @@ bool pg_span_split(pg_span_t span, char needle, pg_span_t *left,
   }
 
   left->data = span.data;
-  left->len = 1 + end - span.data;
+  left->len = end - span.data;
 
   if ((uint64_t)(end - span.data) < span.len - 1) {
-    right->data = end + 1;
-    right->len = span.len - left->len - 1;
+    right->data = end;
+    right->len = span.len - left->len;
+    assert(right->data[0] == needle);
   }
   return true;
 }

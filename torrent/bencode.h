@@ -62,7 +62,7 @@ typedef enum {
   BC_PE_EOF,
   BC_PE_UNEXPECTED_CHARACTER,
   BC_PE_INVALID_NUMBER,
-  BC_PE_INVALID_STRING_LENGTH,
+  BC_PE_INVALID_STRING,
   BC_PE_DICT_KEY_NOT_STRING,
 } bc_parse_error_t;
 
@@ -76,8 +76,8 @@ const char* bc_parse_error_to_string(int e) {
       return "BC_PE_UNEXPECTED_CHARACTER";
     case BC_PE_INVALID_NUMBER:
       return "BC_PE_INVALID_NUMBER";
-    case BC_PE_INVALID_STRING_LENGTH:
-      return "BC_PE_INVALID_STRING_LENGTH";
+    case BC_PE_INVALID_STRING:
+      return "BC_PE_INVALID_STRING";
     case BC_PE_DICT_KEY_NOT_STRING:
       return "BC_PE_DICT_KEY_NOT_STRING";
     default:
@@ -106,19 +106,21 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t input) {
         const bool found = pg_span_split(input, 'e', &left, &right);
         if (!found) return BC_PE_INVALID_NUMBER;
 
-        assert(left.len >= 2);
+        assert(left.len >= 1);
 
-        if (left.len == 2) return BC_PE_INVALID_NUMBER;  // `ie`
+        if (left.len == 1) return BC_PE_INVALID_NUMBER;  // `ie`
         pg_span_consume_left(&left, 1);                  // Skip 'i'
 
-        if (left.data[0] == '-' && left.len == 2)
+        assert(left.len > 0);
+
+        if (left.data[0] == '-' && left.len == 1)
           return BC_PE_INVALID_NUMBER;  // `i-e`
 
         if (!(pg_char_is_digit(left.data[0]) ||
               left.data[0] == '-'))  // `iae` or `i-e`
           return BC_PE_INVALID_NUMBER;
 
-        pg_span_consume_right(&left, 1);  // Skip 'e'
+        pg_span_consume_left(&right, 1);  // Skip 'e'
 
         for (uint64_t i = 1; i < left.len; i++) {
           if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_NUMBER;
@@ -131,15 +133,39 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t input) {
         input = right;
         break;
       }
-      case 1:
-      case 2:
-      case 3:
-      case 4:
-      case 5:
-      case 6:
-      case 7:
-      case 8:
-      case 9: {
+      case '1':
+      case '2':
+      case '3':
+      case '4':
+      case '5':
+      case '6':
+      case '7':
+      case '8':
+      case '9': {
+        pg_span_t left = {0}, right = {0};
+        const bool found = pg_span_split(input, ':', &left, &right);
+        if (!found) return BC_PE_INVALID_STRING;
+
+        assert(left.len >= 1);
+
+        pg_span_consume_left(&right, 1);  // Skip ':'
+
+        uint64_t len = 0;
+        for (uint64_t i = 0; i < left.len; i++) {
+          if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_STRING;
+          len *= 10;
+          len += left.data[0] - '0';
+        }
+        assert(len > 0);
+        if (right.len < len) return BC_PE_INVALID_STRING;  // `5:a`
+
+        pg_span_t string = {.data = right.data, .len = len};
+        pg_array_append(parser->tokens, string);
+        pg_array_append(parser->lengths, len);
+        pg_array_append(parser->kinds, BC_KIND_STRING);
+
+        input = right;
+        pg_span_consume_left(&input, len);  // Skip over string content
         break;
       }
       case 0:
