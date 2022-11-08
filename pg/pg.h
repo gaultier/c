@@ -479,7 +479,7 @@ bool pg_span_split(pg_span_t span, char needle, pg_span_t *left,
   }
 
   left->data = span.data;
-  left->len = end - span.data;
+  left->len = 1 + end - span.data;
 
   if ((uint64_t)(end - span.data) < span.len - 1) {
     right->data = end + 1;

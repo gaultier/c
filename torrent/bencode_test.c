@@ -59,7 +59,63 @@ TEST test_bc_parse_number() {
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, span);
 
-    ASSERT_ENUM_EQ(BC_PE_EOF, err, bc_parse_error_to_string);
+    ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(0ULL, pg_array_count(parser.tokens), "%llu");
+    ASSERT_EQ_FMT(0ULL, pg_array_count(parser.lengths), "%llu");
+    ASSERT_EQ_FMT(0ULL, pg_array_count(parser.kinds), "%llu");
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("iae");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("i-e");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("ie");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("i1-e");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
+    pg_span_t span = pg_span_make_c("i-123e");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, span);
+
+    ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
+    ASSERT_EQ_FMT(1ULL, pg_array_count(parser.tokens), "%llu");
+    ASSERT_EQ_FMT(1ULL, pg_array_count(parser.lengths), "%llu");
+    ASSERT_EQ_FMT(1ULL, pg_array_count(parser.kinds), "%llu");
 
     bc_parser_destroy(&parser);
   }

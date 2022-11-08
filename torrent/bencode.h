@@ -106,17 +106,32 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span_t input) {
         const bool found = pg_span_split(input, 'e', &left, &right);
         if (!found) return BC_PE_INVALID_NUMBER;
 
-        pg_span_consume_left(&left, 1);   // Skip 'i'
+        assert(left.len >= 2);
+
+        if (left.len == 2) return BC_PE_INVALID_NUMBER;  // `ie`
+        pg_span_consume_left(&left, 1);                  // Skip 'i'
+
+        if (left.data[0] == '-' && left.len == 2)
+          return BC_PE_INVALID_NUMBER;  // `i-e`
+
+        if (!(pg_char_is_digit(left.data[0]) ||
+              left.data[0] == '-'))  // `iae` or `i-e`
+          return BC_PE_INVALID_NUMBER;
+
         pg_span_consume_right(&left, 1);  // Skip 'e'
 
-        pg_array_append(parser->kinds, BC_KIND_INTEGER);
+        for (uint64_t i = 1; i < left.len; i++) {
+          if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_NUMBER;
+        }
+
         pg_array_append(parser->tokens, left);
+        pg_array_append(parser->lengths, left.len);
         pg_array_append(parser->kinds, BC_KIND_INTEGER);
 
         input = right;
       }
       case 0:
-        return BC_PE_EOF;
+        return BC_PE_NONE;
       default:
         return BC_PE_UNEXPECTED_CHARACTER;  // FIXME
     }
