@@ -616,7 +616,7 @@ end:
 
 peer_error_t peer_send_heartbeat(peer_t* peer);
 peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
-                            pg_span_t data) {
+                            pg_span32_t data) {
   const uint32_t piece = peer->downloading_piece;
 
   pg_log_debug(peer->logger, "[%s] peer_put_block: piece=%u block_for_piece=%u",
@@ -730,7 +730,7 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       const peer_message_piece_t piece_msg = msg->v.piece;
 
       const uint32_t block_for_piece = piece_msg.begin / PEER_BLOCK_LENGTH;
-      const pg_span_t span = (pg_span_t){
+      const pg_span32_t span = (pg_span32_t){
           .data = (char*)piece_msg.data,
           .len = download_block_length(peer->download, peer->metainfo,
                                        piece_msg.index, block_for_piece),
