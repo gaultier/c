@@ -382,8 +382,9 @@ TEST test_bc_metainfo() {
   ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
 
   bc_metainfo_t metainfo = {0};
+  pg_span32_t info_span = {0};
   bc_metainfo_error_t err_metainfo =
-      bc_parser_init_metainfo(&parser, &metainfo);
+      bc_parser_init_metainfo(&parser, &metainfo, &info_span);
   ASSERT_ENUM_EQ(BC_ME_NONE, err_metainfo, bc_metainfo_error_to_string);
 
   ASSERT_EQ_FMT(3U, metainfo.announce.len, "%u");
@@ -397,6 +398,12 @@ TEST test_bc_metainfo() {
 
   ASSERT_EQ_FMT(20U, metainfo.piece_length, "%u");
   ASSERT_EQ_FMT(20ULL, metainfo.length, "%llu");
+
+  ASSERT_STRN_EQ(
+      "d3:foo4:true6:lengthi20e12:piece "
+      "lengthi20e6:pieces20:000000000000000000004:name5:helloee",
+      info_span.data, info_span.len);
+
   PASS();
 }
 

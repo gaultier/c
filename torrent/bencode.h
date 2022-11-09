@@ -365,7 +365,8 @@ const char* bc_metainfo_error_to_string(int err) {
 //                                                 bc_metainfo_t* metainfo) {
 
 bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t* parser,
-                                            bc_metainfo_t* metainfo) {
+                                            bc_metainfo_t* metainfo,
+                                            pg_span32_t* info_span) {
   if (pg_array_count(parser->kinds) == 0) return BC_ME_METAINFO_NOT_DICTIONARY;
   if (parser->kinds[0] != BC_KIND_DICTIONARY)
     return BC_ME_METAINFO_NOT_DICTIONARY;
@@ -387,6 +388,7 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t* parser,
     } else if (key_kind == BC_KIND_STRING && pg_span32_eq(info_key, key_span) &&
                value_kind == BC_KIND_DICTIONARY) {
       const uint32_t info_len = parser->lengths[cur + i + 1];
+      *info_span = value_span;
 
       const pg_span32_t piece_length_key = pg_span32_make_c("piece length");
       const pg_span32_t name_key = pg_span32_make_c("name");

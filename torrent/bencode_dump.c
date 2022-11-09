@@ -41,8 +41,9 @@ int main(int argc, char* argv[]) {
   puts("");
 
   bc_metainfo_t metainfo = {0};
+  pg_span32_t info_span = {0};
   bc_metainfo_error_t err_metainfo =
-      bc_parser_init_metainfo(&parser, &metainfo);
+      bc_parser_init_metainfo(&parser, &metainfo, &info_span);
   if (err_metainfo != BC_ME_NONE) {
     fprintf(stderr, "Failed to bc_parser_init_metainfo: %s\n",
             bc_metainfo_error_to_string(err));
@@ -59,12 +60,12 @@ int main(int argc, char* argv[]) {
   puts("");
 
   bc_parser_destroy(&parser);
-  //
-  //  uint8_t sha1[20] = {0};
-  //  assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len, sha1) == 0);
-  //  printf("info_hash: ");
-  //  for (uint64_t i = 0; i < sizeof(sha1); i++) {
-  //    printf("%02x ", sha1[i]);
-  //  }
-  //  puts("");
+
+  uint8_t sha1[20] = {0};
+  assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len, sha1) == 0);
+  printf("info_hash: ");
+  for (uint64_t i = 0; i < sizeof(sha1); i++) {
+    printf("%02x ", sha1[i]);
+  }
+  puts("");
 }
