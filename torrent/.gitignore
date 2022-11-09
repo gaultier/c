@@ -3,3 +3,4 @@ bencode_dump
 torrent
 *.iso
 torrent_test
+*.o
