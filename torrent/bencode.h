@@ -354,15 +354,6 @@ const char* bc_metainfo_error_to_string(int err) {
       __builtin_unreachable();
   }
 }
-//
-// void bc_metainfo_destroy(bc_metainfo_t* metainfo) {
-//   if (metainfo->pieces != NULL) pg_array_free(metainfo->pieces);
-//   if (metainfo->name != NULL) pg_string_free(metainfo->name);
-// }
-//
-// bc_metainfo_error_t bc_metainfo_init_from_value(pg_allocator_t allocator,
-//                                                 bc_value_t* val,
-//                                                 bc_metainfo_t* metainfo) {
 
 bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t* parser,
                                             bc_metainfo_t* metainfo,

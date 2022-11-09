@@ -28,7 +28,6 @@ int main(int argc, char* argv[]) {
   }
 
   pg_span32_t input = {.data = (char*)buf, .len = pg_array_count(buf)};
-  // pg_span32_t info_span = {0};
 
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 100);

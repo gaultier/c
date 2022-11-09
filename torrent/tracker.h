@@ -1,10 +1,9 @@
 #pragma once
 
-#include <_types/_uint16_t.h>
 #include <_types/_uint32_t.h>
-#include <_types/_uint64_t.h>
 #include <curl/curl.h>
 #include <curl/easy.h>
+#include <stdint.h>
 
 #include "../pg/pg.h"
 #include "bencode.h"
@@ -32,7 +31,7 @@ const char* tracker_error_to_string(int err) {
 }
 
 typedef struct {
-  pg_span_t url;
+  pg_span32_t url;
   uint8_t peer_id[20];
   uint16_t port;
   uint8_t info_hash[20];
@@ -47,26 +46,31 @@ typedef struct {
 } tracker_peer_address_t;
 
 tracker_error_t tracker_parse_peer_addresses(
-    bc_value_t* value, pg_array_t(tracker_peer_address_t) * peer_addresses) {
-  if (value->kind != BC_KIND_DICTIONARY) return TK_ERR_INVALID_PEERS;
+    bc_parser_t* parser, pg_array_t(tracker_peer_address_t) * peer_addresses) {
+  if (pg_array_count(parser->kinds) == 0) return TK_ERR_INVALID_PEERS;
+  if (parser->kinds[0] != BC_KIND_DICTIONARY) return TK_ERR_INVALID_PEERS;
 
-  bc_dictionary_t* dict = &value->v.dictionary;
-  pg_span_t key = pg_span_make_c("peers");
-  uint64_t index = -1;
-  if (!pg_hashtable_find(dict, key, &index)) return TK_ERR_INVALID_PEERS;
+  uint32_t cur = 1;
+  const pg_span32_t peers_key = pg_span32_make_c("peers");
 
-  bc_value_t peers_val = dict->values[index];
-  if (peers_val.kind != BC_KIND_STRING) return TK_ERR_INVALID_PEERS;
+  for (uint32_t i = 0; i < root_len; i += 2) {
+    bc_kind_t key_kind = parser->kinds[cur + i];
+    pg_span32_t key_span = parser->spans[cur + i];
+    bc_kind_t value_kind = parser->kinds[cur + i + 1];
+    pg_span32_t value_span = parser->spans[cur + i + 1];
 
-  pg_string_t peers_string = peers_val.v.string;
-  if (pg_string_length(peers_string) % 6 != 0) return TK_ERR_INVALID_PEERS;
+    if (key_kind == BC_KIND_STRING && pg_span32_eq(peers_key, key_span) &&
+        value_kind == BC_KIND_STRING) {
+      if (value_span.len % 6 != 0) return TK_ERR_INVALID_PEERS;
 
-  for (uint64_t i = 0; i < pg_string_length(peers_string); i += 6) {
-    tracker_peer_address_t addr = {
-        .ip = *(uint32_t*)(&peers_string[i]),
-        .port = *(uint16_t*)(&peers_string[i + 4]),
-    };
-    pg_array_append(*peer_addresses, addr);
+      for (uint64_t j = 0; j < value_span.len; j += 6) {
+        tracker_peer_address_t addr = {
+            .ip = *(uint32_t*)(&value_span.data[j]),
+            .port = *(uint16_t*)(&value_span.data[j + 4]),
+        };
+        pg_array_append(*peer_addresses, addr);
+      }
+    }
   }
 
   return TK_ERR_NONE;
@@ -74,14 +78,15 @@ tracker_error_t tracker_parse_peer_addresses(
 
 pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
                                          tracker_query_t* q) {
-  pg_span_t info_hash_span =
-      (pg_span_t){.data = (char*)q->info_hash, .len = sizeof(q->info_hash)};
+  pg_span32_t info_hash_span =
+      (pg_span32_t){.data = (char*)q->info_hash, .len = sizeof(q->info_hash)};
   pg_string_t info_hash_url_encoded =
-      pg_span_url_encode(allocator, info_hash_span);
+      pg_span32_url_encode(allocator, info_hash_span);
 
-  pg_span_t peer_id_span =
-      (pg_span_t){.data = (char*)q->peer_id, .len = sizeof(q->peer_id)};
-  pg_string_t peer_id_url_encoded = pg_span_url_encode(allocator, peer_id_span);
+  pg_span32_t peer_id_span =
+      (pg_span32_t){.data = (char*)q->peer_id, .len = sizeof(q->peer_id)};
+  pg_string_t peer_id_url_encoded =
+      pg_span32_url_encode(allocator, peer_id_span);
 
   pg_string_t res = pg_string_make_reserve(allocator, 5000);
   assert(q->url.len < 4196);
@@ -100,6 +105,8 @@ uint64_t tracker_on_response_chunk(void* ptr, uint64_t size, uint64_t nmemb,
   pg_array_t(char)* response = user_data;
 
   const uint64_t new_len = pg_array_count(*response) + ptr_len;
+  if (new_len > UINT16_MAX) return 0;
+
   pg_array_grow(*response, new_len);
   assert(pg_array_capacity(*response) >= ptr_len);
 
@@ -123,7 +130,6 @@ tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
   assert(curl_easy_setopt(curl, CURLOPT_URL, url) == 0);
   assert(curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10) == 0);
 
-  bc_value_t bencode = {0};
   pg_array_t(char) response = {0};
   pg_array_init_reserve(response, 512, allocator);
   assert(curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response) == 0);
@@ -138,21 +144,22 @@ tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
     goto end;
   }
 
-  pg_span_t span = {.data = response, .len = pg_array_count(response)};
-  pg_span_t info_span = {0};
-  bc_parse_error_t bc_err =
-      bc_parse_value(allocator, &span, &bencode, &info_span);
-  if (bc_err != BC_PE_NONE) {
+  pg_span32_t response_span = {.data = response,
+                               .len = pg_array_count(response)};
+
+  bc_parser_t parser = {0};
+  bc_parser_init(pg_heap_allocator(), &parser, 100);
+  bc_parse_error_t parse_err = bc_parse(&parser, &response_span);
+  if (parse_err != BC_PE_NONE) {
     err = TK_ERR_BENCODE_PARSE;
     goto end;
   }
 
-  if ((err = tracker_parse_peer_addresses(&bencode, peer_addresses)) !=
+  if ((err = tracker_parse_peer_addresses(&parser, peer_addresses)) !=
       TK_ERR_NONE)
     goto end;
 
 end:
-  if (bencode.kind != BC_KIND_NONE) bc_value_destroy(&bencode);
   pg_array_free(response);
   curl_easy_cleanup(curl);
   pg_string_free(url);
