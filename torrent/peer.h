@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -32,7 +33,7 @@ typedef struct {
   pg_bitarray_t pieces_downloaded, pieces_downloading, pieces_to_download;
 } download_t;
 
-typedef enum {
+typedef enum : uint8_t {
   PEK_NONE,
   PEK_NEED_MORE,
   PEK_UV,
@@ -47,7 +48,7 @@ typedef enum {
   PEK_CHECKSUM_FAILED,
 } peer_error_kind_t;
 
-typedef enum {
+typedef enum : uint8_t {
   PEER_ACTION_NONE,
   PEER_ACTION_REQUEST_MORE,
   PEER_ACTION_STOP_REQUESTING,
@@ -61,7 +62,7 @@ typedef struct {
   } v;
 } peer_error_t;
 
-typedef enum {
+typedef enum : uint8_t {
   PT_CHOKE,
   PT_UNCHOKE,
   PT_INTERESTED,
@@ -73,7 +74,7 @@ typedef enum {
   PT_CANCEL,
 } peer_tag_t;
 
-typedef enum {
+typedef enum : uint8_t {
   PMK_NONE,
   PMK_HEARTBEAT,
   PMK_CHOKE,

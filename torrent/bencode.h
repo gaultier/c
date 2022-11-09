@@ -51,7 +51,7 @@ void bc_parser_destroy(bc_parser_t* parser) {
   pg_array_free(parser->kinds);
 }
 
-typedef enum {
+typedef enum : uint8_t {
   BC_PE_NONE,
   BC_PE_UNEXPECTED_CHARACTER,
   BC_PE_INVALID_NUMBER,
@@ -309,7 +309,7 @@ typedef struct {
   pg_span32_t pieces;
 } bc_metainfo_t;
 
-typedef enum {
+typedef enum : uint8_t {
   BC_ME_NONE,
   BC_ME_METAINFO_NOT_DICTIONARY,
   BC_ME_ANNOUNCE_NOT_FOUND,
