@@ -371,6 +371,24 @@ TEST test_bc_parse_value_info_span() {
   PASS();
 }
 
+TEST test_bc_metainfo() {
+  pg_span32_t span = pg_span32_make_c(
+      "d8:announce3:foo4:infod3:foo4:true6:lengthi20e13:pieces "
+      "lengthi20e6:pieces20:00000000000000000000ee");
+  bc_parser_t parser = {0};
+  bc_parser_init(pg_heap_allocator(), &parser, 1);
+  bc_parse_error_t err = bc_parse(&parser, &span);
+
+  ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
+
+  bc_metainfo_t metainfo = {0};
+  bc_metainfo_error_t err_metainfo =
+      bc_metainfo_init_from_parser(&parser, &metainfo);
+  ASSERT_ENUM_EQ(BC_ME_NONE, err_metainfo, bc_metainfo_error_to_string);
+
+  PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char** argv) {
@@ -381,6 +399,7 @@ int main(int argc, char** argv) {
   RUN_TEST(test_bc_parse_array);
   RUN_TEST(test_bc_parse_dictionary);
   RUN_TEST(test_bc_parse_value_info_span);
+  RUN_TEST(test_bc_metainfo);
 
   GREATEST_MAIN_END(); /* display results */
 }
