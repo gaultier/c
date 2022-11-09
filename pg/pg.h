@@ -613,6 +613,22 @@ bool pg_span32_starts_with(pg_span32_t haystack, pg_span32_t needle) {
   return memmem(haystack.data, haystack.len, needle.data, needle.len) == 0;
 }
 
+bool pg_span32_eq(pg_span32_t a, pg_span32_t b) {
+  return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
+}
+
+uint64_t pg_span32_parse_u64(pg_span32_t span) {
+  uint64_t res = 0;
+
+  for (uint64_t i = 0; i < span.len; i++) {
+    assert(pg_char_is_digit(span.data[i]));
+
+    res *= 10;
+    res += span.data[i] - '0';
+  }
+  return res;
+}
+
 // ------------- File utils
 
 int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
