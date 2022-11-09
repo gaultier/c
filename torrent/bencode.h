@@ -84,7 +84,7 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span32_t* input) {
 
   switch (c) {
     case 'i': {
-      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
+      if (parser->parent != -1U) parser->lengths[parser->parent] += 1;
 
       pg_span32_t left = {0}, right = {0};
       const bool found = pg_span32_split(*input, 'e', &left, &right);
@@ -126,7 +126,7 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span32_t* input) {
     case '7':
     case '8':
     case '9': {
-      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
+      if (parser->parent != -1U) parser->lengths[parser->parent] += 1;
 
       pg_span32_t left = {0}, right = {0};
       const bool found = pg_span32_split(*input, ':', &left, &right);
@@ -155,7 +155,7 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span32_t* input) {
       break;
     }
     case 'l': {
-      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
+      if (parser->parent != -1U) parser->lengths[parser->parent] += 1;
 
       pg_span32_consume_left(input, 1);  // Skip 'l'
 
@@ -177,7 +177,7 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span32_t* input) {
       break;
     }
     case 'd': {
-      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
+      if (parser->parent != -1U) parser->lengths[parser->parent] += 1;
 
       const pg_span32_t original = *input;
 
@@ -332,10 +332,10 @@ typedef enum {
 
 const char* bc_metainfo_error_to_string(int err) {
   switch (err) {
-    case BC_MI_NONE:
-      return "BC_MI_NONE";
-    case BC_MI_METAINFO_NOT_DICTIONARY:
-      return "BC_MI_METAINFO_NOT_DICTIONARY";
+    case BC_ME_NONE:
+      return "BC_ME_NONE";
+    case BC_ME_METAINFO_NOT_DICTIONARY:
+      return "BC_ME_METAINFO_NOT_DICTIONARY";
     case BC_ME_ANNOUNCE_NOT_FOUND:
       return "BC_ME_ANNOUNCE_NOT_FOUND";
     case BC_ME_ANNOUNCE_INVALID_KIND:
@@ -445,4 +445,5 @@ bc_metainfo_error_t bc_metainfo_init_from_parser(bc_parser_t* parser,
       }
     }
   }
+  return BC_ME_NONE;
 }
