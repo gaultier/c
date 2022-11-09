@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
                pg_array_count(peer_addresses));
 
   pg_string_t name = pg_string_make_length(
-      pg_heap_allocator(), metainfo.announce.data, metainfo.announce.len);
+      pg_heap_allocator(), metainfo.name.data, metainfo.name.len);
   int fd = open(name, O_RDWR | O_CREAT, 0666);
   pg_string_free(name);
   if (fd == -1) {
