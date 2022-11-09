@@ -4,7 +4,7 @@
 
 TEST test_bc_parse_number() {
   {
-    pg_span_t span = pg_span_make_c("-23");
+    pg_span32_t span = pg_span32_make_c("-23");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -14,7 +14,7 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("0");
+    pg_span32_t span = pg_span32_make_c("0");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -24,7 +24,7 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("i");
+    pg_span32_t span = pg_span32_make_c("i");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -34,7 +34,7 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("i3");
+    pg_span32_t span = pg_span32_make_c("i3");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -44,7 +44,7 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("i-3");
+    pg_span32_t span = pg_span32_make_c("i-3");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -54,7 +54,7 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("");
+    pg_span32_t span = pg_span32_make_c("");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -67,7 +67,7 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("iae");
+    pg_span32_t span = pg_span32_make_c("iae");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -77,7 +77,7 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("i-e");
+    pg_span32_t span = pg_span32_make_c("i-e");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -87,7 +87,7 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("ie");
+    pg_span32_t span = pg_span32_make_c("ie");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -97,7 +97,7 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("i1-e");
+    pg_span32_t span = pg_span32_make_c("i1-e");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -107,7 +107,7 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("i-123e");
+    pg_span32_t span = pg_span32_make_c("i-123e");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -129,7 +129,7 @@ TEST test_bc_parse_number() {
 
 TEST test_bc_parse_string() {
   {
-    pg_span_t span = pg_span_make_c(":");
+    pg_span32_t span = pg_span32_make_c(":");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -139,7 +139,7 @@ TEST test_bc_parse_string() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("0");
+    pg_span32_t span = pg_span32_make_c("0");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -149,7 +149,7 @@ TEST test_bc_parse_string() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("0:abc");
+    pg_span32_t span = pg_span32_make_c("0:abc");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -159,7 +159,7 @@ TEST test_bc_parse_string() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("2:a");
+    pg_span32_t span = pg_span32_make_c("2:a");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -169,7 +169,7 @@ TEST test_bc_parse_string() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("1a");
+    pg_span32_t span = pg_span32_make_c("1a");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -179,7 +179,7 @@ TEST test_bc_parse_string() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("-3:abc");
+    pg_span32_t span = pg_span32_make_c("-3:abc");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -189,7 +189,7 @@ TEST test_bc_parse_string() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("3:abc");
+    pg_span32_t span = pg_span32_make_c("3:abc");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -211,7 +211,7 @@ TEST test_bc_parse_string() {
 
 TEST test_bc_parse_array() {
   {
-    pg_span_t span = pg_span_make_c("l");
+    pg_span32_t span = pg_span32_make_c("l");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -221,7 +221,7 @@ TEST test_bc_parse_array() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("li2e");
+    pg_span32_t span = pg_span32_make_c("li2e");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -231,7 +231,7 @@ TEST test_bc_parse_array() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("le");
+    pg_span32_t span = pg_span32_make_c("le");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -247,7 +247,7 @@ TEST test_bc_parse_array() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("li3e2:abli9eee");
+    pg_span32_t span = pg_span32_make_c("li3e2:abli9eee");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -280,7 +280,7 @@ TEST test_bc_parse_array() {
 
 TEST test_bc_parse_dictionary() {
   {
-    pg_span_t span = pg_span_make_c("d");
+    pg_span32_t span = pg_span32_make_c("d");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -290,7 +290,7 @@ TEST test_bc_parse_dictionary() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("dle");
+    pg_span32_t span = pg_span32_make_c("dle");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -300,7 +300,7 @@ TEST test_bc_parse_dictionary() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("dlelee");
+    pg_span32_t span = pg_span32_make_c("dlelee");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -310,7 +310,7 @@ TEST test_bc_parse_dictionary() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("de");
+    pg_span32_t span = pg_span32_make_c("de");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -327,7 +327,7 @@ TEST test_bc_parse_dictionary() {
     bc_parser_destroy(&parser);
   }
   {
-    pg_span_t span = pg_span_make_c("d2:abi3ee");
+    pg_span32_t span = pg_span32_make_c("d2:abi3ee");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);
     bc_parse_error_t err = bc_parse(&parser, &span);
@@ -356,7 +356,7 @@ TEST test_bc_parse_dictionary() {
 }
 
 TEST test_bc_parse_value_info_span() {
-  pg_span_t span = pg_span_make_c("d8:announce3:foo4:infod3:foo4:trueee");
+  pg_span32_t span = pg_span32_make_c("d8:announce3:foo4:infod3:foo4:trueee");
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 1);
   bc_parse_error_t err = bc_parse(&parser, &span);

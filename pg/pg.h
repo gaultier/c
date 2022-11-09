@@ -25,6 +25,11 @@ typedef struct {
   uint64_t len;
 } pg_span_t;
 
+typedef struct {
+  char *data;
+  uint32_t len;
+} pg_span32_t;
+
 typedef struct pg_allocator_t pg_allocator_t;
 struct pg_allocator_t {
   //  void *backing_memory;
@@ -450,7 +455,7 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
 }
 // ------------------ Span
 
-char pg_peek(pg_span_t span) {
+char pg_span_peek(pg_span_t span) {
   if (span.len > 0)
     return span.data[0];
   else
@@ -524,6 +529,86 @@ pg_span_t pg_span_make_c(char *s) {
 }
 
 bool pg_span_starts_with(pg_span_t haystack, pg_span_t needle) {
+  if (needle.len > haystack.len) return false;
+  return memmem(haystack.data, haystack.len, needle.data, needle.len) == 0;
+}
+
+// ------------- Span u32
+
+char pg_span32_peek(pg_span32_t span) {
+  if (span.len > 0)
+    return span.data[0];
+  else
+    return 0;
+}
+
+void pg_span32_consume_left(pg_span32_t *span, uint32_t n) {
+  assert(span != NULL);
+
+  if (span->len == 0) return;
+
+  assert(span->data != NULL);
+  assert(span->len >= n);
+
+  span->data += n;
+  span->len -= n;
+}
+
+void pg_span32_consume_right(pg_span32_t *span, uint32_t n) {
+  assert(span != NULL);
+
+  if (span->len == 0) return;
+
+  assert(span->data != NULL);
+  assert(span->len >= n);
+
+  span->len -= n;
+}
+
+bool pg_span32_split(pg_span32_t span, char needle, pg_span32_t *left,
+                     pg_span32_t *right) {
+  char *end = memchr(span.data, needle, span.len);
+  *left = (pg_span32_t){0};
+  *right = (pg_span32_t){0};
+
+  if (end == NULL) {
+    *left = span;
+    return false;
+  }
+
+  left->data = span.data;
+  left->len = end - span.data;
+
+  if ((uint32_t)(end - span.data) < span.len - 1) {
+    right->data = end;
+    right->len = span.len - left->len;
+    assert(right->data[0] == needle);
+  }
+  return true;
+}
+
+pg_string_t pg_span32_url_encode(pg_allocator_t allocator, pg_span32_t src) {
+  pg_string_t res = pg_string_make_reserve(allocator, 3 * src.len);
+
+  for (uint32_t i = 0; i < src.len; i++) {
+    char buf[4] = {0};
+    const uint64_t len =
+        snprintf(buf, sizeof(buf), "%%%02X", (uint8_t)src.data[i]);
+    res = pg_string_append_length(res, buf, len);
+  }
+
+  return res;
+}
+
+pg_span32_t pg_span32_make(pg_string_t s) {
+  return (pg_span32_t){.data = s, .len = pg_string_length(s)};
+}
+
+pg_span32_t pg_span32_make_c(char *s) {
+  return (pg_span32_t){.data = s, .len = strlen(s)};
+}
+
+bool pg_span32_starts_with(pg_span32_t haystack, pg_span32_t needle) {
   if (needle.len > haystack.len) return false;
   return memmem(haystack.data, haystack.len, needle.data, needle.len) == 0;
 }
