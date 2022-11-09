@@ -37,24 +37,28 @@ int main(int argc, char* argv[]) {
     fprintf(stderr, "Failed to parse: %s\n", bc_parse_error_to_string(err));
     exit(EINVAL);
   }
-  //  printf("info_span: start=%ld len=%llu\n", (uint8_t*)info_span.data - buf,
-  //         info_span.len);
   bc_dump_values(&parser, stdout, 0);
-  bc_parser_destroy(&parser);
   puts("");
 
-  //  bc_metainfo_t metainfo = {0};
-  //  {
-  //    bc_metainfo_error_t err = BC_MI_NONE;
-  //    if ((err = bc_metainfo_init_from_value(pg_heap_allocator(), &bencode,
-  //                                           &metainfo)) != BC_MI_NONE) {
-  //      fprintf(stderr, "Failed to bc_metainfo_init_from_value: %s\n",
-  //              bc_metainfo_error_to_string(err));
-  //      exit(EINVAL);
-  //    }
-  //  }
-  //  __builtin_dump_struct(&metainfo, &printf);
-  //  puts("");
+  bc_metainfo_t metainfo = {0};
+  bc_metainfo_error_t err_metainfo =
+      bc_parser_init_metainfo(&parser, &metainfo);
+  if (err_metainfo != BC_ME_NONE) {
+    fprintf(stderr, "Failed to bc_parser_init_metainfo: %s\n",
+            bc_metainfo_error_to_string(err));
+    exit(EINVAL);
+  }
+  printf(
+      "Metainfo:\n"
+      "  - name: %.*s\n"
+      "  - announce: %.*s\n"
+      "  - length: %llu\n"
+      "  - piece length: %u\n",
+      (int)metainfo.name.len, metainfo.name.data, (int)metainfo.announce.len,
+      metainfo.announce.data, metainfo.length, metainfo.piece_length);
+  puts("");
+
+  bc_parser_destroy(&parser);
   //
   //  uint8_t sha1[20] = {0};
   //  assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len, sha1) == 0);

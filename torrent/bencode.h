@@ -313,20 +313,14 @@ typedef enum {
   BC_ME_NONE,
   BC_ME_METAINFO_NOT_DICTIONARY,
   BC_ME_ANNOUNCE_NOT_FOUND,
-  BC_ME_ANNOUNCE_INVALID_KIND,
   BC_ME_INFO_NOT_FOUND,
-  BC_ME_INFO_INVALID_KIND,
   BC_ME_PIECE_LENGTH_NOT_FOUND,
-  BC_ME_PIECE_LENGTH_INVALID_KIND,
   BC_ME_PIECE_LENGTH_INVALID_VALUE,
   BC_ME_NAME_NOT_FOUND,
-  BC_ME_NAME_INVALID_KIND,
   BC_ME_NAME_INVALID_VALUE,
   BC_ME_LENGTH_NOT_FOUND,
-  BC_ME_LENGTH_INVALID_KIND,
   BC_ME_LENGTH_INVALID_VALUE,
   BC_ME_PIECES_NOT_FOUND,
-  BC_ME_PIECES_INVALID_KIND,
   BC_ME_PIECES_INVALID_VALUE,
 } bc_metainfo_error_t;
 
@@ -338,34 +332,22 @@ const char* bc_metainfo_error_to_string(int err) {
       return "BC_ME_METAINFO_NOT_DICTIONARY";
     case BC_ME_ANNOUNCE_NOT_FOUND:
       return "BC_ME_ANNOUNCE_NOT_FOUND";
-    case BC_ME_ANNOUNCE_INVALID_KIND:
-      return "BC_ME_ANNOUNCE_INVALID_KIND";
     case BC_ME_INFO_NOT_FOUND:
       return "BC_ME_INFO_NOT_FOUND";
-    case BC_ME_INFO_INVALID_KIND:
-      return "BC_ME_INFO_INVALID_KIND";
     case BC_ME_PIECE_LENGTH_NOT_FOUND:
       return "BC_ME_PIECE_LENGTH_NOT_FOUND";
-    case BC_ME_PIECE_LENGTH_INVALID_KIND:
-      return "BC_ME_PIECE_LENGTH_INVALID_KIND";
     case BC_ME_PIECE_LENGTH_INVALID_VALUE:
       return "BC_ME_PIECE_LENGTH_INVALID_VALUE";
     case BC_ME_NAME_NOT_FOUND:
       return "BC_ME_NAME_NOT_FOUND";
-    case BC_ME_NAME_INVALID_KIND:
-      return "BC_ME_NAME_INVALID_KIND";
     case BC_ME_NAME_INVALID_VALUE:
       return "BC_ME_NAME_INVALID_VALUE";
     case BC_ME_LENGTH_NOT_FOUND:
       return "BC_ME_LENGTH_NOT_FOUND";
-    case BC_ME_LENGTH_INVALID_KIND:
-      return "BC_ME_LENGTH_INVALID_KIND";
     case BC_ME_LENGTH_INVALID_VALUE:
       return "BC_ME_LENGTH_INVALID_VALUE";
     case BC_ME_PIECES_NOT_FOUND:
       return "BC_ME_PIECES_NOT_FOUND";
-    case BC_ME_PIECES_INVALID_KIND:
-      return "BC_ME_PIECES_INVALID_KIND";
     case BC_ME_PIECES_INVALID_VALUE:
       return "BC_ME_PIECES_INVALID_VALUE";
     default:
@@ -382,8 +364,8 @@ const char* bc_metainfo_error_to_string(int err) {
 //                                                 bc_value_t* val,
 //                                                 bc_metainfo_t* metainfo) {
 
-bc_metainfo_error_t bc_metainfo_init_from_parser(bc_parser_t* parser,
-                                                 bc_metainfo_t* metainfo) {
+bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t* parser,
+                                            bc_metainfo_t* metainfo) {
   if (pg_array_count(parser->kinds) == 0) return BC_ME_METAINFO_NOT_DICTIONARY;
   if (parser->kinds[0] != BC_KIND_DICTIONARY)
     return BC_ME_METAINFO_NOT_DICTIONARY;

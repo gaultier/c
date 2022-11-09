@@ -383,7 +383,7 @@ TEST test_bc_metainfo() {
 
   bc_metainfo_t metainfo = {0};
   bc_metainfo_error_t err_metainfo =
-      bc_metainfo_init_from_parser(&parser, &metainfo);
+      bc_parser_init_metainfo(&parser, &metainfo);
   ASSERT_ENUM_EQ(BC_ME_NONE, err_metainfo, bc_metainfo_error_to_string);
 
   ASSERT_EQ_FMT(3U, metainfo.announce.len, "%u");
