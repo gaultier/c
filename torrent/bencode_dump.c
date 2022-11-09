@@ -25,7 +25,7 @@ int main(int argc, char* argv[]) {
   // pg_span_t info_span = {0};
 
   bc_parser_t parser = {0};
-  bc_parser_init(pg_heap_allocator(), &parser, input.len / 8);
+  bc_parser_init(pg_heap_allocator(), &parser, 100);
   bc_parse_error_t err = bc_parse(&parser, &input);
   if (err != BC_PE_NONE) {
     fprintf(stderr, "Failed to parse: %s\n", bc_parse_error_to_string(err));

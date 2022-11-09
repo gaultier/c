@@ -5,7 +5,7 @@
 
 #include "../pg/pg.h"
 
-typedef enum {
+typedef enum : uint8_t {
   BC_KIND_NONE,
   BC_KIND_INTEGER,
   BC_KIND_STRING,
