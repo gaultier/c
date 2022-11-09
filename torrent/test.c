@@ -39,20 +39,18 @@ const uint8_t handshake_header[] = {
     0,
 };
 
-static pg_logger_t logger = {.level = PG_LOG_DEBUG};
+static pg_logger_t logger = {.level = PG_LOG_FATAL};
 
 TEST test_on_read() {
   pg_pool_t peer_pool = {0};
   pg_pool_init(&peer_pool, sizeof(peer_t), 1);
 
-  pg_array_t(uint8_t) pieces = {0};
-  pg_array_init_reserve(pieces, 2 * 20, pg_heap_allocator());
-  pg_array_resize(pieces, 2 * 20);
-  bc_metainfo_t metainfo = {.announce = "http://localhost",
-                            .length = 3 * PEER_BLOCK_LENGTH + 1,
-                            .piece_length = 2 * PEER_BLOCK_LENGTH,
-                            .pieces = pieces,
-                            .name = "foo"};
+  bc_metainfo_t metainfo = {
+      .announce = pg_span32_make_c("http://localhost"),
+      .length = 3 * PEER_BLOCK_LENGTH + 1,
+      .piece_length = 2 * PEER_BLOCK_LENGTH,
+      .pieces = pg_span32_make_c("0000000000000000000000000000000000000000"),
+      .name = pg_span32_make_c("foo")};
 
   download_t download = {0};
   download_init(pg_heap_allocator(), &download, &metainfo, info_hash, peer_id,
