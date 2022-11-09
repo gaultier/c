@@ -600,8 +600,9 @@ peer_error_t peer_checksum_piece(peer_t* peer, uint32_t piece) {
   uint8_t hash[20] = {0};
   assert(mbedtls_sha1(data, length, hash) == 0);
 
-  assert(piece * 20 + 20 <= pg_array_count(peer->metainfo->pieces));
-  const uint8_t* const expected = peer->metainfo->pieces + 20 * piece;
+  assert(piece * 20 + 20 <= peer->metainfo->pieces.len);
+  const uint8_t* const expected =
+      (uint8_t*)peer->metainfo->pieces.data + 20 * piece;
 
   if (memcmp(hash, expected, sizeof(hash)) != 0) {
     err = (peer_error_t){.kind = PEK_CHECKSUM_FAILED};
@@ -1240,7 +1241,7 @@ void download_init(pg_allocator_t allocator, download_t* download,
   assert(fd >= 0);
 
   download->fd = fd;
-  download->pieces_count = pg_array_count(metainfo->pieces) / 20;
+  download->pieces_count = metainfo->pieces.len / 20;
 
   download->blocks_per_piece = metainfo->piece_length / PEER_BLOCK_LENGTH;
   download->last_piece_length =
@@ -1292,8 +1293,9 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
     assert(offset + length <= pg_array_count(file_data));
     assert(mbedtls_sha1(file_data + offset, length, hash) == 0);
 
-    assert(piece * 20 + 20 <= pg_array_count(metainfo->pieces));
-    const uint8_t* const expected = metainfo->pieces + 20 * piece;
+    assert(piece * 20 + 20 <= metainfo->pieces.len);
+    const uint8_t* const expected =
+        (uint8_t*)metainfo->pieces.data + 20 * piece;
 
     if (memcmp(hash, expected, sizeof(hash)) != 0) {
       pg_log_error(logger,

@@ -25,11 +25,16 @@ int main(int argc, char* argv[]) {
                  strerror(ret));
   }
 
-  pg_span_t torrent_file_span = {.data = (char*)torrent_file_data,
-                                 .len = pg_array_count(torrent_file_data)};
+  if (pg_array_count(torrent_file_data) > UINT32_MAX) {
+    fprintf(stderr, "Too much data, must be under %u bytes, was %llu\n",
+            UINT32_MAX, pg_array_count(torrent_file_data));
+    exit(EINVAL);
+  }
+  pg_span32_t torrent_file_span = {.data = (char*)torrent_file_data,
+                                   .len = pg_array_count(torrent_file_data)};
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 100);
-  bc_parse_error_t bc_err = bc_parse(&parser, &input);
+  bc_parse_error_t bc_err = bc_parse(&parser, &torrent_file_span);
   if (bc_err != BC_PE_NONE) {
     pg_log_fatal(&logger, EINVAL, "Failed to parse: %s",
                  bc_parse_error_to_string(bc_err));

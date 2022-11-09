@@ -52,6 +52,7 @@ tracker_error_t tracker_parse_peer_addresses(
 
   uint32_t cur = 1;
   const pg_span32_t peers_key = pg_span32_make_c("peers");
+  const uint32_t root_len = parser->lengths[0];
 
   for (uint32_t i = 0; i < root_len; i += 2) {
     bc_kind_t key_kind = parser->kinds[cur + i];
