@@ -445,5 +445,12 @@ bc_metainfo_error_t bc_metainfo_init_from_parser(bc_parser_t* parser,
       }
     }
   }
+
+  if (metainfo->announce.len == 0) return BC_ME_ANNOUNCE_NOT_FOUND;
+  if (metainfo->length == 0) return BC_ME_LENGTH_NOT_FOUND;
+  if (metainfo->piece_length == 0) return BC_ME_PIECE_LENGTH_NOT_FOUND;
+  if (metainfo->pieces.len == 0) return BC_ME_PIECES_NOT_FOUND;
+  if (metainfo->name.len == 0) return BC_ME_NAME_NOT_FOUND;
+
   return BC_ME_NONE;
 }

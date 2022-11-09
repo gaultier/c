@@ -386,6 +386,10 @@ TEST test_bc_metainfo() {
       bc_metainfo_init_from_parser(&parser, &metainfo);
   ASSERT_ENUM_EQ(BC_ME_NONE, err_metainfo, bc_metainfo_error_to_string);
 
+  ASSERT_STRN_EQ("foo", metainfo.announce.data, 3);
+  ASSERT_EQ_FMT(20U, metainfo.pieces.len, "%u");
+  ASSERT_STRN_EQ("00000000000000000000", metainfo.pieces.data, 20);
+
   PASS();
 }
 
