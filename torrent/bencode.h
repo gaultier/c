@@ -404,7 +404,7 @@ bc_metainfo_error_t bc_metainfo_init_from_parser(bc_parser_t* parser,
       metainfo->announce = value_span;
     } else if (key_kind == BC_KIND_STRING && pg_span32_eq(info_key, key_span) &&
                value_kind == BC_KIND_DICTIONARY) {
-      const uint32_t info_len = parser->lengths[cur + i];
+      const uint32_t info_len = parser->lengths[cur + i + 1];
 
       const pg_span32_t piece_length_key = pg_span32_make_c("piece length");
       const pg_span32_t name_key = pg_span32_make_c("name");
@@ -412,14 +412,14 @@ bc_metainfo_error_t bc_metainfo_init_from_parser(bc_parser_t* parser,
       const pg_span32_t pieces_key = pg_span32_make_c("pieces");
 
       for (uint32_t j = 0; j < info_len; j += 2) {
-        key_kind = parser->kinds[cur + i + j];
-        key_span = parser->spans[cur + i + j];
-        value_kind = parser->kinds[cur + i + j + 1];
-        value_span = parser->spans[cur + i + j + 1];
+        key_kind = parser->kinds[cur + i + 2 + j];
+        key_span = parser->spans[cur + i + 2 + j];
+        value_kind = parser->kinds[cur + i + 2 + j + 1];
+        value_span = parser->spans[cur + i + 2 + j + 1];
 
         if (key_kind == BC_KIND_STRING &&
             pg_span32_eq(piece_length_key, key_span) &&
-            value_kind == BC_KIND_STRING) {
+            value_kind == BC_KIND_INTEGER) {
           metainfo->piece_length = pg_span32_parse_u64(value_span);
           if (metainfo->piece_length == 0)
             return BC_ME_PIECE_LENGTH_INVALID_VALUE;
@@ -432,7 +432,7 @@ bc_metainfo_error_t bc_metainfo_init_from_parser(bc_parser_t* parser,
           metainfo->name = value_span;
         } else if (key_kind == BC_KIND_STRING &&
                    pg_span32_eq(length_key, key_span) &&
-                   value_kind == BC_KIND_STRING) {
+                   value_kind == BC_KIND_INTEGER) {
           metainfo->length = pg_span32_parse_u64(value_span);
           if (metainfo->length == 0) return BC_ME_LENGTH_INVALID_VALUE;
         } else if (key_kind == BC_KIND_STRING &&

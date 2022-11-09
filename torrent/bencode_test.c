@@ -373,8 +373,8 @@ TEST test_bc_parse_value_info_span() {
 
 TEST test_bc_metainfo() {
   pg_span32_t span = pg_span32_make_c(
-      "d8:announce3:foo4:infod3:foo4:true6:lengthi20e13:pieces "
-      "lengthi20e6:pieces20:00000000000000000000ee");
+      "d8:announce3:foo4:infod3:foo4:true6:lengthi20e12:piece "
+      "lengthi20e6:pieces20:000000000000000000004:name5:helloee");
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 1);
   bc_parse_error_t err = bc_parse(&parser, &span);
@@ -386,10 +386,17 @@ TEST test_bc_metainfo() {
       bc_metainfo_init_from_parser(&parser, &metainfo);
   ASSERT_ENUM_EQ(BC_ME_NONE, err_metainfo, bc_metainfo_error_to_string);
 
+  ASSERT_EQ_FMT(3U, metainfo.announce.len, "%u");
   ASSERT_STRN_EQ("foo", metainfo.announce.data, 3);
+
   ASSERT_EQ_FMT(20U, metainfo.pieces.len, "%u");
   ASSERT_STRN_EQ("00000000000000000000", metainfo.pieces.data, 20);
 
+  ASSERT_EQ_FMT(5U, metainfo.name.len, "%u");
+  ASSERT_STRN_EQ("hello", metainfo.name.data, 5);
+
+  ASSERT_EQ_FMT(20U, metainfo.piece_length, "%u");
+  ASSERT_EQ_FMT(20ULL, metainfo.length, "%llu");
   PASS();
 }
 
