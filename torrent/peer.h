@@ -200,6 +200,16 @@ uint32_t picker_pick_block(const picker_t* picker,
   return -1;
 }
 
+void picker_mark_block_as_downloading(picker_t* picker, uint32_t block) {
+  pg_bitarray_set(&picker->blocks_downloading, block);
+  pg_bitarray_unset(&picker->blocks_to_download, block);
+}
+
+void picker_mark_block_as_downloaded(picker_t* picker, uint32_t block) {
+  pg_bitarray_set(&picker->blocks_downloaded, block);
+  pg_bitarray_unset(&picker->blocks_downloading, block);
+}
+
 void picker_destroy(picker_t* picker) {
   pg_bitarray_destroy(&picker->blocks_to_download);
   pg_bitarray_destroy(&picker->blocks_downloading);
