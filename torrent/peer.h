@@ -1211,9 +1211,11 @@ void peer_on_connect(uv_connect_t* handle, int status) {
 }
 
 void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
-               download_t* download, bc_metainfo_t* metainfo,
+               download_t* download, bc_metainfo_t* metainfo, picker_t* picker,
                tracker_peer_address_t address) {
   peer->allocator = pg_heap_allocator();  // FIXME
+  peer->picker = picker;
+
   pg_pool_init(
       &peer->write_ctx_pool, sizeof(peer_write_ctx_t),
       (PEER_MAX_IN_FLIGHT_REQUESTS +

@@ -107,6 +107,9 @@ int main(int argc, char* argv[]) {
     pg_bitarray_set_all(&download.pieces_to_download);
   }
 
+  picker_t picker = {0};
+  picker_init(pg_heap_allocator(), &logger, &picker, &metainfo);
+
   pg_pool_t peer_pool = {0};
   pg_pool_init(&peer_pool, sizeof(peer_t), pg_array_count(peer_addresses));
 
@@ -114,7 +117,7 @@ int main(int argc, char* argv[]) {
     const tracker_peer_address_t addr = peer_addresses[i];
     peer_t* peer = pg_pool_alloc(&peer_pool);
     assert(peer != NULL);
-    peer_init(peer, &logger, &peer_pool, &download, &metainfo, addr);
+    peer_init(peer, &logger, &peer_pool, &download, &metainfo, &picker, addr);
     peer_connect(peer, addr);
   }
   uv_run(uv_default_loop(), 0);
