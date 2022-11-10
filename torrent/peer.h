@@ -164,26 +164,31 @@ void picker_init(pg_allocator_t allocator, pg_logger_t* logger,
   pg_bitarray_init(allocator, &picker->blocks_to_download, blocks_count);
   pg_bitarray_init(allocator, &picker->blocks_downloading, blocks_count);
   pg_bitarray_init(allocator, &picker->blocks_downloaded, blocks_count);
-  picker->blocks_per_piece = metainfo->length / metainfo->piece_length;
+
+  pg_bitarray_set_all(&picker->blocks_to_download);
+
+  picker->blocks_per_piece =
+      (uint64_t)ceil((double)metainfo->length / metainfo->piece_length);
   picker->logger = logger;
 }
 
 // TODO: randomness
 uint32_t picker_pick_block(picker_t* picker,
                            const pg_bitarray_t* them_have_pieces, bool* found) {
-  int64_t block = -1;
+  int64_t i = -1;
   bool is_set = false;
-  while (pg_bitarray_next(&picker->blocks_to_download, &block, &is_set)) {
+  while (pg_bitarray_next(&picker->blocks_to_download, &i, &is_set)) {
     if (!is_set) continue;
 
+    const uint32_t block = (uint32_t)i;
     const uint32_t piece = block / picker->blocks_per_piece;
     const bool them_have = pg_bitarray_get(them_have_pieces, piece);
 
     if (!them_have) {
       pg_log_debug(picker->logger,
-                   "[%s] need piece %lld but they "
+                   "[%s] need block=%u for piece=%u but they "
                    "don't have it",
-                   __func__, block);
+                   __func__, block, piece);
       continue;
     }
 

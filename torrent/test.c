@@ -39,7 +39,7 @@ const uint8_t handshake_header[] = {
     0,
 };
 
-static pg_logger_t logger = {.level = PG_LOG_FATAL};
+static pg_logger_t logger = {.level = PG_LOG_DEBUG};
 
 TEST test_on_read() {
   pg_pool_t peer_pool = {0};
@@ -140,13 +140,22 @@ TEST test_picker() {
   picker_t picker = {0};
   picker_init(pg_heap_allocator(), &logger, &picker, &metainfo);
 
-  bool found = false;
   pg_bitarray_t them_have_pieces = {0};
   pg_bitarray_init(pg_heap_allocator(), &them_have_pieces, pieces_count);
-  ASSERT_EQ_FMT(-1U, picker_pick_block(&picker, &them_have_pieces, &found),
-                "%u");
-  ASSERT_EQ(false, found);
-
+  // `them_have_pieces` is only 0s
+  {
+    bool found = false;
+    ASSERT_EQ_FMT(-1U, picker_pick_block(&picker, &them_have_pieces, &found),
+                  "%u");
+    ASSERT_EQ(false, found);
+  }
+  {
+    bool found = false;
+    pg_bitarray_set(&them_have_pieces, 1);
+    ASSERT_EQ_FMT(2U, picker_pick_block(&picker, &them_have_pieces, &found),
+                  "%u");
+    ASSERT_EQ(true, found);
+  }
   picker_destroy(&picker);
 
   PASS();
