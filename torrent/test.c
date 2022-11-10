@@ -156,6 +156,14 @@ TEST test_picker() {
                   "%u");
     ASSERT_EQ(true, found);
   }
+  // `them_have_pieces` is only 1s and all blocks are already downloaded
+  {
+    bool found = false;
+    pg_bitarray_unset_all(&picker.blocks_to_download);
+    ASSERT_EQ_FMT(-1U, picker_pick_block(&picker, &them_have_pieces, &found),
+                  "%u");
+    ASSERT_EQ(false, found);
+  }
   picker_destroy(&picker);
 
   PASS();
