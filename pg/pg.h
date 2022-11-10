@@ -866,7 +866,7 @@ void pg_bitarray_set(pg_bitarray_t *bitarr, uint64_t index) {
   bitarr->data[i] |= 1 << (index % 8);
 }
 
-bool pg_bitarray_get(pg_bitarray_t *bitarr, uint64_t index) {
+bool pg_bitarray_get(const pg_bitarray_t *bitarr, uint64_t index) {
   const uint64_t i = index / 8.0;
   assert(i < pg_array_count(bitarr->data));
 

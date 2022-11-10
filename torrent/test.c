@@ -128,12 +128,29 @@ TEST test_on_read() {
   PASS();
 }
 
+TEST test_picker() {
+  bc_metainfo_t metainfo = {
+      .announce = pg_span32_make_c("http://localhost"),
+      .length = 3 * PEER_BLOCK_LENGTH + 1,
+      .piece_length = 2 * PEER_BLOCK_LENGTH,
+      .pieces = pg_span32_make_c("0000000000000000000000000000000000000000"),
+      .name = pg_span32_make_c("foo")};
+
+  picker_t picker = {0};
+  picker_init(pg_heap_allocator(), &logger, &picker, &metainfo);
+
+  picker_destroy(&picker);
+
+  PASS();
+}
+
 GREATEST_MAIN_DEFS();
 
 int main(int argc, char** argv) {
   GREATEST_MAIN_BEGIN(); /* command-line options, initialization. */
 
   RUN_TEST(test_on_read);
+  RUN_TEST(test_picker);
 
   GREATEST_MAIN_END(); /* display results */
 }

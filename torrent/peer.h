@@ -1,5 +1,8 @@
 #pragma once
 
+#include <_types/_uint32_t.h>
+#include <_types/_uint64_t.h>
+#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -120,6 +123,14 @@ typedef struct {
 } peer_message_t;
 
 typedef struct {
+  pg_bitarray_t blocks_to_download;
+  pg_bitarray_t blocks_downloading;
+  pg_bitarray_t blocks_downloaded;
+  pg_logger_t* logger;
+  uint32_t blocks_per_piece;
+} picker_t;
+
+typedef struct {
   pg_allocator_t allocator;
   pg_logger_t* logger;
   pg_pool_t* peer_pool;
@@ -148,6 +159,49 @@ typedef struct {
   char* data;
   uv_write_t req;
 } peer_write_ctx_t;
+
+void picker_init(pg_allocator_t allocator, pg_logger_t* logger,
+                 picker_t* picker, bc_metainfo_t* metainfo) {
+  const uint64_t blocks_count =
+      (uint64_t)ceil((double)metainfo->length / PEER_BLOCK_LENGTH);
+  pg_bitarray_init(allocator, &picker->blocks_to_download, blocks_count);
+  pg_bitarray_init(allocator, &picker->blocks_downloading, blocks_count);
+  pg_bitarray_init(allocator, &picker->blocks_downloaded, blocks_count);
+  picker->blocks_per_piece = metainfo->length / metainfo->piece_length;
+  picker->logger = logger;
+}
+
+// TODO: randomness
+uint32_t picker_pick_block(picker_t* picker,
+                           const pg_bitarray_t* them_have_pieces, bool* found) {
+  int64_t block = -1;
+  bool is_set = false;
+  while (pg_bitarray_next(&picker->blocks_to_download, &block, &is_set)) {
+    if (!is_set) continue;
+
+    const uint32_t piece = block / picker->blocks_per_piece;
+    const bool them_have = pg_bitarray_get(them_have_pieces, piece);
+
+    if (!them_have) {
+      pg_log_debug(picker->logger,
+                   "[%s] need piece %lld but they "
+                   "don't have it",
+                   __func__, block);
+      continue;
+    }
+
+    pg_log_debug(picker->logger, "[%s] found piece %u", __func__, piece);
+    *found = true;
+    return block;
+  }
+  return -1;
+}
+
+void picker_destroy(picker_t* picker) {
+  pg_bitarray_destroy(&picker->blocks_to_download);
+  pg_bitarray_destroy(&picker->blocks_downloading);
+  pg_bitarray_destroy(&picker->blocks_downloaded);
+}
 
 void peer_message_destroy(peer_t* peer, peer_message_t* msg) {
   switch (msg->kind) {
