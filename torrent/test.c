@@ -129,6 +129,7 @@ TEST test_on_read() {
 }
 
 TEST test_picker() {
+  const uint32_t pieces_count = 2;
   bc_metainfo_t metainfo = {
       .announce = pg_span32_make_c("http://localhost"),
       .length = 3 * PEER_BLOCK_LENGTH + 1,
@@ -138,6 +139,13 @@ TEST test_picker() {
 
   picker_t picker = {0};
   picker_init(pg_heap_allocator(), &logger, &picker, &metainfo);
+
+  bool found = false;
+  pg_bitarray_t them_have_pieces = {0};
+  pg_bitarray_init(pg_heap_allocator(), &them_have_pieces, pieces_count);
+  ASSERT_EQ_FMT(-1U, picker_pick_block(&picker, &them_have_pieces, &found),
+                "%u");
+  ASSERT_EQ(false, found);
 
   picker_destroy(&picker);
 
