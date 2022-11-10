@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -31,6 +30,7 @@ typedef struct {
   uint64_t blocks_per_piece, last_piece_length, last_piece_block_count,
       downloaded_bytes;
   pg_bitarray_t pieces_downloaded, pieces_downloading, pieces_to_download;
+  uint64_t start_ts;
 } download_t;
 
 typedef enum : uint8_t {
@@ -678,14 +678,18 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block_for_piece,
     peer_mark_piece_as_downloaded(peer, peer->downloading_piece);
   }
 
+  const uint64_t now = uv_hrtime();
+  const uint64_t time_diff_s = (now - peer->download->start_ts) / 1e9;
+  const double rate = (double)peer->download->downloaded_bytes / time_diff_s;
   pg_log_info(peer->logger,
-              "[%s] Downloaded %u/%u pieces, %u/%u blocks, %.2f MiB / %.2f MiB",
+              "[%s] Downloaded %u/%u pieces, %u/%u blocks, %.2f MiB / %.2f "
+              "MiB, %2.f B/s",
               peer->addr_s, peer->download->pieces_downloaded_count,
               peer->download->pieces_count,
               peer->download->downloaded_blocks_count,
               peer->download->blocks_count,
               (double)peer->download->downloaded_bytes / 1024 / 1024,
-              (double)peer->metainfo->length / 1024 / 1024);
+              (double)peer->metainfo->length / 1024 / 1024, rate);
 
   return (peer_error_t){0};
 }
@@ -1068,6 +1072,8 @@ peer_error_t peer_send_request(peer_t* peer, uint32_t block_for_piece) {
       "[%s] Sent Request: index=%u begin=%u length=%u in_flight_requests=%u",
       peer->addr_s, peer->downloading_piece, begin, length,
       peer->in_flight_requests);
+
+  if (peer->download->start_ts == 0ULL) peer->download->start_ts = uv_hrtime();
   return peer_send_buf(peer, buf);
 }
 
@@ -1243,6 +1249,7 @@ void download_init(pg_allocator_t allocator, download_t* download,
 
   download->fd = fd;
   download->pieces_count = metainfo->pieces.len / 20;
+  download->start_ts = 0;
 
   download->blocks_per_piece = metainfo->piece_length / PEER_BLOCK_LENGTH;
   download->last_piece_length =
