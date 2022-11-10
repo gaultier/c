@@ -172,8 +172,8 @@ void picker_init(pg_allocator_t allocator, pg_logger_t* logger,
   picker->logger = logger;
 }
 
-// TODO: randomness
-uint32_t picker_pick_block(picker_t* picker,
+// TODO: randomness, rarity
+uint32_t picker_pick_block(const picker_t* picker,
                            const pg_bitarray_t* them_have_pieces, bool* found) {
   int64_t i = -1;
   bool is_set = false;
@@ -194,6 +194,7 @@ uint32_t picker_pick_block(picker_t* picker,
 
     pg_log_debug(picker->logger, "[%s] found piece %u", __func__, piece);
     *found = true;
+
     return block;
   }
   return -1;
