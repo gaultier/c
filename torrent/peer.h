@@ -149,6 +149,8 @@ typedef struct {
 
   pg_ring_t recv_data;
   char addr_s[INET_ADDRSTRLEN + /* :port */ 6];  // TODO: ipv6
+
+  picker_t* picker;
 } peer_t;
 
 typedef struct {
