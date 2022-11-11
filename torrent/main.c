@@ -96,19 +96,16 @@ int main(int argc, char* argv[]) {
   }
 
   download_t download = {0};
-  download_init(pg_heap_allocator(), &download, &metainfo,
-                tracker_query.info_hash, tracker_query.peer_id, fd);
-  peer_error_t peer_err =
-      download_checksum_all(pg_heap_allocator(), &logger, &download, &metainfo);
-  if (peer_err.kind != PEK_NONE) {
-    // Gracefully recover
-    pg_log_error(&logger, "Failed to checksum file: path=%.*s err=%s",
-                 metainfo.name.len, metainfo.name.data, strerror(errno));
-    pg_bitarray_set_all(&download.pieces_to_download);
-  }
+  download_init(&download, tracker_query.info_hash, tracker_query.peer_id, fd);
 
   picker_t picker = {0};
   picker_init(pg_heap_allocator(), &logger, &picker, &metainfo);
+
+  peer_error_t peer_err = picker_checksum_all(pg_heap_allocator(), &logger,
+                                              &picker, &metainfo, &download);
+  if (peer_err.kind != PEK_NONE)
+    pg_log_error(&logger, "Failed to checksum file: path=%.*s err=%s",
+                 metainfo.name.len, metainfo.name.data, strerror(errno));
 
   pg_pool_t peer_pool = {0};
   pg_pool_init(&peer_pool, sizeof(peer_t), pg_array_count(peer_addresses));

@@ -26,7 +26,6 @@ typedef struct {
   uint8_t peer_id[20];
   uint32_t downloaded_pieces_count, downloaded_blocks_count;
   uint64_t downloaded_bytes;
-  pg_bitarray_t pieces_downloaded, pieces_downloading, pieces_to_download;
   uint64_t start_ts;
 } download_t;
 
@@ -213,6 +212,7 @@ bool picker_have_all_blocks_for_piece(const picker_t* picker, uint32_t piece) {
 
   const uint32_t last_block =
       first_block + metainfo_block_count_for_piece(picker->metainfo, piece) - 1;
+  assert(last_block < picker->metainfo->blocks_count);
 
   uint64_t i = first_block;
   bool is_set = false;
@@ -232,6 +232,23 @@ void picker_mark_block_as_downloading(picker_t* picker, uint32_t block) {
   assert(block < picker->metainfo->blocks_count);
   pg_bitarray_set(&picker->blocks_downloading, block);
   pg_bitarray_unset(&picker->blocks_to_download, block);
+}
+
+void picker_mark_piece_as_to_download(picker_t* picker, uint32_t piece) {
+  assert(piece < picker->metainfo->pieces_count);
+
+  const uint32_t first_block = piece * picker->metainfo->blocks_per_piece;
+  assert(first_block < picker->metainfo->blocks_count);
+
+  const uint32_t last_block =
+      first_block + metainfo_block_count_for_piece(picker->metainfo, piece) - 1;
+  assert(last_block < picker->metainfo->blocks_count);
+
+  for (uint32_t block = first_block; block <= last_block; block++) {
+    pg_bitarray_set(&picker->blocks_downloaded, block);
+    pg_bitarray_unset(&picker->blocks_to_download, block);
+    pg_bitarray_unset(&picker->blocks_downloading, block);
+  }
 }
 
 void picker_mark_block_as_downloaded(picker_t* picker, uint32_t block) {
@@ -1157,9 +1174,8 @@ void peer_close(peer_t* peer) {
   }
 }
 
-void download_init(pg_allocator_t allocator, download_t* download,
-                   bc_metainfo_t* metainfo, uint8_t* info_hash,
-                   uint8_t* peer_id, int fd) {
+void download_init(download_t* download, uint8_t* info_hash, uint8_t* peer_id,
+                   int fd) {
   assert(fd >= 0);
 
   download->fd = fd;
@@ -1167,25 +1183,11 @@ void download_init(pg_allocator_t allocator, download_t* download,
 
   memcpy(download->info_hash, info_hash, 20);
   memcpy(download->peer_id, peer_id, 20);
-
-  pg_bitarray_init(allocator, &download->pieces_downloaded,
-                   metainfo->pieces_count - 1);
-  pg_bitarray_init(allocator, &download->pieces_downloading,
-                   metainfo->pieces_count - 1);
-  pg_bitarray_init(allocator, &download->pieces_to_download,
-                   metainfo->pieces_count - 1);
-  pg_bitarray_set_all(&download->pieces_to_download);
 }
 
-void download_destroy(download_t* download) {
-  pg_bitarray_destroy(&download->pieces_downloaded);
-  pg_bitarray_destroy(&download->pieces_downloading);
-  pg_bitarray_destroy(&download->pieces_to_download);
-}
-
-peer_error_t download_checksum_all(pg_allocator_t allocator,
-                                   pg_logger_t* logger, download_t* download,
-                                   bc_metainfo_t* metainfo) {
+peer_error_t picker_checksum_all(pg_allocator_t allocator, pg_logger_t* logger,
+                                 picker_t* picker, bc_metainfo_t* metainfo,
+                                 download_t* download) {
   pg_log_debug(logger, "Checksumming file");
 
   pg_array_t(uint8_t) file_data = {0};
@@ -1202,9 +1204,9 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
     const uint64_t offset = piece * metainfo->piece_length;
     uint8_t hash[20] = {0};
     pg_log_debug(logger,
-                 "download_checksum_all: checksumming: piece=%u length=%llu "
+                 "%s: checksumming: piece=%u length=%llu "
                  "offset=%llu file_length=%llu",
-                 piece, length, offset, pg_array_count(file_data));
+                 __func__, piece, length, offset, pg_array_count(file_data));
     assert(offset + length <= pg_array_count(file_data));
     assert(mbedtls_sha1(file_data + offset, length, hash) == 0);
 
@@ -1217,16 +1219,12 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
                    "download_checksum_all: piece failed checksum: piece=%u "
                    " err=%d",
                    piece, err.kind);
-      pg_bitarray_set(&download->pieces_to_download, piece);
-      pg_bitarray_unset(&download->pieces_downloading, piece);
-      pg_bitarray_unset(&download->pieces_downloaded, piece);
     } else {
       pg_log_debug(logger,
                    "download_checksum_all: piece passed checksum: piece=%u ",
                    piece);
-      pg_bitarray_unset(&download->pieces_to_download, piece);
-      pg_bitarray_unset(&download->pieces_downloading, piece);
-      pg_bitarray_set(&download->pieces_downloaded, piece);
+
+      picker_mark_piece_as_to_download(picker, piece);
 
       assert(download->downloaded_pieces_count < metainfo->pieces_count);
       download->downloaded_pieces_count += 1;
@@ -1240,7 +1238,7 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
     }
   }
 
-  pg_log_info(logger, "download_checksum_all: have %u/%u pieces",
+  pg_log_info(logger, "%s: have %u/%u pieces", __func__,
               download->downloaded_pieces_count, metainfo->pieces_count);
 
   pg_array_free(file_data);

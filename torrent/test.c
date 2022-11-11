@@ -59,8 +59,7 @@ TEST test_on_read() {
   };
 
   download_t download = {0};
-  download_init(pg_heap_allocator(), &download, &metainfo, info_hash, peer_id,
-                0);
+  download_init(&download, info_hash, peer_id, 0);
 
   const tracker_peer_address_t addr = {0};
 
