@@ -838,7 +838,7 @@ typedef struct {
 void pg_bitarray_init(pg_allocator_t allocator, pg_bitarray_t *bitarr,
                       uint64_t max_index) {
   bitarr->max_index = max_index;
-  const uint64_t len = (uint64_t)ceil(((double)max_index) / 8.0);
+  const uint64_t len = 1 + (uint64_t)ceil(((double)max_index) / 8.0);
   pg_array_init_reserve(bitarr->data, len, allocator);
   pg_array_resize(bitarr->data, len);
 }

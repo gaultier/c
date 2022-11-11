@@ -246,6 +246,7 @@ void picker_mark_piece_as_to_download(picker_t* picker, uint32_t piece) {
   const uint32_t last_block =
       first_block + metainfo_block_count_for_piece(picker->metainfo, piece) - 1;
   assert(last_block < picker->metainfo->blocks_count);
+  assert(first_block <= last_block);
 
   for (uint32_t block = first_block; block <= last_block; block++) {
     pg_bitarray_set(&picker->blocks_downloaded, block);
