@@ -855,10 +855,6 @@ uint64_t pg_bitarray_len(const pg_bitarray_t *bitarr) {
   return bitarr->max_index + 1;
 }
 
-void pg_bitarray_clear(pg_bitarray_t *bitarr) {
-  memset(bitarr->data, 0, pg_array_count(bitarr->data));
-}
-
 void pg_bitarray_set(pg_bitarray_t *bitarr, uint64_t index) {
   const uint64_t i = index / 8.0;
   assert(i < pg_array_count(bitarr->data));
@@ -920,15 +916,11 @@ bool pg_bitarray_is_all_unset(pg_bitarray_t *bitarr) {
 }
 
 void pg_bitarray_set_all(pg_bitarray_t *bitarr) {
-  for (uint64_t i = 0; i < pg_array_count(bitarr->data); i++) {
-    bitarr->data[i] = 0xff;
-  }
+  memset(bitarr->data, 0xff, pg_array_count(bitarr->data));
 }
 
 void pg_bitarray_unset_all(pg_bitarray_t *bitarr) {
-  for (uint64_t i = 0; i < pg_array_count(bitarr->data); i++) {
-    bitarr->data[i] = 0;
-  }
+  memset(bitarr->data, 0, pg_array_count(bitarr->data));
 }
 
 void pg_bitarray_resize(pg_bitarray_t *bitarr, uint64_t max_index) {

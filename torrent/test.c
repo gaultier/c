@@ -181,7 +181,7 @@ TEST test_picker() {
   }
 
   {
-    pg_bitarray_clear(&picker.blocks_downloaded);
+    pg_bitarray_unset_all(&picker.blocks_downloaded);
     ASSERT_EQ(false, picker_have_all_blocks_for_piece(&picker, 0));
     ASSERT_EQ(false, picker_have_all_blocks_for_piece(&picker, 1));
 
