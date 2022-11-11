@@ -182,9 +182,10 @@ uint32_t picker_pick_block(const picker_t* picker,
   uint64_t i = 0;
   bool is_set = false;
   while (pg_bitarray_next(&picker->blocks_to_download, &i, &is_set)) {
+    assert(i > 0);
     if (!is_set) continue;
 
-    const uint32_t block = (uint32_t)i;
+    const uint32_t block = (uint32_t)i - 1;
     const uint32_t piece = block / picker->metainfo->blocks_per_piece;
     const bool them_have = pg_bitarray_get(them_have_pieces, piece);
 
@@ -199,7 +200,7 @@ uint32_t picker_pick_block(const picker_t* picker,
     pg_log_debug(picker->logger, "[%s] found piece %u", __func__, piece);
     *found = true;
 
-    return block - 1;
+    return block;
   }
   return 0;
 }
