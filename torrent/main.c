@@ -15,7 +15,7 @@
 int main(int argc, char* argv[]) {
   assert(argc == 2);
 
-  pg_logger_t logger = {.level = PG_LOG_INFO};
+  pg_logger_t logger = {.level = PG_LOG_DEBUG};
 
   pg_array_t(uint8_t) torrent_file_data = {0};
   int64_t ret = 0;

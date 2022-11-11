@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint32_t.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -457,8 +458,11 @@ uint32_t metainfo_block_count_per_piece(bc_metainfo_t* metainfo,
     return metainfo->blocks_per_piece;
 }
 
-uint32_t metainfo_block_length(bc_metainfo_t* metainfo, uint32_t piece,
-                               uint32_t block_for_piece) {
+uint32_t metainfo_block_for_piece_length(bc_metainfo_t* metainfo,
+                                         uint32_t piece,
+                                         uint32_t block_for_piece) {
+  assert(block_for_piece < metainfo->blocks_per_piece);
+
   // Special case for last block of last piece
   if (metainfo_is_last_piece(metainfo, piece) &&
       block_for_piece == metainfo->last_piece_block_count - 1)
@@ -475,3 +479,19 @@ uint32_t metainfo_piece_length(bc_metainfo_t* metainfo, uint32_t piece) {
   return metainfo->piece_length;
 }
 
+uint32_t metainfo_block_to_block_for_piece(bc_metainfo_t* metainfo,
+                                           uint32_t piece, uint32_t block) {
+  assert(piece < metainfo->pieces_count);
+  assert(block < metainfo->blocks_count);
+
+  const uint32_t block_for_piece =
+      (block * BC_BLOCK_LENGTH - piece * metainfo->piece_length) /
+      BC_BLOCK_LENGTH;
+
+  // Handle special case of last block of last piece
+  if (metainfo_is_last_piece(metainfo, piece) &&
+      block_for_piece >= metainfo->last_piece_block_count) {
+    return metainfo->last_piece_block_count - 1;
+  }
+  return block_for_piece;
+}
