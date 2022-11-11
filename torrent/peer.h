@@ -613,7 +613,10 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t piece, uint32_t block,
   assert(peer->in_flight_requests > 0);
   peer->in_flight_requests -= 1;
   peer->download->downloaded_bytes += data.len;
+  assert(peer->download->downloaded_bytes <= peer->metainfo->length);
   peer->download->downloaded_blocks_count += 1;
+  assert(peer->download->downloaded_blocks_count <=
+         peer->metainfo->blocks_count);
 
   if (picker_have_all_blocks_for_piece(peer->picker, piece)) {
     pg_log_debug(peer->logger,
@@ -638,6 +641,8 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t piece, uint32_t block,
       return err;
     }
     peer->download->downloaded_pieces_count += 1;
+    assert(peer->download->downloaded_pieces_count <=
+           peer->metainfo->pieces_count);
   }
 
   const uint64_t now = uv_hrtime();
