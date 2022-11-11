@@ -135,8 +135,7 @@ typedef struct {
   bc_metainfo_t* metainfo;
   bool me_choked, me_interested, them_choked, them_interested, handshaked;
   uint8_t in_flight_requests;
-  pg_bitarray_t them_have_pieces, blocks_for_piece_downloaded,
-      blocks_for_piece_downloading, blocks_for_piece_to_download;
+  pg_bitarray_t them_have_pieces;
 
   uv_tcp_t connection;
   uv_connect_t connect_req;
@@ -164,11 +163,11 @@ void picker_init(pg_allocator_t allocator, pg_logger_t* logger,
   assert(metainfo->last_piece_length > 0);
 
   pg_bitarray_init(allocator, &picker->blocks_to_download,
-                   metainfo->blocks_count);
+                   metainfo->blocks_count - 1);
   pg_bitarray_init(allocator, &picker->blocks_downloading,
-                   metainfo->blocks_count);
+                   metainfo->blocks_count - 1);
   pg_bitarray_init(allocator, &picker->blocks_downloaded,
-                   metainfo->blocks_count);
+                   metainfo->blocks_count - 1);
 
   pg_bitarray_set_all(&picker->blocks_to_download);
 
@@ -185,7 +184,11 @@ uint32_t picker_pick_block(const picker_t* picker,
     if (!is_set) continue;
 
     const uint32_t block = (uint32_t)i - 1;
+    assert(block < picker->metainfo->blocks_count);
+
     const uint32_t piece = block / picker->metainfo->blocks_per_piece;
+    assert(piece < picker->metainfo->pieces_count);
+
     const bool them_have = pg_bitarray_get(them_have_pieces, piece);
 
     if (!them_have) {
@@ -219,13 +222,13 @@ bool picker_have_all_blocks_for_piece(const picker_t* picker, uint32_t piece) {
   while (pg_bitarray_next(&picker->blocks_downloaded, &i, &is_set)) {
     assert(i > 0);
     const uint32_t block = i - 1;
-    assert(block <= picker->metainfo->blocks_count);
+    assert(block < picker->metainfo->blocks_count);
 
     if (block > last_block) return true;
     if (!is_set) return false;
   }
 
-  return false;
+  return true;
 }
 
 void picker_mark_block_as_downloading(picker_t* picker, uint32_t block) {
@@ -1098,12 +1101,6 @@ void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
   peer->metainfo = metainfo;
   pg_bitarray_init(peer->allocator, &peer->them_have_pieces,
                    metainfo->pieces_count - 1);
-  pg_bitarray_init(peer->allocator, &peer->blocks_for_piece_downloaded,
-                   metainfo->blocks_per_piece - 1);
-  pg_bitarray_init(peer->allocator, &peer->blocks_for_piece_downloading,
-                   metainfo->blocks_per_piece - 1);
-  pg_bitarray_init(peer->allocator, &peer->blocks_for_piece_to_download,
-                   metainfo->blocks_per_piece - 1);
   peer->connect_req.data = peer;
   peer->connection.data = peer;
   peer->idle_handle.data = peer;
@@ -1142,9 +1139,6 @@ peer_error_t peer_connect(peer_t* peer, tracker_peer_address_t address) {
 
 void peer_destroy(peer_t* peer) {
   pg_bitarray_destroy(&peer->them_have_pieces);
-  pg_bitarray_destroy(&peer->blocks_for_piece_downloaded);
-  pg_bitarray_destroy(&peer->blocks_for_piece_downloading);
-  pg_bitarray_destroy(&peer->blocks_for_piece_to_download);
   pg_ring_destroy(&peer->recv_data);
 
   pg_pool_destroy(&peer->write_ctx_pool);
