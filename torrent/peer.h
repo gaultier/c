@@ -557,8 +557,14 @@ peer_error_t download_checksum_piece(pg_logger_t* logger,
   // TODO: handle partial reads
   ssize_t ret = read(download->fd, data, length);
   if (ret <= 0) {
-    pg_log_error(logger, "Failed to write(2): err=%s", strerror(errno));
+    pg_log_error(logger, "Failed to read(2): err=%s", strerror(errno));
     err = (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
+    goto end;
+  }
+  if ((uint64_t)ret != length) {
+    pg_log_error(logger, "Failed to read(2) all: %llu/%llu", (uint64_t)ret,
+                 length);
+    err = (peer_error_t){.kind = PEK_OS};
     goto end;
   }
 
