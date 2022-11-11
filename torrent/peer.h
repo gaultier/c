@@ -208,19 +208,20 @@ uint32_t picker_pick_block(const picker_t* picker,
 bool picker_have_all_blocks_for_piece(const picker_t* picker, uint32_t piece) {
   assert(piece < picker->metainfo->pieces_count);
 
-  const uint32_t first_block_for_piece =
-      piece * picker->metainfo->blocks_per_piece;
-  const uint32_t last_block_for_piece =
-      first_block_for_piece +
-      metainfo_block_count_per_piece(picker->metainfo, piece) - 1;
+  const uint32_t first_block = piece * picker->metainfo->blocks_per_piece;
+  assert(first_block < picker->metainfo->blocks_count);
 
-  uint64_t i = first_block_for_piece;
+  const uint32_t last_block =
+      first_block + metainfo_block_count_per_piece(picker->metainfo, piece) - 1;
+
+  uint64_t i = first_block;
   bool is_set = false;
   while (pg_bitarray_next(&picker->blocks_downloaded, &i, &is_set)) {
     assert(i > 0);
     const uint32_t block = i - 1;
+    assert(block <= picker->metainfo->blocks_count);
 
-    if (block > last_block_for_piece) return true;
+    if (block > last_block) return true;
     if (!is_set) return false;
   }
 
@@ -228,11 +229,13 @@ bool picker_have_all_blocks_for_piece(const picker_t* picker, uint32_t piece) {
 }
 
 void picker_mark_block_as_downloading(picker_t* picker, uint32_t block) {
+  assert(block < picker->metainfo->blocks_count);
   pg_bitarray_set(&picker->blocks_downloading, block);
   pg_bitarray_unset(&picker->blocks_to_download, block);
 }
 
 void picker_mark_block_as_downloaded(picker_t* picker, uint32_t block) {
+  assert(block < picker->metainfo->blocks_count);
   pg_bitarray_set(&picker->blocks_downloaded, block);
   pg_bitarray_unset(&picker->blocks_downloading, block);
 }
@@ -578,6 +581,9 @@ end:
 peer_error_t peer_send_heartbeat(peer_t* peer);
 peer_error_t peer_put_block(peer_t* peer, uint32_t piece, uint32_t block,
                             pg_span32_t data) {
+  assert(piece < peer->metainfo->pieces_count);
+  assert(block < peer->metainfo->blocks_count);
+
   pg_log_debug(peer->logger, "[%s] peer_put_block: piece=%u block_for_piece=%u",
                peer->addr_s, piece, block);
 
@@ -589,11 +595,18 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t piece, uint32_t block,
                  strerror(errno));
     return (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
   }
+
   ssize_t ret = write(peer->download->fd, data.data, data.len);
   if (ret <= 0) {
     pg_log_error(peer->logger, "[%s] Failed to write(2): err=%s", peer->addr_s,
                  strerror(errno));
     return (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
+  }
+  if (ret != data.len) {
+    // TODO: handle partial writes
+    pg_log_error(peer->logger, "[%s] Failed to write(2) all data: %zd/%u",
+                 peer->addr_s, ret, data.len);
+    return (peer_error_t){.kind = PEK_OS};
   }
 
   picker_mark_block_as_downloaded(peer->picker, block);
