@@ -1185,14 +1185,14 @@ peer_error_t picker_checksum_all(pg_allocator_t allocator, pg_logger_t* logger,
                                  download_t* download) {
   pg_log_debug(logger, "Checksumming file");
 
+  peer_error_t err = {0};
   pg_array_t(uint8_t) file_data = {0};
   const int64_t ret = pg_read_file_fd(allocator, download->fd, &file_data);
   if (ret != 0) {
-    // TODO: free file_data?
-    return (peer_error_t){.kind = PEK_OS, .v = {.errno_err = ret}};
+    err = (peer_error_t){.kind = PEK_OS, .v = {.errno_err = ret}};
+    goto end;
   }
 
-  peer_error_t err = {0};
   for (uint32_t piece = 0; piece < metainfo->pieces_count; piece++) {
     const uint64_t length = metainfo_piece_length(metainfo, piece);
 
@@ -1236,6 +1236,7 @@ peer_error_t picker_checksum_all(pg_allocator_t allocator, pg_logger_t* logger,
   pg_log_info(logger, "%s: have %u/%u pieces", __func__,
               download->downloaded_pieces_count, metainfo->pieces_count);
 
+end:
   pg_array_free(file_data);
   return err;
 }
