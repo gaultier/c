@@ -174,7 +174,7 @@ void picker_init(pg_allocator_t allocator, pg_logger_t* logger,
 // TODO: randomness, rarity
 uint32_t picker_pick_block(const picker_t* picker,
                            const pg_bitarray_t* them_have_pieces, bool* found) {
-  int64_t i = -1;
+  uint64_t i = 0;
   bool is_set = false;
   while (pg_bitarray_next(&picker->blocks_to_download, &i, &is_set)) {
     if (!is_set) continue;
@@ -205,7 +205,15 @@ bool picker_have_all_blocks_for_piece(const picker_t* picker, uint32_t piece) {
   const uint32_t last_block_for_piece =
       first_block_for_piece +
       metainfo_block_count_per_piece(picker->metainfo, piece);
-  return false;  // FIXME
+
+  uint64_t i = first_block_for_piece;
+  bool is_set = false;
+  while (pg_bitarray_next(&picker->blocks_to_download, &i, &is_set)) {
+    if (i > last_block_for_piece) return true;
+    if (!is_set) return false;
+  }
+
+  return false;
 }
 
 void picker_mark_block_as_downloading(picker_t* picker, uint32_t block) {

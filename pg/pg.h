@@ -873,13 +873,13 @@ bool pg_bitarray_get(const pg_bitarray_t *bitarr, uint64_t index) {
   return bitarr->data[i] & (1 << (index % 8));
 }
 
-bool pg_bitarray_next(const pg_bitarray_t *bitarr, int64_t *index,
+bool pg_bitarray_next(const pg_bitarray_t *bitarr, uint64_t *index,
                       bool *is_set) {
-  if (*index > 0 && (uint64_t)*index >= pg_bitarray_len(bitarr) - 1)
+  if (*index > 0 && (uint64_t)*index > pg_bitarray_len(bitarr) - 1)
     return false;
 
-  *index += 1;
   *is_set = pg_bitarray_get(bitarr, *index);
+  *index += 1;
   return true;
 }
 

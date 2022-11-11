@@ -60,8 +60,8 @@ TEST test_pg_span_split() {
     ASSERT_EQ(true, pg_span_split(span, '\n', &left, &right));
     ASSERT_EQ_FMT(3ULL, left.len, "%llu");
     ASSERT_STRN_EQ("foo", left.data, left.len);
-    ASSERT_EQ_FMT(5ULL, right.len, "%llu");
-    ASSERT_STRN_EQ("hello", right.data, right.len);
+    ASSERT_EQ_FMT(6ULL, right.len, "%llu");
+    ASSERT_STRN_EQ("\nhello", right.data, right.len);
   }
   {
     pg_span_t span = {.data = "", .len = strlen("")};
@@ -297,15 +297,15 @@ TEST test_pg_bitarray() {
   ASSERT_EQ_FMT(10ULL, pg_bitarray_count_unset(&bitarr), "%llu");
 
   // Iterate
-  int64_t i = -1;
+  uint64_t i = 0;
   bool is_set = false;
   while (pg_bitarray_next(&bitarr, &i, &is_set)) {
-    if (i == 5)
+    if (i - 1 == 5)
       ASSERT_EQ(true, is_set);
     else
       ASSERT_EQ(false, is_set);
   }
-  ASSERT_EQ_FMT(10LL, i, "%lld");
+  ASSERT_EQ_FMT(11LL, i, "%lld");
 
   ASSERT_EQ(false, pg_bitarray_is_all_set(&bitarr));
   ASSERT_EQ(false, pg_bitarray_is_all_unset(&bitarr));
