@@ -50,7 +50,13 @@ TEST test_on_read() {
       .length = 3 * BC_BLOCK_LENGTH + 1,
       .piece_length = 2 * BC_BLOCK_LENGTH,
       .pieces = pg_span32_make_c("0000000000000000000000000000000000000000"),
-      .name = pg_span32_make_c("foo")};
+      .name = pg_span32_make_c("foo"),
+      .blocks_count = 4,
+      .last_piece_length = BC_BLOCK_LENGTH + 1,
+      .last_piece_block_count = 2,
+      .blocks_per_piece = 2,
+      .pieces_count = 2,
+  };
 
   download_t download = {0};
   download_init(pg_heap_allocator(), &download, &metainfo, info_hash, peer_id,
@@ -138,7 +144,13 @@ TEST test_picker() {
       .length = 3 * BC_BLOCK_LENGTH + 1,
       .piece_length = 2 * BC_BLOCK_LENGTH,
       .pieces = pg_span32_make_c("0000000000000000000000000000000000000000"),
-      .name = pg_span32_make_c("foo")};
+      .name = pg_span32_make_c("foo"),
+      .blocks_count = 4,
+      .last_piece_length = BC_BLOCK_LENGTH + 1,
+      .last_piece_block_count = 2,
+      .blocks_per_piece = 2,
+      .pieces_count = 2,
+  };
 
   picker_t picker = {0};
   picker_init(pg_heap_allocator(), &logger, &picker, &metainfo);
@@ -148,7 +160,7 @@ TEST test_picker() {
   // `them_have_pieces` is only 0s
   {
     bool found = false;
-    ASSERT_EQ_FMT(-1U, picker_pick_block(&picker, &them_have_pieces, &found),
+    ASSERT_EQ_FMT(0U, picker_pick_block(&picker, &them_have_pieces, &found),
                   "%u");
     ASSERT_EQ(false, found);
   }
@@ -163,7 +175,7 @@ TEST test_picker() {
   {
     bool found = false;
     pg_bitarray_unset_all(&picker.blocks_to_download);
-    ASSERT_EQ_FMT(-1U, picker_pick_block(&picker, &them_have_pieces, &found),
+    ASSERT_EQ_FMT(0U, picker_pick_block(&picker, &them_have_pieces, &found),
                   "%u");
     ASSERT_EQ(false, found);
   }

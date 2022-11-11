@@ -158,6 +158,11 @@ typedef struct {
 void picker_init(pg_allocator_t allocator, pg_logger_t* logger,
                  picker_t* picker, bc_metainfo_t* metainfo) {
   picker->metainfo = metainfo;
+  assert(metainfo->blocks_count > 0);
+  assert(metainfo->pieces_count > 0);
+  assert(metainfo->blocks_per_piece > 0);
+  assert(metainfo->last_piece_block_count > 0);
+  assert(metainfo->last_piece_length > 0);
 
   pg_bitarray_init(allocator, &picker->blocks_to_download,
                    metainfo->blocks_count);
@@ -196,7 +201,7 @@ uint32_t picker_pick_block(const picker_t* picker,
 
     return block - 1;
   }
-  return -1;
+  return 0;
 }
 
 bool picker_have_all_blocks_for_piece(const picker_t* picker, uint32_t piece) {
