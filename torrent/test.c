@@ -47,8 +47,8 @@ TEST test_on_read() {
 
   bc_metainfo_t metainfo = {
       .announce = pg_span32_make_c("http://localhost"),
-      .length = 3 * PEER_BLOCK_LENGTH + 1,
-      .piece_length = 2 * PEER_BLOCK_LENGTH,
+      .length = 3 * BC_BLOCK_LENGTH + 1,
+      .piece_length = 2 * BC_BLOCK_LENGTH,
       .pieces = pg_span32_make_c("0000000000000000000000000000000000000000"),
       .name = pg_span32_make_c("foo")};
 
@@ -58,9 +58,12 @@ TEST test_on_read() {
 
   const tracker_peer_address_t addr = {0};
 
+  picker_t picker = {0};
+  picker_init(pg_heap_allocator(), &logger, &picker, &metainfo);
+
   peer_t* peer = pg_pool_alloc(&peer_pool);
   assert(peer != NULL);
-  peer_init(peer, &logger, &peer_pool, &download, &metainfo, addr);
+  peer_init(peer, &logger, &peer_pool, &download, &metainfo, &picker, addr);
 
   {
     uv_buf_t buf1 = {0};
@@ -132,8 +135,8 @@ TEST test_picker() {
   const uint32_t pieces_count = 2;
   bc_metainfo_t metainfo = {
       .announce = pg_span32_make_c("http://localhost"),
-      .length = 3 * PEER_BLOCK_LENGTH + 1,
-      .piece_length = 2 * PEER_BLOCK_LENGTH,
+      .length = 3 * BC_BLOCK_LENGTH + 1,
+      .piece_length = 2 * BC_BLOCK_LENGTH,
       .pieces = pg_span32_make_c("0000000000000000000000000000000000000000"),
       .name = pg_span32_make_c("foo")};
 
