@@ -212,7 +212,7 @@ bool picker_have_all_blocks_for_piece(const picker_t* picker, uint32_t piece) {
   assert(first_block < picker->metainfo->blocks_count);
 
   const uint32_t last_block =
-      first_block + metainfo_block_count_per_piece(picker->metainfo, piece) - 1;
+      first_block + metainfo_block_count_for_piece(picker->metainfo, piece) - 1;
 
   uint64_t i = first_block;
   bool is_set = false;
@@ -463,15 +463,16 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
           .index = peer_read_u32(&peer->recv_data),
           .begin = peer_read_u32(&peer->recv_data),
       };
+      const uint64_t data_len = announced_len - (1 + 2 * 4);
       // TODO: validate block is in 'downloading'
       if (msg->v.piece.index >= peer->metainfo->pieces_count ||
-          msg->v.piece.begin >= peer->metainfo->piece_length)
+          msg->v.piece.begin + data_len >
+              metainfo_piece_length(peer->metainfo, msg->v.piece.index))
         return (peer_error_t){.kind = PEK_INVALID_PIECE};
 
-      const uint64_t data_len = announced_len - (1 + 2 * 4);
       const uint32_t block_for_piece = msg->v.piece.begin / BC_BLOCK_LENGTH;
-      if (data_len > metainfo_block_for_piece_length(
-                         peer->metainfo, msg->v.piece.index, block_for_piece))
+      if (data_len != metainfo_block_for_piece_length(
+                          peer->metainfo, msg->v.piece.index, block_for_piece))
         return (peer_error_t){.kind = PEK_INVALID_PIECE};
 
       msg->v.piece.data = pg_pool_alloc(&peer->block_pool);
@@ -641,7 +642,7 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t piece, uint32_t block,
       assert(peer->download->downloaded_bytes >= length);
       peer->download->downloaded_bytes -= length;
       const uint64_t blocks_count =
-          metainfo_block_count_per_piece(peer->metainfo, piece);
+          metainfo_block_count_for_piece(peer->metainfo, piece);
       assert(peer->download->downloaded_blocks_count >= blocks_count);
       peer->download->downloaded_blocks_count -= blocks_count;
       return err;
@@ -703,15 +704,22 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       return (peer_error_t){0};
     }
     case PMK_PIECE: {
-      assert(peer->in_flight_requests > 0);
-
       const peer_message_piece_t piece_msg = msg->v.piece;
       const uint32_t piece = piece_msg.index;
 
+      if (peer->in_flight_requests == 0) {
+        pg_log_error(peer->logger, "Received unwanted piece: piece=%u", piece);
+        return (peer_error_t){.kind = PEK_INVALID_PIECE};
+      }
+
       const uint32_t block_for_piece = piece_msg.begin / BC_BLOCK_LENGTH;
-      const uint32_t block =
-          piece * peer->metainfo->blocks_per_piece + block_for_piece;
+      assert(block_for_piece <
+             metainfo_block_count_for_piece(peer->metainfo, piece));
+
+      const uint32_t block = metainfo_block_for_piece_to_block(
+          peer->metainfo, piece, block_for_piece);
       assert(block < peer->metainfo->blocks_count);
+
       const pg_span32_t span = (pg_span32_t){
           .data = (char*)piece_msg.data,
           .len = metainfo_block_for_piece_length(peer->metainfo, piece,
@@ -1228,7 +1236,7 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
 
       assert(download->downloaded_blocks_count < metainfo->blocks_count);
       download->downloaded_blocks_count +=
-          metainfo_block_count_per_piece(metainfo, piece);
+          metainfo_block_count_for_piece(metainfo, piece);
     }
   }
 

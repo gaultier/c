@@ -450,7 +450,7 @@ bool metainfo_is_last_piece(bc_metainfo_t* metainfo, uint32_t piece) {
   return piece == metainfo->pieces_count - 1;
 }
 
-uint32_t metainfo_block_count_per_piece(bc_metainfo_t* metainfo,
+uint32_t metainfo_block_count_for_piece(bc_metainfo_t* metainfo,
                                         uint32_t piece) {
   if (metainfo_is_last_piece(metainfo, piece))
     return metainfo->last_piece_block_count;
@@ -494,4 +494,15 @@ uint32_t metainfo_block_to_block_for_piece(bc_metainfo_t* metainfo,
     return metainfo->last_piece_block_count - 1;
   }
   return block_for_piece;
+}
+
+uint32_t metainfo_block_for_piece_to_block(bc_metainfo_t* metainfo,
+                                           uint32_t piece,
+                                           uint32_t block_for_piece) {
+  assert(piece < metainfo->pieces_count);
+  assert(block_for_piece < metainfo_block_count_for_piece(metainfo, piece));
+
+  const uint32_t block = piece * metainfo->blocks_per_piece + block_for_piece;
+  assert(block < metainfo->blocks_count);
+  return block;
 }
