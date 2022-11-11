@@ -210,12 +210,15 @@ bool picker_have_all_blocks_for_piece(const picker_t* picker, uint32_t piece) {
       piece * picker->metainfo->blocks_per_piece;
   const uint32_t last_block_for_piece =
       first_block_for_piece +
-      metainfo_block_count_per_piece(picker->metainfo, piece);
+      metainfo_block_count_per_piece(picker->metainfo, piece) - 1;
 
   uint64_t i = first_block_for_piece;
   bool is_set = false;
-  while (pg_bitarray_next(&picker->blocks_to_download, &i, &is_set)) {
-    if (i > last_block_for_piece) return true;
+  while (pg_bitarray_next(&picker->blocks_downloaded, &i, &is_set)) {
+    assert(i > 0);
+    const uint32_t block = i - 1;
+
+    if (block > last_block_for_piece) return true;
     if (!is_set) return false;
   }
 

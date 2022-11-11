@@ -179,6 +179,29 @@ TEST test_picker() {
                   "%u");
     ASSERT_EQ(false, found);
   }
+
+  {
+    pg_bitarray_clear(&picker.blocks_downloaded);
+    ASSERT_EQ(false, picker_have_all_blocks_for_piece(&picker, 0));
+    ASSERT_EQ(false, picker_have_all_blocks_for_piece(&picker, 1));
+
+    pg_bitarray_set(&picker.blocks_downloaded, 1);
+    ASSERT_EQ(false, picker_have_all_blocks_for_piece(&picker, 0));
+    ASSERT_EQ(false, picker_have_all_blocks_for_piece(&picker, 1));
+
+    pg_bitarray_set(&picker.blocks_downloaded, 2);
+    ASSERT_EQ(false, picker_have_all_blocks_for_piece(&picker, 0));
+    ASSERT_EQ(false, picker_have_all_blocks_for_piece(&picker, 1));
+
+    pg_bitarray_set(&picker.blocks_downloaded, 3);
+    ASSERT_EQ(false, picker_have_all_blocks_for_piece(&picker, 0));
+    ASSERT_EQ(true, picker_have_all_blocks_for_piece(&picker, 1));
+
+    pg_bitarray_set(&picker.blocks_downloaded, 0);
+    ASSERT_EQ(true, picker_have_all_blocks_for_piece(&picker, 0));
+    ASSERT_EQ(true, picker_have_all_blocks_for_piece(&picker, 1));
+  }
+
   picker_destroy(&picker);
 
   PASS();
