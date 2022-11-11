@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint32_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -20,16 +19,13 @@
   ((uint64_t)(1 + PEER_HANDSHAKE_HEADER_LENGTH + 8 + 20 + 20))
 #define PEER_MAX_MESSAGE_LENGTH ((uint64_t)1 << 27)
 #define PEER_MAX_IN_FLIGHT_REQUESTS ((uint64_t)5)
-#define PEER_BLOCK_LENGTH ((uint32_t)1 << 14)
 
 typedef struct {
   int fd;
   uint8_t info_hash[20];
   uint8_t peer_id[20];
-  uint32_t pieces_downloaded_count, pieces_count, downloaded_blocks_count,
-      blocks_count;
-  uint64_t blocks_per_piece, last_piece_length, last_piece_block_count,
-      downloaded_bytes;
+  uint32_t pieces_downloaded_count, downloaded_blocks_count;
+  uint64_t downloaded_bytes;
   pg_bitarray_t pieces_downloaded, pieces_downloading, pieces_to_download;
   uint64_t start_ts;
 } download_t;
@@ -125,7 +121,7 @@ typedef struct {
   pg_bitarray_t blocks_downloading;
   pg_bitarray_t blocks_downloaded;
   pg_logger_t* logger;
-  uint32_t blocks_per_piece;
+  bc_metainfo_t* metainfo;
 } picker_t;
 
 typedef struct {
@@ -161,16 +157,17 @@ typedef struct {
 
 void picker_init(pg_allocator_t allocator, pg_logger_t* logger,
                  picker_t* picker, bc_metainfo_t* metainfo) {
-  const uint64_t blocks_count =
-      (uint64_t)ceil((double)metainfo->length / PEER_BLOCK_LENGTH);
-  pg_bitarray_init(allocator, &picker->blocks_to_download, blocks_count);
-  pg_bitarray_init(allocator, &picker->blocks_downloading, blocks_count);
-  pg_bitarray_init(allocator, &picker->blocks_downloaded, blocks_count);
+  picker->metainfo = metainfo;
+
+  pg_bitarray_init(allocator, &picker->blocks_to_download,
+                   metainfo->blocks_count);
+  pg_bitarray_init(allocator, &picker->blocks_downloading,
+                   metainfo->blocks_count);
+  pg_bitarray_init(allocator, &picker->blocks_downloaded,
+                   metainfo->blocks_count);
 
   pg_bitarray_set_all(&picker->blocks_to_download);
 
-  picker->blocks_per_piece =
-      (uint64_t)ceil((double)metainfo->length / metainfo->piece_length);
   picker->logger = logger;
 }
 
@@ -183,7 +180,7 @@ uint32_t picker_pick_block(const picker_t* picker,
     if (!is_set) continue;
 
     const uint32_t block = (uint32_t)i;
-    const uint32_t piece = block / picker->blocks_per_piece;
+    const uint32_t piece = block / picker->metainfo->blocks_per_piece;
     const bool them_have = pg_bitarray_get(them_have_pieces, piece);
 
     if (!them_have) {
@@ -203,8 +200,12 @@ uint32_t picker_pick_block(const picker_t* picker,
 }
 
 bool picker_have_all_blocks_for_piece(const picker_t* picker, uint32_t piece) {
-  const uint32_t first_block_for_piece = piece * picker->blocks_per_piece;
-  const uint32_t last_block_for_piece = piece * picker->blocks_per_piece;
+  const uint32_t first_block_for_piece =
+      piece * picker->metainfo->blocks_per_piece;
+  const uint32_t last_block_for_piece =
+      first_block_for_piece +
+      metainfo_block_count_per_piece(picker->metainfo, piece);
+  return false;  // FIXME
 }
 
 void picker_mark_block_as_downloading(picker_t* picker, uint32_t block) {
@@ -242,36 +243,6 @@ void peer_alloc(uv_handle_t* handle, size_t suggested_size, uv_buf_t* buf) {
   assert(suggested_size <= peer->read_buf_pool.chunk_size);
   buf->base = pg_pool_alloc(&peer->read_buf_pool);
   buf->len = peer->read_buf_pool.chunk_size;
-}
-
-bool download_is_last_piece(download_t* download, uint32_t piece) {
-  return piece == download->pieces_count - 1;
-}
-
-uint32_t download_block_count_per_piece(download_t* download, uint32_t piece) {
-  if (download_is_last_piece(download, piece))
-    return download->last_piece_block_count;
-  else
-    return download->blocks_per_piece;
-}
-
-uint32_t download_block_length(download_t* download, bc_metainfo_t* metainfo,
-                               uint32_t piece, uint32_t block_for_piece) {
-  // Special case for last block of last piece
-  if (download_is_last_piece(download, piece) &&
-      block_for_piece == download->last_piece_block_count - 1)
-    return metainfo->length - (piece * metainfo->piece_length +
-                               block_for_piece * PEER_BLOCK_LENGTH);
-
-  return PEER_BLOCK_LENGTH;
-}
-
-uint32_t download_piece_length(download_t* download, bc_metainfo_t* metainfo,
-                               uint32_t piece) {
-  if (download_is_last_piece(download, piece))
-    return download->last_piece_length;
-
-  return metainfo->piece_length;
 }
 
 peer_error_t peer_check_handshaked(peer_t* peer) {
@@ -404,7 +375,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
                             4 + 1);  // consume announced_len + tag
 
       const uint32_t have = peer_read_u32(&peer->recv_data);
-      if (have > peer->download->pieces_count)
+      if (have > peer->metainfo->pieces_count)
         return (peer_error_t){.kind = PEK_INVALID_HAVE};
 
       msg->kind = PMK_HAVE;
@@ -413,7 +384,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
     }
     case PT_BITFIELD: {
       const uint64_t expected_bitfield_len =
-          (uint64_t)ceil(((double)peer->download->pieces_count - 1) / 8.0);
+          (uint64_t)ceil(((double)peer->metainfo->pieces_count - 1) / 8.0);
       if (announced_len != expected_bitfield_len + /* tag */ 1)
         return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
@@ -423,7 +394,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       msg->kind = PMK_BITFIELD;
       msg->v.bitfield = (peer_message_bitfield_t){0};
       pg_array_init_reserve(msg->v.bitfield.bitfield,
-                            peer->download->pieces_count - 1, peer->allocator);
+                            peer->metainfo->pieces_count - 1, peer->allocator);
 
       pg_ring_consume_front(&peer->recv_data,
                             4 + 1);  // consume announced_len + tag
@@ -471,14 +442,14 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
           .begin = peer_read_u32(&peer->recv_data),
       };
       // TODO: validate block is in 'downloading'
-      if (msg->v.piece.index >= peer->download->pieces_count ||
+      if (msg->v.piece.index >= peer->metainfo->pieces_count ||
           msg->v.piece.begin >= peer->metainfo->piece_length)
         return (peer_error_t){.kind = PEK_INVALID_PIECE};
 
       const uint64_t data_len = announced_len - (1 + 2 * 4);
-      const uint32_t block_for_piece = msg->v.piece.begin / PEER_BLOCK_LENGTH;
-      if (data_len > download_block_length(peer->download, peer->metainfo,
-                                           msg->v.piece.index, block_for_piece))
+      const uint32_t block_for_piece = msg->v.piece.begin / BC_BLOCK_LENGTH;
+      if (data_len > metainfo_block_length(peer->metainfo, msg->v.piece.index,
+                                           block_for_piece))
         return (peer_error_t){.kind = PEK_INVALID_PIECE};
 
       msg->v.piece.data = pg_pool_alloc(&peer->block_pool);
@@ -547,8 +518,7 @@ const char* peer_message_kind_to_string(int k) {
 
 peer_error_t peer_checksum_piece(peer_t* peer, uint32_t piece) {
   const uint64_t offset = piece * peer->metainfo->piece_length;
-  const uint64_t length =
-      download_piece_length(peer->download, peer->metainfo, piece);
+  const uint64_t length = metainfo_piece_length(peer->metainfo, piece);
 
   if (lseek(peer->download->fd, offset, SEEK_SET) == -1) {
     pg_log_error(peer->logger, "[%s] Failed to lseek(2): err=%s", peer->addr_s,
@@ -588,7 +558,7 @@ end:
 
 peer_error_t peer_send_heartbeat(peer_t* peer);
 peer_error_t peer_put_block(peer_t* peer, uint32_t block, pg_span32_t data) {
-  const uint32_t piece = block / peer->picker->blocks_per_piece;
+  const uint32_t piece = block / peer->metainfo->blocks_per_piece;
 
   pg_log_debug(peer->logger, "[%s] peer_put_block: piece=%u block_for_piece=%u",
                peer->addr_s, piece, block);
@@ -603,7 +573,7 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block, pg_span32_t data) {
 
   const uint64_t offset =
       (uint64_t)piece * (uint64_t)peer->metainfo->piece_length +
-      (uint64_t)block * PEER_BLOCK_LENGTH;
+      (uint64_t)block * BC_BLOCK_LENGTH;
 
   if (lseek(peer->download->fd, offset, SEEK_SET) == -1) {
     pg_log_error(peer->logger, "[%s] Failed to lseek(2): err=%s", peer->addr_s,
@@ -620,7 +590,7 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block, pg_span32_t data) {
   picker_mark_block_as_downloaded(peer->picker, block);
   peer->download->downloaded_bytes += data.len;
 
-  if (picker_have_all_blocks_for_piece(peer->picker)) {
+  if (picker_have_all_blocks_for_piece(peer->picker, block)) {
     pg_log_debug(
         peer->logger,
         "[%s] peer_put_block: have all blocks: piece=%u block_for_piece=%u",
@@ -632,13 +602,12 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block, pg_span32_t data) {
                    "[%s] peer_put_block: piece failed checksum: piece=%u "
                    "block_for_piece=%u err=%d",
                    peer->addr_s, piece, block, err.kind);
-      const uint64_t length =
-          download_piece_length(peer->download, peer->metainfo, piece);
+      const uint64_t length = metainfo_piece_length(peer->metainfo, piece);
 
       assert(peer->download->downloaded_bytes >= length);
       peer->download->downloaded_bytes -= length;
       const uint64_t blocks_count =
-          download_block_count_per_piece(peer->download, piece);
+          metainfo_block_count_per_piece(peer->metainfo, piece);
       assert(peer->download->downloaded_blocks_count >= blocks_count);
       peer->download->downloaded_blocks_count -= blocks_count;
       return err;
@@ -652,9 +621,9 @@ peer_error_t peer_put_block(peer_t* peer, uint32_t block, pg_span32_t data) {
               "[%s] Downloaded %u/%u pieces, %u/%u blocks, %.2f MiB / %.2f "
               "MiB, %2.f B/s",
               peer->addr_s, peer->download->pieces_downloaded_count,
-              peer->download->pieces_count,
+              peer->metainfo->pieces_count,
               peer->download->downloaded_blocks_count,
-              peer->download->blocks_count,
+              peer->metainfo->blocks_count,
               (double)peer->download->downloaded_bytes / 1024 / 1024,
               (double)peer->metainfo->length / 1024 / 1024, rate);
 
@@ -701,11 +670,11 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
 
       const peer_message_piece_t piece_msg = msg->v.piece;
 
-      const uint32_t block_for_piece = piece_msg.begin / PEER_BLOCK_LENGTH;
+      const uint32_t block_for_piece = piece_msg.begin / BC_BLOCK_LENGTH;
       const pg_span32_t span = (pg_span32_t){
           .data = (char*)piece_msg.data,
-          .len = download_block_length(peer->download, peer->metainfo,
-                                       piece_msg.index, block_for_piece),
+          .len = metainfo_block_length(peer->metainfo, piece_msg.index,
+                                       block_for_piece),
       };
 
       pg_log_debug(peer->logger,
@@ -944,11 +913,10 @@ uint8_t* peer_write_u8(uint8_t* buf, uint64_t* buf_len, uint8_t x) {
 }
 
 peer_error_t peer_send_request(peer_t* peer, uint32_t block) {
-  const uint32_t piece = block / peer->picker->blocks_per_piece;
+  const uint32_t piece = block / peer->metainfo->blocks_per_piece;
   const uint32_t begin =
-      block * PEER_BLOCK_LENGTH - piece * peer->metainfo->piece_length;
-  const uint32_t length =
-      download_block_length(peer->download, peer->metainfo, piece, block);
+      block * BC_BLOCK_LENGTH - piece * peer->metainfo->piece_length;
+  const uint32_t length = metainfo_block_length(peer->metainfo, piece, block);
 
   uv_buf_t buf =
       uv_buf_init(peer->allocator.realloc(4 + 1 + 3 * 4, NULL, 0), 0);
@@ -1050,7 +1018,7 @@ void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
                    sizeof(void*),
                30);
 
-  pg_pool_init(&peer->block_pool, PEER_BLOCK_LENGTH,
+  pg_pool_init(&peer->block_pool, BC_BLOCK_LENGTH,
                PEER_MAX_IN_FLIGHT_REQUESTS);  // TODO: increase when starting to
                                               // handle Request msg
 
@@ -1059,13 +1027,13 @@ void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
   peer->download = download;
   peer->metainfo = metainfo;
   pg_bitarray_init(peer->allocator, &peer->them_have_pieces,
-                   peer->download->pieces_count - 1);
+                   metainfo->pieces_count - 1);
   pg_bitarray_init(peer->allocator, &peer->blocks_for_piece_downloaded,
-                   peer->download->blocks_per_piece - 1);
+                   metainfo->blocks_per_piece - 1);
   pg_bitarray_init(peer->allocator, &peer->blocks_for_piece_downloading,
-                   peer->download->blocks_per_piece - 1);
+                   metainfo->blocks_per_piece - 1);
   pg_bitarray_init(peer->allocator, &peer->blocks_for_piece_to_download,
-                   peer->download->blocks_per_piece - 1);
+                   metainfo->blocks_per_piece - 1);
   peer->connect_req.data = peer;
   peer->connection.data = peer;
   peer->idle_handle.data = peer;
@@ -1142,25 +1110,17 @@ void download_init(pg_allocator_t allocator, download_t* download,
   assert(fd >= 0);
 
   download->fd = fd;
-  download->pieces_count = metainfo->pieces.len / 20;
   download->start_ts = 0;
 
-  download->blocks_per_piece = metainfo->piece_length / PEER_BLOCK_LENGTH;
-  download->last_piece_length =
-      metainfo->length - (download->pieces_count - 1) * metainfo->piece_length;
-  download->last_piece_block_count =
-      (uint64_t)ceil((double)download->last_piece_length / PEER_BLOCK_LENGTH);
-  download->blocks_count =
-      (uint64_t)ceil((double)metainfo->length / PEER_BLOCK_LENGTH);
   memcpy(download->info_hash, info_hash, 20);
   memcpy(download->peer_id, peer_id, 20);
 
   pg_bitarray_init(allocator, &download->pieces_downloaded,
-                   download->pieces_count - 1);
+                   metainfo->pieces_count - 1);
   pg_bitarray_init(allocator, &download->pieces_downloading,
-                   download->pieces_count - 1);
+                   metainfo->pieces_count - 1);
   pg_bitarray_init(allocator, &download->pieces_to_download,
-                   download->pieces_count - 1);
+                   metainfo->pieces_count - 1);
   pg_bitarray_set_all(&download->pieces_to_download);
 }
 
@@ -1183,8 +1143,8 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
   }
 
   peer_error_t err = {0};
-  for (uint32_t piece = 0; piece < download->pieces_count; piece++) {
-    const uint64_t length = download_piece_length(download, metainfo, piece);
+  for (uint32_t piece = 0; piece < metainfo->pieces_count; piece++) {
+    const uint64_t length = metainfo_piece_length(metainfo, piece);
 
     const uint64_t offset = piece * metainfo->piece_length;
     uint8_t hash[20] = {0};
@@ -1215,20 +1175,20 @@ peer_error_t download_checksum_all(pg_allocator_t allocator,
       pg_bitarray_unset(&download->pieces_downloading, piece);
       pg_bitarray_set(&download->pieces_downloaded, piece);
 
-      assert(download->pieces_downloaded_count < download->pieces_count);
+      assert(download->pieces_downloaded_count < metainfo->pieces_count);
       download->pieces_downloaded_count += 1;
 
       download->downloaded_bytes += length;
       assert(download->downloaded_bytes <= metainfo->length);
 
-      assert(download->downloaded_blocks_count < download->blocks_count);
+      assert(download->downloaded_blocks_count < metainfo->blocks_count);
       download->downloaded_blocks_count +=
-          download_block_count_per_piece(download, piece);
+          metainfo_block_count_per_piece(metainfo, piece);
     }
   }
 
   pg_log_info(logger, "download_checksum_all: have %u/%u pieces",
-              download->pieces_downloaded_count, download->pieces_count);
+              download->pieces_downloaded_count, metainfo->pieces_count);
 
   pg_array_free(file_data);
   return err;

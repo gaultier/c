@@ -6,6 +6,8 @@
 
 #include "../pg/pg.h"
 
+#define BC_BLOCK_LENGTH ((uint32_t)1 << 14)
+
 typedef enum : uint8_t {
   BC_KIND_NONE,
   BC_KIND_INTEGER,
@@ -307,6 +309,10 @@ typedef struct {
   uint64_t length;
   pg_span32_t name;
   pg_span32_t pieces;
+
+  // Computed
+  uint32_t pieces_count, blocks_count, blocks_per_piece, last_piece_length,
+      last_piece_block_count;
 } bc_metainfo_t;
 
 typedef enum : uint8_t {
@@ -427,5 +433,45 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t* parser,
   if (metainfo->pieces.len == 0) return BC_ME_PIECES_NOT_FOUND;
   if (metainfo->name.len == 0) return BC_ME_NAME_NOT_FOUND;
 
+  // Compute QoL values
+  metainfo->pieces_count = metainfo->pieces.len / 20;
+  metainfo->blocks_per_piece = metainfo->piece_length / BC_BLOCK_LENGTH;
+  metainfo->last_piece_length =
+      metainfo->length - (metainfo->pieces_count - 1) * metainfo->piece_length;
+  metainfo->last_piece_block_count =
+      (uint64_t)ceil((double)metainfo->last_piece_length / BC_BLOCK_LENGTH);
+  metainfo->blocks_count =
+      (uint64_t)ceil((double)metainfo->length / BC_BLOCK_LENGTH);
   return BC_ME_NONE;
 }
+
+bool metainfo_is_last_piece(bc_metainfo_t* metainfo, uint32_t piece) {
+  return piece == metainfo->pieces_count - 1;
+}
+
+uint32_t metainfo_block_count_per_piece(bc_metainfo_t* metainfo,
+                                        uint32_t piece) {
+  if (metainfo_is_last_piece(metainfo, piece))
+    return metainfo->last_piece_block_count;
+  else
+    return metainfo->blocks_per_piece;
+}
+
+uint32_t metainfo_block_length(bc_metainfo_t* metainfo, uint32_t piece,
+                               uint32_t block_for_piece) {
+  // Special case for last block of last piece
+  if (metainfo_is_last_piece(metainfo, piece) &&
+      block_for_piece == metainfo->last_piece_block_count - 1)
+    return metainfo->length -
+           (piece * metainfo->piece_length + block_for_piece * BC_BLOCK_LENGTH);
+
+  return BC_BLOCK_LENGTH;
+}
+
+uint32_t metainfo_piece_length(bc_metainfo_t* metainfo, uint32_t piece) {
+  if (metainfo_is_last_piece(metainfo, piece))
+    return metainfo->last_piece_length;
+
+  return metainfo->piece_length;
+}
+
