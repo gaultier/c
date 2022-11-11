@@ -194,7 +194,7 @@ uint32_t picker_pick_block(const picker_t* picker,
     pg_log_debug(picker->logger, "[%s] found piece %u", __func__, piece);
     *found = true;
 
-    return block;
+    return block - 1;
   }
   return -1;
 }
