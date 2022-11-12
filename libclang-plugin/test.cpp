@@ -11,7 +11,7 @@ int main() {
   Person p_default_initialized;
   printf("UB: %d\n", p_default_initialized.age);
 
-  Person* p_new = new Person;
+  Person *p_new = new Person;
   printf("OK: %d\n", p_new->age);
   delete p_new;
 

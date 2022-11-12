@@ -60,7 +60,7 @@ void *pg_stack_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
 }
 
 void pg_stack_free(void *memory) {
-  (void)memory;  // no-op
+  (void)memory; // no-op
 }
 
 pg_allocator_t pg_stack_allocator() {
@@ -129,7 +129,8 @@ void pg_pool_free_all(pg_pool_t *pool) {
 
 void *pg_pool_alloc(pg_pool_t *pool) {
   pg_pool_free_node_t *node = pool->head;
-  if (node == NULL) return NULL;  // No more space
+  if (node == NULL)
+    return NULL; // No more space
 
   pool->head = pool->head->next;
 
@@ -185,32 +186,33 @@ typedef struct pg_array_header_t {
 #define pg_array_capacity(x) (PG_ARRAY_HEADER(x)->capacity)
 #define pg_array_available_space(x) (pg_array_capacity(x) - pg_array_len(x))
 
-#define pg_array_init_reserve(x, cap, my_allocator)                          \
-  do {                                                                       \
-    void **pg__array_ = (void **)&(x);                                       \
-    pg_array_header_t *pg__ah =                                              \
-        (pg_array_header_t *)(my_allocator)                                  \
-            .realloc(sizeof(pg_array_header_t) + sizeof(*(x)) * (cap), NULL, \
-                     0);                                                     \
-    pg__ah->count = 0;                                                       \
-    pg__ah->capacity = cap;                                                  \
-    pg__ah->allocator = my_allocator;                                        \
-    *pg__array_ = (void *)(pg__ah + 1);                                      \
+#define pg_array_init_reserve(x, cap, my_allocator)                            \
+  do {                                                                         \
+    void **pg__array_ = (void **)&(x);                                         \
+    pg_array_header_t *pg__ah =                                                \
+        (pg_array_header_t *)(my_allocator)                                    \
+            .realloc(sizeof(pg_array_header_t) + sizeof(*(x)) * (cap), NULL,   \
+                     0);                                                       \
+    pg__ah->count = 0;                                                         \
+    pg__ah->capacity = cap;                                                    \
+    pg__ah->allocator = my_allocator;                                          \
+    *pg__array_ = (void *)(pg__ah + 1);                                        \
   } while (0)
 
 #define pg_array_init(x, my_allocator) pg_array_init_reserve(x, 0, my_allocator)
 
-#define pg_array_free(x)                            \
-  do {                                              \
-    pg_array_header_t *pg__ah = PG_ARRAY_HEADER(x); \
-    pg__ah->allocator.free(pg__ah);                 \
-    x = NULL;                                       \
+#define pg_array_free(x)                                                       \
+  do {                                                                         \
+    pg_array_header_t *pg__ah = PG_ARRAY_HEADER(x);                            \
+    pg__ah->allocator.free(pg__ah);                                            \
+    x = NULL;                                                                  \
   } while (0)
 
 #define pg_array_grow(x, min_capacity)                                         \
   do {                                                                         \
     uint64_t new_capacity = PG_ARRAY_GROW_FORMULA(pg_array_capacity(x));       \
-    if (new_capacity < (min_capacity)) new_capacity = (min_capacity);          \
+    if (new_capacity < (min_capacity))                                         \
+      new_capacity = (min_capacity);                                           \
     const uint64_t old_size =                                                  \
         sizeof(pg_array_header_t) + pg_array_capacity(x) * sizeof(*x);         \
     const uint64_t new_size =                                                  \
@@ -221,31 +223,33 @@ typedef struct pg_array_header_t {
     x = (void *)(pg__new_header + 1);                                          \
   } while (0)
 
-#define pg_array_append(x, item)                                           \
-  do {                                                                     \
-    if (pg_array_capacity(x) < pg_array_len(x) + 1) pg_array_grow(x, 0); \
-    (x)[pg_array_len(x)++] = (item);                                     \
+#define pg_array_append(x, item)                                               \
+  do {                                                                         \
+    if (pg_array_capacity(x) < pg_array_len(x) + 1)                            \
+      pg_array_grow(x, 0);                                                     \
+    (x)[pg_array_len(x)++] = (item);                                           \
   } while (0)
 
-#define pg_array_pop(x)                    \
-  do {                                     \
-    assert(PG_ARRAY_HEADER(x)->count > 0); \
-    PG_ARRAY_HEADER(x)->count--;           \
+#define pg_array_pop(x)                                                        \
+  do {                                                                         \
+    assert(PG_ARRAY_HEADER(x)->count > 0);                                     \
+    PG_ARRAY_HEADER(x)->count--;                                               \
   } while (0)
-#define pg_array_clear(x)          \
-  do {                             \
-    PG_ARRAY_HEADER(x)->count = 0; \
+#define pg_array_clear(x)                                                      \
+  do {                                                                         \
+    PG_ARRAY_HEADER(x)->count = 0;                                             \
   } while (0)
 
-#define pg_array_resize(x, new_count)                         \
-  do {                                                        \
-    if (PG_ARRAY_HEADER(x)->capacity < (uint64_t)(new_count)) \
-      pg_array_grow(x, (uint64_t)(new_count));                \
-    PG_ARRAY_HEADER(x)->count = (uint64_t)(new_count);        \
+#define pg_array_resize(x, new_count)                                          \
+  do {                                                                         \
+    if (PG_ARRAY_HEADER(x)->capacity < (uint64_t)(new_count))                  \
+      pg_array_grow(x, (uint64_t)(new_count));                                 \
+    PG_ARRAY_HEADER(x)->count = (uint64_t)(new_count);                         \
   } while (0)
 
 char pg_char_to_lower(char c) {
-  if (c >= 'A' && c <= 'Z') return 'a' + (c - 'A');
+  if (c >= 'A' && c <= 'Z')
+    return 'a' + (c - 'A');
   return c;
 }
 
@@ -256,12 +260,14 @@ bool pg_char_is_space(char c) {
 }
 
 bool pg_char_is_digit(char c) {
-  if (c >= '0' && c <= '9') return true;
+  if (c >= '0' && c <= '9')
+    return true;
   return false;
 }
 
 bool pg_char_is_alpha(char c) {
-  if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) return true;
+  if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'))
+    return true;
   return false;
 }
 
@@ -272,7 +278,8 @@ bool pg_char_is_alphanumeric(char c) {
 bool pg_str_has_prefix(char *haystack0, char *needle0) {
   uint64_t haystack0_len = strlen(haystack0);
   uint64_t needle0_len = strlen(needle0);
-  if (needle0_len > haystack0_len) return false;
+  if (needle0_len > haystack0_len)
+    return false;
   return memcmp(haystack0, needle0, needle0_len) == 0;
 }
 
@@ -305,7 +312,8 @@ pg_string_t pg_string_make_reserve(pg_allocator_t a, uint64_t capacity) {
   pg_string_t str;
   pg_string_header_t *header;
 
-  if (ptr == NULL) return NULL;
+  if (ptr == NULL)
+    return NULL;
   memset(ptr, 0, header_size + capacity + 1);
 
   str = (char *)ptr + header_size;
@@ -326,8 +334,10 @@ pg_string_t pg_string_make_length(pg_allocator_t a, void const *init_str,
   pg_string_t str;
   pg_string_header_t *header;
 
-  if (ptr == NULL) return NULL;
-  if (!init_str) memset(ptr, 0, header_size + num_bytes + 1);
+  if (ptr == NULL)
+    return NULL;
+  if (!init_str)
+    memset(ptr, 0, header_size + num_bytes + 1);
 
   str = (char *)ptr + header_size;
   header = PG_STRING_HEADER(str);
@@ -399,7 +409,8 @@ pg_string_t pg_string_make_space_for(pg_string_t str, int64_t add_len) {
     new_size = sizeof(pg_string_header_t) + new_len + 1;
 
     new_ptr = PG_STRING_HEADER(str)->allocator.realloc(new_size, ptr, old_size);
-    if (new_ptr == NULL) return NULL;
+    if (new_ptr == NULL)
+      return NULL;
 
     header = (pg_string_header_t *)new_ptr;
     header->allocator = a;
@@ -465,7 +476,8 @@ char pg_span_peek(pg_span_t span) {
 void pg_span_consume_left(pg_span_t *span, uint64_t n) {
   assert(span != NULL);
 
-  if (span->len == 0) return;
+  if (span->len == 0)
+    return;
 
   assert(span->data != NULL);
   assert(span->len >= n);
@@ -477,7 +489,8 @@ void pg_span_consume_left(pg_span_t *span, uint64_t n) {
 void pg_span_consume_right(pg_span_t *span, uint64_t n) {
   assert(span != NULL);
 
-  if (span->len == 0) return;
+  if (span->len == 0)
+    return;
 
   assert(span->data != NULL);
   assert(span->len >= n);
@@ -529,7 +542,8 @@ pg_span_t pg_span_make_c(char *s) {
 }
 
 bool pg_span_starts_with(pg_span_t haystack, pg_span_t needle) {
-  if (needle.len > haystack.len) return false;
+  if (needle.len > haystack.len)
+    return false;
   return memmem(haystack.data, haystack.len, needle.data, needle.len) == 0;
 }
 
@@ -545,7 +559,8 @@ char pg_span32_peek(pg_span32_t span) {
 void pg_span32_consume_left(pg_span32_t *span, uint32_t n) {
   assert(span != NULL);
 
-  if (span->len == 0) return;
+  if (span->len == 0)
+    return;
 
   assert(span->data != NULL);
   assert(span->len >= n);
@@ -557,7 +572,8 @@ void pg_span32_consume_left(pg_span32_t *span, uint32_t n) {
 void pg_span32_consume_right(pg_span32_t *span, uint32_t n) {
   assert(span != NULL);
 
-  if (span->len == 0) return;
+  if (span->len == 0)
+    return;
 
   assert(span->data != NULL);
   assert(span->len >= n);
@@ -609,7 +625,8 @@ pg_span32_t pg_span32_make_c(char *s) {
 }
 
 bool pg_span32_starts_with(pg_span32_t haystack, pg_span32_t needle) {
-  if (needle.len > haystack.len) return false;
+  if (needle.len > haystack.len)
+    return false;
   return memmem(haystack.data, haystack.len, needle.data, needle.len) == 0;
 }
 
@@ -641,7 +658,8 @@ int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
     if (ret == -1) {
       return errno;
     }
-    if (ret == 0) return 0;
+    if (ret == 0)
+      return 0;
     pg_array_resize(*buf, pg_array_len(*buf) + ret);
     pg_array_grow(*buf, pg_array_capacity(*buf) + read_buffer_size);
   }
@@ -672,36 +690,36 @@ typedef struct {
   pg_log_level_t level;
 } pg_logger_t;
 
-#define pg_log_debug(logger, fmt, ...)                            \
-  do {                                                            \
-    if ((logger) != NULL && (logger)->level <= PG_LOG_DEBUG)      \
-      fprintf(stderr, "%s[DEBUG] " fmt "%s\n",                    \
-              (isatty(2) ? "\x1b[38:5:240m" : ""), ##__VA_ARGS__, \
-              (isatty(2) ? "\x1b[0m" : ""));                      \
+#define pg_log_debug(logger, fmt, ...)                                         \
+  do {                                                                         \
+    if ((logger) != NULL && (logger)->level <= PG_LOG_DEBUG)                   \
+      fprintf(stderr, "%s[DEBUG] " fmt "%s\n",                                 \
+              (isatty(2) ? "\x1b[38:5:240m" : ""), ##__VA_ARGS__,              \
+              (isatty(2) ? "\x1b[0m" : ""));                                   \
   } while (0)
 
-#define pg_log_info(logger, fmt, ...)                                        \
-  do {                                                                       \
-    if ((logger) != NULL && (logger)->level <= PG_LOG_INFO)                  \
-      fprintf(stderr, "%s[INFO] " fmt "%s\n", (isatty(2) ? "\x1b[32m" : ""), \
-              ##__VA_ARGS__, (isatty(2) ? "\x1b[0m" : ""));                  \
+#define pg_log_info(logger, fmt, ...)                                          \
+  do {                                                                         \
+    if ((logger) != NULL && (logger)->level <= PG_LOG_INFO)                    \
+      fprintf(stderr, "%s[INFO] " fmt "%s\n", (isatty(2) ? "\x1b[32m" : ""),   \
+              ##__VA_ARGS__, (isatty(2) ? "\x1b[0m" : ""));                    \
   } while (0)
 
-#define pg_log_error(logger, fmt, ...)                                        \
-  do {                                                                        \
-    if ((logger) != NULL && (logger)->level <= PG_LOG_ERROR)                  \
-      fprintf(stderr, "%s[ERROR] " fmt "%s\n", (isatty(2) ? "\x1b[31m" : ""), \
-              ##__VA_ARGS__, (isatty(2) ? "\x1b[0m" : ""));                   \
+#define pg_log_error(logger, fmt, ...)                                         \
+  do {                                                                         \
+    if ((logger) != NULL && (logger)->level <= PG_LOG_ERROR)                   \
+      fprintf(stderr, "%s[ERROR] " fmt "%s\n", (isatty(2) ? "\x1b[31m" : ""),  \
+              ##__VA_ARGS__, (isatty(2) ? "\x1b[0m" : ""));                    \
   } while (0)
 
-#define pg_log_fatal(logger, exit_code, fmt, ...)                 \
-  do {                                                            \
-    if ((logger) != NULL && (logger)->level <= PG_LOG_FATAL) {    \
-      fprintf(stderr, "%s[FATAL] " fmt "%s\n",                    \
-              (isatty(2) ? "\x1b[38:5:124m" : ""), ##__VA_ARGS__, \
-              (isatty(2) ? "\x1b[0m" : ""));                      \
-      exit(exit_code);                                            \
-    }                                                             \
+#define pg_log_fatal(logger, exit_code, fmt, ...)                              \
+  do {                                                                         \
+    if ((logger) != NULL && (logger)->level <= PG_LOG_FATAL) {                 \
+      fprintf(stderr, "%s[FATAL] " fmt "%s\n",                                 \
+              (isatty(2) ? "\x1b[38:5:124m" : ""), ##__VA_ARGS__,              \
+              (isatty(2) ? "\x1b[0m" : ""));                                   \
+      exit(exit_code);                                                         \
+    }                                                                          \
   } while (0)
 
 // -------------------------- Ring buffer of bytes
@@ -728,7 +746,8 @@ uint64_t pg_ring_cap(pg_ring_t *ring) { return ring->cap; }
 void pg_ring_destroy(pg_ring_t *ring) { ring->allocator.free(ring->data); }
 
 uint8_t *pg_ring_get_ptr(pg_ring_t *ring, uint64_t i) {
-  if (ring->cap == 0) return NULL;
+  if (ring->cap == 0)
+    return NULL;
 
   assert(i < ring->cap);
   const uint64_t index = (i + ring->offset) % ring->cap;
@@ -747,7 +766,8 @@ uint8_t *pg_ring_front_ptr(pg_ring_t *ring) {
 uint8_t pg_ring_front(pg_ring_t *ring) { return *pg_ring_front_ptr(ring); }
 
 uint8_t *pg_ring_back_ptr(pg_ring_t *ring) {
-  if (ring->cap == 0) return NULL;
+  if (ring->cap == 0)
+    return NULL;
 
   const uint64_t index = (ring->offset + ring->len - 1) % ring->cap;
   return &ring->data[index];
@@ -818,7 +838,8 @@ void pg_ring_push_backv(pg_ring_t *ring, uint8_t *data, uint64_t len) {
   // Fill the tail
   const uint64_t space_tail = ring->cap - index;
   uint64_t to_write_tail_count = len;
-  if (to_write_tail_count > space_tail) to_write_tail_count = space_tail;
+  if (to_write_tail_count > space_tail)
+    to_write_tail_count = space_tail;
   assert(index + to_write_tail_count <= ring->cap);
   memcpy(ring->data + index, data, to_write_tail_count);
 
@@ -871,7 +892,8 @@ bool pg_bitarray_get(const pg_bitarray_t *bitarr, uint64_t index) {
 
 bool pg_bitarray_next(const pg_bitarray_t *bitarr, uint64_t *index,
                       bool *is_set) {
-  if (*index >= pg_bitarray_len(bitarr)) return false;
+  if (*index >= pg_bitarray_len(bitarr))
+    return false;
 
   *is_set = pg_bitarray_get(bitarr, *index);
   *index += 1;
@@ -903,14 +925,16 @@ uint64_t pg_bitarray_count_unset(pg_bitarray_t *bitarr) {
 
 bool pg_bitarray_is_all_set(pg_bitarray_t *bitarr) {
   for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
-    if (!pg_bitarray_get(bitarr, i)) return false;
+    if (!pg_bitarray_get(bitarr, i))
+      return false;
   }
   return true;
 }
 
 bool pg_bitarray_is_all_unset(pg_bitarray_t *bitarr) {
   for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
-    if (pg_bitarray_get(bitarr, i)) return false;
+    if (pg_bitarray_get(bitarr, i))
+      return false;
   }
   return true;
 }

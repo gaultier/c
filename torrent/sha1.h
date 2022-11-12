@@ -8,12 +8,12 @@
 #define MBEDTLS_BYTE_2(x) ((uint8_t)(((x) >> 16) & 0xff))
 #define MBEDTLS_BYTE_3(x) ((uint8_t)(((x) >> 24) & 0xff))
 #ifndef MBEDTLS_PUT_UINT32_BE
-#define MBEDTLS_PUT_UINT32_BE(n, data, offset) \
-  {                                            \
-    (data)[(offset)] = MBEDTLS_BYTE_3(n);      \
-    (data)[(offset) + 1] = MBEDTLS_BYTE_2(n);  \
-    (data)[(offset) + 2] = MBEDTLS_BYTE_1(n);  \
-    (data)[(offset) + 3] = MBEDTLS_BYTE_0(n);  \
+#define MBEDTLS_PUT_UINT32_BE(n, data, offset)                                 \
+  {                                                                            \
+    (data)[(offset)] = MBEDTLS_BYTE_3(n);                                      \
+    (data)[(offset) + 1] = MBEDTLS_BYTE_2(n);                                  \
+    (data)[(offset) + 2] = MBEDTLS_BYTE_1(n);                                  \
+    (data)[(offset) + 3] = MBEDTLS_BYTE_0(n);                                  \
   }
 #endif
 typedef struct mbedtls_sha1_context {
@@ -28,7 +28,8 @@ void mbedtls_sha1_init(mbedtls_sha1_context *ctx) {
 }
 
 void mbedtls_sha1_free(mbedtls_sha1_context *ctx) {
-  if (ctx == NULL) return;
+  if (ctx == NULL)
+    return;
 
   memset(ctx, 0, sizeof(mbedtls_sha1_context));
 }
@@ -55,9 +56,9 @@ int mbedtls_sha1_starts(mbedtls_sha1_context *ctx) {
 }
 
 #ifndef MBEDTLS_GET_UINT32_BE
-#define MBEDTLS_GET_UINT32_BE(data, offset) \
-  (((uint32_t)(data)[(offset)] << 24) |     \
-   ((uint32_t)(data)[(offset) + 1] << 16) | \
+#define MBEDTLS_GET_UINT32_BE(data, offset)                                    \
+  (((uint32_t)(data)[(offset)] << 24) |                                        \
+   ((uint32_t)(data)[(offset) + 1] << 16) |                                    \
    ((uint32_t)(data)[(offset) + 2] << 8) | ((uint32_t)(data)[(offset) + 3]))
 #endif
 int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
@@ -85,15 +86,15 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
 
 #define S(x, n) (((x) << (n)) | (((x)&0xFFFFFFFF) >> (32 - (n))))
 
-#define R(t)                                                        \
-  (local.temp = local.W[((t)-3) & 0x0F] ^ local.W[((t)-8) & 0x0F] ^ \
-                local.W[((t)-14) & 0x0F] ^ local.W[(t)&0x0F],       \
+#define R(t)                                                                   \
+  (local.temp = local.W[((t)-3) & 0x0F] ^ local.W[((t)-8) & 0x0F] ^            \
+                local.W[((t)-14) & 0x0F] ^ local.W[(t)&0x0F],                  \
    (local.W[(t)&0x0F] = S(local.temp, 1)))
 
-#define P(a, b, c, d, e, x)                        \
-  do {                                             \
-    (e) += S((a), 5) + F((b), (c), (d)) + K + (x); \
-    (b) = S((b), 30);                              \
+#define P(a, b, c, d, e, x)                                                    \
+  do {                                                                         \
+    (e) += S((a), 5) + F((b), (c), (d)) + K + (x);                             \
+    (b) = S((b), 30);                                                          \
   } while (0)
 
   local.A = ctx->state[0];
@@ -233,7 +234,8 @@ int mbedtls_sha1_update(mbedtls_sha1_context *ctx, const unsigned char *input,
   size_t fill;
   uint32_t left;
 
-  if (ilen == 0) return (0);
+  if (ilen == 0)
+    return (0);
 
   left = ctx->total[0] & 0x3F;
   fill = 64 - left;
@@ -241,7 +243,8 @@ int mbedtls_sha1_update(mbedtls_sha1_context *ctx, const unsigned char *input,
   ctx->total[0] += (uint32_t)ilen;
   ctx->total[0] &= 0xFFFFFFFF;
 
-  if (ctx->total[0] < (uint32_t)ilen) ctx->total[1]++;
+  if (ctx->total[0] < (uint32_t)ilen)
+    ctx->total[1]++;
 
   if (left && ilen >= fill) {
     memcpy((void *)(ctx->buffer + left), input, fill);
@@ -255,13 +258,15 @@ int mbedtls_sha1_update(mbedtls_sha1_context *ctx, const unsigned char *input,
   }
 
   while (ilen >= 64) {
-    if ((ret = mbedtls_internal_sha1_process(ctx, input)) != 0) return (ret);
+    if ((ret = mbedtls_internal_sha1_process(ctx, input)) != 0)
+      return (ret);
 
     input += 64;
     ilen -= 64;
   }
 
-  if (ilen > 0) memcpy((void *)(ctx->buffer + left), input, ilen);
+  if (ilen > 0)
+    memcpy((void *)(ctx->buffer + left), input, ilen);
 
   return (0);
 }
@@ -329,11 +334,14 @@ int mbedtls_sha1(const unsigned char *input, size_t ilen,
 
   mbedtls_sha1_init(&ctx);
 
-  if ((ret = mbedtls_sha1_starts(&ctx)) != 0) goto exit;
+  if ((ret = mbedtls_sha1_starts(&ctx)) != 0)
+    goto exit;
 
-  if ((ret = mbedtls_sha1_update(&ctx, input, ilen)) != 0) goto exit;
+  if ((ret = mbedtls_sha1_update(&ctx, input, ilen)) != 0)
+    goto exit;
 
-  if ((ret = mbedtls_sha1_finish(&ctx, output)) != 0) goto exit;
+  if ((ret = mbedtls_sha1_finish(&ctx, output)) != 0)
+    goto exit;
 
 exit:
   mbedtls_sha1_free(&ctx);
