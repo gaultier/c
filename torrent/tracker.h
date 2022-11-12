@@ -7,7 +7,7 @@
 #include "../pg/pg.h"
 #include "bencode.h"
 
-typedef enum {
+typedef enum : uint8_t {
   TK_ERR_NONE,
   TK_ERR_CURL,
   TK_ERR_BENCODE_PARSE,
@@ -16,16 +16,16 @@ typedef enum {
 
 const char *tracker_error_to_string(int err) {
   switch (err) {
-  case TK_ERR_NONE:
-    return "TK_ERR_NONE";
-  case TK_ERR_CURL:
-    return "TK_ERR_CURL";
-  case TK_ERR_BENCODE_PARSE:
-    return "TK_ERR_BENCODE_PARSE";
-  case TK_ERR_INVALID_PEERS:
-    return "TK_ERR_INVALID_PEERS";
-  default:
-    __builtin_unreachable();
+    case TK_ERR_NONE:
+      return "TK_ERR_NONE";
+    case TK_ERR_CURL:
+      return "TK_ERR_CURL";
+    case TK_ERR_BENCODE_PARSE:
+      return "TK_ERR_BENCODE_PARSE";
+    case TK_ERR_INVALID_PEERS:
+      return "TK_ERR_INVALID_PEERS";
+    default:
+      __builtin_unreachable();
   }
 }
 
@@ -46,10 +46,8 @@ typedef struct {
 
 tracker_error_t tracker_parse_peer_addresses(
     bc_parser_t *parser, pg_array_t(tracker_peer_address_t) * peer_addresses) {
-  if (pg_array_len(parser->kinds) == 0)
-    return TK_ERR_INVALID_PEERS;
-  if (parser->kinds[0] != BC_KIND_DICTIONARY)
-    return TK_ERR_INVALID_PEERS;
+  if (pg_array_len(parser->kinds) == 0) return TK_ERR_INVALID_PEERS;
+  if (parser->kinds[0] != BC_KIND_DICTIONARY) return TK_ERR_INVALID_PEERS;
 
   uint32_t cur = 1;
   const pg_span32_t peers_key = pg_span32_make_c("peers");
@@ -63,8 +61,7 @@ tracker_error_t tracker_parse_peer_addresses(
 
     if (key_kind == BC_KIND_STRING && pg_span32_eq(peers_key, key_span) &&
         value_kind == BC_KIND_STRING) {
-      if (value_span.len % 6 != 0)
-        return TK_ERR_INVALID_PEERS;
+      if (value_span.len % 6 != 0) return TK_ERR_INVALID_PEERS;
 
       for (uint64_t j = 0; j < value_span.len; j += 6) {
         tracker_peer_address_t addr = {
@@ -108,8 +105,7 @@ uint64_t tracker_on_response_chunk(void *ptr, uint64_t size, uint64_t nmemb,
   pg_array_t(char) *response = user_data;
 
   const uint64_t new_len = pg_array_len(*response) + ptr_len;
-  if (new_len > UINT16_MAX)
-    return 0;
+  if (new_len > UINT16_MAX) return 0;
 
   pg_array_grow(*response, new_len);
   assert(pg_array_capacity(*response) >= ptr_len);
@@ -120,9 +116,10 @@ uint64_t tracker_on_response_chunk(void *ptr, uint64_t size, uint64_t nmemb,
   return new_len;
 }
 
-tracker_error_t
-tracker_fetch_peers(pg_allocator_t allocator, tracker_query_t *q,
-                    pg_array_t(tracker_peer_address_t) * peer_addresses) {
+tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
+                                    tracker_query_t *q,
+                                    pg_array_t(tracker_peer_address_t) *
+                                        peer_addresses) {
   tracker_error_t err = TK_ERR_NONE;
 
   pg_string_t url = tracker_build_url_from_query(allocator, q);
