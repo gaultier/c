@@ -51,7 +51,7 @@ typedef struct {
 } tracker_peer_address_ipv6_t;
 
 tracker_error_t tracker_parse_peer_addresses(
-    bc_parser_t *parser,
+    pg_logger_t *logger, bc_parser_t *parser,
     pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses_ipv4,
     pg_array_t(tracker_peer_address_ipv6_t) * peer_addresses_ipv6) {
   if (pg_array_len(parser->kinds) == 0) return TK_ERR_INVALID_PEERS;
@@ -60,6 +60,8 @@ tracker_error_t tracker_parse_peer_addresses(
   uint32_t cur = 1;
   const pg_span32_t peers_key = pg_span32_make_c("peers");
   const pg_span32_t peers6_key = pg_span32_make_c("peers6");
+  const pg_span32_t failure_reason_key = pg_span32_make_c("failure reason");
+  const pg_span32_t warning_message_key = pg_span32_make_c("warning message");
   const uint32_t root_len = parser->lengths[0];
 
   for (uint32_t i = 0; i < root_len; i += 2) {
@@ -79,9 +81,9 @@ tracker_error_t tracker_parse_peer_addresses(
         };
         pg_array_append(*peer_addresses_ipv4, addr);
       }
-    }
-    if (key_kind == BC_KIND_STRING && pg_span32_eq(peers6_key, key_span) &&
-        value_kind == BC_KIND_STRING) {
+    } else if (key_kind == BC_KIND_STRING &&
+               pg_span32_eq(peers6_key, key_span) &&
+               value_kind == BC_KIND_STRING) {
       if (value_span.len % 18 != 0) return TK_ERR_INVALID_PEERS;
 
       for (uint64_t j = 0; j < value_span.len; j += 6) {
@@ -92,6 +94,16 @@ tracker_error_t tracker_parse_peer_addresses(
         __builtin_dump_struct(&addr, &printf);
         pg_array_append(*peer_addresses_ipv6, addr);
       }
+    } else if (key_kind == BC_KIND_STRING &&
+               pg_span32_eq(failure_reason_key, key_span) &&
+               value_kind == BC_KIND_STRING) {
+      pg_log_error(logger, "Tracker error: %.*s", value_span.len,
+                   value_span.data);
+    } else if (key_kind == BC_KIND_STRING &&
+               pg_span32_eq(warning_message_key, key_span) &&
+               value_kind == BC_KIND_STRING) {
+      pg_log_error(logger, "Tracker warning: %.*s", value_span.len,
+                   value_span.data);
     }
   }
 
@@ -139,7 +151,7 @@ uint64_t tracker_on_response_chunk(void *ptr, uint64_t size, uint64_t nmemb,
 }
 
 tracker_error_t tracker_fetch_peers(
-    pg_allocator_t allocator, tracker_query_t *q,
+    pg_logger_t *logger, pg_allocator_t allocator, tracker_query_t *q,
     pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses_ipv4,
     pg_array_t(tracker_peer_address_ipv6_t) * peer_addresses_ipv6) {
   tracker_error_t err = TK_ERR_NONE;
@@ -176,7 +188,7 @@ tracker_error_t tracker_fetch_peers(
     goto end;
   }
 
-  if ((err = tracker_parse_peer_addresses(&parser, peer_addresses_ipv4,
+  if ((err = tracker_parse_peer_addresses(logger, &parser, peer_addresses_ipv4,
                                           peer_addresses_ipv6)) != TK_ERR_NONE)
     goto end;
 

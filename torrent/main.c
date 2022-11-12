@@ -76,13 +76,14 @@ int main(int argc, char* argv[]) {
 
   pg_log_debug(&logger, "Fetching peers from tracker");
   tracker_error_t tracker_err =
-      tracker_fetch_peers(pg_heap_allocator(), &tracker_query,
+      tracker_fetch_peers(&logger, pg_heap_allocator(), &tracker_query,
                           &peer_addresses_ipv4, &peer_addresses_ipv6);
   if (tracker_err != TK_ERR_NONE) {
     pg_log_fatal(&logger, EINVAL, "Failed to contact tracker: %s",
                  tracker_error_to_string(tracker_err));
   }
-  if (pg_array_len(peer_addresses_ipv4) == 0) {
+  if (pg_array_len(peer_addresses_ipv4) == 0 &&
+      pg_array_len(peer_addresses_ipv6) == 0) {
     pg_log_fatal(&logger, EINVAL, "No peers returned from tracker");
   }
 
