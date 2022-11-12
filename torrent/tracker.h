@@ -93,7 +93,7 @@ pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
   snprintf(
       res, pg_string_capacity(res),
       "%.*s?info_hash=%s&peer_id=%s&port=%hu&uploaded=%llu&downloaded=%llu&"
-      "left=%llu",
+      "left=%llu&compact=1",
       (int)q->url.len, q->url.data, info_hash_url_encoded, peer_id_url_encoded,
       q->port, q->uploaded, q->downloaded, q->left);
   return res;
