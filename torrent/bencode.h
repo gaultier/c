@@ -113,6 +113,8 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span32_t* input) {
       for (uint32_t i = 1; i < left.len; i++) {
         if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_NUMBER;
       }
+      if (left.len > 1 && left.data[0] == '0')
+        return BC_PE_INVALID_NUMBER;  // `i03e`
 
       pg_array_append(parser->spans, left);
       pg_array_append(parser->lengths, left.len);
