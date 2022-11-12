@@ -11,7 +11,7 @@ typedef enum {
   TK_ERR_NONE,
   TK_ERR_CURL,
   TK_ERR_BENCODE_PARSE,
-  TK_ERR_INVipv6ALID_PEERS,
+  TK_ERR_INVALID_PEERS,
 } tracker_error_t;
 
 const char* tracker_error_to_string(int err) {
@@ -144,8 +144,7 @@ tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
     goto end;
   }
 
-  pg_span32_t response_span = {.data = response,
-                               .len = pg_array_len(response)};
+  pg_span32_t response_span = {.data = response, .len = pg_array_len(response)};
 
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 100);
