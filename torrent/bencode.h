@@ -387,11 +387,13 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
   const pg_span32_t info_key = pg_span32_make_c("info");
   const uint32_t root_len = parser->lengths[0];
 
+  uint32_t h = 0;
   for (uint32_t i = 0; i < root_len; i += 2) {
-    bc_kind_t key_kind = parser->kinds[cur + i];
-    pg_span32_t key_span = parser->spans[cur + i];
-    bc_kind_t value_kind = parser->kinds[cur + i + 1];
-    pg_span32_t value_span = parser->spans[cur + i + 1];
+    h = cur + i;
+    bc_kind_t key_kind = parser->kinds[h];
+    pg_span32_t key_span = parser->spans[h];
+    bc_kind_t value_kind = parser->kinds[h + 1];
+    pg_span32_t value_span = parser->spans[h + 1];
 
     if (key_kind == BC_KIND_STRING && pg_span32_eq(announce_key, key_span) &&
         value_kind == BC_KIND_STRING) {
@@ -407,10 +409,10 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
       const pg_span32_t pieces_key = pg_span32_make_c("pieces");
 
       for (uint32_t j = 0; j < info_len; j += 2) {
-        key_kind = parser->kinds[cur + i + 2 + j];
-        key_span = parser->spans[cur + i + 2 + j];
-        value_kind = parser->kinds[cur + i + 2 + j + 1];
-        value_span = parser->spans[cur + i + 2 + j + 1];
+        key_kind = parser->kinds[h + j];
+        key_span = parser->spans[h + j];
+        value_kind = parser->kinds[h + j + 1];
+        value_span = parser->spans[h + j + 1];
 
         if (key_kind == BC_KIND_STRING &&
             pg_span32_eq(piece_length_key, key_span) &&
@@ -437,8 +439,17 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
             return BC_ME_PIECES_INVALID_VALUE;
           metainfo->pieces = value_span;
         }
+
+        // Skip over nested children
+        if (value_kind == BC_KIND_ARRAY || value_kind == BC_KIND_DICTIONARY)
+          h += parser->lengths[h + j + i];
       }
     }
+
+    // Skip over nested children
+    if (parser->kinds[h] == BC_KIND_ARRAY ||
+        parser->kinds[h] == BC_KIND_DICTIONARY)
+      h += parser->lengths[h];
   }
 
   if (metainfo->announce.len == 0) return BC_ME_ANNOUNCE_NOT_FOUND;
