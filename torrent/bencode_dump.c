@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
       bc_parser_init_metainfo(&parser, &metainfo, &info_span);
   if (err_metainfo != BC_ME_NONE) {
     fprintf(stderr, "Failed to bc_parser_init_metainfo: %s\n",
-            bc_metainfo_error_to_string(err));
+            bc_metainfo_error_to_string(err_metainfo));
     exit(EINVAL);
   }
   printf(
