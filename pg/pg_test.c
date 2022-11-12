@@ -12,7 +12,7 @@ TEST test_pg_array_append() {
     pg_array_append(array, 1);
     pg_array_append(array, 2);
 
-    ASSERT_EQ(pg_array_count(array), 2);
+    ASSERT_EQ(pg_array_len(array), 2);
     ASSERT_EQ(array[0], 1);
     ASSERT_EQ(array[1], 2);
 

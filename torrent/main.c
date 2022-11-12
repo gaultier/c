@@ -25,13 +25,13 @@ int main(int argc, char* argv[]) {
                  strerror(ret));
   }
 
-  if (pg_array_count(torrent_file_data) > UINT32_MAX) {
+  if (pg_array_len(torrent_file_data) > UINT32_MAX) {
     fprintf(stderr, "Too much data, must be under %u bytes, was %llu\n",
-            UINT32_MAX, pg_array_count(torrent_file_data));
+            UINT32_MAX, pg_array_len(torrent_file_data));
     exit(EINVAL);
   }
   pg_span32_t torrent_file_span = {.data = (char*)torrent_file_data,
-                                   .len = pg_array_count(torrent_file_data)};
+                                   .len = pg_array_len(torrent_file_data)};
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 100);
   bc_parse_error_t bc_err = bc_parse(&parser, &torrent_file_span);
@@ -77,12 +77,12 @@ int main(int argc, char* argv[]) {
     pg_log_fatal(&logger, EINVAL, "Failed to contact tracker: %s",
                  tracker_error_to_string(tracker_err));
   }
-  if (pg_array_count(peer_addresses) == 0) {
+  if (pg_array_len(peer_addresses) == 0) {
     pg_log_fatal(&logger, EINVAL, "No peers returned from tracker");
   }
 
   pg_log_debug(&logger, "Fetched %llu peers from tracker",
-               pg_array_count(peer_addresses));
+               pg_array_len(peer_addresses));
 
   pg_string_t name = pg_string_make_length(
       pg_heap_allocator(), metainfo.name.data, metainfo.name.len);
@@ -110,9 +110,9 @@ int main(int argc, char* argv[]) {
                  metainfo.name.len, metainfo.name.data, strerror(errno));
 
   pg_pool_t peer_pool = {0};
-  pg_pool_init(&peer_pool, sizeof(peer_t), pg_array_count(peer_addresses));
+  pg_pool_init(&peer_pool, sizeof(peer_t), pg_array_len(peer_addresses));
 
-  for (uint64_t i = 0; i < pg_array_count(peer_addresses); i++) {
+  for (uint64_t i = 0; i < pg_array_len(peer_addresses); i++) {
     const tracker_peer_address_t addr = peer_addresses[i];
     peer_t* peer = pg_pool_alloc(&peer_pool);
     assert(peer != NULL);

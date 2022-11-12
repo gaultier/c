@@ -502,7 +502,7 @@ peer_error_t peer_message_parse(peer_t* peer, peer_message_t* msg) {
       }
       pg_log_debug(peer->logger, "[%s] piece: begin=%u index=%u len=%llu",
                    peer->addr_s, msg->v.piece.begin, msg->v.piece.index,
-                   pg_array_count(msg->v.piece.data));
+                   pg_array_len(msg->v.piece.data));
 
       return (peer_error_t){0};
     }
@@ -719,7 +719,7 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       pg_array_t(uint8_t) bitfield = msg->v.bitfield.bitfield;
 
       pg_bitarray_setv(&peer->them_have_pieces, bitfield,
-                       pg_array_count(bitfield));
+                       pg_array_len(bitfield));
 
       *action = PEER_ACTION_REQUEST_MORE;
       return (peer_error_t){0};
@@ -750,7 +750,7 @@ peer_error_t peer_message_handle(peer_t* peer, peer_message_t* msg,
       pg_log_debug(
           peer->logger,
           "[%s] piece: begin=%u piece=%u len=%llu block_for_piece=%u block=%u",
-          peer->addr_s, piece_msg.begin, piece, pg_array_count(piece_msg.data),
+          peer->addr_s, piece_msg.begin, piece, pg_array_len(piece_msg.data),
           block_for_piece, block);
       peer_put_block(peer, piece, block, span);
 
@@ -1202,8 +1202,8 @@ peer_error_t picker_checksum_all(pg_allocator_t allocator, pg_logger_t* logger,
     pg_log_debug(logger,
                  "%s: checksumming: piece=%u length=%llu "
                  "offset=%llu file_length=%llu",
-                 __func__, piece, length, offset, pg_array_count(file_data));
-    assert(offset + length <= pg_array_count(file_data));
+                 __func__, piece, length, offset, pg_array_len(file_data));
+    assert(offset + length <= pg_array_len(file_data));
     assert(mbedtls_sha1(file_data + offset, length, hash) == 0);
 
     assert(piece * 20 + 20 <= metainfo->pieces.len);

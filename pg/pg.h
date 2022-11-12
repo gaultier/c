@@ -181,9 +181,9 @@ typedef struct pg_array_header_t {
 #endif
 
 #define PG_ARRAY_HEADER(x) ((pg_array_header_t *)(x)-1)
-#define pg_array_count(x) (PG_ARRAY_HEADER(x)->count)
+#define pg_array_len(x) (PG_ARRAY_HEADER(x)->count)
 #define pg_array_capacity(x) (PG_ARRAY_HEADER(x)->capacity)
-#define pg_array_available_space(x) (pg_array_capacity(x) - pg_array_count(x))
+#define pg_array_available_space(x) (pg_array_capacity(x) - pg_array_len(x))
 
 #define pg_array_init_reserve(x, cap, my_allocator)                          \
   do {                                                                       \
@@ -223,8 +223,8 @@ typedef struct pg_array_header_t {
 
 #define pg_array_append(x, item)                                           \
   do {                                                                     \
-    if (pg_array_capacity(x) < pg_array_count(x) + 1) pg_array_grow(x, 0); \
-    (x)[pg_array_count(x)++] = (item);                                     \
+    if (pg_array_capacity(x) < pg_array_len(x) + 1) pg_array_grow(x, 0); \
+    (x)[pg_array_len(x)++] = (item);                                     \
   } while (0)
 
 #define pg_array_pop(x)                    \
@@ -637,12 +637,12 @@ int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
   pg_array_init_reserve(*buf, read_buffer_size, allocator);
   for (;;) {
     int64_t ret =
-        read(fd, *buf + pg_array_count(*buf), pg_array_available_space(*buf));
+        read(fd, *buf + pg_array_len(*buf), pg_array_available_space(*buf));
     if (ret == -1) {
       return errno;
     }
     if (ret == 0) return 0;
-    pg_array_resize(*buf, pg_array_count(*buf) + ret);
+    pg_array_resize(*buf, pg_array_len(*buf) + ret);
     pg_array_grow(*buf, pg_array_capacity(*buf) + read_buffer_size);
   }
   return 0;
@@ -857,14 +857,14 @@ uint64_t pg_bitarray_len(const pg_bitarray_t *bitarr) {
 
 void pg_bitarray_set(pg_bitarray_t *bitarr, uint64_t index) {
   const uint64_t i = index / 8.0;
-  assert(i < pg_array_count(bitarr->data));
+  assert(i < pg_array_len(bitarr->data));
 
   bitarr->data[i] |= 1 << (index % 8);
 }
 
 bool pg_bitarray_get(const pg_bitarray_t *bitarr, uint64_t index) {
   const uint64_t i = index / 8.0;
-  assert(i < pg_array_count(bitarr->data));
+  assert(i < pg_array_len(bitarr->data));
 
   return bitarr->data[i] & (1 << (index % 8));
 }
@@ -880,7 +880,7 @@ bool pg_bitarray_next(const pg_bitarray_t *bitarr, uint64_t *index,
 
 void pg_bitarray_unset(pg_bitarray_t *bitarr, uint64_t index) {
   const uint64_t i = index / 8.0;
-  assert(i < pg_array_count(bitarr->data));
+  assert(i < pg_array_len(bitarr->data));
 
   bitarr->data[i] &= ~(1 << (index % 8));
 }
@@ -916,11 +916,11 @@ bool pg_bitarray_is_all_unset(pg_bitarray_t *bitarr) {
 }
 
 void pg_bitarray_set_all(pg_bitarray_t *bitarr) {
-  memset(bitarr->data, 0xff, pg_array_count(bitarr->data));
+  memset(bitarr->data, 0xff, pg_array_len(bitarr->data));
 }
 
 void pg_bitarray_unset_all(pg_bitarray_t *bitarr) {
-  memset(bitarr->data, 0, pg_array_count(bitarr->data));
+  memset(bitarr->data, 0, pg_array_len(bitarr->data));
 }
 
 void pg_bitarray_resize(pg_bitarray_t *bitarr, uint64_t max_index) {

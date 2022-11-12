@@ -470,7 +470,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     pg_array_resize(api->tokens, res);
     res = 0;
 
-    const uint64_t tokens_count = pg_array_count(api->tokens);
+    const uint64_t tokens_count = pg_array_len(api->tokens);
     assert(tokens_count > 0);
     if (api->tokens[0].type != JSMN_ARRAY) {
         fprintf(stderr,
@@ -494,7 +494,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
     char* git_url = NULL;
     uint64_t field_count = 0;
 
-    for (uint64_t i = 1; i < pg_array_count(api->tokens); i++) {
+    for (uint64_t i = 1; i < pg_array_len(api->tokens); i++) {
         jsmntok_t* const cur = &api->tokens[i - 1];
         jsmntok_t* const next = &api->tokens[i];
         if (!(cur->type == JSMN_STRING && next->type == JSMN_STRING)) continue;

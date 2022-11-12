@@ -79,8 +79,8 @@ const char* bc_parse_error_to_string(int e) {
 }
 
 bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span32_t* input) {
-  assert(pg_array_count(parser->spans) == pg_array_count(parser->lengths));
-  assert(pg_array_count(parser->lengths) == pg_array_count(parser->kinds));
+  assert(pg_array_len(parser->spans) == pg_array_len(parser->lengths));
+  assert(pg_array_len(parser->lengths) == pg_array_len(parser->kinds));
 
   const char c = pg_span32_peek(*input);
 
@@ -170,7 +170,7 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span32_t* input) {
       pg_array_append(parser->kinds, BC_KIND_ARRAY);
 
       const uint32_t parent = parser->parent;
-      parser->parent = pg_array_count(parser->kinds) - 1;
+      parser->parent = pg_array_len(parser->kinds) - 1;
 
       while (pg_span32_peek(*input) != 'e' && pg_span32_peek(*input) != 0) {
         bc_parse_error_t err = bc_parse(parser, input);
@@ -194,10 +194,10 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span32_t* input) {
       pg_array_append(parser->kinds, BC_KIND_DICTIONARY);
 
       const uint32_t parent = parser->parent;
-      parser->parent = pg_array_count(parser->kinds) - 1;
+      parser->parent = pg_array_len(parser->kinds) - 1;
       const uint32_t me = parser->parent;
 
-      const uint32_t prev_token_count = pg_array_count(parser->spans);
+      const uint32_t prev_token_count = pg_array_len(parser->spans);
 
       while (pg_span32_peek(*input) != 'e' && pg_span32_peek(*input) != 0) {
         bc_parse_error_t err = bc_parse(parser, input);
@@ -206,7 +206,7 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span32_t* input) {
       if (pg_span32_peek(*input) != 'e') return BC_PE_UNEXPECTED_CHARACTER;
       pg_span32_consume_left(input, 1);  // Skip 'e'
 
-      assert(me < pg_array_count(parser->kinds));
+      assert(me < pg_array_len(parser->kinds));
       const uint32_t kv_count = parser->lengths[me];
       if (kv_count % 2 != 0) return BC_PE_INVALID_DICT;
 
@@ -235,7 +235,7 @@ void bc_dump_value_indent(FILE* f, uint64_t indent) {
 
 uint32_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
                        uint32_t index) {
-  assert(index < pg_array_count(parser->kinds));
+  assert(index < pg_array_len(parser->kinds));
 
   const bc_kind_t kind = parser->kinds[index];
   const pg_span32_t span = parser->spans[index];
@@ -301,8 +301,8 @@ uint32_t bc_dump_value(bc_parser_t* parser, FILE* f, uint64_t indent,
 }
 
 void bc_dump_values(bc_parser_t* parser, FILE* f, uint64_t indent) {
-  assert(pg_array_count(parser->spans) == pg_array_count(parser->lengths));
-  assert(pg_array_count(parser->lengths) == pg_array_count(parser->kinds));
+  assert(pg_array_len(parser->spans) == pg_array_len(parser->lengths));
+  assert(pg_array_len(parser->lengths) == pg_array_len(parser->kinds));
 
   bc_dump_value(parser, f, indent, 0);
 }
@@ -368,7 +368,7 @@ const char* bc_metainfo_error_to_string(int err) {
 bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t* parser,
                                             bc_metainfo_t* metainfo,
                                             pg_span32_t* info_span) {
-  if (pg_array_count(parser->kinds) == 0) return BC_ME_METAINFO_NOT_DICTIONARY;
+  if (pg_array_len(parser->kinds) == 0) return BC_ME_METAINFO_NOT_DICTIONARY;
   if (parser->kinds[0] != BC_KIND_DICTIONARY)
     return BC_ME_METAINFO_NOT_DICTIONARY;
 

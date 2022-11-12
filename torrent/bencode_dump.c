@@ -21,13 +21,13 @@ int main(int argc, char* argv[]) {
       exit(ret);
     }
   }
-  if (pg_array_count(buf) > UINT32_MAX) {
+  if (pg_array_len(buf) > UINT32_MAX) {
     fprintf(stderr, "Too much data, must be under %u bytes, was %llu\n",
-            UINT32_MAX, pg_array_count(buf));
+            UINT32_MAX, pg_array_len(buf));
     exit(EINVAL);
   }
 
-  pg_span32_t input = {.data = (char*)buf, .len = pg_array_count(buf)};
+  pg_span32_t input = {.data = (char*)buf, .len = pg_array_len(buf)};
 
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 100);

@@ -82,13 +82,13 @@ static void pg_hashmap_add(pg_hashmap_u64_t* hashmap, uint64_t key,
     }
 
     hashmap->hashes[index] = hash;
-    pg_array_resize(hashmap->hashes, pg_array_count(hashmap->hashes) + 1);
+    pg_array_resize(hashmap->hashes, pg_array_len(hashmap->hashes) + 1);
 
     hashmap->keys[index] = key;
-    pg_array_resize(hashmap->keys, pg_array_count(hashmap->keys) + 1);
+    pg_array_resize(hashmap->keys, pg_array_len(hashmap->keys) + 1);
 
     hashmap->values[index] = value;
-    pg_array_resize(hashmap->values, pg_array_count(hashmap->values) + 1);
+    pg_array_resize(hashmap->values, pg_array_len(hashmap->values) + 1);
 }
 
 static bool pg_hashmap_exists(const pg_hashmap_u64_t* hashmap, uint64_t key) {
