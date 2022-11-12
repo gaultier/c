@@ -65,7 +65,7 @@ int main(int argc, char* argv[]) {
   assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len,
                       tracker_query.info_hash) == 0);
 
-  pg_array_t(tracker_peer_address_t) peer_addresses = {0};
+  pg_array_t(tracker_peer_address_ipv4_t) peer_addresses = {0};
   pg_array_init_reserve(peer_addresses,
                         /* Default is 50 peers returned from tracker */ 50,
                         pg_heap_allocator());
@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
   pg_pool_init(&peer_pool, sizeof(peer_t), pg_array_len(peer_addresses));
 
   for (uint64_t i = 0; i < pg_array_len(peer_addresses); i++) {
-    const tracker_peer_address_t addr = peer_addresses[i];
+    const tracker_peer_address_ipv4_t addr = peer_addresses[i];
     peer_t* peer = pg_pool_alloc(&peer_pool);
     assert(peer != NULL);
     peer_init(peer, &logger, &peer_pool, &download, &metainfo, &picker, addr);

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint8_t.h>
 #include <curl/curl.h>
 #include <curl/easy.h>
 #include <stdint.h>
@@ -42,15 +43,22 @@ typedef struct {
 typedef struct {
   uint32_t ip;
   uint16_t port;
-} tracker_peer_address_t;
+} tracker_peer_address_ipv4_t;
+
+typedef struct {
+  uint8_t ip[16];
+  uint16_t port;
+} tracker_peer_address_ipv6_t;
 
 tracker_error_t tracker_parse_peer_addresses(
-    bc_parser_t *parser, pg_array_t(tracker_peer_address_t) * peer_addresses) {
+    bc_parser_t *parser,
+    pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses) {
   if (pg_array_len(parser->kinds) == 0) return TK_ERR_INVALID_PEERS;
   if (parser->kinds[0] != BC_KIND_DICTIONARY) return TK_ERR_INVALID_PEERS;
 
   uint32_t cur = 1;
   const pg_span32_t peers_key = pg_span32_make_c("peers");
+  const pg_span32_t peers6_key = pg_span32_make_c("peers6");
   const uint32_t root_len = parser->lengths[0];
 
   for (uint32_t i = 0; i < root_len; i += 2) {
@@ -64,11 +72,24 @@ tracker_error_t tracker_parse_peer_addresses(
       if (value_span.len % 6 != 0) return TK_ERR_INVALID_PEERS;
 
       for (uint64_t j = 0; j < value_span.len; j += 6) {
-        tracker_peer_address_t addr = {
+        tracker_peer_address_ipv4_t addr = {
             .ip = *(uint32_t *)(&value_span.data[j]),
             .port = *(uint16_t *)(&value_span.data[j + 4]),
         };
         pg_array_append(*peer_addresses, addr);
+      }
+    }
+    if (key_kind == BC_KIND_STRING && pg_span32_eq(peers6_key, key_span) &&
+        value_kind == BC_KIND_STRING) {
+      if (value_span.len % 18 != 0) return TK_ERR_INVALID_PEERS;
+
+      for (uint64_t j = 0; j < value_span.len; j += 6) {
+        tracker_peer_address_ipv6_t addr = {
+            .port = *(uint16_t *)(&value_span.data[j + 16]),
+        };
+        memcpy(addr.ip, &value_span.data[j], 16);
+        __builtin_dump_struct(&addr, &printf);
+        // pg_array_append(*peer_addresses, addr);
       }
     }
   }
@@ -118,7 +139,7 @@ uint64_t tracker_on_response_chunk(void *ptr, uint64_t size, uint64_t nmemb,
 
 tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
                                     tracker_query_t *q,
-                                    pg_array_t(tracker_peer_address_t) *
+                                    pg_array_t(tracker_peer_address_ipv4_t) *
                                         peer_addresses) {
   tracker_error_t err = TK_ERR_NONE;
 
