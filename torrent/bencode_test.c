@@ -107,6 +107,16 @@ TEST test_bc_parse_number() {
     bc_parser_destroy(&parser);
   }
   {
+    pg_span32_t span = pg_span32_make_c("i-0e");
+    bc_parser_t parser = {0};
+    bc_parser_init(pg_heap_allocator(), &parser, 1);
+    bc_parse_error_t err = bc_parse(&parser, &span);
+
+    ASSERT_ENUM_EQ(BC_PE_INVALID_NUMBER, err, bc_parse_error_to_string);
+
+    bc_parser_destroy(&parser);
+  }
+  {
     pg_span32_t span = pg_span32_make_c("i-123e");
     bc_parser_t parser = {0};
     bc_parser_init(pg_heap_allocator(), &parser, 1);

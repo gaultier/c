@@ -101,6 +101,8 @@ bc_parse_error_t bc_parse(bc_parser_t* parser, pg_span32_t* input) {
 
       if (left.data[0] == '-' && left.len == 1)
         return BC_PE_INVALID_NUMBER;  // `i-e`
+      if (left.data[0] == '-' && left.len == 2 && left.data[1] == '0')
+        return BC_PE_INVALID_NUMBER;  // `i-0e`
 
       if (!(pg_char_is_digit(left.data[0]) ||
             left.data[0] == '-'))  // `iae` or `i-e`
