@@ -1037,11 +1037,10 @@ peer_error_t peer_send_prologue(peer_t* peer) {
   err = peer_send_handshake(peer);
   if (err.kind != PEK_NONE) return err;
 
-  err = peer_send_choke(peer);
-  if (err.kind != PEK_NONE) return err;
-
   err = peer_send_interested(peer);
   if (err.kind != PEK_NONE) return err;
+
+  peer->me_interested = true;
 
   return err;
 }
@@ -1113,6 +1112,8 @@ void peer_init(peer_t* peer, pg_logger_t* logger, pg_pool_t* peer_pool,
 
   peer->them_choked = true;
   peer->them_interested = false;
+  peer->me_choked = true;
+  peer->me_interested = false;
 }
 
 peer_error_t peer_connect(peer_t* peer, tracker_peer_address_t address) {
