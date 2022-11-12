@@ -246,7 +246,7 @@ TEST test_pg_bitarray() {
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 9));
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 10));
 
-  pg_bitarray_clear(&bitarr);
+  pg_bitarray_unset_all(&bitarr);
 
   pg_bitarray_set(&bitarr, 5);
   ASSERT_EQ(false, pg_bitarray_get(&bitarr, 0));

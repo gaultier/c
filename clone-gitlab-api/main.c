@@ -450,8 +450,7 @@ static int api_parse_and_upsert_projects(api_t* api, const options_t* options,
         res = jsmn_parse(&p, api->response_body, sdslen(api->response_body),
                          api->tokens, pg_array_capacity(api->tokens));
         if (res == JSMN_ERROR_NOMEM) {
-            pg_array_reserve(api->tokens,
-                             pg_array_capacity(api->tokens) * 2 + 8);
+            pg_array_grow(api->tokens, pg_array_capacity(api->tokens) * 2 + 8);
             continue;
         }
         if (res < 0 && res != JSMN_ERROR_NOMEM) {
