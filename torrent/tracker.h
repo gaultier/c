@@ -52,7 +52,8 @@ typedef struct {
 
 tracker_error_t tracker_parse_peer_addresses(
     bc_parser_t *parser,
-    pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses) {
+    pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses_ipv4,
+    pg_array_t(tracker_peer_address_ipv6_t) * peer_addresses_ipv6) {
   if (pg_array_len(parser->kinds) == 0) return TK_ERR_INVALID_PEERS;
   if (parser->kinds[0] != BC_KIND_DICTIONARY) return TK_ERR_INVALID_PEERS;
 
@@ -76,7 +77,7 @@ tracker_error_t tracker_parse_peer_addresses(
             .ip = *(uint32_t *)(&value_span.data[j]),
             .port = *(uint16_t *)(&value_span.data[j + 4]),
         };
-        pg_array_append(*peer_addresses, addr);
+        pg_array_append(*peer_addresses_ipv4, addr);
       }
     }
     if (key_kind == BC_KIND_STRING && pg_span32_eq(peers6_key, key_span) &&
@@ -89,7 +90,7 @@ tracker_error_t tracker_parse_peer_addresses(
         };
         memcpy(addr.ip, &value_span.data[j], 16);
         __builtin_dump_struct(&addr, &printf);
-        // pg_array_append(*peer_addresses, addr);
+        pg_array_append(*peer_addresses_ipv6, addr);
       }
     }
   }
@@ -137,10 +138,10 @@ uint64_t tracker_on_response_chunk(void *ptr, uint64_t size, uint64_t nmemb,
   return new_len;
 }
 
-tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
-                                    tracker_query_t *q,
-                                    pg_array_t(tracker_peer_address_ipv4_t) *
-                                        peer_addresses) {
+tracker_error_t tracker_fetch_peers(
+    pg_allocator_t allocator, tracker_query_t *q,
+    pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses_ipv4,
+    pg_array_t(tracker_peer_address_ipv6_t) * peer_addresses_ipv6) {
   tracker_error_t err = TK_ERR_NONE;
 
   pg_string_t url = tracker_build_url_from_query(allocator, q);
@@ -175,8 +176,8 @@ tracker_error_t tracker_fetch_peers(pg_allocator_t allocator,
     goto end;
   }
 
-  if ((err = tracker_parse_peer_addresses(&parser, peer_addresses)) !=
-      TK_ERR_NONE)
+  if ((err = tracker_parse_peer_addresses(&parser, peer_addresses_ipv4,
+                                          peer_addresses_ipv6)) != TK_ERR_NONE)
     goto end;
 
 end:

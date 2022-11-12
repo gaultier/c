@@ -65,24 +65,29 @@ int main(int argc, char* argv[]) {
   assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len,
                       tracker_query.info_hash) == 0);
 
-  pg_array_t(tracker_peer_address_ipv4_t) peer_addresses = {0};
-  pg_array_init_reserve(peer_addresses,
+  pg_array_t(tracker_peer_address_ipv4_t) peer_addresses_ipv4 = {0};
+  pg_array_init_reserve(peer_addresses_ipv4,
+                        /* Default is 50 peers returned from tracker */ 50,
+                        pg_heap_allocator());
+  pg_array_t(tracker_peer_address_ipv6_t) peer_addresses_ipv6 = {0};
+  pg_array_init_reserve(peer_addresses_ipv6,
                         /* Default is 50 peers returned from tracker */ 50,
                         pg_heap_allocator());
 
   pg_log_debug(&logger, "Fetching peers from tracker");
   tracker_error_t tracker_err =
-      tracker_fetch_peers(pg_heap_allocator(), &tracker_query, &peer_addresses);
+      tracker_fetch_peers(pg_heap_allocator(), &tracker_query,
+                          &peer_addresses_ipv4, &peer_addresses_ipv6);
   if (tracker_err != TK_ERR_NONE) {
     pg_log_fatal(&logger, EINVAL, "Failed to contact tracker: %s",
                  tracker_error_to_string(tracker_err));
   }
-  if (pg_array_len(peer_addresses) == 0) {
+  if (pg_array_len(peer_addresses_ipv4) == 0) {
     pg_log_fatal(&logger, EINVAL, "No peers returned from tracker");
   }
 
   pg_log_debug(&logger, "Fetched %llu peers from tracker",
-               pg_array_len(peer_addresses));
+               pg_array_len(peer_addresses_ipv4));
 
   pg_string_t name = pg_string_make_length(
       pg_heap_allocator(), metainfo.name.data, metainfo.name.len);
@@ -110,10 +115,10 @@ int main(int argc, char* argv[]) {
                  metainfo.name.len, metainfo.name.data, strerror(errno));
 
   pg_pool_t peer_pool = {0};
-  pg_pool_init(&peer_pool, sizeof(peer_t), pg_array_len(peer_addresses));
+  pg_pool_init(&peer_pool, sizeof(peer_t), pg_array_len(peer_addresses_ipv4));
 
-  for (uint64_t i = 0; i < pg_array_len(peer_addresses); i++) {
-    const tracker_peer_address_ipv4_t addr = peer_addresses[i];
+  for (uint64_t i = 0; i < pg_array_len(peer_addresses_ipv4); i++) {
+    const tracker_peer_address_ipv4_t addr = peer_addresses_ipv4[i];
     peer_t* peer = pg_pool_alloc(&peer_pool);
     assert(peer != NULL);
     peer_init(peer, &logger, &peer_pool, &download, &metainfo, &picker, addr);
