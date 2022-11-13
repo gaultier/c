@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint8_t.h>
 #include <curl/curl.h>
 #include <curl/easy.h>
 #include <stdint.h>
@@ -175,7 +174,7 @@ tracker_error_t tracker_fetch_peers(
   assert(curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10) == 0);
 
   pg_array_t(char) response = {0};
-  pg_array_init_reserve(response, 512, allocator);
+  pg_array_init_reserve(response, 1024, allocator);
   assert(curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response) == 0);
   assert(curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
                           tracker_on_response_chunk) == 0);

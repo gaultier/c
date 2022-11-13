@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #ifndef MIN
@@ -649,17 +650,20 @@ uint64_t pg_span32_parse_u64(pg_span32_t span) {
 
 int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
                         pg_array_t(uint8_t) * buf) {
-  const uint64_t read_buffer_size = 4096;
-  pg_array_init_reserve(*buf, read_buffer_size, allocator);
-  for (;;) {
-    int64_t ret =
-        read(fd, *buf + pg_array_len(*buf), pg_array_available_space(*buf));
+  struct stat st = {0};
+  if (fstat(fd, &st) == -1) {
+    return errno;
+  }
+  const uint64_t read_buffer_size =
+      MIN((uint64_t)UINT32_MAX, (uint64_t)st.st_size);
+  pg_array_init_reserve(*buf, st.st_size, allocator);
+  while (pg_array_len(*buf) < (uint64_t)st.st_size) {
+    int64_t ret = read(fd, *buf + pg_array_len(*buf), read_buffer_size);
     if (ret == -1) {
       return errno;
     }
     if (ret == 0) return 0;
     pg_array_resize(*buf, pg_array_len(*buf) + ret);
-    pg_array_grow(*buf, pg_array_capacity(*buf) + read_buffer_size);
   }
   return 0;
 }
