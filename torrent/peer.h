@@ -279,9 +279,10 @@ void peer_message_destroy(peer_t *peer, peer_message_t *msg) {
 void peer_close(peer_t *peer);
 
 void peer_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
+  (void)suggested_size;
+
   peer_t *peer = handle->data;
 
-  assert(suggested_size <= peer->read_buf_pool.chunk_size);
   buf->base = pg_pool_alloc(&peer->read_buf_pool);
   buf->len = peer->read_buf_pool.chunk_size;
 }
@@ -1088,8 +1089,10 @@ void peer_init(peer_t *peer, pg_logger_t *logger, pg_pool_t *peer_pool,
       (PEER_MAX_IN_FLIGHT_REQUESTS +
        /* arbitrary, account for handshake, heartbeats and so on */ 20));
 
-  pg_pool_init(&peer->read_buf_pool,
-               /* suggested size from libuv */ 65536, 30);
+  pg_pool_init(
+      &peer->read_buf_pool,
+      /* real stats suggest most buffers should be 8KiB-16KiB in size */ 17000,
+      30);
 
   pg_pool_init(&peer->block_pool, BC_BLOCK_LENGTH,
                PEER_MAX_IN_FLIGHT_REQUESTS);  // TODO: increase when starting to
@@ -1105,7 +1108,7 @@ void peer_init(peer_t *peer, pg_logger_t *logger, pg_pool_t *peer_pool,
   peer->connection.data = peer;
   peer->idle_handle.data = peer;
   pg_ring_init(peer->allocator, &peer->recv_data,
-               /* semi-arbitrary */ 2 * UINT16_MAX);
+               /* hold 2 uv_bufs at most at once */ 2 * 17000);
 
   snprintf(peer->addr_s, sizeof(peer->addr_s), "%s:%hu",
            inet_ntoa(*(struct in_addr *)&address.ip), htons(address.port));
