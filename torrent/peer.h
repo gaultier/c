@@ -434,8 +434,10 @@ peer_error_t peer_message_parse(peer_t *peer, peer_message_t *msg) {
 
       msg->kind = PMK_BITFIELD;
       msg->v.bitfield = (peer_message_bitfield_t){0};
-      pg_array_init_reserve(msg->v.bitfield.bitfield,
-                            peer->metainfo->pieces_count - 1, peer->allocator);
+
+      const uint64_t len =
+          1 + (uint64_t)ceil(((double)peer->metainfo->pieces_count - 1) / 8.0);
+      pg_array_init_reserve(msg->v.bitfield.bitfield, len, peer->allocator);
 
       pg_ring_consume_front(&peer->recv_data,
                             4 + 1);  // consume announced_len + tag
@@ -929,7 +931,7 @@ peer_error_t peer_send_handshake(peer_t *peer) {
       uv_buf_init(peer->allocator.realloc(PEER_HANDSHAKE_LENGTH, NULL, 0),
                   PEER_HANDSHAKE_LENGTH);
 
-  const uint8_t handshake_header[] = {
+  static const uint8_t handshake_header[] = {
       PEER_HANDSHAKE_HEADER_LENGTH,
       'B',
       'i',
@@ -1085,9 +1087,7 @@ void peer_init(peer_t *peer, pg_logger_t *logger, pg_pool_t *peer_pool,
        /* arbitrary, account for handshake, heartbeats and so on */ 20));
 
   pg_pool_init(&peer->read_buf_pool,
-               /* suggested size from libuv + embeded linked list */ 65536 +
-                   sizeof(void *),
-               30);
+               /* suggested size from libuv */ 65536, 30);
 
   pg_pool_init(&peer->block_pool, BC_BLOCK_LENGTH,
                PEER_MAX_IN_FLIGHT_REQUESTS);  // TODO: increase when starting to
