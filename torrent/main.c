@@ -123,5 +123,8 @@ int main(int argc, char* argv[]) {
     peer_init(peer, &logger, &peer_pool, &download, &metainfo, &picker, addr);
     peer_connect(peer, addr);
   }
+  pg_array_free(peer_addresses_ipv4);
+  pg_array_free(peer_addresses_ipv6);
+
   uv_run(uv_default_loop(), 0);
 }
