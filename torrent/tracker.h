@@ -54,6 +54,8 @@ typedef struct {
   uint16_t port;
 } tracker_peer_address_ipv6_t;
 
+#define TRACKER_MAX_PEERS 50
+
 tracker_error_t tracker_parse_peer_addresses(
     pg_logger_t *logger, bc_parser_t *parser,
     pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses_ipv4,
@@ -84,6 +86,8 @@ tracker_error_t tracker_parse_peer_addresses(
             .port = *(uint16_t *)(&value_span.data[j + 4]),
         };
         pg_array_append(*peer_addresses_ipv4, addr);
+        if (pg_array_len(*peer_addresses_ipv4) >= TRACKER_MAX_PEERS)
+          return TK_ERR_NONE;
       }
     } else if (key_kind == BC_KIND_STRING &&
                pg_span32_eq(peers6_key, key_span) &&
@@ -97,6 +101,8 @@ tracker_error_t tracker_parse_peer_addresses(
         memcpy(addr.ip, &value_span.data[j], 16);
         __builtin_dump_struct(&addr, &printf);
         pg_array_append(*peer_addresses_ipv6, addr);
+        if (pg_array_len(*peer_addresses_ipv6) >= TRACKER_MAX_PEERS)
+          return TK_ERR_NONE;
       }
     } else if (key_kind == BC_KIND_STRING &&
                pg_span32_eq(failure_reason_key, key_span) &&
