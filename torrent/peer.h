@@ -718,6 +718,8 @@ peer_error_t peer_message_handle(peer_t *peer, peer_message_t *msg,
     case PMK_BITFIELD: {
       pg_array_t(uint8_t) bitfield = msg->v.bitfield.bitfield;
 
+      // TODO: don't allocate `msg->v.bitfield.bitfield`, simply set
+      // `them_have_pieces` directly
       pg_bitarray_setv(&peer->them_have_pieces, bitfield,
                        pg_array_len(bitfield));
 
