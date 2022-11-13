@@ -38,13 +38,15 @@ typedef struct {
   uint64_t uploaded;
   uint64_t downloaded;
   uint64_t left;
-  uint8_t info_hash[20];
   uint16_t port;
+  uint8_t info_hash[20];
+  PG_PAD(2);
 } tracker_query_t;
 
 typedef struct {
   uint32_t ip;
   uint16_t port;
+  PG_PAD(2);
 } tracker_peer_address_ipv4_t;
 
 typedef struct {

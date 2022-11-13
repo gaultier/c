@@ -101,15 +101,17 @@ typedef struct {
 } peer_message_piece_t;
 
 typedef struct {
-  peer_message_kind_t kind;
   union {
     peer_message_have_t have;
     peer_message_request_t request;
     peer_message_piece_t piece;
     peer_message_bitfield_t bitfield;
   } v;
+  peer_message_kind_t kind;
+  PG_PAD(7);
 } peer_message_t;
 
+// TODO: investigate how to reduce size
 typedef struct {
   pg_bitarray_t blocks_to_download;
   pg_bitarray_t blocks_downloading;
@@ -121,6 +123,7 @@ typedef struct {
 typedef struct {
   pg_allocator_t allocator;
   pg_logger_t *logger;
+  picker_t *picker;
   pg_pool_t *peer_pool;
   pg_pool_t write_ctx_pool;
   pg_pool_t read_buf_pool;
@@ -128,8 +131,6 @@ typedef struct {
 
   download_t *download;
   bc_metainfo_t *metainfo;
-  bool me_choked, me_interested, them_choked, them_interested, handshaked;
-  uint8_t in_flight_requests;
   pg_bitarray_t them_have_pieces;
 
   uv_tcp_t connection;
@@ -137,9 +138,11 @@ typedef struct {
   uv_idle_t idle_handle;
 
   pg_ring_t recv_data;
-  char addr_s[INET_ADDRSTRLEN + /* :port */ 6];  // TODO: ipv6
+  char addr_s[INET6_ADDRSTRLEN + /* :port */ 6];
+  bool me_choked, me_interested, them_choked, them_interested, handshaked;
+  uint8_t in_flight_requests;
 
-  picker_t *picker;
+  PG_PAD(6);
 } peer_t;
 
 typedef struct {

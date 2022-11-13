@@ -60,7 +60,7 @@ TEST test_on_read() {
   download_t download = {0};
   download_init(&download, info_hash, 0);
 
-  const tracker_peer_address_t addr = {0};
+  const tracker_peer_address_ipv4_t addr = {0};
 
   picker_t picker = {0};
   picker_init(pg_heap_allocator(), &logger, &picker, &metainfo);
