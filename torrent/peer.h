@@ -23,7 +23,6 @@
 typedef struct {
   int fd;
   uint8_t info_hash[20];
-  uint8_t peer_id[20];
   uint32_t downloaded_pieces_count, downloaded_blocks_count;
   uint64_t downloaded_bytes;
   uint64_t start_ts;
@@ -962,7 +961,7 @@ peer_error_t peer_send_handshake(peer_t *peer) {
          sizeof(peer->download->info_hash));
   memcpy(
       buf.base + sizeof(handshake_header) + sizeof(peer->download->info_hash),
-      peer->download->peer_id, sizeof(peer->download->peer_id));
+      peer_id, sizeof(peer_id));
 
   return peer_send_buf(peer, buf);
 }
@@ -1166,15 +1165,13 @@ void peer_close(peer_t *peer) {
   }
 }
 
-void download_init(download_t *download, uint8_t *info_hash, uint8_t *peer_id,
-                   int fd) {
+void download_init(download_t *download, uint8_t *info_hash, int fd) {
   assert(fd >= 0);
 
   download->fd = fd;
   download->start_ts = 0;
 
   memcpy(download->info_hash, info_hash, 20);
-  memcpy(download->peer_id, peer_id, 20);
 }
 
 peer_error_t picker_checksum_all(pg_allocator_t allocator, pg_logger_t *logger,

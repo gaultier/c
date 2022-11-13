@@ -8,6 +8,9 @@
 #include "../pg/pg.h"
 #include "bencode.h"
 
+static const uint8_t peer_id[20] = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
+                                    11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
+
 typedef enum : uint8_t {
   TK_ERR_NONE,
   TK_ERR_CURL,
@@ -32,12 +35,11 @@ const char *tracker_error_to_string(int err) {
 
 typedef struct {
   pg_span32_t url;
-  uint8_t peer_id[20];
-  uint16_t port;
-  uint8_t info_hash[20];
   uint64_t uploaded;
   uint64_t downloaded;
   uint64_t left;
+  uint8_t info_hash[20];
+  uint16_t port;
 } tracker_query_t;
 
 typedef struct {
@@ -118,7 +120,7 @@ pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
       pg_span32_url_encode(allocator, info_hash_span);
 
   pg_span32_t peer_id_span =
-      (pg_span32_t){.data = (char *)q->peer_id, .len = sizeof(q->peer_id)};
+      (pg_span32_t){.data = (char *)peer_id, .len = sizeof(peer_id)};
   pg_string_t peer_id_url_encoded =
       pg_span32_url_encode(allocator, peer_id_span);
 

@@ -56,8 +56,6 @@ int main(int argc, char* argv[]) {
   }
 
   tracker_query_t tracker_query = {
-      .peer_id = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
-                  11, 12, 13, 14, 15, 16, 17, 18, 19, 20},
       .port = 6881,
       .url = metainfo.announce,
       .left = metainfo.length,
@@ -104,7 +102,7 @@ int main(int argc, char* argv[]) {
   }
 
   download_t download = {0};
-  download_init(&download, tracker_query.info_hash, tracker_query.peer_id, fd);
+  download_init(&download, tracker_query.info_hash, fd);
 
   picker_t picker = {0};
   picker_init(pg_heap_allocator(), &logger, &picker, &metainfo);

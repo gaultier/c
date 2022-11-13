@@ -6,7 +6,6 @@
 #include "uv.h"
 #include "vendor/greatest/greatest.h"
 
-static uint8_t peer_id[20] = {0};
 static uint8_t info_hash[20] = {0};
 const uint8_t handshake_header[] = {
     PEER_HANDSHAKE_HEADER_LENGTH,
@@ -59,7 +58,7 @@ TEST test_on_read() {
   };
 
   download_t download = {0};
-  download_init(&download, info_hash, peer_id, 0);
+  download_init(&download, info_hash, 0);
 
   const tracker_peer_address_t addr = {0};
 
@@ -82,7 +81,7 @@ TEST test_on_read() {
            sizeof(peer->download->info_hash));
     memcpy(buf1.base + sizeof(handshake_header) +
                sizeof(peer->download->info_hash),
-           peer->download->peer_id, sizeof(peer->download->peer_id));
+           peer_id, sizeof(peer_id));
     buf1.len = PEER_HANDSHAKE_LENGTH;
 
     uv_stream_t stream = {.data = peer};
