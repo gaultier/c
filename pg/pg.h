@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -21,6 +20,8 @@
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
+#define PG_PAD(n) uint8_t padding__COUNTER__[n]
+
 typedef struct {
   char *data;
   uint64_t len;
@@ -29,6 +30,7 @@ typedef struct {
 typedef struct {
   char *data;
   uint32_t len;
+  PG_PAD(4);
 } pg_span32_t;
 
 typedef struct pg_allocator_t pg_allocator_t;

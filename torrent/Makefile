@@ -8,7 +8,7 @@ bencode_dump: bencode_dump.c
 	$(CC) -Wall -Wextra -g $(CFLAGS) $^ -o $@ $(LDFLAGS)
 
 torrent: main.c bencode.h peer.h sha1.h tracker.h
-	$(CC) -Wall -Wextra -g $(CFLAGS) $< -o $@ $(LDFLAGS) -lcurl -luv
+	$(CC) -Wall -Wextra -Wpadded -g $(CFLAGS) $< -o $@ $(LDFLAGS) -lcurl -luv -isystem /usr/local/include/
 
 test: bencode_test torrent_test
 	./torrent_test

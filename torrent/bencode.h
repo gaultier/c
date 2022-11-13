@@ -38,6 +38,7 @@ typedef struct {
   pg_array_t(uint32_t) lengths;
   pg_array_t(bc_kind_t) kinds;
   uint32_t parent;
+  PG_PAD(4);
 } bc_parser_t;
 
 void bc_parser_init(pg_allocator_t allocator, bc_parser_t *parser,
@@ -319,11 +320,11 @@ void bc_dump_values(bc_parser_t *parser, FILE *f, uint64_t indent) {
 
 typedef struct {
   pg_span32_t announce;
-  uint32_t piece_length;
   uint64_t length;
   pg_span32_t name;
   pg_span32_t pieces;
 
+  uint32_t piece_length;
   // Computed
   uint32_t pieces_count, blocks_count, blocks_per_piece, last_piece_length,
       last_piece_block_count;

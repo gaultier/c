@@ -52,10 +52,6 @@ typedef enum : uint8_t {
 
 typedef struct {
   peer_error_kind_t kind;
-  union {
-    int uv_err;
-    int errno_err;
-  } v;
 } peer_error_t;
 
 typedef enum : uint8_t {
@@ -569,7 +565,7 @@ peer_error_t download_checksum_piece(pg_logger_t *logger,
 
   if (lseek(download->fd, offset, SEEK_SET) == -1) {
     pg_log_error(logger, "Failed to lseek(2): err=%s", strerror(errno));
-    return (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
+    return (peer_error_t){.kind = PEK_OS};
   }
 
   pg_array_t(uint8_t) data = {0};
@@ -580,7 +576,7 @@ peer_error_t download_checksum_piece(pg_logger_t *logger,
   ssize_t ret = read(download->fd, data, length);
   if (ret <= 0) {
     pg_log_error(logger, "Failed to read(2): err=%s", strerror(errno));
-    err = (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
+    err = (peer_error_t){.kind = PEK_OS};
     goto end;
   }
   if ((uint64_t)ret != length) {
@@ -621,14 +617,14 @@ peer_error_t peer_put_block(peer_t *peer, uint32_t piece, uint32_t block,
   if (lseek(peer->download->fd, offset, SEEK_SET) == -1) {
     pg_log_error(peer->logger, "[%s] Failed to lseek(2): err=%s", peer->addr_s,
                  strerror(errno));
-    return (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
+    return (peer_error_t){.kind = PEK_OS};
   }
 
   ssize_t ret = write(peer->download->fd, data.data, data.len);
   if (ret <= 0) {
     pg_log_error(peer->logger, "[%s] Failed to write(2): err=%s", peer->addr_s,
                  strerror(errno));
-    return (peer_error_t){.kind = PEK_OS, .v = {.errno_err = errno}};
+    return (peer_error_t){.kind = PEK_OS};
   }
   if (ret != data.len) {
     // TODO: handle partial writes
@@ -914,7 +910,7 @@ peer_error_t peer_send_buf(peer_t *peer, uv_buf_t buf) {
     pg_pool_free(&peer->write_ctx_pool, ctx);
     peer->allocator.free(buf.base);
 
-    return (peer_error_t){.kind = PEK_UV, .v = {-ret}};
+    return (peer_error_t){.kind = PEK_UV};
   }
 
   return (peer_error_t){0};
@@ -1121,7 +1117,7 @@ peer_error_t peer_connect(peer_t *peer, tracker_peer_address_ipv4_t address) {
   if ((ret = uv_tcp_init(uv_default_loop(), &peer->connection)) != 0) {
     pg_log_error(peer->logger, "[%s] Failed to uv_tcp_init: %d %s",
                  peer->addr_s, ret, strerror(ret));
-    return (peer_error_t){.kind = PEK_UV, .v = {.uv_err = -ret}};
+    return (peer_error_t){.kind = PEK_UV};
   }
 
   struct sockaddr_in addr = (struct sockaddr_in){
@@ -1134,7 +1130,7 @@ peer_error_t peer_connect(peer_t *peer, tracker_peer_address_ipv4_t address) {
                             (struct sockaddr *)&addr, peer_on_connect)) != 0) {
     pg_log_error(peer->logger, "[%s] Failed to uv_tcp_connect: %d %s",
                  peer->addr_s, ret, strerror(ret));
-    return (peer_error_t){.kind = PEK_UV, .v = {.uv_err = -ret}};
+    return (peer_error_t){.kind = PEK_UV};
   }
   return (peer_error_t){.kind = PEK_NONE};
 }
@@ -1190,7 +1186,7 @@ peer_error_t picker_checksum_all(pg_allocator_t allocator, pg_logger_t *logger,
   pg_array_t(uint8_t) file_data = {0};
   const int64_t ret = pg_read_file_fd(allocator, download->fd, &file_data);
   if (ret != 0) {
-    err = (peer_error_t){.kind = PEK_OS, .v = {.errno_err = ret}};
+    err = (peer_error_t){.kind = PEK_OS};
     goto end;
   }
 
