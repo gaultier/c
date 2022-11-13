@@ -383,74 +383,56 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
   if (parser->kinds[0] != BC_KIND_DICTIONARY)
     return BC_ME_METAINFO_NOT_DICTIONARY;
 
-  uint32_t cur = 1;
   const pg_span32_t announce_key = pg_span32_make_c("announce");
   const pg_span32_t info_key = pg_span32_make_c("info");
-  const uint32_t root_len = parser->lengths[0];
+  const pg_span32_t piece_length_key = pg_span32_make_c("piece length");
+  const pg_span32_t name_key = pg_span32_make_c("name");
+  const pg_span32_t length_key = pg_span32_make_c("length");
+  const pg_span32_t pieces_key = pg_span32_make_c("pieces");
 
-  uint32_t h = 0;
-  for (uint32_t i = 0; i < root_len; i += 2) {
-    h = cur + i;
-    bc_kind_t key_kind = parser->kinds[h];
-    pg_span32_t key_span = parser->spans[h];
-    bc_kind_t value_kind = parser->kinds[h + 1];
-    pg_span32_t value_span = parser->spans[h + 1];
+  bool in_info = false;
+  uint32_t info_len = 0;
+  for (uint32_t i = 1; i < pg_array_len(parser->kinds) - 1; i++) {
+    if (in_info && i > info_len) in_info = false;
+
+    bc_kind_t key_kind = parser->kinds[i];
+    pg_span32_t key_span = parser->spans[i];
+    bc_kind_t value_kind = parser->kinds[i + 1];
+    pg_span32_t value_span = parser->spans[i + 1];
 
     if (key_kind == BC_KIND_STRING && pg_span32_eq(announce_key, key_span) &&
         value_kind == BC_KIND_STRING) {
       metainfo->announce = value_span;
     } else if (key_kind == BC_KIND_STRING && pg_span32_eq(info_key, key_span) &&
                value_kind == BC_KIND_DICTIONARY) {
-      const uint32_t info_len = parser->lengths[cur + i + 1];
-      *info_span = value_span;
+      in_info = true;
+      info_len = parser->lengths[i];
+      *info_span = parser->spans[i];
+      continue;
+    } else if (in_info && key_kind == BC_KIND_STRING &&
+               pg_span32_eq(piece_length_key, key_span) &&
+               value_kind == BC_KIND_INTEGER) {
+      metainfo->piece_length = pg_span32_parse_u64(value_span);
+      if (metainfo->piece_length == 0) return BC_ME_PIECE_LENGTH_INVALID_VALUE;
+    } else if (in_info && key_kind == BC_KIND_STRING &&
+               pg_span32_eq(name_key, key_span) &&
+               value_kind == BC_KIND_STRING) {
+      // TODO: more validation
+      if (value_span.len == 0) return BC_ME_NAME_INVALID_VALUE;
 
-      const pg_span32_t piece_length_key = pg_span32_make_c("piece length");
-      const pg_span32_t name_key = pg_span32_make_c("name");
-      const pg_span32_t length_key = pg_span32_make_c("length");
-      const pg_span32_t pieces_key = pg_span32_make_c("pieces");
-
-      for (uint32_t j = 0; j < info_len; j += 2) {
-        key_kind = parser->kinds[h + j];
-        key_span = parser->spans[h + j];
-        value_kind = parser->kinds[h + j + 1];
-        value_span = parser->spans[h + j + 1];
-
-        if (key_kind == BC_KIND_STRING &&
-            pg_span32_eq(piece_length_key, key_span) &&
-            value_kind == BC_KIND_INTEGER) {
-          metainfo->piece_length = pg_span32_parse_u64(value_span);
-          if (metainfo->piece_length == 0)
-            return BC_ME_PIECE_LENGTH_INVALID_VALUE;
-        } else if (key_kind == BC_KIND_STRING &&
-                   pg_span32_eq(name_key, key_span) &&
-                   value_kind == BC_KIND_STRING) {
-          // TODO: more validation
-          if (value_span.len == 0) return BC_ME_NAME_INVALID_VALUE;
-
-          metainfo->name = value_span;
-        } else if (key_kind == BC_KIND_STRING &&
-                   pg_span32_eq(length_key, key_span) &&
-                   value_kind == BC_KIND_INTEGER) {
-          metainfo->length = pg_span32_parse_u64(value_span);
-          if (metainfo->length == 0) return BC_ME_LENGTH_INVALID_VALUE;
-        } else if (key_kind == BC_KIND_STRING &&
-                   pg_span32_eq(pieces_key, key_span) &&
-                   value_kind == BC_KIND_STRING) {
-          if (value_span.len == 0 || value_span.len % 20 != 0)
-            return BC_ME_PIECES_INVALID_VALUE;
-          metainfo->pieces = value_span;
-        }
-
-        // Skip over nested children
-        if (value_kind == BC_KIND_ARRAY || value_kind == BC_KIND_DICTIONARY)
-          h += parser->lengths[h + j + i];
-      }
+      metainfo->name = value_span;
+    } else if (in_info && key_kind == BC_KIND_STRING &&
+               pg_span32_eq(length_key, key_span) &&
+               value_kind == BC_KIND_INTEGER) {
+      metainfo->length = pg_span32_parse_u64(value_span);
+      if (metainfo->length == 0) return BC_ME_LENGTH_INVALID_VALUE;
+    } else if (in_info && key_kind == BC_KIND_STRING &&
+               pg_span32_eq(pieces_key, key_span) &&
+               value_kind == BC_KIND_STRING) {
+      if (value_span.len == 0 || value_span.len % 20 != 0)
+        return BC_ME_PIECES_INVALID_VALUE;
+      metainfo->pieces = value_span;
     }
-
-    // Skip over nested children
-    if (parser->kinds[h] == BC_KIND_ARRAY ||
-        parser->kinds[h] == BC_KIND_DICTIONARY)
-      h += parser->lengths[h];
   }
 
   if (metainfo->announce.len == 0) return BC_ME_ANNOUNCE_NOT_FOUND;
