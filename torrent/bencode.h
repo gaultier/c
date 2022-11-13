@@ -391,9 +391,11 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
   const pg_span32_t pieces_key = pg_span32_make_c("pieces");
 
   bool in_info = false;
-  uint32_t info_len = 0;
-  for (uint32_t i = 1; i < pg_array_len(parser->kinds) - 1; i++) {
-    if (in_info && i > info_len) in_info = false;
+  uint32_t info_end = 0;
+  for (uint32_t i = 1; i < pg_array_len(parser->kinds) - 1; i += 2) {
+    if (in_info && i > info_end) {
+      in_info = false;
+    }
 
     bc_kind_t key_kind = parser->kinds[i];
     pg_span32_t key_span = parser->spans[i];
@@ -406,9 +408,8 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
     } else if (key_kind == BC_KIND_STRING && pg_span32_eq(info_key, key_span) &&
                value_kind == BC_KIND_DICTIONARY) {
       in_info = true;
-      info_len = parser->lengths[i];
-      *info_span = parser->spans[i];
-      continue;
+      info_end = i + parser->lengths[i + 1];
+      *info_span = value_span;
     } else if (in_info && key_kind == BC_KIND_STRING &&
                pg_span32_eq(piece_length_key, key_span) &&
                value_kind == BC_KIND_INTEGER) {

@@ -20,7 +20,20 @@
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
-#define PG_PAD(n) uint8_t padding__COUNTER__[n]
+// Check that __COUNTER__ is defined and that __COUNTER__ increases by 1
+// every time it is expanded. X + 1 == X + 0 is used in case X is defined to be
+// empty. If X is empty the expression becomes (+1 == +0).
+#if defined(__COUNTER__) && (__COUNTER__ + 1 == __COUNTER__ + 0)
+#define PG_PRIVATE_UNIQUE_ID __COUNTER__
+#else
+#define PG_PRIVATE_UNIQUE_ID __LINE__
+#endif
+
+// Helpers for generating unique variable names
+#define PG_PRIVATE_NAME(n) PG_PRIVATE_CONCAT(n, PG_PRIVATE_UNIQUE_ID)
+#define PG_PRIVATE_CONCAT(a, b) PG_PRIVATE_CONCAT2(a, b)
+#define PG_PRIVATE_CONCAT2(a, b) a##b
+#define PG_PAD(n) uint8_t PG_PRIVATE_NAME(_padding)[n]
 
 typedef struct {
   char *data;
