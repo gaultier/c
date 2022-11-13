@@ -392,7 +392,7 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
 
   bool in_info = false;
   uint32_t info_end = 0;
-  for (uint32_t i = 1; i < pg_array_len(parser->kinds) - 1; i += 2) {
+  for (uint32_t i = 1; i < pg_array_len(parser->kinds) - 1; i++) {
     if (in_info && i > info_end) {
       in_info = false;
     }

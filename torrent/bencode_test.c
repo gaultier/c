@@ -393,7 +393,9 @@ TEST test_bc_parse_value_info_span() {
 
 TEST test_bc_metainfo() {
   pg_span32_t span = pg_span32_make_c(
-      "d8:announce3:foo4:infod3:foo4:true6:lengthi20e12:piece "
+      "d8:announce3:foo13:announce-"
+      "listl27:http://example.com/"
+      "announcee4:infod3:foo4:true6:lengthi20e12:piece "
       "lengthi20e6:pieces20:000000000000000000004:name5:helloe6:lengthi99ee");
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 1);
