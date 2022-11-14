@@ -585,6 +585,12 @@ bool pg_span_contains(pg_span_t haystack, pg_span_t needle) {
   return memmem(haystack.data, haystack.len, needle.data, needle.len) != NULL;
 }
 
+bool pg_span_ends_with(pg_span_t haystack, pg_span_t needle) {
+  if (needle.len > haystack.len) return false;
+  return memmem(haystack.data + haystack.len - needle.len, needle.len,
+                needle.data, needle.len) != NULL;
+}
+
 pg_string_t pg_span_url_encode(pg_allocator_t allocator, pg_span_t src) {
   pg_string_t res = pg_string_make_reserve(allocator, 3 * src.len);
 
@@ -616,6 +622,8 @@ bool pg_span_eq(pg_span_t a, pg_span_t b) {
 }
 
 uint64_t pg_span_parse_u64_hex(pg_span_t span, bool *valid) {
+  pg_span_trim(&span);
+
   uint64_t res = 0;
   uint64_t sign = 1;
   if (pg_span_peek_left(span, NULL) == '-') {
@@ -664,8 +672,11 @@ uint64_t pg_span_parse_u64_hex(pg_span_t span, bool *valid) {
 }
 
 uint64_t pg_span_parse_u64_decimal(pg_span_t span, bool *valid) {
+  pg_span_trim(&span);
+
   uint64_t res = 0;
   uint64_t sign = 1;
+
   if (pg_span_peek_left(span, NULL) == '-') {
     sign = -1;
     pg_span_consume_left(&span, 1);
