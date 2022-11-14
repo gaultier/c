@@ -98,7 +98,9 @@ stacktrace_entry_t fn_name_to_stacktrace_entry(pg_logger_t* logger,
                                                pg_span_t name) {
   pg_span_t left = {0}, right = {0};
   uint64_t offset = 0;
-  if (pg_span_split_at_first(name, '+', &left, &right)) {  // +0xab present
+  if (pg_span_split_at_last(name, '+', &left,
+                            &right) &&
+      right.len > 0) {  // +0xab present at the end
     bool valid = false;
     offset = pg_span_parse_u64_hex(right, &valid);
     if (!valid)

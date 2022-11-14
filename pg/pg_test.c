@@ -109,6 +109,16 @@ TEST test_pg_span_split_at_last() {
     ASSERT_STRN_EQ("\nllo", right.data, right.len);
   }
   {
+    pg_span_t span = pg_span_make_c("Foundation`+[NSString initialize]+0x3d");
+    pg_span_t left = {0}, right = {0};
+
+    ASSERT_EQ(true, pg_span_split_at_last(span, '+', &left, &right));
+    ASSERT_EQ_FMT(33ULL, left.len, "%llu");
+    ASSERT_STRN_EQ("Foundation`+[NSString initialize]", left.data, left.len);
+    ASSERT_EQ_FMT(5ULL, right.len, "%llu");
+    ASSERT_STRN_EQ("+0x3d", right.data, right.len);
+  }
+  {
     pg_span_t span = pg_span_make_c("");
     pg_span_t left = {0}, right = {0};
 
