@@ -90,7 +90,7 @@ bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span32_t *input) {
       if (parser->parent != -1U) parser->lengths[parser->parent] += 1;
 
       pg_span32_t left = {0}, right = {0};
-      const bool found = pg_span32_split(*input, 'e', &left, &right);
+      const bool found = pg_span32_split_left(*input, 'e', &left, &right);
       if (!found) return BC_PE_INVALID_NUMBER;
 
       assert(left.len >= 1);
@@ -136,7 +136,7 @@ bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span32_t *input) {
       if (parser->parent != -1U) parser->lengths[parser->parent] += 1;
 
       pg_span32_t left = {0}, right = {0};
-      const bool found = pg_span32_split(*input, ':', &left, &right);
+      const bool found = pg_span32_split_left(*input, ':', &left, &right);
       if (!found) return BC_PE_INVALID_STRING;
 
       assert(left.len >= 1);

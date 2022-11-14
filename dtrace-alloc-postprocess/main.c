@@ -203,9 +203,7 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
       pg_span_trim_left(&input);
       bool arg1_valid = false;
       if (arg1_span.len != 0) {
-        if (kind == EK_REALLOC_ENTRY)
-          arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
-        else if (kind == EK_CALLOC_ENTRY)
+        if (kind == EK_REALLOC_ENTRY || kind == EK_CALLOC_ENTRY)
           arg1 = pg_span_parse_u64_decimal(arg1_span, &arg1_valid);
         else
           pg_log_fatal(logger, EINVAL, "Unexpected arg1 for %s: %.*s",
@@ -275,26 +273,66 @@ int main(int argc, char* argv[]) {
   parse_input(&logger, input, &events, &fn_names);
 
   uint64_t mem_size = 0;
+  pg_array_t(uint64_t) allocated_ptrs = {0};
+  pg_array_init_reserve(allocated_ptrs, pg_array_len(events.kinds) / 2,
+                        pg_heap_allocator());
+  pg_array_t(uint64_t) allocated_sizes = {0};
+  pg_array_init_reserve(allocated_sizes, pg_array_len(events.kinds) / 2,
+                        pg_heap_allocator());
+
+  uint64_t cur_alloc_size = 0;
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
     switch (events.kinds[i]) {
       case EK_MALLOC_ENTRY:
-        mem_size += events.arg0s[i];
+        cur_alloc_size = events.arg0s[i];
+        mem_size += cur_alloc_size;
         printf("%llu %llu\n", events.timestamps[i], mem_size);
+        pg_array_append(allocated_sizes, cur_alloc_size);
         break;
+      case EK_MALLOC_RETURN:
+      case EK_CALLOC_RETURN:
+      case EK_REALLOC_RETURN: {
+        const uint64_t ptr = events.arg0s[i];
+        if (ptr != 0) pg_array_append(allocated_ptrs, ptr);
+        break;
+      }
       case EK_REALLOC_ENTRY:
-        mem_size += events.arg1s[i];
+        cur_alloc_size = events.arg1s[i];
+        mem_size += cur_alloc_size;
         printf("%llu %llu\n", events.timestamps[i], mem_size);
+        pg_array_append(allocated_sizes, cur_alloc_size);
         break;
       case EK_CALLOC_ENTRY:
-        mem_size += events.arg0s[i] * events.arg1s[i];
+        cur_alloc_size =
+            events.arg0s[i] * events.arg1s[i];  // TODO: check overflow
+        mem_size += cur_alloc_size;
+        printf("%llu %llu\n", events.timestamps[i], mem_size);
+        pg_array_append(allocated_sizes, cur_alloc_size);
+        break;
+      case EK_FREE_ENTRY: {
+        uint64_t size = 0;
+        uint64_t found_at = -1ULL;
+        const uint64_t ptr = events.arg0s[i];
+        for (uint64_t j = 0; j < pg_array_len(allocated_ptrs); j++) {
+          if (allocated_ptrs[j] == ptr) {
+            size = allocated_sizes[j];
+            found_at = j;
+            break;
+          }
+        }
+        mem_size -= size;
         printf("%llu %llu\n", events.timestamps[i],
                mem_size);  // TODO: check overflow
+        if (found_at != -1ULL) {
+          allocated_ptrs[found_at] =
+              allocated_ptrs[pg_array_len(allocated_ptrs) - 1];
+          allocated_sizes[found_at] =
+              allocated_sizes[pg_array_len(allocated_sizes) - 1];
+          pg_array_resize(allocated_ptrs, pg_array_len(allocated_ptrs) - 1);
+          pg_array_resize(allocated_sizes, pg_array_len(allocated_sizes) - 1);
+        }
         break;
-      case EK_FREE_ENTRY:
-        mem_size -= 0;  // FIXME
-        printf("%llu %llu\n", events.timestamps[i],
-               mem_size);  // TODO: check overflow
-        break;
+      }
       default:
         break;
     }
