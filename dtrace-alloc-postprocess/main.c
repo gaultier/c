@@ -33,6 +33,10 @@ typedef struct {
   pg_array_t(bool) is_entry;
 } events_t;
 
+typedef struct {
+  uint64_t ptr, size;
+} allocation_t;
+
 static void events_init(events_t* events) {
   const uint64_t cap = 10000;
   pg_array_init_reserve(events->kinds, cap, pg_heap_allocator());
@@ -243,6 +247,34 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
   }
 }
 
+void on_free(events_t* events, uint64_t i, pg_array_t(allocation_t) allocations,
+             uint64_t* mem_size) {
+  allocation_t alloc = {0};
+  uint64_t found_at = -1ULL;
+  const uint64_t ptr = events->arg0s[i];
+  for (uint64_t j = 0; j < pg_array_len(allocations); j++) {
+    if (allocations[j].ptr == ptr) {
+      alloc = allocations[j];
+      found_at = j;
+      break;
+    }
+  }
+  *mem_size -= alloc.size;
+  printf("%llu %llu\n", events->timestamps[i],
+         *mem_size);  // TODO: check overflow
+  if (found_at != -1ULL) {
+    allocations[found_at] = allocations[pg_array_len(allocations) - 1];
+    pg_array_resize(allocations, pg_array_len(allocations) - 1);
+  }
+}
+
+void on_malloc_return(events_t* events, uint64_t i,
+                      pg_array_t(allocation_t) * allocations,
+                      allocation_t* cur_allocation) {
+  cur_allocation->ptr = events->arg0s[i];
+  if (cur_allocation->ptr != 0) pg_array_append(*allocations, *cur_allocation);
+}
+
 int main(int argc, char* argv[]) {
   pg_logger_t logger = {.level = PG_LOG_INFO};
   pg_array_t(uint8_t) file_data = {0};
@@ -273,66 +305,54 @@ int main(int argc, char* argv[]) {
   parse_input(&logger, input, &events, &fn_names);
 
   uint64_t mem_size = 0;
-  pg_array_t(uint64_t) allocated_ptrs = {0};
-  pg_array_init_reserve(allocated_ptrs, pg_array_len(events.kinds) / 2,
-                        pg_heap_allocator());
-  pg_array_t(uint64_t) allocated_sizes = {0};
-  pg_array_init_reserve(allocated_sizes, pg_array_len(events.kinds) / 2,
+  // TODO: map[allocated_ptr] = allocated_size
+  pg_array_t(allocation_t) allocations = {0};
+  pg_array_init_reserve(allocations, pg_array_len(events.kinds) / 2,
                         pg_heap_allocator());
 
-  uint64_t cur_alloc_size = 0;
+  allocation_t cur_allocation = {0};
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
     switch (events.kinds[i]) {
       case EK_MALLOC_ENTRY:
-        cur_alloc_size = events.arg0s[i];
-        mem_size += cur_alloc_size;
-        printf("%llu %llu\n", events.timestamps[i], mem_size);
-        pg_array_append(allocated_sizes, cur_alloc_size);
+        on_malloc_return(&events, i, &allocations, &cur_allocation);
         break;
       case EK_MALLOC_RETURN:
       case EK_CALLOC_RETURN:
       case EK_REALLOC_RETURN: {
-        const uint64_t ptr = events.arg0s[i];
-        if (ptr != 0) pg_array_append(allocated_ptrs, ptr);
+        cur_allocation.ptr = events.arg0s[i];
+        if (cur_allocation.ptr != 0)
+          pg_array_append(allocations, cur_allocation);
         break;
       }
-      case EK_REALLOC_ENTRY:
-        cur_alloc_size = events.arg1s[i];
-        mem_size += cur_alloc_size;
-        printf("%llu %llu\n", events.timestamps[i], mem_size);
-        pg_array_append(allocated_sizes, cur_alloc_size);
-        break;
-      case EK_CALLOC_ENTRY:
-        cur_alloc_size =
-            events.arg0s[i] * events.arg1s[i];  // TODO: check overflow
-        mem_size += cur_alloc_size;
-        printf("%llu %llu\n", events.timestamps[i], mem_size);
-        pg_array_append(allocated_sizes, cur_alloc_size);
-        break;
-      case EK_FREE_ENTRY: {
-        uint64_t size = 0;
-        uint64_t found_at = -1ULL;
-        const uint64_t ptr = events.arg0s[i];
-        for (uint64_t j = 0; j < pg_array_len(allocated_ptrs); j++) {
-          if (allocated_ptrs[j] == ptr) {
-            size = allocated_sizes[j];
-            found_at = j;
-            break;
+      case EK_REALLOC_ENTRY:         // FIXME
+        if (events.arg0s[i] == 0) {  // Same as malloc
+          cur_allocation.size = events.arg1s[i];
+          mem_size += cur_allocation.size;
+        } else {  // Same as free + malloc
+          allocation_t alloc = {0};
+          uint64_t found_at = -1ULL;
+          const uint64_t ptr = events.arg0s[i];
+          for (uint64_t j = 0; j < pg_array_len(allocations); j++) {
+            if (allocations[j].ptr == ptr) {
+              alloc = allocations[j];
+              found_at = j;
+              break;
+            }
           }
         }
-        mem_size -= size;
-        printf("%llu %llu\n", events.timestamps[i],
-               mem_size);  // TODO: check overflow
-        if (found_at != -1ULL) {
-          allocated_ptrs[found_at] =
-              allocated_ptrs[pg_array_len(allocated_ptrs) - 1];
-          allocated_sizes[found_at] =
-              allocated_sizes[pg_array_len(allocated_sizes) - 1];
-          pg_array_resize(allocated_ptrs, pg_array_len(allocated_ptrs) - 1);
-          pg_array_resize(allocated_sizes, pg_array_len(allocated_sizes) - 1);
-        }
+        printf("%llu %llu\n", events.timestamps[i], mem_size);
+        pg_array_append(allocations, cur_allocation);
         break;
-      }
+      case EK_CALLOC_ENTRY:
+        cur_allocation.size =
+            events.arg0s[i] * events.arg1s[i];  // TODO: check overflow
+        mem_size += cur_allocation.size;
+        printf("%llu %llu\n", events.timestamps[i], mem_size);
+        pg_array_append(allocations, cur_allocation);
+        break;
+      case EK_FREE_ENTRY:
+        on_free(&events, i, allocations, &mem_size);
+        break;
       default:
         break;
     }
