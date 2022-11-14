@@ -98,7 +98,7 @@ stacktrace_entry_t fn_name_to_stacktrace_entry(pg_logger_t* logger,
                                                pg_span_t name) {
   pg_span_t left = {0}, right = {0};
   uint64_t offset = 0;
-  if (pg_span_split(name, '+', &left, &right)) {  // +0xab present
+  if (pg_span_split_left(name, '+', &left, &right)) {  // +0xab present
     bool valid = false;
     offset = pg_span_parse_u64_hex(right, &valid);
     if (!valid)
@@ -175,7 +175,7 @@ int main(int argc, char* argv[]) {
     // malloc/realloc/calloc/free:entry
     pg_span_trim_left(&input);
     pg_span_t fn_leaf = input;
-    pg_span_split(input, ' ', &fn_leaf, &input);
+    pg_span_split_left(input, ' ', &fn_leaf, &input);
     pg_span_trim_left(&input);
     const bool is_entry = pg_span_ends_with(fn_leaf, entry_span);
     if (pg_span_contains(fn_leaf, malloc_span))
@@ -192,7 +192,7 @@ int main(int argc, char* argv[]) {
 
     // timestamp
     pg_span_t timestamp_span = {0};
-    pg_span_split(input, ' ', &timestamp_span, &input);
+    pg_span_split_left(input, ' ', &timestamp_span, &input);
     pg_span_trim_left(&input);
     bool timestamp_valid = false;
     const uint64_t timestamp =
@@ -203,7 +203,7 @@ int main(int argc, char* argv[]) {
 
     // arg0
     pg_span_t arg0_span = {0};
-    pg_span_split(input, ' ', &arg0_span, &input);
+    pg_span_split_left(input, ' ', &arg0_span, &input);
     pg_span_trim_left(&input);
     bool arg0_valid = false;
     uint64_t arg0 = 0;
@@ -222,7 +222,7 @@ int main(int argc, char* argv[]) {
     char c = pg_span_peek_left(input, &more_chars);
     if (!more_chars) break;
     if (pg_char_is_digit(c)) {
-      pg_span_split(input, '\n', &arg1_span, &input);
+      pg_span_split_left(input, '\n', &arg1_span, &input);
       pg_span_trim_left(&input);
       bool arg1_valid = false;
       if (arg1_span.len != 0) {
@@ -258,7 +258,7 @@ int main(int argc, char* argv[]) {
 
       pg_span_trim_left(&input);
       pg_span_t fn = input;
-      pg_span_split(input, ' ', &fn, &input);
+      pg_span_split_left(input, ' ', &fn, &input);
       pg_span_trim_left(&input);
       pg_span_trim_right(&fn);
 
