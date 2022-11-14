@@ -472,11 +472,24 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
 }
 // ------------------ Span
 
-char pg_span_peek(pg_span_t span) {
-  if (span.len > 0)
+char pg_span_peek_left(pg_span_t span, bool *found) {
+  if (span.len > 0) {
+    *found = true;
     return span.data[0];
-  else
+  } else {
+    *found = false;
     return 0;
+  }
+}
+
+char pg_span_peek_right(pg_span_t span, bool *found) {
+  if (span.len > 0) {
+    *found = true;
+    return span.data[span.len - 1];
+  } else {
+    *found = false;
+    return 0;
+  }
 }
 
 void pg_span_consume_left(pg_span_t *span, uint64_t n) {
@@ -524,6 +537,48 @@ bool pg_span_split(pg_span_t span, char needle, pg_span_t *left,
   return true;
 }
 
+bool pg_span_skip_left_until_inclusive(pg_span_t *span, char needle) {
+  pg_span_t left = {0}, right = {0};
+  if (!pg_span_split(*span, needle, &left, &right)) {
+    return false;
+  }
+
+  *span = right;
+  pg_span_consume_left(span, 1);
+  return true;
+}
+
+void pg_span_trim_left(pg_span_t *span) {
+  bool more_chars = false;
+  char c = 0;
+  while (true) {
+    c = pg_span_peek_left(*span, &more_chars);
+    if (!more_chars) return;
+    if (pg_char_is_space(c))
+      pg_span_consume_left(span, 1);
+    else
+      return;
+  }
+}
+
+void pg_span_trim_right(pg_span_t *span) {
+  bool more_chars = false;
+  char c = 0;
+  while (true) {
+    c = pg_span_peek_right(*span, &more_chars);
+    if (!more_chars) return;
+    if (pg_char_is_space(c))
+      pg_span_consume_right(span, 1);
+    else
+      return;
+  }
+}
+
+void pg_span_trim(pg_span_t *span) {
+  pg_span_trim_left(span);
+  pg_span_trim_right(span);
+}
+
 pg_string_t pg_span_url_encode(pg_allocator_t allocator, pg_span_t src) {
   pg_string_t res = pg_string_make_reserve(allocator, 3 * src.len);
 
@@ -547,7 +602,7 @@ pg_span_t pg_span_make_c(char *s) {
 
 bool pg_span_starts_with(pg_span_t haystack, pg_span_t needle) {
   if (needle.len > haystack.len) return false;
-  return memmem(haystack.data, haystack.len, needle.data, needle.len) == 0;
+  return memmem(haystack.data, haystack.len, needle.data, needle.len) != NULL;
 }
 
 // ------------- Span u32
