@@ -54,14 +54,14 @@ SUITE(pg_array) {
 
 TEST test_pg_span_split_at_first() {
   {
-    pg_span_t span = pg_span_make_c("foo\nhello");
+    pg_span_t span = pg_span_make_c("foo\nhe\nllo");
     pg_span_t left = {0}, right = {0};
 
     ASSERT_EQ(true, pg_span_split_at_first(span, '\n', &left, &right));
     ASSERT_EQ_FMT(3ULL, left.len, "%llu");
     ASSERT_STRN_EQ("foo", left.data, left.len);
-    ASSERT_EQ_FMT(6ULL, right.len, "%llu");
-    ASSERT_STRN_EQ("\nhello", right.data, right.len);
+    ASSERT_EQ_FMT(7ULL, right.len, "%llu");
+    ASSERT_STRN_EQ("\nhe\nllo", right.data, right.len);
   }
   {
     pg_span_t span = pg_span_make_c("");
@@ -90,8 +90,8 @@ TEST test_pg_span_split_at_first() {
     ASSERT_EQ(true, pg_span_split_at_first(span, '\n', &left, &right));
     ASSERT_EQ_FMT(1ULL, left.len, "%llu");
     ASSERT_STRN_EQ("z", left.data, left.len);
-    ASSERT_EQ_FMT(0ULL, right.len, "%llu");
-    ASSERT_EQ_FMT(NULL, right.data, "%p");
+    ASSERT_EQ_FMT(1ULL, right.len, "%llu");
+    ASSERT_STRN_EQ("\n", right.data, right.len);
   }
 
   PASS();
@@ -103,10 +103,10 @@ TEST test_pg_span_split_at_last() {
     pg_span_t left = {0}, right = {0};
 
     ASSERT_EQ(true, pg_span_split_at_last(span, '\n', &left, &right));
-    ASSERT_EQ_FMT(3ULL, left.len, "%llu");
-    ASSERT_STRN_EQ("foo", left.data, left.len);
-    ASSERT_EQ_FMT(6ULL, right.len, "%llu");
-    ASSERT_STRN_EQ("\nhello", right.data, right.len);
+    ASSERT_EQ_FMT(6ULL, left.len, "%llu");
+    ASSERT_STRN_EQ("foo\nhe", left.data, left.len);
+    ASSERT_EQ_FMT(4ULL, right.len, "%llu");
+    ASSERT_STRN_EQ("\nllo", right.data, right.len);
   }
   {
     pg_span_t span = pg_span_make_c("");
@@ -135,8 +135,8 @@ TEST test_pg_span_split_at_last() {
     ASSERT_EQ(true, pg_span_split_at_last(span, '\n', &left, &right));
     ASSERT_EQ_FMT(1ULL, left.len, "%llu");
     ASSERT_STRN_EQ("z", left.data, left.len);
-    ASSERT_EQ_FMT(0ULL, right.len, "%llu");
-    ASSERT_EQ_FMT(NULL, right.data, "%p");
+    ASSERT_EQ_FMT(1ULL, right.len, "%llu");
+    ASSERT_STRN_EQ("\n", right.data, right.len);
   }
 
   PASS();

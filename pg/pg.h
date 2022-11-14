@@ -518,31 +518,30 @@ void pg_span_consume_right(pg_span_t *span, uint64_t n) {
 
 bool pg_span_split_at_first(pg_span_t span, char needle, pg_span_t *left,
                             pg_span_t *right) {
-  char *end = memchr(span.data, needle, span.len);
   *left = (pg_span_t){0};
   *right = (pg_span_t){0};
 
-  if (end == NULL) {
-    *left = span;
-    return false;
+  for (uint64_t i = 0; i < span.len; i++) {
+    if (span.data[i] == needle) {
+      left->data = span.data;
+      left->len = i;
+      right->data = span.data + i;
+      right->len = span.len - i;
+      assert(right->data[0] == needle);
+
+      return true;
+    }
   }
 
-  left->data = span.data;
-  left->len = end - span.data;
-
-  if ((uint64_t)(end - span.data) < span.len - 1) {
-    right->data = end;
-    right->len = span.len - left->len;
-    assert(right->data[0] == needle);
-  }
-  return true;
+  *left = span;
+  return false;
 }
 
 bool pg_span_split_at_last(pg_span_t span, char needle, pg_span_t *left,
                            pg_span_t *right) {
   *left = (pg_span_t){0};
   *right = (pg_span_t){0};
-  for (uint64_t i = span.len - 1; i >= 0; i--) {
+  for (int64_t i = span.len - 1; i >= 0; i--) {
     if (span.data[i] == needle) {
       left->data = span.data;
       left->len = i;
