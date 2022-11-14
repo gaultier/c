@@ -33,7 +33,7 @@ typedef struct {
   pg_array_t(bool) is_entry;
 } events_t;
 
-void events_init(events_t* events) {
+static void events_init(events_t* events) {
   const uint64_t cap = 10000;
   pg_array_init_reserve(events->kinds, cap, pg_heap_allocator());
   pg_array_init_reserve(events->stacktraces, cap, pg_heap_allocator());
@@ -42,8 +42,8 @@ void events_init(events_t* events) {
   pg_array_init_reserve(events->arg1s, cap, pg_heap_allocator());
 }
 
-uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
-                      bool* found) {
+static uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
+                             bool* found) {
   for (uint64_t i = 0; i < pg_array_len(fn_names); i++) {
     if (pg_span_eq(fn_names[i], name)) {
       *found = true;
@@ -53,7 +53,7 @@ uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
   return false;
 }
 
-const char* event_kind_to_string(event_kind_t kind) {
+static const char* event_kind_to_string(event_kind_t kind) {
   switch (kind) {
     case EK_NONE:
       return "EK_NONE";
@@ -76,7 +76,8 @@ const char* event_kind_to_string(event_kind_t kind) {
   }
 }
 
-void event_dump(events_t* events, pg_array_t(pg_span_t) fn_names, uint64_t i) {
+static void event_dump(events_t* events, pg_array_t(pg_span_t) fn_names,
+                       uint64_t i) {
   printf("Event: kind=%s timestamp=%llu arg0=%llu arg1=%llu stacktrace=",
          event_kind_to_string(events->kinds[i]), events->timestamps[i],
          events->arg0s[i], events->arg1s[i]);
@@ -93,9 +94,8 @@ void event_dump(events_t* events, pg_array_t(pg_span_t) fn_names, uint64_t i) {
 // foo`bar+0xab
 // foo`bar
 // foo`+[objc_weirdness]+0xab
-stacktrace_entry_t fn_name_to_stacktrace_entry(pg_logger_t* logger,
-                                               pg_array_t(pg_span_t) * fn_names,
-                                               pg_span_t name) {
+static stacktrace_entry_t fn_name_to_stacktrace_entry(
+    pg_logger_t* logger, pg_array_t(pg_span_t) * fn_names, pg_span_t name) {
   pg_span_t left = {0}, right = {0};
   uint64_t offset = 0;
   if (pg_span_split_at_last(name, '+', &left,
@@ -118,33 +118,8 @@ stacktrace_entry_t fn_name_to_stacktrace_entry(pg_logger_t* logger,
   return (stacktrace_entry_t){.fn_i = fn_i, .offset = offset};
 }
 
-int main(int argc, char* argv[]) {
-  pg_logger_t logger = {.level = PG_LOG_INFO};
-  pg_array_t(uint8_t) file_data = {0};
-  if (argc == 1) {
-    // int fd = STDIN_FILENO;
-    pg_log_fatal(&logger, EINVAL, "TODO read from stdin");
-  } else if (argc == 2) {
-    int fd = open(argv[1], O_RDONLY);
-    if (fd == -1) {
-      pg_log_fatal(&logger, errno, "Failed to open file %s: %s", argv[1],
-                   strerror(errno));
-    }
-    int64_t ret = 0;
-    if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &file_data)) != 0) {
-      pg_log_fatal(&logger, ret, "Failed to read file %s: %s", argv[1],
-                   strerror(ret));
-    }
-  }
-
-  pg_span_t input = {.data = (char*)file_data, .len = pg_array_len(file_data)};
-
-  events_t events = {0};
-  events_init(&events);
-
-  pg_array_t(pg_span_t) fn_names = {0};
-  pg_array_init_reserve(fn_names, 500, pg_heap_allocator());
-
+static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
+                        pg_array_t(pg_span_t) * fn_names) {
   // Skip header, unneeded
   if (pg_span_starts_with(input, pg_span_make_c("CPU")))
     pg_span_skip_left_until_inclusive(&input, '\n');
@@ -189,7 +164,7 @@ int main(int argc, char* argv[]) {
     else if (pg_span_contains(fn_leaf, free_span))
       kind = EK_FREE_ENTRY;
     else
-      pg_log_fatal(&logger, EINVAL, "Unkown event kind: %.*s", (int)fn_leaf.len,
+      pg_log_fatal(logger, EINVAL, "Unkown event kind: %.*s", (int)fn_leaf.len,
                    fn_leaf.data);
 
     // timestamp
@@ -200,7 +175,7 @@ int main(int argc, char* argv[]) {
     const uint64_t timestamp =
         pg_span_parse_u64_decimal(timestamp_span, &timestamp_valid);
     if (!timestamp_valid)
-      pg_log_fatal(&logger, EINVAL, "Invalid timestamp: %.*s",
+      pg_log_fatal(logger, EINVAL, "Invalid timestamp: %.*s",
                    (int)timestamp_span.len, timestamp_span.data);
 
     // arg0
@@ -214,7 +189,7 @@ int main(int argc, char* argv[]) {
     else
       arg0 = pg_span_parse_u64_decimal(arg0_span, &arg0_valid);
     if (!arg0_valid)
-      pg_log_fatal(&logger, EINVAL, "Invalid arg0: %.*s", (int)arg0_span.len,
+      pg_log_fatal(logger, EINVAL, "Invalid arg0: %.*s", (int)arg0_span.len,
                    arg0_span.data);
 
     // arg1
@@ -233,12 +208,12 @@ int main(int argc, char* argv[]) {
         else if (kind == EK_CALLOC_ENTRY)
           arg1 = pg_span_parse_u64_decimal(arg1_span, &arg1_valid);
         else
-          pg_log_fatal(&logger, EINVAL, "Unexpected arg1 for %s: %.*s",
+          pg_log_fatal(logger, EINVAL, "Unexpected arg1 for %s: %.*s",
                        event_kind_to_string(kind), (int)arg1_span.len,
                        arg1_span.data);
       }
       if (!arg1_valid)
-        pg_log_fatal(&logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
+        pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
                      arg1_span.data);
     }
 
@@ -247,13 +222,13 @@ int main(int argc, char* argv[]) {
       bool more_chars = false;
       char c = pg_span_peek_left(input, &more_chars);
       if (!more_chars || pg_char_is_digit(c)) {  // The End / New frame
-        pg_array_append(events.kinds, kind);
-        pg_array_append(events.stacktraces, stacktrace);
-        pg_array_append(events.timestamps, timestamp);
-        pg_array_append(events.arg0s, arg0);
-        pg_array_append(events.arg1s, arg1);
+        pg_array_append(events->kinds, kind);
+        pg_array_append(events->stacktraces, stacktrace);
+        pg_array_append(events->timestamps, timestamp);
+        pg_array_append(events->arg0s, arg0);
+        pg_array_append(events->arg1s, arg1);
 
-        event_dump(&events, fn_names, pg_array_len(events.kinds) - 1);
+        event_dump(events, *fn_names, pg_array_len(events->kinds) - 1);
         break;
       }
 
@@ -264,9 +239,40 @@ int main(int argc, char* argv[]) {
       pg_span_trim(&fn);
 
       const stacktrace_entry_t stacktrace_entry =
-          fn_name_to_stacktrace_entry(&logger, &fn_names, fn);
+          fn_name_to_stacktrace_entry(logger, fn_names, fn);
       pg_array_append(stacktrace, stacktrace_entry);
     }
   }
+}
+
+int main(int argc, char* argv[]) {
+  pg_logger_t logger = {.level = PG_LOG_INFO};
+  pg_array_t(uint8_t) file_data = {0};
+  if (argc == 1) {
+    // int fd = STDIN_FILENO;
+    pg_log_fatal(&logger, EINVAL, "TODO read from stdin");
+  } else if (argc == 2) {
+    int fd = open(argv[1], O_RDONLY);
+    if (fd == -1) {
+      pg_log_fatal(&logger, errno, "Failed to open file %s: %s", argv[1],
+                   strerror(errno));
+    }
+    int64_t ret = 0;
+    if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &file_data)) != 0) {
+      pg_log_fatal(&logger, ret, "Failed to read file %s: %s", argv[1],
+                   strerror(ret));
+    }
+  }
+
+  pg_span_t input = {.data = (char*)file_data, .len = pg_array_len(file_data)};
+
+  events_t events = {0};
+  events_init(&events);
+
+  pg_array_t(pg_span_t) fn_names = {0};
+  pg_array_init_reserve(fn_names, 500, pg_heap_allocator());
+
+  parse_input(&logger, input, &events, &fn_names);
+
   return 0;
 }
