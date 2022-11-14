@@ -924,14 +924,14 @@ peer_error_t peer_send_buf(peer_t *peer, uv_buf_t buf) {
 }
 
 peer_error_t peer_send_heartbeat(peer_t *peer) {
-  uv_buf_t buf = uv_buf_init(peer->allocator.realloc(sizeof(uint32_t), NULL, 0),
+  uv_buf_t buf = uv_buf_init(peer->allocator.realloc(NULL, sizeof(uint32_t), 0),
                              sizeof(uint32_t));
   return peer_send_buf(peer, buf);
 }
 
 peer_error_t peer_send_handshake(peer_t *peer) {
   uv_buf_t buf =
-      uv_buf_init(peer->allocator.realloc(PEER_HANDSHAKE_LENGTH, NULL, 0),
+      uv_buf_init(peer->allocator.realloc(NULL, PEER_HANDSHAKE_LENGTH, 0),
                   PEER_HANDSHAKE_LENGTH);
 
   static const uint8_t handshake_header[] = {
@@ -996,7 +996,7 @@ peer_error_t peer_send_request(peer_t *peer, uint32_t block) {
       metainfo_block_for_piece_length(peer->metainfo, piece, block_for_piece);
 
   uv_buf_t buf =
-      uv_buf_init(peer->allocator.realloc(4 + 1 + 3 * 4, NULL, 0), 0);
+      uv_buf_init(peer->allocator.realloc(NULL, 4 + 1 + 3 * 4, 0), 0);
 
   uint8_t *bytes = (uint8_t *)buf.base;
   bytes = peer_write_u32(bytes, (uint64_t *)&buf.len, 1 + 3 * 4);
@@ -1016,7 +1016,7 @@ peer_error_t peer_send_request(peer_t *peer, uint32_t block) {
 }
 
 peer_error_t peer_send_choke(peer_t *peer) {
-  uv_buf_t buf = uv_buf_init(peer->allocator.realloc(4 + 1, NULL, 0), 0);
+  uv_buf_t buf = uv_buf_init(peer->allocator.realloc(NULL, 4 + 1, 0), 0);
 
   uint8_t *bytes = (uint8_t *)buf.base;
   bytes = peer_write_u32(bytes, (uint64_t *)&buf.len, 1);
@@ -1026,7 +1026,7 @@ peer_error_t peer_send_choke(peer_t *peer) {
 }
 
 peer_error_t peer_send_interested(peer_t *peer) {
-  uv_buf_t buf = uv_buf_init(peer->allocator.realloc(4 + 1, NULL, 0), 0);
+  uv_buf_t buf = uv_buf_init(peer->allocator.realloc(NULL, 4 + 1, 0), 0);
 
   uint8_t *bytes = (uint8_t *)buf.base;
   bytes = peer_write_u32(bytes, (uint64_t *)&buf.len, 1);

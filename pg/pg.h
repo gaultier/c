@@ -52,11 +52,11 @@ typedef struct pg_allocator_t pg_allocator_t;
 struct pg_allocator_t {
   //  void *backing_memory;
   //  uint64_t backing_memory_cap;
-  void *(*realloc)(uint64_t new_size, void *old_memory, uint64_t old_size);
+  void *(*realloc)(void *old_memory, uint64_t new_size, uint64_t old_size);
   void (*free)(void *memory);
 };
 
-void *pg_heap_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
+void *pg_heap_realloc(void *old_memory, uint64_t new_size, uint64_t old_size) {
   void *res = realloc(old_memory, new_size);
   memset((uint8_t *)res + old_size, 0, new_size - old_size);
   return res;
@@ -68,7 +68,7 @@ pg_allocator_t pg_heap_allocator() {
   return (pg_allocator_t){.realloc = pg_heap_realloc, .free = pg_heap_free};
 }
 
-void *pg_stack_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
+void *pg_stack_realloc(void *old_memory, uint64_t new_size, uint64_t old_size) {
   (void)old_memory;
   (void)old_size;
 
@@ -85,7 +85,7 @@ pg_allocator_t pg_stack_allocator() {
   return (pg_allocator_t){.realloc = pg_stack_realloc, .free = pg_stack_free};
 }
 
-void *pg_null_realloc(uint64_t new_size, void *old_memory, uint64_t old_size) {
+void *pg_null_realloc(void *old_memory, uint64_t new_size, uint64_t old_size) {
   (void)new_size;
   (void)old_memory;
   (void)old_size;
@@ -208,7 +208,7 @@ typedef struct pg_array_header_t {
     void **pg__array_ = (void **)&(x);                                       \
     pg_array_header_t *pg__ah =                                              \
         (pg_array_header_t *)(my_allocator)                                  \
-            .realloc(sizeof(pg_array_header_t) + sizeof(*(x)) * (cap), NULL, \
+            .realloc(NULL, sizeof(pg_array_header_t) + sizeof(*(x)) * (cap), \
                      0);                                                     \
     pg__ah->len = 0;                                                         \
     pg__ah->capacity = cap;                                                  \
@@ -234,7 +234,7 @@ typedef struct pg_array_header_t {
     const uint64_t new_size =                                                  \
         sizeof(pg_array_header_t) + new_capacity * sizeof(*x);                 \
     pg_array_header_t *pg__new_header = PG_ARRAY_HEADER(x)->allocator.realloc( \
-        new_size, PG_ARRAY_HEADER(x), old_size);                               \
+        PG_ARRAY_HEADER(x), new_size, old_size);                               \
     pg__new_header->capacity = new_capacity;                                   \
     x = (void *)(pg__new_header + 1);                                          \
   } while (0)
@@ -318,7 +318,7 @@ void pg__set_string_capacity(pg_string_t str, uint64_t cap) {
 
 pg_string_t pg_string_make_reserve(pg_allocator_t a, uint64_t capacity) {
   uint64_t header_size = sizeof(pg_string_header_t);
-  void *ptr = a.realloc(header_size + capacity + 1, NULL, 0);
+  void *ptr = a.realloc(NULL, header_size + capacity + 1, 0);
 
   pg_string_t str;
   pg_string_header_t *header;
@@ -339,7 +339,7 @@ pg_string_t pg_string_make_reserve(pg_allocator_t a, uint64_t capacity) {
 pg_string_t pg_string_make_length(pg_allocator_t a, void const *init_str,
                                   uint64_t num_bytes) {
   uint64_t header_size = sizeof(pg_string_header_t);
-  void *ptr = a.realloc(header_size + num_bytes + 1, NULL, 0);
+  void *ptr = a.realloc(NULL, header_size + num_bytes + 1, 0);
 
   pg_string_t str;
   pg_string_header_t *header;
@@ -416,7 +416,7 @@ pg_string_t pg_string_make_space_for(pg_string_t str, int64_t add_len) {
     old_size = sizeof(pg_string_header_t) + pg_string_length(str) + 1;
     new_size = sizeof(pg_string_header_t) + new_len + 1;
 
-    new_ptr = PG_STRING_HEADER(str)->allocator.realloc(new_size, ptr, old_size);
+    new_ptr = PG_STRING_HEADER(str)->allocator.realloc(ptr, new_size, old_size);
     if (new_ptr == NULL) return NULL;
 
     header = (pg_string_header_t *)new_ptr;
@@ -872,7 +872,7 @@ void pg_ring_init(pg_allocator_t allocator, pg_ring_t *ring, uint64_t cap) {
   assert(cap > 0);
 
   ring->len = ring->offset = 0;
-  ring->data = allocator.realloc(cap, NULL, 0);
+  ring->data = allocator.realloc(NULL, cap, 0);
   ring->cap = cap;
   ring->allocator = allocator;
 }
