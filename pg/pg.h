@@ -625,11 +625,8 @@ uint64_t pg_span_parse_u64_hex(pg_span_t span, bool *valid) {
     pg_span_consume_left(&span, 1);
   }
 
-  if (!pg_span_starts_with(span, pg_span_make_c("0x"))) {
-    *valid = false;
-    return 0;
-  }
-  pg_span_consume_left(&span, 2);
+  if (pg_span_starts_with(span, pg_span_make_c("0x")))
+    pg_span_consume_left(&span, 2);
 
   for (uint64_t i = 0; i < span.len; i++) {
     if (!pg_char_is_alphanumeric(span.data[i])) {
@@ -665,6 +662,30 @@ uint64_t pg_span_parse_u64_hex(pg_span_t span, bool *valid) {
   *valid = true;
   return sign * res;
 }
+
+uint64_t pg_span_parse_u64_decimal(pg_span_t span, bool *valid) {
+  uint64_t res = 0;
+  uint64_t sign = 1;
+  if (pg_span_peek_left(span, NULL) == '-') {
+    sign = -1;
+    pg_span_consume_left(&span, 1);
+  } else if (pg_span_peek_left(span, NULL) == '+') {
+    pg_span_consume_left(&span, 1);
+  }
+
+  for (uint64_t i = 0; i < span.len; i++) {
+    if (!pg_char_is_digit(span.data[i])) {
+      *valid = false;
+      return 0;
+    }
+
+    res *= 10;
+    res += span.data[i] - '0';
+  }
+  *valid = true;
+  return sign * res;
+}
+
 // ------------- Span u32
 
 char pg_span32_peek(pg_span32_t span) {

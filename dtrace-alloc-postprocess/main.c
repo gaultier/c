@@ -9,6 +9,8 @@
 typedef enum : uint8_t {
   EK_NONE,
   EK_MALLOC,
+  EK_REALLOC,
+  EK_CALLOC,
   EK_FREE,
 } event_kind_t;
 
@@ -21,11 +23,18 @@ typedef pg_array_t(stacktrace_entry_t) stacktrace_t;
 typedef struct {
   pg_array_t(event_kind_t) kind;
   pg_array_t(stacktrace_t) stacktraces;
+  pg_array_t(uint64_t) timestamps;
+  pg_array_t(uint64_t) arg0s;
+  pg_array_t(uint64_t) arg1s;
 } events_t;
 
 void events_init(events_t* events) {
-  pg_array_init_reserve(events->kind, 10000, pg_heap_allocator());
-  pg_array_init_reserve(events->stacktraces, 10000, pg_heap_allocator());
+  const uint64_t cap = 10000;
+  pg_array_init_reserve(events->kind, cap, pg_heap_allocator());
+  pg_array_init_reserve(events->stacktraces, cap, pg_heap_allocator());
+  pg_array_init_reserve(events->timestamps, cap, pg_heap_allocator());
+  pg_array_init_reserve(events->arg0s, cap, pg_heap_allocator());
+  pg_array_init_reserve(events->arg1s, cap, pg_heap_allocator());
 }
 
 uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
@@ -93,7 +102,9 @@ int main(int argc, char* argv[]) {
   if (pg_span_starts_with(input, pg_span_make_c("CPU")))
     pg_span_skip_left_until_inclusive(&input, '\n');
 
-  const pg_span_t alloc_span = pg_span_make_c("alloc");
+  const pg_span_t malloc_span = pg_span_make_c("malloc");
+  const pg_span_t realloc_span = pg_span_make_c("realloc");
+  const pg_span_t calloc_span = pg_span_make_c("calloc");
   const pg_span_t free_span = pg_span_make_c("free");
 
   while (true) {
@@ -101,7 +112,7 @@ int main(int argc, char* argv[]) {
     stacktrace_t stacktrace = {0};
     pg_array_init_reserve(stacktrace, 10, pg_heap_allocator());
 
-    pg_span_skip_left_until_inclusive(&input, ' ');
+    pg_span_trim_left(&input);
 
     // Skip CPU id column
     {
@@ -120,8 +131,12 @@ int main(int argc, char* argv[]) {
     pg_span_t fn_leaf = input;
     pg_span_split(input, ' ', &fn_leaf, &input);
     pg_span_trim_left(&input);
-    if (pg_span_contains(fn_leaf, alloc_span))
+    if (pg_span_contains(fn_leaf, malloc_span))
       kind = EK_MALLOC;
+    else if (pg_span_contains(fn_leaf, realloc_span))
+      kind = EK_REALLOC;
+    else if (pg_span_contains(fn_leaf, calloc_span))
+      kind = EK_CALLOC;
     else if (pg_span_contains(fn_leaf, free_span))
       kind = EK_FREE;
     else
@@ -129,26 +144,44 @@ int main(int argc, char* argv[]) {
                    fn_leaf.data);
 
     // timestamp
-    pg_span_t ts = {0};
-    pg_span_split(input, ' ', &ts, &input);
+    pg_span_t timestamp_span = {0};
+    pg_span_split(input, ' ', &timestamp_span, &input);
     pg_span_trim_left(&input);
+    bool timestamp_valid = false;
+    const uint64_t timestamp =
+        pg_span_parse_u64_decimal(timestamp_span, &timestamp_valid);
+    if (!timestamp_valid)
+      pg_log_fatal(&logger, EINVAL, "Invalid timestamp: %.*s",
+                   (int)timestamp_span.len, timestamp_span.data);
 
     // arg0
-    pg_span_t arg0 = {0};
-    pg_span_split(input, ' ', &arg0, &input);
+    pg_span_t arg0_span = {0};
+    pg_span_split(input, ' ', &arg0_span, &input);
     pg_span_trim_left(&input);
+    bool arg0_valid = false;
+    const uint64_t arg0 =
+        kind == EK_REALLOC ? pg_span_parse_u64_hex(arg0_span, &arg0_valid)
+                           : pg_span_parse_u64_decimal(arg0_span, &arg0_valid);
+    if (!arg0_valid)
+      pg_log_fatal(&logger, EINVAL, "Invalid arg0: %.*s", (int)arg0_span.len,
+                   arg0_span.data);
 
     // arg1
-    {
-      bool more_chars = false;
-      char c = pg_span_peek_left(input, &more_chars);
-      if (!more_chars) break;
-      if (c != '\n') {
-        pg_span_t arg1 = {0};
-        pg_span_split(input, '\n', &arg1, &input);
-        pg_span_trim_left(&input);
-      }
+    pg_span_t arg1_span = {0};
+    bool more_chars = false;
+    char c = pg_span_peek_left(input, &more_chars);
+    if (!more_chars) break;
+    if (c != '\n') {
+      pg_span_split(input, '\n', &arg1_span, &input);
+      pg_span_trim_left(&input);
     }
+    bool arg1_valid = false;
+    const uint64_t arg1 =
+        kind == EK_REALLOC ? pg_span_parse_u64_hex(arg1_span, &arg1_valid)
+                           : pg_span_parse_u64_decimal(arg1_span, &arg1_valid);
+    if (!arg1_valid)
+      pg_log_fatal(&logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
+                   arg1_span.data);
 
     // Rest of stacktrace
     while (true) {
@@ -158,6 +191,9 @@ int main(int argc, char* argv[]) {
       if (pg_char_is_digit(c)) {  // New frame
         pg_array_append(events.kind, kind);
         pg_array_append(events.stacktraces, stacktrace);
+        pg_array_append(events.timestamps, timestamp);
+        pg_array_append(events.arg0s, arg0);
+        pg_array_append(events.arg1s, arg1);
         break;
       }
 
