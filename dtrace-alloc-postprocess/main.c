@@ -228,7 +228,7 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
         pg_array_append(events->arg0s, arg0);
         pg_array_append(events->arg1s, arg1);
 
-        event_dump(events, *fn_names, pg_array_len(events->kinds) - 1);
+        // event_dump(events, *fn_names, pg_array_len(events->kinds) - 1);
         break;
       }
 
@@ -273,6 +273,32 @@ int main(int argc, char* argv[]) {
   pg_array_init_reserve(fn_names, 500, pg_heap_allocator());
 
   parse_input(&logger, input, &events, &fn_names);
+
+  uint64_t mem_size = 0;
+  for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
+    switch (events.kinds[i]) {
+      case EK_MALLOC_ENTRY:
+        mem_size += events.arg0s[i];
+        printf("%llu %llu\n", events.timestamps[i], mem_size);
+        break;
+      case EK_REALLOC_ENTRY:
+        mem_size += events.arg1s[i];
+        printf("%llu %llu\n", events.timestamps[i], mem_size);
+        break;
+      case EK_CALLOC_ENTRY:
+        mem_size += events.arg0s[i] * events.arg1s[i];
+        printf("%llu %llu\n", events.timestamps[i],
+               mem_size);  // TODO: check overflow
+        break;
+      case EK_FREE_ENTRY:
+        mem_size -= 0;  // FIXME
+        printf("%llu %llu\n", events.timestamps[i],
+               mem_size);  // TODO: check overflow
+        break;
+      default:
+        break;
+    }
+  }
 
   return 0;
 }
