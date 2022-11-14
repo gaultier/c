@@ -52,57 +52,12 @@ SUITE(pg_array) {
   RUN_TEST(test_pg_array_capacity);
 }
 
-TEST test_pg_span_split_left() {
+TEST test_pg_span_split_at_first() {
   {
-    pg_span_t span = {.data = "foo\nhello", .len = strlen("foo\nhello")};
+    pg_span_t span = pg_span_make_c("foo\nhello");
     pg_span_t left = {0}, right = {0};
 
-    ASSERT_EQ(true, pg_span_split_left(span, '\n', &left, &right));
-    ASSERT_EQ_FMT(3ULL, left.len, "%llu");
-    ASSERT_STRN_EQ("foo", left.data, left.len);
-    ASSERT_EQ_FMT(6ULL, right.len, "%llu");
-    ASSERT_STRN_EQ("\nhello", right.data, right.len);
-  }
-  {
-    pg_span_t span = {.data = "", .len = strlen("")};
-    pg_span_t left = {0}, right = {0};
-
-    ASSERT_EQ(false, pg_span_split_left(span, '\n', &left, &right));
-    ASSERT_EQ_FMT(span.len, left.len, "%llu");
-    ASSERT_EQ_FMT(span.data, left.data, "%p");
-    ASSERT_EQ_FMT(0ULL, right.len, "%llu");
-    ASSERT_EQ_FMT(NULL, right.data, "%p");
-  }
-  {
-    pg_span_t span = {.data = "z", .len = strlen("z")};
-    pg_span_t left = {0}, right = {0};
-
-    ASSERT_EQ(false, pg_span_split_left(span, '\n', &left, &right));
-    ASSERT_EQ_FMT(1ULL, left.len, "%llu");
-    ASSERT_STRN_EQ("z", left.data, left.len);
-    ASSERT_EQ_FMT(0ULL, right.len, "%llu");
-    ASSERT_EQ_FMT(NULL, right.data, "%p");
-  }
-  {
-    pg_span_t span = {.data = "z\n", .len = strlen("z\n")};
-    pg_span_t left = {0}, right = {0};
-
-    ASSERT_EQ(true, pg_span_split_left(span, '\n', &left, &right));
-    ASSERT_EQ_FMT(1ULL, left.len, "%llu");
-    ASSERT_STRN_EQ("z", left.data, left.len);
-    ASSERT_EQ_FMT(0ULL, right.len, "%llu");
-    ASSERT_EQ_FMT(NULL, right.data, "%p");
-  }
-
-  PASS();
-}
-
-TEST test_pg_span_split_right() {
-  {
-    pg_span_t span = pg_span_make_c("foo\nhe\nllo");
-    pg_span_t left = {0}, right = {0};
-
-    ASSERT_EQ(true, pg_span_split_right(span, '\n', &left, &right));
+    ASSERT_EQ(true, pg_span_split_at_first(span, '\n', &left, &right));
     ASSERT_EQ_FMT(3ULL, left.len, "%llu");
     ASSERT_STRN_EQ("foo", left.data, left.len);
     ASSERT_EQ_FMT(6ULL, right.len, "%llu");
@@ -112,7 +67,7 @@ TEST test_pg_span_split_right() {
     pg_span_t span = pg_span_make_c("");
     pg_span_t left = {0}, right = {0};
 
-    ASSERT_EQ(false, pg_span_split_right(span, '\n', &left, &right));
+    ASSERT_EQ(false, pg_span_split_at_first(span, '\n', &left, &right));
     ASSERT_EQ_FMT(span.len, left.len, "%llu");
     ASSERT_EQ_FMT(span.data, left.data, "%p");
     ASSERT_EQ_FMT(0ULL, right.len, "%llu");
@@ -122,7 +77,7 @@ TEST test_pg_span_split_right() {
     pg_span_t span = pg_span_make_c("z");
     pg_span_t left = {0}, right = {0};
 
-    ASSERT_EQ(false, pg_span_split_right(span, '\n', &left, &right));
+    ASSERT_EQ(false, pg_span_split_at_first(span, '\n', &left, &right));
     ASSERT_EQ_FMT(1ULL, left.len, "%llu");
     ASSERT_STRN_EQ("z", left.data, left.len);
     ASSERT_EQ_FMT(0ULL, right.len, "%llu");
@@ -132,7 +87,52 @@ TEST test_pg_span_split_right() {
     pg_span_t span = pg_span_make_c("z\n");
     pg_span_t left = {0}, right = {0};
 
-    ASSERT_EQ(true, pg_span_split_right(span, '\n', &left, &right));
+    ASSERT_EQ(true, pg_span_split_at_first(span, '\n', &left, &right));
+    ASSERT_EQ_FMT(1ULL, left.len, "%llu");
+    ASSERT_STRN_EQ("z", left.data, left.len);
+    ASSERT_EQ_FMT(0ULL, right.len, "%llu");
+    ASSERT_EQ_FMT(NULL, right.data, "%p");
+  }
+
+  PASS();
+}
+
+TEST test_pg_span_split_at_last() {
+  {
+    pg_span_t span = pg_span_make_c("foo\nhe\nllo");
+    pg_span_t left = {0}, right = {0};
+
+    ASSERT_EQ(true, pg_span_split_at_last(span, '\n', &left, &right));
+    ASSERT_EQ_FMT(3ULL, left.len, "%llu");
+    ASSERT_STRN_EQ("foo", left.data, left.len);
+    ASSERT_EQ_FMT(6ULL, right.len, "%llu");
+    ASSERT_STRN_EQ("\nhello", right.data, right.len);
+  }
+  {
+    pg_span_t span = pg_span_make_c("");
+    pg_span_t left = {0}, right = {0};
+
+    ASSERT_EQ(false, pg_span_split_at_last(span, '\n', &left, &right));
+    ASSERT_EQ_FMT(span.len, left.len, "%llu");
+    ASSERT_EQ_FMT(span.data, left.data, "%p");
+    ASSERT_EQ_FMT(0ULL, right.len, "%llu");
+    ASSERT_EQ_FMT(NULL, right.data, "%p");
+  }
+  {
+    pg_span_t span = pg_span_make_c("z");
+    pg_span_t left = {0}, right = {0};
+
+    ASSERT_EQ(false, pg_span_split_at_last(span, '\n', &left, &right));
+    ASSERT_EQ_FMT(1ULL, left.len, "%llu");
+    ASSERT_STRN_EQ("z", left.data, left.len);
+    ASSERT_EQ_FMT(0ULL, right.len, "%llu");
+    ASSERT_EQ_FMT(NULL, right.data, "%p");
+  }
+  {
+    pg_span_t span = pg_span_make_c("z\n");
+    pg_span_t left = {0}, right = {0};
+
+    ASSERT_EQ(true, pg_span_split_at_last(span, '\n', &left, &right));
     ASSERT_EQ_FMT(1ULL, left.len, "%llu");
     ASSERT_STRN_EQ("z", left.data, left.len);
     ASSERT_EQ_FMT(0ULL, right.len, "%llu");
@@ -455,8 +455,8 @@ int main(int argc, char **argv) {
 
   /* Tests can also be gathered into test suites. */
   RUN_SUITE(pg_array);
-  RUN_TEST(test_pg_span_split_left);
-  RUN_TEST(test_pg_span_split_right);
+  RUN_TEST(test_pg_span_split_at_first);
+  RUN_TEST(test_pg_span_split_at_last);
   RUN_TEST(test_pg_string_url_encode);
   RUN_TEST(test_pg_ring);
   RUN_TEST(test_pg_bitarray);

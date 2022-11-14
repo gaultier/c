@@ -516,8 +516,8 @@ void pg_span_consume_right(pg_span_t *span, uint64_t n) {
   span->len -= n;
 }
 
-bool pg_span_split_left(pg_span_t span, char needle, pg_span_t *left,
-                        pg_span_t *right) {
+bool pg_span_split_at_first(pg_span_t span, char needle, pg_span_t *left,
+                            pg_span_t *right) {
   char *end = memchr(span.data, needle, span.len);
   *left = (pg_span_t){0};
   *right = (pg_span_t){0};
@@ -538,8 +538,8 @@ bool pg_span_split_left(pg_span_t span, char needle, pg_span_t *left,
   return true;
 }
 
-bool pg_span_split_right(pg_span_t span, char needle, pg_span_t *left,
-                         pg_span_t *right) {
+bool pg_span_split_at_last(pg_span_t span, char needle, pg_span_t *left,
+                           pg_span_t *right) {
   *left = (pg_span_t){0};
   *right = (pg_span_t){0};
   for (uint64_t i = span.len - 1; i >= 0; i--) {
@@ -560,7 +560,7 @@ bool pg_span_split_right(pg_span_t span, char needle, pg_span_t *left,
 
 bool pg_span_skip_left_until_inclusive(pg_span_t *span, char needle) {
   pg_span_t left = {0}, right = {0};
-  if (!pg_span_split_left(*span, needle, &left, &right)) {
+  if (!pg_span_split_at_first(*span, needle, &left, &right)) {
     return false;
   }
 
