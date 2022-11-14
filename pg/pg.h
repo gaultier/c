@@ -538,6 +538,25 @@ bool pg_span_split(pg_span_t span, char needle, pg_span_t *left,
   return true;
 }
 
+bool pg_span_split_right(pg_span_t span, char needle, pg_span_t *left,
+                         pg_span_t *right) {
+  *left = (pg_span_t){0};
+  *right = (pg_span_t){0};
+  for (uint64_t i = span.len - 1; i >= 0; i--) {
+    if (span.data[i] == needle) {
+      left->data = span.data;
+      left->len = end - span.data;
+    }
+  }
+
+  if ((uint64_t)(end - span.data) < span.len - 1) {
+    right->data = end;
+    right->len = span.len - left->len;
+    assert(right->data[0] == needle);
+  }
+  return true;
+}
+
 bool pg_span_skip_left_until_inclusive(pg_span_t *span, char needle) {
   pg_span_t left = {0}, right = {0};
   if (!pg_span_split(*span, needle, &left, &right)) {

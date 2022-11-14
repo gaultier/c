@@ -92,14 +92,18 @@ void event_dump(events_t* events, pg_array_t(pg_span_t) fn_names, uint64_t i) {
 // name is of the form:
 // foo`bar+0xab
 // foo`bar
-stacktrace_entry_t fn_name_to_stacktrace_entry(pg_array_t(pg_span_t) * fn_names,
+// foo`+[objc_weirdness]+0xab
+stacktrace_entry_t fn_name_to_stacktrace_entry(pg_logger_t* logger,
+                                               pg_array_t(pg_span_t) * fn_names,
                                                pg_span_t name) {
   pg_span_t left = {0}, right = {0};
   uint64_t offset = 0;
   if (pg_span_split(name, '+', &left, &right)) {  // +0xab present
     bool valid = false;
     offset = pg_span_parse_u64_hex(right, &valid);
-    assert(valid);  // TODO better error handling
+    if (!valid)
+      pg_log_fatal(logger, EINVAL, "Invalid offset: name=%.*s offset=%.*s",
+                   (int)name.len, name.data, (int)right.len, right.data);
   }
 
   bool found = false;
@@ -203,7 +207,7 @@ int main(int argc, char* argv[]) {
     pg_span_trim_left(&input);
     bool arg0_valid = false;
     uint64_t arg0 = 0;
-    if (!is_entry || kind == EK_REALLOC_ENTRY)
+    if (!is_entry || kind == EK_REALLOC_ENTRY || kind == EK_FREE_ENTRY)
       arg0 = pg_span_parse_u64_hex(arg0_span, &arg0_valid);
     else
       arg0 = pg_span_parse_u64_decimal(arg0_span, &arg0_valid);
@@ -217,10 +221,9 @@ int main(int argc, char* argv[]) {
     bool more_chars = false;
     char c = pg_span_peek_left(input, &more_chars);
     if (!more_chars) break;
-    if (c != '\n') {
+    if (pg_char_is_digit(c)) {
       pg_span_split(input, '\n', &arg1_span, &input);
       pg_span_trim_left(&input);
-    } else {
       bool arg1_valid = false;
       if (arg1_span.len != 0) {
         if (kind == EK_REALLOC_ENTRY)
@@ -260,7 +263,7 @@ int main(int argc, char* argv[]) {
       pg_span_trim_right(&fn);
 
       const stacktrace_entry_t stacktrace_entry =
-          fn_name_to_stacktrace_entry(&fn_names, fn);
+          fn_name_to_stacktrace_entry(&logger, &fn_names, fn);
       pg_array_append(stacktrace, stacktrace_entry);
     }
   }
