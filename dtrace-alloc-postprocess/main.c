@@ -155,7 +155,7 @@ int main(int argc, char* argv[]) {
   const pg_span_t free_span = pg_span_make_c("free");
   const pg_span_t entry_span = pg_span_make_c(":entry");
 
-  while (true) {
+  while (input.len > 0) {
     event_kind_t kind = EK_NONE;
     stacktrace_t stacktrace = {0};
     pg_array_init_reserve(stacktrace, 10, pg_heap_allocator());
@@ -246,8 +246,7 @@ int main(int argc, char* argv[]) {
     while (true) {
       bool more_chars = false;
       char c = pg_span_peek_left(input, &more_chars);
-      if (!more_chars) break;
-      if (pg_char_is_digit(c)) {  // New frame
+      if (!more_chars || pg_char_is_digit(c)) {  // The End / New frame
         pg_array_append(events.kinds, kind);
         pg_array_append(events.stacktraces, stacktrace);
         pg_array_append(events.timestamps, timestamp);
@@ -260,9 +259,9 @@ int main(int argc, char* argv[]) {
 
       pg_span_trim_left(&input);
       pg_span_t fn = input;
-      pg_span_split_at_first(input, ' ', &fn, &input);
+      pg_span_split_at_first(input, '\n', &fn, &input);
       pg_span_trim_left(&input);
-      pg_span_trim_right(&fn);
+      pg_span_trim(&fn);
 
       const stacktrace_entry_t stacktrace_entry =
           fn_name_to_stacktrace_entry(&logger, &fn_names, fn);
