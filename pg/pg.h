@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -474,20 +475,20 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
 
 char pg_span_peek_left(pg_span_t span, bool *found) {
   if (span.len > 0) {
-    *found = true;
+    if (found != NULL) *found = true;
     return span.data[0];
   } else {
-    *found = false;
+    if (found != NULL) *found = false;
     return 0;
   }
 }
 
 char pg_span_peek_right(pg_span_t span, bool *found) {
   if (span.len > 0) {
-    *found = true;
+    if (found != NULL) *found = true;
     return span.data[span.len - 1];
   } else {
-    *found = false;
+    if (found != NULL) *found = false;
     return 0;
   }
 }
@@ -579,6 +580,11 @@ void pg_span_trim(pg_span_t *span) {
   pg_span_trim_right(span);
 }
 
+bool pg_span_contains(pg_span_t haystack, pg_span_t needle) {
+  if (needle.len > haystack.len) return false;
+  return memmem(haystack.data, haystack.len, needle.data, needle.len) != NULL;
+}
+
 pg_string_t pg_span_url_encode(pg_allocator_t allocator, pg_span_t src) {
   pg_string_t res = pg_string_make_reserve(allocator, 3 * src.len);
 
@@ -602,9 +608,63 @@ pg_span_t pg_span_make_c(char *s) {
 
 bool pg_span_starts_with(pg_span_t haystack, pg_span_t needle) {
   if (needle.len > haystack.len) return false;
-  return memmem(haystack.data, haystack.len, needle.data, needle.len) != NULL;
+  return memmem(haystack.data, needle.len, needle.data, needle.len) != NULL;
 }
 
+bool pg_span_eq(pg_span_t a, pg_span_t b) {
+  return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
+}
+
+uint64_t pg_span_parse_u64_hex(pg_span_t span, bool *valid) {
+  uint64_t res = 0;
+  uint64_t sign = 1;
+  if (pg_span_peek_left(span, NULL) == '-') {
+    sign = -1;
+    pg_span_consume_left(&span, 1);
+  } else if (pg_span_peek_left(span, NULL) == '+') {
+    pg_span_consume_left(&span, 1);
+  }
+
+  if (!pg_span_starts_with(span, pg_span_make_c("0x"))) {
+    *valid = false;
+    return 0;
+  }
+  pg_span_consume_left(&span, 2);
+
+  for (uint64_t i = 0; i < span.len; i++) {
+    if (!pg_char_is_alphanumeric(span.data[i])) {
+      *valid = false;
+      return 0;
+    }
+
+    res *= 16;
+    uint64_t n = 0;
+    char c = pg_char_to_lower(span.data[i]);
+
+    if (c == 'a')
+      n = 10;
+    else if (c == 'b')
+      n = 11;
+    else if (c == 'c')
+      n = 12;
+    else if (c == 'd')
+      n = 13;
+    else if (c == 'e')
+      n = 14;
+    else if (c == 'f')
+      n = 15;
+    else if (pg_char_is_digit(c))
+      n = c - '0';
+    else {
+      *valid = false;
+      return 0;
+    }
+    res += n;
+  }
+
+  *valid = true;
+  return sign * res;
+}
 // ------------- Span u32
 
 char pg_span32_peek(pg_span32_t span) {

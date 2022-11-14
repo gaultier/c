@@ -1,9 +1,66 @@
-#include <_types/_uint8_t.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdlib.h>
 #include <sys/errno.h>
-#include <sys/fcntl.h>
 #include <unistd.h>
 
 #include "../pg/pg.h"
+
+typedef enum : uint8_t {
+  EK_NONE,
+  EK_MALLOC,
+  EK_FREE,
+} event_kind_t;
+
+typedef struct {
+  uint64_t fn_i;
+  uint64_t offset;
+} stacktrace_entry_t;
+
+typedef pg_array_t(stacktrace_entry_t) stacktrace_t;
+typedef struct {
+  pg_array_t(event_kind_t) kind;
+  pg_array_t(stacktrace_t) stacktraces;
+} events_t;
+
+void events_init(events_t* events) {
+  pg_array_init_reserve(events->kind, 10000, pg_heap_allocator());
+  pg_array_init_reserve(events->stacktraces, 10000, pg_heap_allocator());
+}
+
+uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
+                      bool* found) {
+  for (uint64_t i = 0; i < pg_array_len(fn_names); i++) {
+    if (pg_span_eq(fn_names[i], name)) {
+      *found = true;
+      return i;
+    }
+  }
+  return false;
+}
+
+// name is of the form:
+// foo`bar+0xab
+// foo`bar
+stacktrace_entry_t fn_name_to_stacktrace_entry(pg_array_t(pg_span_t) * fn_names,
+                                               pg_span_t name) {
+  pg_span_t left = {0}, right = {0};
+  uint64_t offset = 0;
+  if (pg_span_split(name, '+', &left, &right)) {  // +0xab present
+    bool valid = false;
+    offset = pg_span_parse_u64_hex(right, &valid);
+    assert(valid);  // TODO better error handling
+  }
+
+  bool found = false;
+  uint64_t fn_i = fn_name_find(*fn_names, left, &found);
+  if (!found) {
+    pg_array_append(*fn_names, left);
+    fn_i = pg_array_len(*fn_names) - 1;
+  }
+
+  return (stacktrace_entry_t){.fn_i = fn_i, .offset = offset};
+}
 
 int main(int argc, char* argv[]) {
   pg_logger_t logger = {.level = PG_LOG_INFO};
@@ -26,11 +83,24 @@ int main(int argc, char* argv[]) {
 
   pg_span_t input = {.data = (char*)file_data, .len = pg_array_len(file_data)};
 
+  events_t events = {0};
+  events_init(&events);
+
+  pg_array_t(pg_span_t) fn_names = {0};
+  pg_array_init_reserve(fn_names, 500, pg_heap_allocator());
+
   // Skip header, unneeded
   if (pg_span_starts_with(input, pg_span_make_c("CPU")))
     pg_span_skip_left_until_inclusive(&input, '\n');
 
+  const pg_span_t alloc_span = pg_span_make_c("alloc");
+  const pg_span_t free_span = pg_span_make_c("free");
+
   while (true) {
+    event_kind_t kind = EK_NONE;
+    stacktrace_t stacktrace = {0};
+    pg_array_init_reserve(stacktrace, 10, pg_heap_allocator());
+
     pg_span_skip_left_until_inclusive(&input, ' ');
 
     // Skip CPU id column
@@ -45,11 +115,18 @@ int main(int argc, char* argv[]) {
       pg_span_skip_left_until_inclusive(&input, ' ');
     }
 
-    // malloc/realloc/calloc/free
+    // malloc/realloc/calloc/free:entry
     pg_span_trim_left(&input);
     pg_span_t fn_leaf = input;
     pg_span_split(input, ' ', &fn_leaf, &input);
     pg_span_trim_left(&input);
+    if (pg_span_contains(fn_leaf, alloc_span))
+      kind = EK_MALLOC;
+    else if (pg_span_contains(fn_leaf, free_span))
+      kind = EK_FREE;
+    else
+      pg_log_fatal(&logger, EINVAL, "Unkown event kind: %.*s", (int)fn_leaf.len,
+                   fn_leaf.data);
 
     // timestamp
     pg_span_t ts = {0};
@@ -78,9 +155,10 @@ int main(int argc, char* argv[]) {
       bool more_chars = false;
       char c = pg_span_peek_left(input, &more_chars);
       if (!more_chars) break;
-      if (c == '\n') {  // New frame
-        // TODO
-        return 1;
+      if (pg_char_is_digit(c)) {  // New frame
+        pg_array_append(events.kind, kind);
+        pg_array_append(events.stacktraces, stacktrace);
+        break;
       }
 
       pg_span_trim_left(&input);
@@ -88,6 +166,10 @@ int main(int argc, char* argv[]) {
       pg_span_split(input, ' ', &fn, &input);
       pg_span_trim_left(&input);
       pg_span_trim_right(&fn);
+
+      const stacktrace_entry_t stacktrace_entry =
+          fn_name_to_stacktrace_entry(&fn_names, fn);
+      pg_array_append(stacktrace, stacktrace_entry);
     }
   }
   return 0;
