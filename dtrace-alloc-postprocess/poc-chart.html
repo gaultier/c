@@ -19,7 +19,6 @@
 
 .chart .grid {
    stroke: #ccc;
-   stroke-dasharray: 0;
    stroke-width: 1;
 }
 
@@ -34,9 +33,10 @@
    fill: black;
 }
 
-.data {
-   fill: black;
+.data > line {
    stroke-width: 1; 
+   stroke: #ccc;
+   stroke-dasharray: 1;
 }
 
 .rect:hover {
@@ -65,23 +65,25 @@
          <line x1="90" x2="705" y1="370" y2="370"></line>
          </g>
          <g class="labels x-labels">
-         <text x="100" y="400">2008</text>
-         <text x="246" y="400">2009</text>
-         <text x="392" y="400">2010</text>
-         <text x="538" y="400">2011</text>
-         <text x="684" y="400">2012</text>
-         <text x="400" y="440" class="label-title">Year</text>
+         <text x="100" y="400" text-anchor="middle" dominant-baseline="central" transform="rotate(-50, 100, 400)">2008</text>
+         <text x="246" y="400" text-anchor="middle" dominant-baseline="central" transform="rotate(-50, 246, 400)">2009</text>
+         <text x="392" y="400" text-anchor="middle" dominant-baseline="central" transform="rotate(-50, 392, 400)">2010</text>
+         <text x="538" y="400" text-anchor="middle" dominant-baseline="central" transform="rotate(-50, 538, 400)">2011</text>
+         <text x="684" y="400" text-anchor="middle" dominant-baseline="central" transform="rotate(-50, 684, 400)">2012</text>
+         <text x="400" y="440" class="label-title">Time</text>
          </g>
          <g class="labels y-labels">
          <text x="80" y="15">15</text>
          <text x="80" y="131">10</text>
          <text x="80" y="248">5</text>
          <text x="80" y="373">0</text>
-         <text x="50" y="200" class="label-title">Price</text>
+         <text x="60" y="200" class="label-title">Memory</text>
          </g>
          <g class="data" data-setname="Our first data set">
-         <rect id="rect1" class="rect" height="200" y="173" x="246" width="7" fill="blue"></rect>
-         <rect id="rect2" class="rect" height="160" y="213" x="392" width="9" fill="green"></rect>
+         <line x1="90" x2="705" y1="15" y2="15"></line>
+         <rect id="rect0" class="rect" height="100" y="270" x="100" width="7" fill="purple"></rect>
+         <rect id="rect1" class="rect" height="200" y="170" x="246" width="7" fill="blue"></rect>
+         <rect id="rect2" class="rect" height="160" y="210" x="392" width="9" fill="green"></rect>
          </g>
       </svg>
       <div class="tooltip" id="tooltip" ></div> 
