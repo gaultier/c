@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <meta charset="UTF-8" />
+      <style>
+
+.chart .labels.x-labels {
+   text-anchor: middle;
+}
+
+.chart .labels.y-labels {
+   text-anchor: end;
+}
+
+
+.chart {
+   height: 500px;
+   width: 800px;
+}
+
+.chart .grid {
+   stroke: #ccc;
+   stroke-dasharray: 0;
+   stroke-width: 1;
+}
+
+.labels {
+   font-size: 13px;
+}
+
+.label-title {
+   font-weight: bold;
+   text-transform: uppercase;
+   font-size: 12px;
+   fill: black;
+}
+
+.data {
+   fill: black;
+   stroke-width: 1; 
+}
+
+.rect:hover {
+   stroke: currentColor;
+}
+
+.tooltip {
+   padding: .3rem;
+   background-color: black;
+   color: white;
+   position: absolute;
+   top: 60px;
+   left: 183px;
+   opacity:0;
+}
+
+      </style>
+   </head>
+   <body>
+      <svg id="chart" class="chart">
+
+         <g class="grid x-grid" id="xGrid">
+         <line x1="90" x2="90" y1="5" y2="371"></line>
+         </g>
+         <g class="grid y-grid" id="yGrid">
+         <line x1="90" x2="705" y1="370" y2="370"></line>
+         </g>
+         <g class="labels x-labels">
+         <text x="100" y="400">2008</text>
+         <text x="246" y="400">2009</text>
+         <text x="392" y="400">2010</text>
+         <text x="538" y="400">2011</text>
+         <text x="684" y="400">2012</text>
+         <text x="400" y="440" class="label-title">Year</text>
+         </g>
+         <g class="labels y-labels">
+         <text x="80" y="15">15</text>
+         <text x="80" y="131">10</text>
+         <text x="80" y="248">5</text>
+         <text x="80" y="373">0</text>
+         <text x="50" y="200" class="label-title">Price</text>
+         </g>
+         <g class="data" data-setname="Our first data set">
+         <rect id="rect1" class="rect" height="200" y="173" x="246" width="7" fill="blue"></rect>
+         <rect id="rect2" class="rect" height="160" y="213" x="392" width="9" fill="green"></rect>
+         </g>
+      </svg>
+      <div class="tooltip" id="tooltip" ></div> 
+   </body>
+
+   <script >
+
+      chart = document.getElementById('chart');
+rects = document.querySelectorAll('.rect');
+tooltip = document.getElementById('tooltip');
+
+rects.forEach(function(rect, i) {
+rect.addEventListener('mouseover', function(e) {
+  tooltip.style.opacity = 0.9;
+  tooltip.style.top = 5 + e.clientY + document.body.scrollTop + 'px';
+  tooltip.style.left = 5 + e.clientX + document.body.scrollLeft + 'px';
+  tooltip.textContent = 'rect' + i;
+})
+rect.addEventListener('mouseleave', function(e) {
+  tooltip.style.opacity = 0;
+  tooltip.textContent = '';
+})
+})
+
+   </script>
+</html>
