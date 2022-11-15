@@ -259,10 +259,10 @@ void on_free(events_t* events, uint64_t i, pg_array_t(allocation_t) allocations,
       break;
     }
   }
-  *mem_size -= alloc.size;
-  printf("%llu %llu\n", events->timestamps[i],
-         *mem_size);  // TODO: check overflow
   if (found_at != -1ULL) {
+    *mem_size -= alloc.size;
+    printf("%llu %llu\n", events->timestamps[i],
+           *mem_size);  // TODO: check overflow
     allocations[found_at] = allocations[pg_array_len(allocations) - 1];
     pg_array_resize(allocations, pg_array_len(allocations) - 1);
   }
