@@ -11,8 +11,18 @@
 
    <script src="chart.umd.min.js"></script>
    <script>
+      var metadata = ['foo', 'bar', 'baz', 'hello', 'world', 'mag', 'pie'];
       const chart = new Chart(document.getElementById('chart'), {
         type: 'line',
+        options: {
+          plugins: {
+            tooltip: {
+              callbacks: {
+                 label: function(ctx) {return metadata[ctx.dataIndex]},
+              }
+            }
+          }
+        },
         data: {
           labels: [1, 2, 3, 4, 5, 6, 7],
           datasets: [{
@@ -22,7 +32,7 @@
             borderColor: 'rgb(75, 192, 192)',
             tension: 0.1,
           }],
-        },
+      }
       });
    </script>
 </html>

@@ -34,7 +34,7 @@ typedef struct {
 } events_t;
 
 typedef struct {
-  uint64_t ptr, size, timestamp, total_mem_size;
+  uint64_t ptr, size, timestamp, total_mem_size, event_i;
 } allocation_t;
 
 static void events_init(events_t* events) {
@@ -306,6 +306,7 @@ int main(int argc, char* argv[]) {
       case EK_REALLOC_RETURN: {
         cur_allocation.timestamp = events.timestamps[i];
         cur_allocation.ptr = events.arg0s[i];
+        cur_allocation.event_i = i;
         mem_size += cur_allocation.size;
         max_mem_size = MAX(max_mem_size, mem_size);
 
@@ -344,7 +345,7 @@ int main(int argc, char* argv[]) {
   //  exit(0);
 
   // Output html
-  puts(
+  printf(
       // clang-format off
 "<!DOCTYPE html>"
 "  <html>"
@@ -364,17 +365,41 @@ int main(int argc, char* argv[]) {
 
   for (uint64_t i = 0; i < 200; i++) printf("%llu,", allocations[i].timestamp);
 
-  puts(
-      "];"
+  printf(
+      "];\n"
       "var data=[");
   for (uint64_t i = 0; i < 200; i++)
     printf("%llu,", allocations[i].total_mem_size);
 
-  puts(
+  printf(
+      "];\n"
+      "var locations=[");
+  for (uint64_t i = 0; i < 200; i++) {
+    printf("'");
+    const uint64_t event_i = allocations[i].event_i;
+    const stacktrace_t st = events.stacktraces[event_i];
+    for (uint64_t j = 0; j < pg_array_len(st); j++) {
+      const uint64_t fn_i = st[j].fn_i;
+      const pg_span_t fn_name = fn_names[fn_i];
+      printf("%.*s;", (int)fn_name.len, fn_name.data);
+    }
+    printf("',");
+  }
+
+  printf(
       // clang-format off
-      "];"
+      "];\n"
 "      const chart = new Chart(document.getElementById('chart'), {"
 "        type: 'line',"
+"        options: {"
+"          plugins: {"
+"            tooltip: {"
+"              callbacks: {"
+"                 label: function(ctx) {return locations[ctx.dataIndex]},"
+"              }"
+"            }"
+"          }"
+"        },"
 "        data: {"
 "          labels: labels,"
 "          datasets: [{"
