@@ -34,7 +34,7 @@ typedef struct {
 } events_t;
 
 typedef struct {
-  uint64_t ptr, size;
+  uint64_t ptr, size, timestamp;
 } allocation_t;
 
 static void events_init(events_t* events) {
@@ -319,6 +319,7 @@ int main(int argc, char* argv[]) {
       case EK_MALLOC_RETURN:
       case EK_CALLOC_RETURN:
       case EK_REALLOC_RETURN: {
+        cur_allocation.timestamp = events.timestamps[i];
         cur_allocation.ptr = events.arg0s[i];
         mem_size += cur_allocation.size;
         if (cur_allocation.ptr != 0) {
@@ -327,7 +328,8 @@ int main(int argc, char* argv[]) {
         }
         break;
       }
-      case EK_REALLOC_ENTRY:         // FIXME
+      case EK_REALLOC_ENTRY:
+        cur_allocation.timestamp = events.timestamps[i];
         if (events.arg0s[i] == 0) {  // Same as malloc
           cur_allocation.size = events.arg1s[i];
         } else {  // Same as free + malloc
@@ -338,6 +340,7 @@ int main(int argc, char* argv[]) {
         pg_array_append(allocations, cur_allocation);
         break;
       case EK_CALLOC_ENTRY:
+        cur_allocation.timestamp = events.timestamps[i];
         cur_allocation.size =
             events.arg0s[i] * events.arg1s[i];  // TODO: check overflow
         break;
