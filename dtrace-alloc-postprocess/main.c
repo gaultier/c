@@ -334,9 +334,16 @@ int main(int argc, char* argv[]) {
         break;
     }
   }
+  if (pg_array_len(allocations) == 0) return 0;
 
   // Output html
-  const uint64_t chart_w = 800, chart_h = 500;
+  const uint64_t margin_between_bars = 2;
+  const uint64_t bar_w = 5;
+  const uint64_t chart_w =
+                     (allocations[pg_array_len(allocations) - 1].timestamp -
+                      allocations[0].timestamp) *
+                     (margin_between_bars + bar_w),
+                 chart_h = 500;
   printf(
       // clang-format off
 "<!DOCTYPE html>"
@@ -399,7 +406,32 @@ int main(int argc, char* argv[]) {
 "      <svg id=\"chart\" class=\"chart\">"
 ""
 "        <g class=\"grid x-grid\" id=\"xGrid\"> "
-"         </g>"
+"          <line x1=\"90\" x2=\"90\" y1=\"5\" y2=\"371\"></line>"
+"        </g>"
+"        <g class=\"grid y-grid\" id=\"yGrid\">"
+"          <line x1=\"90\" x2=\"705\" y1=\"370\" y2=\"370\"></line>"
+"        </g>"
+"        <g class=\"labels y-labels\">"
+"          <text x=\"60\" y=\"200\" class=\"label-title\">Memory</text>"
+"        </g>"
+"        <g class=\"labels x-labels\">"
+"          <text x=\"400\" y=\"440\" class=\"label-title\">Time</text>"
+"        </g>"
+"        <g class=\"data\" data-setname=\"Our first data set\">",
+      // clang-format on
+      chart_h, chart_w);
+
+  for (uint64_t i = 0; i < pg_array_len(allocations) - 1; i++) {
+    const uint64_t h = 100, y = 270,
+                   x = 100 + i * (margin_between_bars + bar_w);
+    printf(
+        "<rect id=\"rect%llu\" class=\"rect\" width=\"%llu\" height=\"%llu\" "
+        "y=\"%llu\" x=\"%llu\"></rect>",
+        i, bar_w, h, y, x);
+  }
+
+  puts(
+      // clang-format off
 "      </svg>"
 "      <div class=\"tooltip\" id=\"tooltip\" ></div>"
 "   </body>"
@@ -407,12 +439,9 @@ int main(int argc, char* argv[]) {
 "     rects = document.querySelectorAll('.rect');"
 "     tooltip = document.getElementById('tooltip');"
 "   </script>"
-"</html>",
-// clang-format off
-chart_w, chart_h);
-
-  for (uint64_t i = 0; i < pg_array_len(allocations) - 1; i++) {
-  }
+"</html>"
+      // clang-format on
+  );
 
   return 0;
 }
