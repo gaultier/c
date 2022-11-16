@@ -72,9 +72,10 @@ static const char* event_kind_to_string(event_kind_t kind) {
 
 static void event_dump(events_t* events, pg_array_t(pg_span_t) fn_names,
                        uint64_t i) {
-  printf("Event: kind=%s timestamp=%llu arg0=%llu arg1=%llu stacktrace=",
-         event_kind_to_string(events->kinds[i]), events->timestamps[i],
-         events->arg0s[i], events->arg1s[i]);
+  printf(
+      "Event: kind=%s timestamp=%llu arg0=%llu arg1=%llu arg2=%llu stacktrace=",
+      event_kind_to_string(events->kinds[i]), events->timestamps[i],
+      events->arg0s[i], events->arg1s[i], events->arg2s[i]);
   for (uint64_t j = 0; j < pg_array_len(events->stacktraces[i]); j++) {
     const uint64_t fn_i = events->stacktraces[i][j].fn_i;
     const uint64_t offset = events->stacktraces[i][j].offset;
