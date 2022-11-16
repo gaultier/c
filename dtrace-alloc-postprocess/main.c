@@ -336,7 +336,8 @@ int main(int argc, char* argv[]) {
   }
 
   // Output html
-  puts(
+  const uint64_t chart_w = 800, chart_h = 500;
+  printf(
       // clang-format off
 "<!DOCTYPE html>"
 "  <html>"
@@ -352,8 +353,8 @@ int main(int argc, char* argv[]) {
 "        }"
 ""
 "        .chart {"
-"          height: 500px;"
-"          width: 800px;"
+"          height: %llupx;"
+"          width: %llupx;"
 "        }"
 ""
 "        .chart .grid {"
@@ -406,9 +407,9 @@ int main(int argc, char* argv[]) {
 "     rects = document.querySelectorAll('.rect');"
 "     tooltip = document.getElementById('tooltip');"
 "   </script>"
-"</html>"
+"</html>",
 // clang-format off
-);
+chart_w, chart_h);
 
   for (uint64_t i = 0; i < pg_array_len(allocations) - 1; i++) {
   }
