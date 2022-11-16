@@ -363,18 +363,19 @@ int main(int argc, char* argv[]) {
       // clang-format on
   );
 
-  for (uint64_t i = 0; i < 900; i++) printf("%llu,", allocations[i].timestamp);
+  for (uint64_t i = 0; i < pg_array_len(allocations); i++)
+    printf("%llu,", allocations[i].timestamp);
 
   printf(
       "];\n"
       "var data=[");
-  for (uint64_t i = 0; i < 900; i++)
+  for (uint64_t i = 0; i < pg_array_len(allocations); i++)
     printf("%llu,", allocations[i].total_mem_size);
 
   printf(
       "];\n"
       "var stacktraces=[");
-  for (uint64_t i = 0; i < 900; i++) {
+  for (uint64_t i = 0; i < pg_array_len(allocations); i++) {
     printf("['%llu',", allocations[i].size);
     const uint64_t event_i = allocations[i].event_i;
     const stacktrace_t st = events.stacktraces[event_i];
@@ -397,7 +398,11 @@ int main(int argc, char* argv[]) {
 "              callbacks: {"
 "                 label: function(ctx) {return stacktraces[ctx.dataIndex]},"
 "              }"
-"            }"
+"            },"
+"            decimation: {"
+"              algorithm: 'ttb',"
+"              enabled: true,"
+"            }, "
 "          }"
 "        },"
 "        data: {"
