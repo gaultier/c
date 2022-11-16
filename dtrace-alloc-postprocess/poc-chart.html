@@ -3,108 +3,26 @@
    <head>
       <meta charset="UTF-8" />
       <style>
-
-.chart .labels.x-labels {
-   text-anchor: middle;
-}
-
-.chart .labels.y-labels {
-   text-anchor: end;
-}
-
-.chart {
-   height: 500px;
-   width: 800px;
-}
-
-.chart .grid {
-   stroke: #ccc;
-   stroke-width: 1;
-}
-
-.labels {
-   font-size: 13px;
-}
-
-.label-title {
-   font-weight: bold;
-   text-transform: uppercase;
-   font-size: 12px;
-   fill: black;
-}
-
-.data > line {
-   stroke-width: 1; 
-   stroke: #ccc;
-   stroke-dasharray: 1;
-}
-
-.rect:hover {
-   stroke: currentColor;
-}
-
-.tooltip {
-   padding: .3rem;
-   background-color: black;
-   color: white;
-   position: absolute;
-   top: 60px;
-   left: 183px;
-   opacity:0;
-}
-
       </style>
    </head>
    <body>
-      <svg id="chart" class="chart">
-
-         <g class="grid x-grid" id="xGrid">
-         <line x1="90" x2="90" y1="5" y2="371"></line>
-         </g>
-         <g class="grid y-grid" id="yGrid">
-         <line x1="90" x2="705" y1="370" y2="370"></line>
-         </g>
-         <g class="labels x-labels">
-         <text x="100" y="400" text-anchor="middle" dominant-baseline="central" transform="rotate(-50, 100, 400)">2008</text>
-         <text x="246" y="400" text-anchor="middle" dominant-baseline="central" transform="rotate(-50, 246, 400)">2009</text>
-         <text x="392" y="400" text-anchor="middle" dominant-baseline="central" transform="rotate(-50, 392, 400)">2010</text>
-         <text x="538" y="400" text-anchor="middle" dominant-baseline="central" transform="rotate(-50, 538, 400)">2011</text>
-         <text x="684" y="400" text-anchor="middle" dominant-baseline="central" transform="rotate(-50, 684, 400)">2012</text>
-         <text x="400" y="440" class="label-title">Time</text>
-         </g>
-         <g class="labels y-labels">
-         <text x="80" y="15">15</text>
-         <text x="80" y="131">10</text>
-         <text x="80" y="248">5</text>
-         <text x="80" y="373">0</text>
-         <text x="60" y="200" class="label-title">Memory</text>
-         </g>
-         <g class="data" data-setname="Our first data set">
-         <line x1="90" x2="705" y1="15" y2="15"></line>
-         <rect id="rect0" class="rect" height="100" y="270" x="100" width="7" fill="purple"></rect>
-         <rect id="rect1" class="rect" height="200" y="170" x="246" width="7" fill="blue"></rect>
-         <rect id="rect2" class="rect" height="160" y="210" x="392" width="9" fill="green"></rect>
-         </g>
-      </svg>
-      <div class="tooltip" id="tooltip" ></div> 
+     <div style="width: 800px;"><canvas id="chart"></canvas></div>
    </body>
 
-   <script >
-rects = document.querySelectorAll('.rect');
-tooltip = document.getElementById('tooltip');
-
-rects.forEach(function(rect, i) {
-rect.addEventListener('mouseover', function(e) {
-  tooltip.style.opacity = 0.9;
-  tooltip.style.top = 5 + e.clientY + document.body.scrollTop + 'px';
-  tooltip.style.left = 5 + e.clientX + document.body.scrollLeft + 'px';
-  tooltip.textContent = 'rect' + i;
-})
-rect.addEventListener('mouseleave', function(e) {
-  tooltip.style.opacity = 0;
-  tooltip.textContent = '';
-})
-})
-
+   <script src="chart.umd.min.js"></script>
+   <script>
+      const chart = new Chart(document.getElementById('chart'), {
+        type: 'line',
+        data: {
+          labels: [1, 2, 3, 4, 5, 6, 7],
+          datasets: [{
+            label: 'My first dataset',
+            data: [65, 59, 80, 81, 56, 55, 40],
+            fill: false,
+            borderColor: 'rgb(75, 192, 192)',
+            tension: 0.1,
+          }],
+        },
+      });
    </script>
 </html>

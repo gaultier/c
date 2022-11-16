@@ -338,110 +338,54 @@ int main(int argc, char* argv[]) {
   }
   if (pg_array_len(allocations) == 0) return 0;
 
+  //  for (uint64_t i = 0; i < pg_array_len(allocations) - 1; i++) {
+  //    __builtin_dump_struct(&allocations[i], &printf);
+  //  }
+  //  exit(0);
+
   // Output html
-  const uint64_t margin_between_bars = 2;
-  const uint64_t bar_w = 5;
-  const uint64_t chart_w =
-                     (allocations[pg_array_len(allocations) - 1].timestamp -
-                      allocations[0].timestamp) *
-                     (margin_between_bars + bar_w),
-                 chart_h = 800;
-  printf(
+  puts(
       // clang-format off
 "<!DOCTYPE html>"
 "  <html>"
 "    <head>"
 "      <meta charset=\"UTF-8\" />"
 "      <style>"
-"        .chart .labels.x-labels {"
-"          text-anchor: middle;"
-"        }"
-""
-"        .chart .labels.y-labels {"
-"          text-anchor: end;"
-"        }"
-""
-"        .chart {"
-"          height: %llupx;"
-"          width: %llupx;"
-"        }"
-""
-"        .chart .grid {"
-"          stroke: #ccc;"
-"          stroke-width: 1;"
-"        }"
-""
-"        .labels {"
-"          font-size: 13px;"
-"        }"
-""
-"        .label-title {"
-"          font-weight: bold;"
-"          text-transform: uppercase;"
-"          font-size: 12px;"
-"          fill: black;"
-"        }"
-""
-"        .data > line {"
-"          stroke-width: 1; "
-"          stroke: #ccc;"
-"          stroke-dasharray: 1;"
-"        }"
-""
-"        .rect:hover {"
-"          stroke: currentColor;"
-"        }"
-""
-"        .tooltip {"
-"          padding: .3rem;"
-"          background-color: black;"
-"          color: white;"
-"          position: absolute;"
-"          top: 60px;"
-"          left: 183px;"
-"          opacity:0;"
-"        }"
-""
 "      </style>"
 "    </head>"
 "    <body>"
-"      <svg id=\"chart\" class=\"chart\">"
-""
-"        <g class=\"grid x-grid\" id=\"xGrid\"> "
-"          <line x1=\"90\" x2=\"90\" y1=\"5\" y2=\"371\"></line>"
-"        </g>"
-"        <g class=\"grid y-grid\" id=\"yGrid\">"
-"          <line x1=\"90\" x2=\"705\" y1=\"370\" y2=\"370\"></line>"
-"        </g>"
-"        <g class=\"labels y-labels\">"
-"          <text x=\"60\" y=\"200\" class=\"label-title\">Memory</text>"
-"        </g>"
-"        <g class=\"labels x-labels\">"
-"          <text x=\"400\" y=\"440\" class=\"label-title\">Time</text>"
-"        </g>"
-"        <g class=\"data\" data-setname=\"Our first data set\">",
+"       <div style=\"width: 1400px;\"><canvas id=\"chart\"></canvas></div>"
+"   </body>"
+"   <script src=\"chart.umd.min.js\"></script>"
+"   <script>"
+"     var labels = ["
       // clang-format on
-      chart_h, chart_w);
+  );
 
-  for (uint64_t i = 0; i < pg_array_len(allocations) - 1; i++) {
-    const uint64_t height =
-        (uint64_t)log(((double)allocations[i].total_mem_size)) * 10;  // FIXME
-    const uint64_t h = height, y = 0,
-                   x = 100 + i * (margin_between_bars + bar_w);
-    printf(
-        "<rect id=\"rect%llu\" class=\"rect\" width=\"%llu\" height=\"%llu\" "
-        "y=\"%llu\" x=\"%llu\"></rect>",
-        i, bar_w, h, y, x);
-  }
+  for (uint64_t i = 0; i < 200; i++) printf("%llu,", allocations[i].timestamp);
+
+  puts(
+      "];"
+      "var data=[");
+  for (uint64_t i = 0; i < 200; i++)
+    printf("%llu,", allocations[i].total_mem_size);
 
   puts(
       // clang-format off
-"      </svg>"
-"      <div class=\"tooltip\" id=\"tooltip\" ></div>"
-"   </body>"
-"   <script>"
-"     rects = document.querySelectorAll('.rect');"
-"     tooltip = document.getElementById('tooltip');"
+      "];"
+"      const chart = new Chart(document.getElementById('chart'), {"
+"        type: 'line',"
+"        data: {"
+"          labels: labels,"
+"          datasets: [{"
+"            label: 'Allocations',"
+"            data: data,"
+"            fill: false,"
+"            borderColor: 'rgb(75, 192, 192)',"
+"            tension: 0.1,"
+"          }],"
+"        },"
+"      });"
 "   </script>"
 "</html>"
       // clang-format on
