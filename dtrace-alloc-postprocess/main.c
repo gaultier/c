@@ -305,13 +305,14 @@ int main(int argc, char* argv[]) {
       // clang-format on
   );
 
-  for (uint64_t i = 0; i < pg_array_len(events.timestamps); i++)
+  const uint64_t SHOW = 100;
+  for (uint64_t i = 0; i < MIN(SHOW, pg_array_len(events.timestamps)); i++)
     printf("%llu,", events.timestamps[i]);
 
   printf(
       "];\n"
       "var data=[");
-  for (uint64_t i = 0; i < pg_array_len(events.arg0s); i++) {
+  for (uint64_t i = 0; i < MIN(SHOW, pg_array_len(events.arg0s)); i++) {
     if (events.kinds[i] == EK_FREE) {
       printf("-%llu,", 0ULL);  // FIXME
     } else {
@@ -322,7 +323,7 @@ int main(int argc, char* argv[]) {
   printf(
       "];\n"
       "var stacktraces=[");
-  for (uint64_t i = 0; i < pg_array_len(events.stacktraces); i++) {
+  for (uint64_t i = 0; i < MIN(SHOW, pg_array_len(events.stacktraces)); i++) {
     printf("['%llu',", events.arg0s[i]);
     const stacktrace_t st = events.stacktraces[i];
     for (uint64_t j = 0; j < pg_array_len(st); j++) {
@@ -345,10 +346,10 @@ int main(int argc, char* argv[]) {
 "                 label: function(ctx) {return stacktraces[ctx.dataIndex]},"
 "              }"
 "            },"
-"            decimation: {"
-"              algorithm: 'ttb',"
-"              enabled: true,"
-"            }, "
+//"            decimation: {"
+//"              algorithm: 'ttb',"
+//"              enabled: true,"
+//"            }, "
 "          }"
 "        },"
 "        data: {"
