@@ -34,7 +34,7 @@ typedef struct {
 } events_t;
 
 typedef struct {
-  uint64_t ptr, size, timestamp;
+  uint64_t ptr, size, timestamp, total_mem_size;
 } allocation_t;
 
 static void events_init(events_t* events) {
@@ -261,18 +261,10 @@ void on_free(events_t* events, uint64_t i, pg_array_t(allocation_t) allocations,
   }
   if (found_at != -1ULL) {
     *mem_size -= alloc.size;
-    printf("%llu %llu\n", events->timestamps[i],
-           *mem_size);  // TODO: check overflow
+    // Rm allocation
     allocations[found_at] = allocations[pg_array_len(allocations) - 1];
     pg_array_resize(allocations, pg_array_len(allocations) - 1);
   }
-}
-
-void on_malloc_return(events_t* events, uint64_t i,
-                      pg_array_t(allocation_t) * allocations,
-                      allocation_t* cur_allocation) {
-  cur_allocation->ptr = events->arg0s[i];
-  if (cur_allocation->ptr != 0) pg_array_append(*allocations, *cur_allocation);
 }
 
 int main(int argc, char* argv[]) {
@@ -322,9 +314,9 @@ int main(int argc, char* argv[]) {
         cur_allocation.timestamp = events.timestamps[i];
         cur_allocation.ptr = events.arg0s[i];
         mem_size += cur_allocation.size;
+        cur_allocation.total_mem_size = mem_size;
         if (cur_allocation.ptr != 0) {
           pg_array_append(allocations, cur_allocation);
-          printf("%llu %llu\n", events.timestamps[i], mem_size);
         }
         break;
       }
@@ -336,8 +328,6 @@ int main(int argc, char* argv[]) {
           on_free(&events, i, allocations, &mem_size);
           cur_allocation.size = events.arg1s[i];
         }
-        printf("%llu %llu\n", events.timestamps[i], mem_size);
-        pg_array_append(allocations, cur_allocation);
         break;
       case EK_CALLOC_ENTRY:
         cur_allocation.timestamp = events.timestamps[i];
