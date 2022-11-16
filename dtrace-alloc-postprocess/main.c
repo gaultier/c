@@ -250,20 +250,13 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
 void on_free(events_t* events, uint64_t i, pg_array_t(allocation_t) allocations,
              uint64_t* mem_size) {
   allocation_t alloc = {0};
-  uint64_t found_at = -1ULL;
   const uint64_t ptr = events->arg0s[i];
   for (uint64_t j = 0; j < pg_array_len(allocations); j++) {
-    if (allocations[j].ptr == ptr) {
-      alloc = allocations[j];
-      found_at = j;
-      break;
+    if (allocations[j].ptr == ptr &&
+        allocations[j].timestamp < events->timestamps[i]) {
+      *mem_size -= alloc.size;
+      return;
     }
-  }
-  if (found_at != -1ULL) {
-    *mem_size -= alloc.size;
-    // Rm allocation
-    allocations[found_at] = allocations[pg_array_len(allocations) - 1];
-    pg_array_resize(allocations, pg_array_len(allocations) - 1);
   }
 }
 
