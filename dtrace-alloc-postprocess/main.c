@@ -289,7 +289,7 @@ int main(int argc, char* argv[]) {
 
   parse_input(&logger, input, &events, &fn_names);
 
-  uint64_t mem_size = 0;
+  uint64_t mem_size = 0, max_mem_size = 0;
   // TODO: map[allocated_ptr] = allocated_size
   pg_array_t(allocation_t) allocations = {0};
   pg_array_init_reserve(allocations, pg_array_len(events.kinds) / 2,
@@ -307,6 +307,8 @@ int main(int argc, char* argv[]) {
         cur_allocation.timestamp = events.timestamps[i];
         cur_allocation.ptr = events.arg0s[i];
         mem_size += cur_allocation.size;
+        max_mem_size = MAX(max_mem_size, mem_size);
+
         cur_allocation.total_mem_size = mem_size;
         if (cur_allocation.ptr != 0) {
           pg_array_append(allocations, cur_allocation);
@@ -343,7 +345,7 @@ int main(int argc, char* argv[]) {
                      (allocations[pg_array_len(allocations) - 1].timestamp -
                       allocations[0].timestamp) *
                      (margin_between_bars + bar_w),
-                 chart_h = 500;
+                 chart_h = 800;
   printf(
       // clang-format off
 "<!DOCTYPE html>"
@@ -422,7 +424,9 @@ int main(int argc, char* argv[]) {
       chart_h, chart_w);
 
   for (uint64_t i = 0; i < pg_array_len(allocations) - 1; i++) {
-    const uint64_t h = 100, y = 270,
+    const uint64_t height =
+        (uint64_t)log(((double)allocations[i].total_mem_size)) * 10;  // FIXME
+    const uint64_t h = height, y = 0,
                    x = 100 + i * (margin_between_bars + bar_w);
     printf(
         "<rect id=\"rect%llu\" class=\"rect\" width=\"%llu\" height=\"%llu\" "
