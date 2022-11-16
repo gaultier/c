@@ -9,13 +9,9 @@
 
 typedef enum : uint8_t {
   EK_NONE,
-  EK_MALLOC_ENTRY,
-  EK_REALLOC_ENTRY,
-  EK_CALLOC_ENTRY,
-  EK_MALLOC_RETURN,
-  EK_REALLOC_RETURN,
-  EK_CALLOC_RETURN,
-  EK_FREE_ENTRY,
+  EK_ALLOC,
+  EK_REALLOC,
+  EK_FREE,
 } event_kind_t;
 
 typedef struct {
@@ -30,6 +26,7 @@ typedef struct {
   pg_array_t(uint64_t) timestamps;
   pg_array_t(uint64_t) arg0s;
   pg_array_t(uint64_t) arg1s;
+  pg_array_t(uint64_t) arg2s;
   pg_array_t(bool) is_entry;
 } events_t;
 
@@ -44,6 +41,7 @@ static void events_init(events_t* events) {
   pg_array_init_reserve(events->timestamps, cap, pg_heap_allocator());
   pg_array_init_reserve(events->arg0s, cap, pg_heap_allocator());
   pg_array_init_reserve(events->arg1s, cap, pg_heap_allocator());
+  pg_array_init_reserve(events->arg2s, cap, pg_heap_allocator());
 }
 
 static uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
@@ -61,20 +59,12 @@ static const char* event_kind_to_string(event_kind_t kind) {
   switch (kind) {
     case EK_NONE:
       return "EK_NONE";
-    case EK_MALLOC_ENTRY:
-      return "EK_MALLOC_ENTRY";
-    case EK_REALLOC_ENTRY:
-      return "EK_REALLOC_ENTRY";
-    case EK_CALLOC_ENTRY:
-      return "EK_CALLOC_ENTRY";
-    case EK_MALLOC_RETURN:
-      return "EK_MALLOC_RETURN";
-    case EK_REALLOC_RETURN:
-      return "EK_REALLOC_RETURN";
-    case EK_CALLOC_RETURN:
-      return "EK_CALLOC_RETURN";
-    case EK_FREE_ENTRY:
-      return "EK_FREE_ENTRY";
+    case EK_ALLOC:
+      return "EK_ALLOC";
+    case EK_REALLOC:
+      return "EK_REALLOC";
+    case EK_FREE:
+      return "EK_FREE";
     default:
       __builtin_unreachable();
   }
@@ -132,7 +122,6 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
   const pg_span_t realloc_span = pg_span_make_c("realloc");
   const pg_span_t calloc_span = pg_span_make_c("calloc");
   const pg_span_t free_span = pg_span_make_c("free");
-  const pg_span_t entry_span = pg_span_make_c(":entry");
 
   while (input.len > 0) {
     event_kind_t kind = EK_NONE;
@@ -158,15 +147,13 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     pg_span_t fn_leaf = input;
     pg_span_split_at_first(input, ' ', &fn_leaf, &input);
     pg_span_trim_left(&input);
-    const bool is_entry = pg_span_ends_with(fn_leaf, entry_span);
-    if (pg_span_contains(fn_leaf, malloc_span))
-      kind = is_entry ? EK_MALLOC_ENTRY : EK_MALLOC_RETURN;
+    if (pg_span_contains(fn_leaf, malloc_span) ||
+        pg_span_contains(fn_leaf, calloc_span))
+      kind = EK_ALLOC;
     else if (pg_span_contains(fn_leaf, realloc_span))
-      kind = is_entry ? EK_REALLOC_ENTRY : EK_REALLOC_RETURN;
-    else if (pg_span_contains(fn_leaf, calloc_span))
-      kind = is_entry ? EK_CALLOC_ENTRY : EK_CALLOC_RETURN;
+      kind = EK_REALLOC;
     else if (pg_span_contains(fn_leaf, free_span))
-      kind = EK_FREE_ENTRY;
+      kind = EK_FREE;
     else
       pg_log_fatal(logger, EINVAL, "Unkown event kind: %.*s", (int)fn_leaf.len,
                    fn_leaf.data);
@@ -187,11 +174,9 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     pg_span_split_at_first(input, ' ', &arg0_span, &input);
     pg_span_trim_left(&input);
     bool arg0_valid = false;
-    uint64_t arg0 = 0;
-    if (!is_entry || kind == EK_REALLOC_ENTRY || kind == EK_FREE_ENTRY)
-      arg0 = pg_span_parse_u64_hex(arg0_span, &arg0_valid);
-    else
-      arg0 = pg_span_parse_u64_decimal(arg0_span, &arg0_valid);
+    const uint64_t arg0 =
+        kind == EK_FREE ? pg_span_parse_u64_hex(arg0_span, &arg0_valid)
+                        : pg_span_parse_u64_decimal(arg0_span, &arg0_valid);
     if (!arg0_valid)
       pg_log_fatal(logger, EINVAL, "Invalid arg0: %.*s", (int)arg0_span.len,
                    arg0_span.data);
@@ -203,20 +188,43 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     char c = pg_span_peek_left(input, &more_chars);
     if (!more_chars) break;
     if (pg_char_is_digit(c)) {
-      pg_span_split_at_first(input, '\n', &arg1_span, &input);
+      pg_span_split_at_first(input, ' ', &arg1_span, &input);
       pg_span_trim_left(&input);
       bool arg1_valid = false;
       if (arg1_span.len != 0) {
-        if (kind == EK_REALLOC_ENTRY || kind == EK_CALLOC_ENTRY)
-          arg1 = pg_span_parse_u64_decimal(arg1_span, &arg1_valid);
+        if (kind != EK_FREE)
+          arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
         else
           pg_log_fatal(logger, EINVAL, "Unexpected arg1 for %s: %.*s",
                        event_kind_to_string(kind), (int)arg1_span.len,
                        arg1_span.data);
+        if (!arg1_valid)
+          pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
+                       arg1_span.data);
       }
-      if (!arg1_valid)
-        pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
-                     arg1_span.data);
+    }
+
+    // arg2
+    pg_span_t arg2_span = {0};
+    uint64_t arg2 = 0;
+    more_chars = false;
+    c = pg_span_peek_left(input, &more_chars);
+    if (!more_chars) break;
+    if (pg_char_is_digit(c)) {
+      pg_span_split_at_first(input, '\n', &arg2_span, &input);
+      pg_span_trim_left(&input);
+      bool arg2_valid = false;
+      if (arg2_span.len != 0) {
+        if (kind != EK_FREE)
+          arg2 = pg_span_parse_u64_hex(arg2_span, &arg2_valid);
+        else
+          pg_log_fatal(logger, EINVAL, "Unexpected arg2 for %s: %.*s",
+                       event_kind_to_string(kind), (int)arg2_span.len,
+                       arg2_span.data);
+        if (!arg2_valid)
+          pg_log_fatal(logger, EINVAL, "Invalid arg2: %.*s", (int)arg2_span.len,
+                       arg2_span.data);
+      }
     }
 
     // Rest of stacktrace
@@ -229,8 +237,9 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
         pg_array_append(events->timestamps, timestamp);
         pg_array_append(events->arg0s, arg0);
         pg_array_append(events->arg1s, arg1);
+        pg_array_append(events->arg2s, arg2);
 
-        // event_dump(events, *fn_names, pg_array_len(events->kinds) - 1);
+        event_dump(events, *fn_names, pg_array_len(events->kinds) - 1);
         break;
       }
 
@@ -247,8 +256,8 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
   }
 }
 
-void on_free(events_t* events, uint64_t i, pg_array_t(allocation_t) allocations,
-             uint64_t* mem_size) {
+static void on_free(events_t* events, uint64_t i,
+                    pg_array_t(allocation_t) allocations, uint64_t* mem_size) {
   allocation_t alloc = {0};
   const uint64_t ptr = events->arg0s[i];
   for (uint64_t j = 0; j < pg_array_len(allocations); j++) {
@@ -289,6 +298,7 @@ int main(int argc, char* argv[]) {
 
   parse_input(&logger, input, &events, &fn_names);
 
+#if 0
   uint64_t mem_size = 0, max_mem_size = 0;
   // TODO: map[allocated_ptr] = allocated_size
   pg_array_t(allocation_t) allocations = {0};
@@ -417,6 +427,6 @@ int main(int argc, char* argv[]) {
 "</html>"
       // clang-format on
   );
-
+#endif
   return 0;
 }
