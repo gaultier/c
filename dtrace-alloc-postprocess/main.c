@@ -373,9 +373,9 @@ int main(int argc, char* argv[]) {
 
   printf(
       "];\n"
-      "var locations=[");
+      "var stacktraces=[");
   for (uint64_t i = 0; i < 200; i++) {
-    printf("[");
+    printf("['%llu',", allocations[i].size);
     const uint64_t event_i = allocations[i].event_i;
     const stacktrace_t st = events.stacktraces[event_i];
     for (uint64_t j = 0; j < pg_array_len(st); j++) {
@@ -395,7 +395,7 @@ int main(int argc, char* argv[]) {
 "          plugins: {"
 "            tooltip: {"
 "              callbacks: {"
-"                 label: function(ctx) {return locations[ctx.dataIndex]},"
+"                 label: function(ctx) {return stacktraces[ctx.dataIndex]},"
 "              }"
 "            }"
 "          }"
