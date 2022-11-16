@@ -375,15 +375,15 @@ int main(int argc, char* argv[]) {
       "];\n"
       "var locations=[");
   for (uint64_t i = 0; i < 200; i++) {
-    printf("'");
+    printf("[");
     const uint64_t event_i = allocations[i].event_i;
     const stacktrace_t st = events.stacktraces[event_i];
     for (uint64_t j = 0; j < pg_array_len(st); j++) {
       const uint64_t fn_i = st[j].fn_i;
       const pg_span_t fn_name = fn_names[fn_i];
-      printf("%.*s;", (int)fn_name.len, fn_name.data);
+      printf("'%.*s',", (int)fn_name.len, fn_name.data);
     }
-    printf("',");
+    printf("],");
   }
 
   printf(
@@ -405,9 +405,6 @@ int main(int argc, char* argv[]) {
 "          datasets: [{"
 "            label: 'Allocations',"
 "            data: data,"
-"            fill: false,"
-"            borderColor: 'rgb(75, 192, 192)',"
-"            tension: 0.1,"
 "          }],"
 "        },"
 "      });"
