@@ -240,7 +240,7 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
         pg_array_append(events->arg1s, arg1);
         pg_array_append(events->arg2s, arg2);
 
-        event_dump(events, *fn_names, pg_array_len(events->kinds) - 1);
+        // event_dump(events, *fn_names, pg_array_len(events->kinds) - 1);
         break;
       }
 
@@ -253,19 +253,6 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
       const stacktrace_entry_t stacktrace_entry =
           fn_name_to_stacktrace_entry(logger, fn_names, fn);
       pg_array_append(stacktrace, stacktrace_entry);
-    }
-  }
-}
-
-static void on_free(events_t* events, uint64_t i,
-                    pg_array_t(allocation_t) allocations, uint64_t* mem_size) {
-  allocation_t alloc = {0};
-  const uint64_t ptr = events->arg0s[i];
-  for (uint64_t j = 0; j < pg_array_len(allocations); j++) {
-    if (allocations[j].ptr == ptr &&
-        allocations[j].timestamp < events->timestamps[i]) {
-      *mem_size -= alloc.size;
-      return;
     }
   }
 }
@@ -299,62 +286,6 @@ int main(int argc, char* argv[]) {
 
   parse_input(&logger, input, &events, &fn_names);
 
-#if 0
-  uint64_t mem_size = 0, max_mem_size = 0;
-  // TODO: map[allocated_ptr] = allocated_size
-  pg_array_t(allocation_t) allocations = {0};
-  pg_array_init_reserve(allocations, pg_array_len(events.kinds) / 2,
-                        pg_heap_allocator());
-
-  allocation_t cur_allocation = {0};
-  for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
-    switch (events.kinds[i]) {
-      case EK_MALLOC_ENTRY:
-        cur_allocation.size = events.arg0s[i];
-        break;
-      case EK_MALLOC_RETURN:
-      case EK_CALLOC_RETURN:
-      case EK_REALLOC_RETURN: {
-        cur_allocation.timestamp = events.timestamps[i];
-        cur_allocation.ptr = events.arg0s[i];
-        cur_allocation.event_i = i;
-        mem_size += cur_allocation.size;
-        max_mem_size = MAX(max_mem_size, mem_size);
-
-        cur_allocation.total_mem_size = mem_size;
-        if (cur_allocation.ptr != 0) {
-          pg_array_append(allocations, cur_allocation);
-        }
-        break;
-      }
-      case EK_REALLOC_ENTRY:
-        cur_allocation.timestamp = events.timestamps[i];
-        if (events.arg0s[i] == 0) {  // Same as malloc
-          cur_allocation.size = events.arg1s[i];
-        } else {  // Same as free + malloc
-          on_free(&events, i, allocations, &mem_size);
-          cur_allocation.size = events.arg1s[i];
-        }
-        break;
-      case EK_CALLOC_ENTRY:
-        cur_allocation.timestamp = events.timestamps[i];
-        cur_allocation.size =
-            events.arg0s[i] * events.arg1s[i];  // TODO: check overflow
-        break;
-      case EK_FREE_ENTRY:
-        on_free(&events, i, allocations, &mem_size);
-        break;
-      default:
-        break;
-    }
-  }
-  if (pg_array_len(allocations) == 0) return 0;
-
-  //  for (uint64_t i = 0; i < pg_array_len(allocations) - 1; i++) {
-  //    __builtin_dump_struct(&allocations[i], &printf);
-  //  }
-  //  exit(0);
-
   // Output html
   printf(
       // clang-format off
@@ -374,22 +305,26 @@ int main(int argc, char* argv[]) {
       // clang-format on
   );
 
-  for (uint64_t i = 0; i < pg_array_len(allocations); i++)
-    printf("%llu,", allocations[i].timestamp);
+  for (uint64_t i = 0; i < pg_array_len(events.timestamps); i++)
+    printf("%llu,", events.timestamps[i]);
 
   printf(
       "];\n"
       "var data=[");
-  for (uint64_t i = 0; i < pg_array_len(allocations); i++)
-    printf("%llu,", allocations[i].total_mem_size);
+  for (uint64_t i = 0; i < pg_array_len(events.arg0s); i++) {
+    if (events.kinds[i] == EK_FREE) {
+      printf("-%llu,", 0ULL);  // FIXME
+    } else {
+      printf("%llu,", events.arg0s[i]);
+    }
+  }
 
   printf(
       "];\n"
       "var stacktraces=[");
-  for (uint64_t i = 0; i < pg_array_len(allocations); i++) {
-    printf("['%llu',", allocations[i].size);
-    const uint64_t event_i = allocations[i].event_i;
-    const stacktrace_t st = events.stacktraces[event_i];
+  for (uint64_t i = 0; i < pg_array_len(events.stacktraces); i++) {
+    printf("['%llu',", events.arg0s[i]);
+    const stacktrace_t st = events.stacktraces[i];
     for (uint64_t j = 0; j < pg_array_len(st); j++) {
       const uint64_t fn_i = st[j].fn_i;
       const pg_span_t fn_name = fn_names[fn_i];
@@ -428,6 +363,5 @@ int main(int argc, char* argv[]) {
 "</html>"
       // clang-format on
   );
-#endif
   return 0;
 }
