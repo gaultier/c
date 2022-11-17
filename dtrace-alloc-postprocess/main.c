@@ -189,11 +189,9 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     if (kind != EK_FREE) {
       pg_span_split_at_first(input, ' ', &arg1_span, &input);
       pg_span_trim_left(&input);
-      bool arg1_valid = false;
       if (arg1_span.len != 0) {
-        pg_log_fatal(logger, EINVAL, "Unexpected arg1 for %s: %.*s",
-                     event_kind_to_string(kind), (int)arg1_span.len,
-                     arg1_span.data);
+        bool arg1_valid = false;
+        arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
         if (!arg1_valid)
           pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
                        arg1_span.data);
@@ -206,11 +204,9 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     if (kind != EK_FREE) {
       pg_span_split_at_first(input, '\n', &arg2_span, &input);
       pg_span_trim_left(&input);
-      bool arg2_valid = false;
       if (arg2_span.len != 0) {
-        pg_log_fatal(logger, EINVAL, "Unexpected arg2 for %s: %.*s",
-                     event_kind_to_string(kind), (int)arg2_span.len,
-                     arg2_span.data);
+        bool arg2_valid = false;
+        arg2 = pg_span_parse_u64_hex(arg1_span, &arg2_valid);
         if (!arg2_valid)
           pg_log_fatal(logger, EINVAL, "Invalid arg2: %.*s", (int)arg2_span.len,
                        arg2_span.data);
