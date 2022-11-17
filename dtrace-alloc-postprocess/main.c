@@ -186,20 +186,14 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     // arg1
     pg_span_t arg1_span = {0};
     uint64_t arg1 = 0;
-    bool more_chars = false;
-    char c = pg_span_peek_left(input, &more_chars);
-    if (!more_chars) break;
-    if (pg_char_is_digit(c)) {
+    if (kind != EK_FREE) {
       pg_span_split_at_first(input, ' ', &arg1_span, &input);
       pg_span_trim_left(&input);
       bool arg1_valid = false;
       if (arg1_span.len != 0) {
-        if (kind != EK_FREE)
-          arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
-        else
-          pg_log_fatal(logger, EINVAL, "Unexpected arg1 for %s: %.*s",
-                       event_kind_to_string(kind), (int)arg1_span.len,
-                       arg1_span.data);
+        pg_log_fatal(logger, EINVAL, "Unexpected arg1 for %s: %.*s",
+                     event_kind_to_string(kind), (int)arg1_span.len,
+                     arg1_span.data);
         if (!arg1_valid)
           pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
                        arg1_span.data);
@@ -209,20 +203,14 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     // arg2
     pg_span_t arg2_span = {0};
     uint64_t arg2 = 0;
-    more_chars = false;
-    c = pg_span_peek_left(input, &more_chars);
-    if (!more_chars) break;
-    if (pg_char_is_digit(c)) {
+    if (kind != EK_FREE) {
       pg_span_split_at_first(input, '\n', &arg2_span, &input);
       pg_span_trim_left(&input);
       bool arg2_valid = false;
       if (arg2_span.len != 0) {
-        if (kind != EK_FREE)
-          arg2 = pg_span_parse_u64_hex(arg2_span, &arg2_valid);
-        else
-          pg_log_fatal(logger, EINVAL, "Unexpected arg2 for %s: %.*s",
-                       event_kind_to_string(kind), (int)arg2_span.len,
-                       arg2_span.data);
+        pg_log_fatal(logger, EINVAL, "Unexpected arg2 for %s: %.*s",
+                     event_kind_to_string(kind), (int)arg2_span.len,
+                     arg2_span.data);
         if (!arg2_valid)
           pg_log_fatal(logger, EINVAL, "Invalid arg2: %.*s", (int)arg2_span.len,
                        arg2_span.data);
@@ -307,7 +295,7 @@ int main(int argc, char* argv[]) {
   );
 
   const uint64_t START = 0;
-  const uint64_t SHOW = 9000;
+  const uint64_t SHOW = 1700;
 
   for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.arg0s)); i++) {
     if (events.kinds[i] == EK_FREE) continue;
