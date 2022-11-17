@@ -311,35 +311,54 @@ int main(int argc, char* argv[]) {
 
   for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.arg0s)); i++) {
     if (events.kinds[i] == EK_FREE) continue;
-#if 0
-    {
-      const uint64_t ptr = events.arg0s[i];
-
-      bool found = false;
-      for (int64_t j = i - 1; j >= 0; j--) {
-        if (events.kinds[j] != EK_FREE && events.arg1s[j] == ptr) {
-          printf("-%llu,", events.arg0s[j]);
-          found = true;
-          assert(events.arg1s[i] == 0);
-          events.arg1s[i] = events.arg0s[j];
-          break;
-        }
-      }
-      if (!found) printf("0,");
-    }
-#endif
     printf("{x:%llu, y:%llu},", events.timestamps[i], events.arg0s[i]);
   }
 
   printf(
       "];\n"
-      "var stacktraces=[");
+      "var allocation_stacktraces=[");
   for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.stacktraces));
        i++) {
     if (events.kinds[i] == EK_FREE) continue;
-    printf("['mem: %lld',", events.kinds[i] == EK_FREE
-                                ? (-(int64_t)events.arg1s[i])
-                                : ((int64_t)events.arg0s[i]));
+    printf("['mem: %llu',", events.arg0s[i]);
+
+    const stacktrace_t st = events.stacktraces[i];
+    for (uint64_t j = 0; j < pg_array_len(st); j++) {
+      const uint64_t fn_i = st[j].fn_i;
+      const pg_span_t fn_name = fn_names[fn_i];
+      printf("'%.*s',", (int)fn_name.len, fn_name.data);
+    }
+    printf("],");
+  }
+
+  printf(
+      "];\n"
+      "var frees=[");
+  for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.stacktraces));
+       i++) {
+    if (events.kinds[i] != EK_FREE) continue;
+
+    const uint64_t ptr = events.arg0s[i];
+
+    bool found = false;
+    for (int64_t j = i - 1; j >= 0; j--) {
+      if (events.kinds[j] != EK_FREE && events.arg1s[j] == ptr) {
+        printf("{x:%llu,y:%llu},", events.timestamps[i], events.arg0s[j]);
+        found = true;
+        assert(events.arg1s[i] == 0);
+        events.arg1s[i] = events.arg0s[j];
+        break;
+      }
+    }
+    if (!found) printf("{x:%llu,y:0},", events.timestamps[i]);
+  }
+  printf(
+      "];\n"
+      "var free_stacktraces=[");
+  for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.stacktraces));
+       i++) {
+    if (events.kinds[i] != EK_FREE) continue;
+    printf("['mem: %llu',", events.arg1s[i]);
 
     const stacktrace_t st = events.stacktraces[i];
     for (uint64_t j = 0; j < pg_array_len(st); j++) {
@@ -360,7 +379,7 @@ int main(int argc, char* argv[]) {
 "          plugins: {"
 "            tooltip: {"
 "              callbacks: {"
-"                 label: function(ctx) {return stacktraces[ctx.dataIndex]},"
+"                 label: function(ctx) {return ctx.datasetIndex==0? allocation_stacktraces[ctx.dataIndex]:free_stacktraces[ctx.dataIndex]},"
 "              }"
 "            },"
 //"            decimation: {"
@@ -379,10 +398,10 @@ int main(int argc, char* argv[]) {
 "          },"
 "        },"
 "        data: {"
-"          datasets: [{"
-"            label: 'Allocations',"
-"            data: allocations,"
-"          }],"
+"          datasets: ["
+"            {label: 'Allocations', data: allocations},"
+"            {label: 'Frees', data: frees},"
+"          ],"
 "        },"
 "      });"
 "   </script>"
