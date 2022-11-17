@@ -305,7 +305,7 @@ int main(int argc, char* argv[]) {
       // clang-format on
   );
 
-  const uint64_t SHOW = 100;
+  const uint64_t SHOW = 20000;
   for (uint64_t i = 0; i < MIN(SHOW, pg_array_len(events.timestamps)); i++)
     printf("%llu,", events.timestamps[i]);
 
@@ -346,11 +346,20 @@ int main(int argc, char* argv[]) {
 "                 label: function(ctx) {return stacktraces[ctx.dataIndex]},"
 "              }"
 "            },"
-//"            decimation: {"
-//"              algorithm: 'ttb',"
-//"              enabled: true,"
-//"            }, "
-"          }"
+"            decimation: {"
+"              algorithm: 'ttb',"
+"              enabled: true,"
+"            }, "
+"          },"
+"          scales: {"
+"            x: {"
+"              display: true,"
+"            },"
+"            y: {"
+"              display: true,"
+"              type: 'logarithmic',"
+"            },"
+"          },"
 "        },"
 "        data: {"
 "          labels: labels,"
