@@ -302,20 +302,17 @@ int main(int argc, char* argv[]) {
 "   </body>"
 "   <script src=\"chart.umd.min.js\"></script>"
 "   <script>"
-"     var labels = ["
+"     var allocations = ["
       // clang-format on
   );
 
   const uint64_t START = 0;
-  const uint64_t SHOW = 1650;
-  for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.timestamps)); i++)
-    printf("%llu,", events.timestamps[i]);
+  const uint64_t SHOW = 9000;
 
-  printf(
-      "];\n"
-      "var data=[");
   for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.arg0s)); i++) {
-    if (events.kinds[i] == EK_FREE) {
+    if (events.kinds[i] == EK_FREE) continue;
+#if 0
+    {
       const uint64_t ptr = events.arg0s[i];
 
       bool found = false;
@@ -329,9 +326,9 @@ int main(int argc, char* argv[]) {
         }
       }
       if (!found) printf("0,");
-    } else {
-      printf("%llu,", events.arg0s[i]);
     }
+#endif
+    printf("{x:%llu, y:%llu},", events.timestamps[i], events.arg0s[i]);
   }
 
   printf(
@@ -339,6 +336,7 @@ int main(int argc, char* argv[]) {
       "var stacktraces=[");
   for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.stacktraces));
        i++) {
+    if (events.kinds[i] == EK_FREE) continue;
     printf("['mem: %lld',", events.kinds[i] == EK_FREE
                                 ? (-(int64_t)events.arg1s[i])
                                 : ((int64_t)events.arg0s[i]));
@@ -358,6 +356,7 @@ int main(int argc, char* argv[]) {
 "      const chart = new Chart(document.getElementById('chart'), {"
 "        type: 'scatter',"
 "        options: {"
+"           animation: false,"
 "          plugins: {"
 "            tooltip: {"
 "              callbacks: {"
@@ -375,15 +374,14 @@ int main(int argc, char* argv[]) {
 "            },"
 "            y: {"
 "              display: true,"
-//"              type: 'logarithmic',"
+"              type: 'logarithmic',"
 "            },"
 "          },"
 "        },"
 "        data: {"
-"          labels: labels,"
 "          datasets: [{"
 "            label: 'Allocations',"
-"            data: data,"
+"            data: allocations,"
 "          }],"
 "        },"
 "      });"
