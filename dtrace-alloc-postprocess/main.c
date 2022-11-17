@@ -305,16 +305,29 @@ int main(int argc, char* argv[]) {
       // clang-format on
   );
 
-  const uint64_t SHOW = 20000;
-  for (uint64_t i = 0; i < MIN(SHOW, pg_array_len(events.timestamps)); i++)
+  const uint64_t START = 1600;
+  const uint64_t SHOW = 1650;
+  for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.timestamps)); i++)
     printf("%llu,", events.timestamps[i]);
 
   printf(
       "];\n"
       "var data=[");
-  for (uint64_t i = 0; i < MIN(SHOW, pg_array_len(events.arg0s)); i++) {
+  for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.arg0s)); i++) {
     if (events.kinds[i] == EK_FREE) {
-      printf("-%llu,", 0ULL);  // FIXME
+      const uint64_t ptr = events.arg0s[i];
+
+      bool found = false;
+      for (int64_t j = i - 1; j >= 0; j--) {
+        if (events.kinds[j] == EK_ALLOC && events.arg1s[j] == ptr) {
+          printf("-%llu,", events.arg0s[j]);
+          found = true;
+          assert(events.arg1s[i] == 0);
+          events.arg1s[i] = events.arg0s[j];
+          break;
+        }
+      }
+      if (!found) printf("0,");
     } else {
       printf("%llu,", events.arg0s[i]);
     }
@@ -323,8 +336,10 @@ int main(int argc, char* argv[]) {
   printf(
       "];\n"
       "var stacktraces=[");
-  for (uint64_t i = 0; i < MIN(SHOW, pg_array_len(events.stacktraces)); i++) {
-    printf("['%llu',", events.arg0s[i]);
+  for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.stacktraces));
+       i++) {
+    printf("['mem: %lld',",
+           events.kinds[i] == EK_ALLOC ? events.arg0s[i] : -events.arg1s[i]);
     const stacktrace_t st = events.stacktraces[i];
     for (uint64_t j = 0; j < pg_array_len(st); j++) {
       const uint64_t fn_i = st[j].fn_i;
@@ -357,7 +372,7 @@ int main(int argc, char* argv[]) {
 "            },"
 "            y: {"
 "              display: true,"
-"              type: 'logarithmic',"
+//"              type: 'logarithmic',"
 "            },"
 "          },"
 "        },"
