@@ -32,8 +32,8 @@ typedef struct {
 } events_t;
 
 typedef struct {
-  uint64_t ptr, size, timestamp, total_mem_size, event_i;
-} allocation_t;
+  uint64_t ptr, size, start_i, end_i;
+} lifetime_t;
 
 static void events_init(events_t* events) {
   const uint64_t cap = 10000;
@@ -271,6 +271,44 @@ int main(int argc, char* argv[]) {
 
   parse_input(&logger, input, &events, &fn_names);
 
+  pg_array_t(lifetime_t) lifetimes = {0};
+  pg_array_init_reserve(lifetimes, pg_array_len(events.kinds),
+                        pg_heap_allocator());
+  for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
+    const event_kind_t kind = events.kinds[i];
+    if (kind == EK_ALLOC) {
+      pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
+                                               .start_i = i,
+                                               .size = events.arg0s[i]}));
+    } else if (kind == EK_FREE) {
+      const uint64_t ptr = events.arg0s[i];
+      for (int64_t j = pg_array_len(lifetimes) - 1; j >= 0; j--) {
+        if (lifetimes[j].ptr == ptr && lifetimes[j].end_i == 0) {
+          lifetimes[j].end_i = i;
+          break;
+        }
+      }
+    } else if (kind == EK_REALLOC) {
+      const uint64_t old_ptr = events.arg2s[i];
+      if (old_ptr == 0) {  // Same as malloc
+        pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
+                                                 .start_i = i,
+                                                 .size = events.arg0s[i]}));
+      } else {  // Same as free + malloc
+        for (int64_t j = pg_array_len(lifetimes) - 1; j >= 0; j--) {
+          if (lifetimes[j].ptr == old_ptr && lifetimes[j].end_i == 0) {
+            lifetimes[j].end_i = i;
+            break;
+          }
+        }
+        pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
+                                                 .start_i = i,
+                                                 .size = events.arg0s[i]}));
+      }
+    } else
+      __builtin_unreachable();
+  }
+
   // Output html
   printf(
       // clang-format off
@@ -291,9 +329,9 @@ int main(int argc, char* argv[]) {
   );
 
   const uint64_t START = 0;
-  const uint64_t SHOW = 1700;
+  const uint64_t COUNT = 1700;
 
-  for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.arg0s)); i++) {
+  for (uint64_t i = START; i < MIN(COUNT, pg_array_len(events.arg0s)); i++) {
     if (events.kinds[i] == EK_FREE) continue;
     printf("{x:%llu, y:%llu},", events.timestamps[i], events.arg0s[i]);
   }
@@ -301,7 +339,7 @@ int main(int argc, char* argv[]) {
   printf(
       "];\n"
       "var allocation_stacktraces=[");
-  for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.stacktraces));
+  for (uint64_t i = START; i < MIN(COUNT, pg_array_len(events.stacktraces));
        i++) {
     if (events.kinds[i] == EK_FREE) continue;
     printf("['mem: %llu',", events.arg0s[i]);
@@ -318,7 +356,7 @@ int main(int argc, char* argv[]) {
   printf(
       "];\n"
       "var frees=[");
-  for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.stacktraces));
+  for (uint64_t i = START; i < MIN(COUNT, pg_array_len(events.stacktraces));
        i++) {
     if (events.kinds[i] != EK_FREE) continue;
 
@@ -339,7 +377,7 @@ int main(int argc, char* argv[]) {
   printf(
       "];\n"
       "var free_stacktraces=[");
-  for (uint64_t i = START; i < MIN(SHOW, pg_array_len(events.stacktraces));
+  for (uint64_t i = START; i < MIN(COUNT, pg_array_len(events.stacktraces));
        i++) {
     if (events.kinds[i] != EK_FREE) continue;
     printf("['mem: %llu',", events.arg1s[i]);
@@ -354,16 +392,33 @@ int main(int argc, char* argv[]) {
   }
 
   printf(
+      "];\n"
+      "var lifetimes=[");
+  // FIXME
+  for (uint64_t i = START; i < MIN(COUNT, pg_array_len(lifetimes)); i++) {
+    const lifetime_t l = lifetimes[i];
+    if (l.end_i == 0) continue;
+    printf("{x:%llu,y:%llu},", events.timestamps[l.start_i], l.size);
+    printf("{x:%llu,y:%llu},", events.timestamps[l.end_i], l.size);
+    break;
+  }
+
+  printf(
       // clang-format off
       "];\n"
 "      const chart = new Chart(document.getElementById('chart'), {"
-"        type: 'scatter',"
 "        options: {"
 "           animation: false,"
 "          plugins: {"
 "            tooltip: {"
 "              callbacks: {"
-"                 label: function(ctx) {return ctx.datasetIndex==0? allocation_stacktraces[ctx.dataIndex]:free_stacktraces[ctx.dataIndex]},"
+"                 label: function(ctx) {"
+"                    if(ctx.datasetIndex==0) return allocation_stacktraces[ctx.dataIndex];"
+"                    else if (ctx.dataIndex == 1) return free_stacktraces[ctx.dataIndex];"
+"                    else {"
+"                      return /* FIXME*/ '';"
+"                    }"
+"                 },"
 "              }"
 "            },"
 //"            decimation: {"
@@ -383,8 +438,9 @@ int main(int argc, char* argv[]) {
 "        },"
 "        data: {"
 "          datasets: ["
-"            {label: 'Allocations', data: allocations},"
-"            {label: 'Frees', data: frees},"
+"            {type: 'scatter', label: 'Allocations', data: allocations},"
+"            {type: 'scatter', label: 'Frees', data: frees},"
+"            {type: 'line', label: 'Lifetimes', data: lifetimes},"
 "          ],"
 "        },"
 "      });"
