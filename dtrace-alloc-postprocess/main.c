@@ -310,6 +310,29 @@ int main(int argc, char* argv[]) {
   }
 
   // Output html
+
+  uint64_t max_w = 0;
+  for (uint64_t i = 0; i < pg_array_len(lifetimes); i++) {
+    const lifetime_t l = lifetimes[i];
+    if (l.end_i == 0) continue;
+    const uint64_t start = events.timestamps[l.start_i];
+    const uint64_t end = events.timestamps[l.end_i];
+    const uint64_t w = end - start;
+    max_w = MAX(max_w, w);
+  }
+
+  const uint64_t h = 7;
+  const uint64_t margin_h = 1;
+  const uint64_t monitoring_start = events.timestamps[lifetimes[0].start_i];
+  uint64_t monitoring_end = 0;
+  for (int64_t i = pg_array_len(lifetimes) - 1; i >= 0; i--) {
+    if (monitoring_end != 0) break;
+    monitoring_end = events.timestamps[lifetimes[i].end_i];
+  }
+
+  const uint64_t chart_w = (monitoring_end - monitoring_start) / 1e6 * 3,
+                 chart_h = pg_array_len(lifetimes) * (h + margin_h);
+  // const float ratio_w = (float)chart_w / (float)max_w;
   printf(
       // clang-format off
 "<!DOCTYPE html>"
@@ -320,17 +343,15 @@ int main(int argc, char* argv[]) {
 "      </style>"
 "    </head>"
 "    <body>"
-"       <div style=\"width: 1600px;\"><canvas id=\"chart\"></canvas></div>"
-"   </body>"
-"   <script src=\"chart.umd.min.js\"></script>"
-"   <script>"
-"     var allocations = ["
+"        <svg width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"10\" text-anchor=\"end\">"
       // clang-format on
-  );
+      ,
+      chart_w, chart_h);
 
   const uint64_t START = 0;
-  const uint64_t COUNT = 1700;
+  const uint64_t COUNT = 100000;
 
+#if 0
   for (uint64_t i = START; i < MIN(COUNT, pg_array_len(events.arg0s)); i++) {
     if (events.kinds[i] == EK_FREE) continue;
     printf("{x:%llu, y:%llu},", events.timestamps[i], events.arg0s[i]);
@@ -390,61 +411,41 @@ int main(int argc, char* argv[]) {
     }
     printf("],");
   }
+#endif
 
-  printf(
-      "];\n"
-      "var lifetimes=[");
-  // FIXME
   for (uint64_t i = START; i < MIN(COUNT, pg_array_len(lifetimes)); i++) {
     const lifetime_t l = lifetimes[i];
-    if (l.end_i == 0) continue;
-    printf("{x:%llu,y:%llu},", events.timestamps[l.start_i], l.size);
-    printf("{x:%llu,y:%llu},", events.timestamps[l.end_i], l.size);
-    break;
+    const uint64_t start = events.timestamps[l.start_i];
+    const uint64_t x = (start - monitoring_start) / 1e6;
+    const uint64_t y = i * (h + margin_h);
+
+    if (l.end_i == 0) {
+      printf(  // clang-format off
+        "<g>"
+"           <circle fill=\"green\" cx=\"%llu\" cy=\"%llu\" r=\"%llu\"></circle> "
+        "</g>\n"
+               // clang-format on
+          ,
+          x, y, 3ULL);
+      continue;
+    }
+
+    const uint64_t end = events.timestamps[l.end_i];
+    const uint64_t w = MAX(3, (float)(end - start) / 1e6);
+    assert(w <= chart_w);
+    printf(  // clang-format off
+        "<g>"
+"          <rect fill=\"steelblue\" x=\"%llu\" y=\"%llu\" width=\"%llu\" height=\"%llu\"></rect>"
+        "</g>\n"
+             // clang-format on
+        ,
+        x, y, w, h);
   }
 
   printf(
       // clang-format off
-      "];\n"
-"      const chart = new Chart(document.getElementById('chart'), {"
-"        options: {"
-"           animation: false,"
-"          plugins: {"
-"            tooltip: {"
-"              callbacks: {"
-"                 label: function(ctx) {"
-"                    if(ctx.datasetIndex==0) return allocation_stacktraces[ctx.dataIndex];"
-"                    else if (ctx.dataIndex == 1) return free_stacktraces[ctx.dataIndex];"
-"                    else {"
-"                      return /* FIXME*/ '';"
-"                    }"
-"                 },"
-"              }"
-"            },"
-//"            decimation: {"
-//"              algorithm: 'ttb',"
-//"              enabled: true,"
-//"            }, "
-"          },"
-"          scales: {"
-"            x: {"
-"              display: true,"
-"            },"
-"            y: {"
-"              display: true,"
-"              type: 'logarithmic',"
-"            },"
-"          },"
-"        },"
-"        data: {"
-"          datasets: ["
-"            {type: 'scatter', label: 'Allocations', data: allocations},"
-"            {type: 'scatter', label: 'Frees', data: frees},"
-"            {type: 'line', label: 'Lifetimes', data: lifetimes},"
-"          ],"
-"        },"
-"      });"
-"   </script>"
+"     </svg>"
+"   </body>"
 "</html>"
       // clang-format on
   );

@@ -24,20 +24,11 @@
         },
         data: {
           datasets: [{
-             type: 'scatter',
+             type: 'bubble',
             label: 'My first dataset',
-             data: [{x:1,y:65}, {x:2, y:59}, {x:3,y:80}, {x:4, y:81}, {x:5, y:59}, {x:6, y:65}, {x:7,y:65}],
+             data: [{x:1,y:65, r:6}, {x:2, y:59, r:0}, {x:3,y:80, r:1}, {x:4, y:81, r:1}, {x:5, y:59, r:1}, {x:6, y:65, r:2}, ],
           },
-          {
-             type: 'line',
-            label: 'Lifetime',
-             data: [{x:2, y:59}, {x:5, y:59}],
-          },
-         {
-             type: 'line',
-            label: 'Lifetime',
-             data: [{x:1, y:65}, {x:7, y:65}],
-          } ],
+       ],
       }
       });
    </script>
