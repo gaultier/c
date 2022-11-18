@@ -446,6 +446,31 @@ int main(int argc, char* argv[]) {
       // clang-format off
 "     </svg>"
 "   </body>"
+"   <script>"
+      // clang-format on
+  );
+
+  printf("var stacktraces=[");
+  for (uint64_t i = 0; i < pg_array_len(events.stacktraces); i++) {
+    const stacktrace_t st = events.stacktraces[i];
+    printf("'");
+    for (uint64_t j = 0; j < pg_array_len(st); j++) {
+      const uint64_t fn_i = st[j].fn_i;
+      const pg_span_t fn_name = fn_names[fn_i];
+      printf("%.*s ", (int)fn_name.len, fn_name.data);
+    }
+    printf("',");
+  }
+  printf("];\n");
+
+  printf(
+      // clang-format off
+"      document.querySelectorAll('g').forEach(function(e, i){"
+"        e.addEventListener('mouseover', function() {"
+"          console.log(stacktraces[i]);"
+"        });"
+"      });"
+"   </script>"
 "</html>"
       // clang-format on
   );
