@@ -271,6 +271,7 @@ int main(int argc, char* argv[]) {
 
   parse_input(&logger, input, &events, &fn_names);
 
+#if 0
   pg_array_t(lifetime_t) lifetimes = {0};
   pg_array_init_reserve(lifetimes, pg_array_len(events.kinds),
                         pg_heap_allocator());
@@ -308,30 +309,22 @@ int main(int argc, char* argv[]) {
     } else
       __builtin_unreachable();
   }
+#endif
 
   // Output html
 
-  uint64_t max_w = 0;
-  for (uint64_t i = 0; i < pg_array_len(lifetimes); i++) {
-    const lifetime_t l = lifetimes[i];
-    if (l.end_i == 0) continue;
-    const uint64_t start = events.timestamps[l.start_i];
-    const uint64_t end = events.timestamps[l.end_i];
-    const uint64_t w = end - start;
-    max_w = MAX(max_w, w);
-  }
+  const uint64_t rect_w = 5;
+  const uint64_t rect_h = 7;
+  const uint64_t rect_margin_top = 1;
+  const uint64_t rect_margin_right = 3;
+  const uint64_t monitoring_start = events.timestamps[0];
+  const uint64_t monitoring_end =
+      events.timestamps[pg_array_len(events.timestamps) - 1];
 
-  const uint64_t h = 7;
-  const uint64_t margin_h = 1;
-  const uint64_t monitoring_start = events.timestamps[lifetimes[0].start_i];
-  uint64_t monitoring_end = 0;
-  for (int64_t i = pg_array_len(lifetimes) - 1; i >= 0; i--) {
-    if (monitoring_end != 0) break;
-    monitoring_end = events.timestamps[lifetimes[i].end_i];
-  }
-
-  const uint64_t chart_w = (monitoring_end - monitoring_start) / 1e6 * 3,
-                 chart_h = pg_array_len(lifetimes) * (h + margin_h);
+  const uint64_t chart_w = (monitoring_end - monitoring_start) / /* ms */ 1e6 *
+                           rect_w,
+                 chart_h =
+                     pg_array_len(events.kinds) * (rect_h + rect_margin_top);
   // const float ratio_w = (float)chart_w / (float)max_w;
   printf(
       // clang-format off
@@ -347,9 +340,6 @@ int main(int argc, char* argv[]) {
       // clang-format on
       ,
       chart_w, chart_h);
-
-  const uint64_t START = 0;
-  const uint64_t COUNT = 100000;
 
 #if 0
   for (uint64_t i = START; i < MIN(COUNT, pg_array_len(events.arg0s)); i++) {
@@ -413,26 +403,27 @@ int main(int argc, char* argv[]) {
   }
 #endif
 
-  for (uint64_t i = START; i < MIN(COUNT, pg_array_len(lifetimes)); i++) {
-    const lifetime_t l = lifetimes[i];
-    const uint64_t start = events.timestamps[l.start_i];
-    const uint64_t x = (start - monitoring_start) / 1e6;
-    const uint64_t y = i * (h + margin_h);
+  for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
+    const event_kind_t kind = events.kinds[i];
+    const uint64_t start = events.timestamps[i];
+    const uint64_t x = i * (rect_w + rect_margin_right);
+    const uint64_t y = i * (rect_h + rect_margin_top);
 
-    if (l.end_i == 0) {
-      printf(  // clang-format off
-        "<g>"
-"           <circle fill=\"green\" cx=\"%llu\" cy=\"%llu\" r=\"%llu\"></circle> "
-        "</g>\n"
-               // clang-format on
-          ,
-          x, y, 3ULL);
-      continue;
-    }
+    //    if (l.end_i == 0) {
+    //      printf(  // clang-format off
+    //        "<g>"
+    //"           <circle fill=\"green\" cx=\"%llu\" cy=\"%llu\"
+    // r=\"%llu\"></circle> "
+    //        "</g>\n"
+    //               // clang-format on
+    //          ,
+    //          x, y, 3ULL);
+    //      continue;
+    //    }
 
-    const uint64_t end = events.timestamps[l.end_i];
-    const uint64_t w = MAX(3, (float)(end - start) / 1e6);
-    assert(w <= chart_w);
+    const uint64_t w = rect_w;
+    const uint64_t h = kind == EK_FREE ? rect_h  // FIXME
+                                       : events.arg1s[i];
     printf(  // clang-format off
         "<g>"
 "          <rect fill=\"steelblue\" x=\"%llu\" y=\"%llu\" width=\"%llu\" height=\"%llu\"></rect>"
