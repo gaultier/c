@@ -403,7 +403,7 @@ int main(int argc, char* argv[]) {
     assert(y <= (chart_padding_top + chart_h - circle_r));
 
     printf(
-        "<g><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
+        "<g class=\"datapoint\"><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
         "r=\"%llu\" class=\"%s\"></circle></g>\n",
         kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r,
         kind == EK_FREE ? "free" : "alloc");
@@ -449,29 +449,40 @@ int main(int argc, char* argv[]) {
 
   printf(
       // clang-format off
-"      var tooltip = document.getElementById('tooltip');"
-"      var mouse_x= 0;"
-"      var mouse_y=0;"
-"      document.onmousemove = function(e){"
-"        mouse_x = event.clientX + document.body.scrollLeft;"
-"        mouse_y = event.clientY + document.body.scrollTop;"
-"      };"
-"      document.querySelectorAll('g > circle').forEach(function(e, i){"
-"        e.addEventListener('mouseover', function() {"
-"          tooltip.innerText = stacktraces[i]; "
-"           tooltip.style.display = '';"
-"           tooltip.style.padding = '5px';"
-"           tooltip.style.left = 5 + mouse_x + 'px';"
-"           tooltip.style.top = 5 + mouse_y + 'px';"
-"        });"
-"        e.addEventListener('mouseleave', function() {"
-"          tooltip.innerText = stacktraces[i]; "
-"           tooltip.style.display = 'none';"
-"        });"
-"      });"
-"   </script>"
-"</html>"
+"      var tooltip = document.getElementById('tooltip');\n"
+"      var mouse_x= 0;\n"
+"      var mouse_y=0;\n"
+"      document.onmousemove = function(e){\n"
+"        mouse_x = event.clientX + document.body.scrollLeft;\n"
+"        mouse_y = event.clientY + document.body.scrollTop;\n"
+"      };\n"
+"      var circles = document.querySelectorAll('g.datapoint > circle')\n"
+"      circles.forEach(function(e, i){\n"
+"        e.addEventListener('mouseover', function() {\n"
+"          tooltip.innerText = stacktraces[i]; \n"
+"           tooltip.style.display = '';\n"
+"           tooltip.style.padding = '5px';\n"
+"           tooltip.style.left = 5 + mouse_x + 'px';\n"
+"           tooltip.style.top = 5 + mouse_y + 'px';\n"
+
+"           if (e.classList.contains('free')){\n"
+"console.log('free='+i); // FIXME"
+"             document.querySelectorAll('g.datapoint:nth-child('+ i +')').forEach(function(other, j){ other.setAttribute('r', 8); console.log('alloc='+j); });\n"
+"           }\n"
+"        });\n"
+"        e.addEventListener('mouseleave', function() {\n"
+"          tooltip.innerText = stacktraces[i]; \n"
+"          tooltip.style.display = 'none';\n"
+
+"           if (e.classList.contains('free')){\n"
+"             alloc = document.querySelectorAll('g.datapoint:nth-child('+ i +')').forEach(function(other, j){ other.setAttribute('r', %llu); })\n"
+"           }\n"
+"        });\n"
+"      });\n"
+"   </script>\n"
+"</html>\n"
       // clang-format on
-  );
+      ,
+      circle_r);
   return 0;
 }
