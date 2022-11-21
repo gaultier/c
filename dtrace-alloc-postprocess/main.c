@@ -321,9 +321,9 @@ int main(int argc, char* argv[]) {
   // const uint64_t rect_h = 7;
   // const uint64_t rect_margin_top = 1;
   // const uint64_t rect_margin_right = 3;
-  const uint64_t monitoring_start = (double)events.timestamps[0] / 1e6;
+  const uint64_t monitoring_start = (double)events.timestamps[0];
   const uint64_t monitoring_end =
-      (double)events.timestamps[pg_array_len(events.timestamps) - 1] / 1e6;
+      (double)events.timestamps[pg_array_len(events.timestamps) - 1];
   const uint64_t monitoring_duration = monitoring_end - monitoring_start;
 
   const uint64_t chart_w = 1600;
@@ -367,7 +367,7 @@ int main(int argc, char* argv[]) {
 "      <style>"
 "      </style>"
 "    </head>"
-"    <body>"
+"    <body style=\"min-height:1200px;\">"
 "        <div id=\"tooltip\" style=\"background-color: rgb(40, 40, 40); opacity:1; color:white; border-radius:8px; display:none; position: absolute;\"></div>"
 "        <svg style=\"margin: 10px\" width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"10\" text-anchor=\"end\">"
 "            <g><text x=\"%llu\" y=\"%llu\">Time</text></g>"
@@ -390,9 +390,8 @@ int main(int argc, char* argv[]) {
 
     if (kind == EK_FREE && arg0 == 0) continue;
 
-    const uint64_t ts_ms = events.timestamps[i] / 1e6;
-    const double px =
-        ((double)(ts_ms - monitoring_start)) / monitoring_duration;
+    const uint64_t ts = events.timestamps[i];
+    const double px = ((double)(ts - monitoring_start)) / monitoring_duration;
     assert(px <= 1.0);
 
     const uint64_t x = chart_margin_left + px * (chart_w - chart_margin_left);
@@ -407,9 +406,10 @@ int main(int argc, char* argv[]) {
     printf(
         "<g class=\"datapoint\"><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
         "r=\"%llu\" data-kind=\"%s\" data-id=\"%llu\" "
-        "data-refid=\"%llu\"></circle></g>\n",
+        "data-refid=\"%llu\" "
+        "data-value=\"%llu\" data-timestamp=\"%llu\"></circle></g>\n",
         kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r,
-        kind == EK_FREE ? "free" : "alloc", i, arg2);
+        kind == EK_FREE ? "free" : "alloc", i, arg2, arg0, ts);
   }
 
   printf(
@@ -450,7 +450,8 @@ int main(int argc, char* argv[]) {
 "      var circles = document.querySelectorAll('g.datapoint > circle')\n"
 "      circles.forEach(function(e, i){\n"
 "        e.addEventListener('mouseover', function() {\n"
-"          tooltip.innerText = stacktraces[i]; \n"
+"           var value = e.getAttribute('data-value');\n"
+"           tooltip.innerText = value + '\\n\\n' + stacktraces[i]; \n"
 "           tooltip.style.display = '';\n"
 "           tooltip.style.padding = '5px';\n"
 "           tooltip.style.left = 5 + mouse_x + 'px';\n"
@@ -461,14 +462,23 @@ int main(int argc, char* argv[]) {
 "             var refId = e.getAttribute('data-refid');\n"
 "console.log(refId);\n"
 "             var alloc = document.querySelector('circle[data-id=\"' + refId + '\"]');\n"
-"             console.log(alloc);\n"
 "             alloc.setAttribute('r', 10);\n" 
 "             alloc.setAttribute('fill', 'blueviolet');\n"
 "             e.setAttribute('r', 10);\n"
+
+"             tooltip.innerText += '\\n\\nAllocated:\\n' + stacktraces[parseInt(refId)]; \n"
+"             var allocTimestamp = parseInt(alloc.getAttribute('data-timestamp'));"
+"             var freeTimestamp = parseInt(e.getAttribute('data-timestamp'));"
+"             var durationNs = (freeTimestamp-allocTimestamp);"
+"             tooltip.innerText += '\\n\\nLifetime: ';\n"
+"             if (durationNs<1000) tooltip.innerText += durationNs.toFixed(2) + ' ns';\n"
+"             else if (durationNs<1000*1000) tooltip.innerText += (durationNs /1000).toFixed(2) + ' us';\n"
+"             else if (durationNs<1000* 1000*1000) tooltip.innerText += (durationNs / 1000 /1000).toFixed(2) + ' ms';\n"
+"             else tooltip.innerText += (durationNs / 1e9).toFixed(2) + ' s';\n"
 "           }\n"
 "        });\n"
 "        e.addEventListener('mouseleave', function() {\n"
-"          tooltip.innerText = stacktraces[i]; \n"
+"          tooltip.innerText = ''; \n"
 "          tooltip.style.display = 'none';\n"
 "           if (e.getAttribute('data-kind')=='free'){\n"
 "             var refId = e.getAttribute('data-refid');"
