@@ -324,8 +324,8 @@ int main(int argc, char* argv[]) {
 
   const uint64_t chart_w = 1600;
   const uint64_t chart_h = 800;
-  const uint64_t chart_margin_w = 60;
-  const uint64_t chart_margin_h = 20;
+  const uint64_t chart_margin_left = 60;
+  const uint64_t chart_margin_bottom = 20;
   //  const uint64_t chart_padding_w = 10;
   //  const uint64_t chart_padding_h = 10;
 
@@ -356,11 +356,11 @@ int main(int argc, char* argv[]) {
 "            <g><text x=\"%llu\" y=\"%llu\">Allocations</text></g>"
 "           <g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" stroke=\"black\" stroke-width=\"3\"></line></g>"
       ,
-      chart_margin_w + chart_w, chart_margin_h + chart_h, // svg
-       chart_w/2, chart_margin_h + chart_h, // x-axis text
-      chart_margin_w, chart_margin_h, chart_margin_w, chart_h, // x-axis
+      chart_margin_left + chart_w, chart_margin_bottom + chart_h, // svg
+       chart_w/2, chart_margin_bottom + chart_h, // x-axis text
+      chart_margin_left, chart_margin_bottom, chart_margin_left, chart_h, // x-axis
       50ULL, chart_h/2, // y-axis text
-      chart_margin_w, chart_h, chart_w, chart_h // y-axis
+      chart_margin_left, chart_h, chart_w, chart_h // y-axis
       );
   // clang-format on
 
@@ -371,8 +371,8 @@ int main(int argc, char* argv[]) {
         ((double)(ts_ms - monitoring_start)) / monitoring_duration;
     assert(px <= 100);
 
-    const uint64_t x = chart_margin_w + px * (chart_w - chart_margin_w);
-    assert(x <= chart_w + chart_margin_w);
+    const uint64_t x = chart_margin_left + px * (chart_w - chart_margin_left);
+    assert(x <= chart_w + chart_margin_left);
 
     const double arg0 = events.arg0s[i];
     const double py = (kind == EK_ALLOC || kind == EK_REALLOC)
