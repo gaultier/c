@@ -327,7 +327,7 @@ int main(int argc, char* argv[]) {
   const uint64_t chart_margin_left = 60;
   const uint64_t chart_margin_bottom = 20;
   //  const uint64_t chart_padding_w = 10;
-  //  const uint64_t chart_padding_h = 10;
+  const uint64_t chart_padding_top = 5;
 
   double max_arg0 = 0;
   //  double min_arg0 = 0;
@@ -380,8 +380,9 @@ int main(int argc, char* argv[]) {
                           : 0  // FIXME
         ;
     assert(py <= 100);
-    const uint64_t y = chart_h - py * chart_h;
-    assert(y <= chart_h);
+    const uint64_t y =
+        chart_padding_top + chart_h - py * (chart_h - chart_padding_top);
+    assert(y <= chart_h + chart_padding_top);
 
     printf(
         "<g><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
