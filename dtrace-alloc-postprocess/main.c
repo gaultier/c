@@ -349,6 +349,7 @@ int main(int argc, char* argv[]) {
         const uint64_t new_ptr = events.arg1s[j];
         if (new_ptr == ptr_to_free) {
           events.arg0s[i] = other_mem_size;
+          events.arg2s[i] = j;
           break;
         }
       }
@@ -402,23 +403,13 @@ int main(int argc, char* argv[]) {
     const uint64_t y = (chart_padding_top + chart_h - circle_r) * (1.0 - py);
     assert(y <= (chart_padding_top + chart_h - circle_r));
 
+    const uint64_t arg2 = events.arg2s[i];
     printf(
         "<g class=\"datapoint\"><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
-        "r=\"%llu\" class=\"%s\"></circle></g>\n",
+        "r=\"%llu\" data-kind=\"%s\" data-id=\"%llu\" "
+        "data-refid=\"%llu\"></circle></g>\n",
         kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r,
-        kind == EK_FREE ? "free" : "alloc");
-
-    //  const uint64_t w = rect_w;
-    //  const uint64_t h = kind == EK_FREE ? rect_h  // FIXME
-    //                                     : events.arg1s[i];
-    //  printf(  // clang-format off
-    //        "<g>"
-    //"          <rect fill=\"steelblue\" x=\"%llu\" y=\"%llu\" width=\"%llu\"
-    // height=\"%llu\"></rect>"
-    //        "</g>\n"
-    //           // clang-format on
-    //      ,
-    //      x, y, w, h);
+        kind == EK_FREE ? "free" : "alloc", i, arg2);
   }
 
   printf(
@@ -465,17 +456,26 @@ int main(int argc, char* argv[]) {
 "           tooltip.style.left = 5 + mouse_x + 'px';\n"
 "           tooltip.style.top = 5 + mouse_y + 'px';\n"
 
-"           if (e.classList.contains('free')){\n"
-"console.log('free='+i); // FIXME"
-"             document.querySelectorAll('g.datapoint:nth-child('+ i +')').forEach(function(other, j){ other.setAttribute('r', 8); console.log('alloc='+j); });\n"
+"           if (e.getAttribute('data-kind')=='free'){\n"
+"console.log('free='+i);\n"
+"             var refId = e.getAttribute('data-refid');\n"
+"console.log(refId);\n"
+"             var alloc = document.querySelector('circle[data-id=\"' + refId + '\"]');\n"
+"             console.log(alloc);\n"
+"             alloc.setAttribute('r', 10);\n" 
+"             alloc.setAttribute('fill', 'blueviolet');\n"
+"             e.setAttribute('r', 10);\n"
 "           }\n"
 "        });\n"
 "        e.addEventListener('mouseleave', function() {\n"
 "          tooltip.innerText = stacktraces[i]; \n"
 "          tooltip.style.display = 'none';\n"
-
-"           if (e.classList.contains('free')){\n"
-"             alloc = document.querySelectorAll('g.datapoint:nth-child('+ i +')').forEach(function(other, j){ other.setAttribute('r', %llu); })\n"
+"           if (e.getAttribute('data-kind')=='free'){\n"
+"             var refId = e.getAttribute('data-refid');"
+"             var alloc = document.querySelector('circle[data-id=\"' + refId + '\"]');\n"
+"             alloc.setAttribute('r', %llu);\n" 
+"             alloc.setAttribute('fill', 'steelblue');\n"
+"             e.setAttribute('r', %llu);\n"
 "           }\n"
 "        });\n"
 "      });\n"
@@ -483,6 +483,6 @@ int main(int argc, char* argv[]) {
 "</html>\n"
       // clang-format on
       ,
-      circle_r);
+      circle_r, circle_r);
   return 0;
 }
