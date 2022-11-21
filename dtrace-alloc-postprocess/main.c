@@ -349,6 +349,7 @@ int main(int argc, char* argv[]) {
 "      </style>"
 "    </head>"
 "    <body>"
+"        <div id=\"tooltip\" style=\"background-color: rgb(40, 40, 40); opacity:1; color:white; border-radius:8px; display:none; position: absolute;\"></div>"
 "        <svg style=\"margin: 10px\" width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"10\" text-anchor=\"end\">"
 "            <g><text x=\"%llu\" y=\"%llu\">Time</text></g>"
 "           <g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" stroke=\"black\" stroke-width=\"3\"></line></g>"
@@ -410,7 +411,7 @@ int main(int argc, char* argv[]) {
     for (uint64_t j = 0; j < pg_array_len(st); j++) {
       const uint64_t fn_i = st[j].fn_i;
       const pg_span_t fn_name = fn_names[fn_i];
-      printf("%.*s ", (int)fn_name.len, fn_name.data);
+      printf("%.*s\\n", (int)fn_name.len, fn_name.data);
     }
     printf("',");
   }
@@ -418,9 +419,24 @@ int main(int argc, char* argv[]) {
 
   printf(
       // clang-format off
-"      document.querySelectorAll('g').forEach(function(e, i){"
+"      var tooltip = document.getElementById('tooltip');"
+"      var mouse_x= 0;"
+"      var mouse_y=0;"
+"      document.onmousemove = function(e){"
+"        mouse_x = event.clientX + document.body.scrollLeft;"
+"        mouse_y = event.clientY + document.body.scrollTop;"
+"      };"
+"      document.querySelectorAll('g > circle').forEach(function(e, i){"
 "        e.addEventListener('mouseover', function() {"
-"          console.log(stacktraces[i]);"
+"          tooltip.innerText = stacktraces[i]; "
+"           tooltip.style.display = '';"
+"           tooltip.style.padding = '5px';"
+"           tooltip.style.left = 5 + mouse_x + 'px';"
+"           tooltip.style.top = 5 + mouse_y + 'px';"
+"        });"
+"        e.addEventListener('mouseleave', function() {"
+"          tooltip.innerText = stacktraces[i]; "
+"           tooltip.style.display = 'none';"
 "        });"
 "      });"
 "   </script>"
