@@ -313,18 +313,31 @@ int main(int argc, char* argv[]) {
 
   // Output html
 
-  const uint64_t rect_w = 5;
-  const uint64_t rect_h = 7;
-  const uint64_t rect_margin_top = 1;
-  const uint64_t rect_margin_right = 3;
-  const uint64_t monitoring_start = events.timestamps[0];
+  // const uint64_t rect_w = 5;
+  // const uint64_t rect_h = 7;
+  // const uint64_t rect_margin_top = 1;
+  // const uint64_t rect_margin_right = 3;
+  const uint64_t monitoring_start = (float)events.timestamps[0] / 1e6;
   const uint64_t monitoring_end =
-      events.timestamps[pg_array_len(events.timestamps) - 1];
+      (float)events.timestamps[pg_array_len(events.timestamps) - 1] / 1e6;
+  const uint64_t monitoring_duration = monitoring_end - monitoring_start;
 
-  const uint64_t chart_w = (monitoring_end - monitoring_start) / /* ms */ 1e6 *
-                           rect_w,
-                 chart_h =
-                     pg_array_len(events.kinds) * (rect_h + rect_margin_top);
+  const uint64_t chart_w = 1600;
+  const uint64_t chart_h = 800;
+  const uint64_t chart_margin_left = 20;
+  const uint64_t chart_margin_top = 20;
+  const uint64_t chart_padding_left = 5;
+  const uint64_t chart_padding_top = 5;
+
+  uint64_t max = 0, min = 0;
+  for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
+    const event_kind_t kind = events.kinds[i];
+    if (kind == EK_ALLOC || kind == EK_REALLOC) {
+      max = MAX(max, events.arg0s[i]);
+      min = MIN(min, events.arg0s[i]);
+    }
+  }
+
   // const float ratio_w = (float)chart_w / (float)max_w;
   printf(
       // clang-format off
@@ -336,77 +349,26 @@ int main(int argc, char* argv[]) {
 "      </style>"
 "    </head>"
 "    <body>"
-"        <svg width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"10\" text-anchor=\"end\">"
+"        <svg style=\"margin: %llupx 0 0 %llupx\" width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"10\" text-anchor=\"end\">"
+"           <g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" stroke=\"black\" stroke-width=\"3\"></line></g>"
       // clang-format on
       ,
-      chart_w, chart_h);
-
-#if 0
-  for (uint64_t i = START; i < MIN(COUNT, pg_array_len(events.arg0s)); i++) {
-    if (events.kinds[i] == EK_FREE) continue;
-    printf("{x:%llu, y:%llu},", events.timestamps[i], events.arg0s[i]);
-  }
-
-  printf(
-      "];\n"
-      "var allocation_stacktraces=[");
-  for (uint64_t i = START; i < MIN(COUNT, pg_array_len(events.stacktraces));
-       i++) {
-    if (events.kinds[i] == EK_FREE) continue;
-    printf("['mem: %llu',", events.arg0s[i]);
-
-    const stacktrace_t st = events.stacktraces[i];
-    for (uint64_t j = 0; j < pg_array_len(st); j++) {
-      const uint64_t fn_i = st[j].fn_i;
-      const pg_span_t fn_name = fn_names[fn_i];
-      printf("'%.*s',", (int)fn_name.len, fn_name.data);
-    }
-    printf("],");
-  }
-
-  printf(
-      "];\n"
-      "var frees=[");
-  for (uint64_t i = START; i < MIN(COUNT, pg_array_len(events.stacktraces));
-       i++) {
-    if (events.kinds[i] != EK_FREE) continue;
-
-    const uint64_t ptr = events.arg0s[i];
-
-    bool found = false;
-    for (int64_t j = i - 1; j >= 0; j--) {
-      if (events.kinds[j] != EK_FREE && events.arg1s[j] == ptr) {
-        printf("{x:%llu,y:%llu},", events.timestamps[i], events.arg0s[j]);
-        found = true;
-        assert(events.arg1s[i] == 0);
-        events.arg1s[i] = events.arg0s[j];
-        break;
-      }
-    }
-    if (!found) printf("{x:%llu,y:0},", events.timestamps[i]);
-  }
-  printf(
-      "];\n"
-      "var free_stacktraces=[");
-  for (uint64_t i = START; i < MIN(COUNT, pg_array_len(events.stacktraces));
-       i++) {
-    if (events.kinds[i] != EK_FREE) continue;
-    printf("['mem: %llu',", events.arg1s[i]);
-
-    const stacktrace_t st = events.stacktraces[i];
-    for (uint64_t j = 0; j < pg_array_len(st); j++) {
-      const uint64_t fn_i = st[j].fn_i;
-      const pg_span_t fn_name = fn_names[fn_i];
-      printf("'%.*s',", (int)fn_name.len, fn_name.data);
-    }
-    printf("],");
-  }
-#endif
+      chart_margin_top, chart_margin_left, chart_w, chart_h, 0ULL, 0ULL, 0ULL,
+      chart_h);
 
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
     const event_kind_t kind = events.kinds[i];
-    const uint64_t x = ((float)(1 + i) / pg_array_len(events.kinds) * chart_w);
-    const uint64_t y = (float)i * chart_h;
+    const uint64_t ts_ms = events.timestamps[i] / 1e6;
+    const float px = ((float)(ts_ms - monitoring_start)) / monitoring_duration;
+    assert(px <= 100);
+
+    const uint64_t x = px * chart_w;
+    assert(x <= chart_w);
+
+    const float py = (float)(i + 1) / pg_array_len(events.kinds);
+    assert(py <= 100);
+    const uint64_t y = py * chart_h;
+    assert(y <= chart_h);
 
     printf(
         "<g><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
