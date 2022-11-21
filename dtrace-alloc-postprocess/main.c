@@ -186,16 +186,14 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     // arg1
     pg_span_t arg1_span = {0};
     uint64_t arg1 = 0;
-    if (kind != EK_FREE) {
-      pg_span_split_at_first(input, ' ', &arg1_span, &input);
-      pg_span_trim_left(&input);
-      if (arg1_span.len != 0) {
-        bool arg1_valid = false;
-        arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
-        if (!arg1_valid)
-          pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
-                       arg1_span.data);
-      }
+    pg_span_split_at_first(input, ' ', &arg1_span, &input);
+    pg_span_trim_left(&input);
+    if (arg1_span.len != 0) {
+      bool arg1_valid = false;
+      arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
+      if (!arg1_valid)
+        pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
+                     arg1_span.data);
     }
 
     // arg2
@@ -271,6 +269,12 @@ int main(int argc, char* argv[]) {
 
   parse_input(&logger, input, &events, &fn_names);
 
+  assert(pg_array_len(events.kinds) == pg_array_len(events.arg0s));
+  assert(pg_array_len(events.arg0s) == pg_array_len(events.arg1s));
+  assert(pg_array_len(events.arg1s) == pg_array_len(events.arg2s));
+  assert(pg_array_len(events.arg2s) == pg_array_len(events.stacktraces));
+  assert(pg_array_len(events.stacktraces) == pg_array_len(events.timestamps));
+
 #if 0
   pg_array_t(lifetime_t) lifetimes = {0};
   pg_array_init_reserve(lifetimes, pg_array_len(events.kinds),
@@ -329,14 +333,28 @@ int main(int argc, char* argv[]) {
   //  const uint64_t chart_padding_w = 10;
   const uint64_t chart_padding_top = 5;
 
-  double max_arg0 = 0;
+  double max_log_arg0 = 0;
   //  double min_arg0 = 0;
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
     const event_kind_t kind = events.kinds[i];
-    if (kind == EK_ALLOC || kind == EK_REALLOC) {
-      max_arg0 = MAX(max_arg0, log((double)events.arg0s[i]));
-      //      min_arg0 = MIN(min_arg0, events.arg0s[i]);
+    const uint64_t arg0 = events.arg0s[i];
+
+    if (kind == EK_FREE) {
+      const uint64_t ptr_to_free = events.arg1s[i];
+
+      for (int64_t j = i - 1; j >= 0; j--) {
+        const event_kind_t other_kind = events.kinds[j];
+        if (!(other_kind == EK_ALLOC || other_kind == EK_REALLOC)) continue;
+        const uint64_t other_mem_size = events.arg0s[j];
+        const uint64_t new_ptr = events.arg1s[j];
+        if (new_ptr == arg0) {
+          events.arg0s[i] = other_mem_size;
+          break;
+        }
+      }
     }
+    max_log_arg0 = MAX(max_log_arg0, log((double)arg0));
+    //      min_arg0 = MIN(min_arg0, events.arg0s[i]);
   }
 
   printf(
@@ -364,30 +382,30 @@ int main(int argc, char* argv[]) {
       );
   // clang-format on
 
+  const uint64_t circle_r = 3ULL;
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
     const event_kind_t kind = events.kinds[i];
+    const uint64_t arg0 = events.arg0s[i];
+
+    if (kind == EK_FREE && arg0 == 0) continue;
+
     const uint64_t ts_ms = events.timestamps[i] / 1e6;
     const double px =
         ((double)(ts_ms - monitoring_start)) / monitoring_duration;
-    assert(px <= 100);
+    assert(px <= 1.0);
 
     const uint64_t x = chart_margin_left + px * (chart_w - chart_margin_left);
     assert(x <= chart_w + chart_margin_left);
 
-    const double arg0 = events.arg0s[i];
-    const double py = (kind == EK_ALLOC || kind == EK_REALLOC)
-                          ? log(arg0) / max_arg0
-                          : 0  // FIXME
-        ;
-    assert(py <= 100);
-    const uint64_t y =
-        chart_padding_top + chart_h - py * (chart_h - chart_padding_top);
-    assert(y <= chart_h + chart_padding_top);
+    const double py = arg0 == 0 ? 0 : (log((double)arg0) / max_log_arg0);
+    assert(py <= 1.0);
+    const uint64_t y = (chart_padding_top + chart_h - circle_r) * (1.0 - py);
+    assert(y <= (chart_padding_top + chart_h - circle_r));
 
     printf(
         "<g><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
         "r=\"%llu\"></circle></g>\n",
-        kind == EK_FREE ? "magenta" : "steelblue", x, y, 3ULL);
+        kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r);
 
     //  const uint64_t w = rect_w;
     //  const uint64_t h = kind == EK_FREE ? rect_h  // FIXME
@@ -412,6 +430,11 @@ int main(int argc, char* argv[]) {
 
   printf("var stacktraces=[");
   for (uint64_t i = 0; i < pg_array_len(events.stacktraces); i++) {
+    const event_kind_t kind = events.kinds[i];
+    const uint64_t arg0 = events.arg0s[i];
+
+    if (kind == EK_FREE && arg0 == 0) continue;
+
     const stacktrace_t st = events.stacktraces[i];
     printf("'");
     for (uint64_t j = 0; j < pg_array_len(st); j++) {
