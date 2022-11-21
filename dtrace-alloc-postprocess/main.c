@@ -347,7 +347,7 @@ int main(int argc, char* argv[]) {
         if (!(other_kind == EK_ALLOC || other_kind == EK_REALLOC)) continue;
         const uint64_t other_mem_size = events.arg0s[j];
         const uint64_t new_ptr = events.arg1s[j];
-        if (new_ptr == arg0) {
+        if (new_ptr == ptr_to_free) {
           events.arg0s[i] = other_mem_size;
           break;
         }
@@ -404,8 +404,9 @@ int main(int argc, char* argv[]) {
 
     printf(
         "<g><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
-        "r=\"%llu\"></circle></g>\n",
-        kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r);
+        "r=\"%llu\" class=\"%s\"></circle></g>\n",
+        kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r,
+        kind == EK_FREE ? "free" : "alloc");
 
     //  const uint64_t w = rect_w;
     //  const uint64_t h = kind == EK_FREE ? rect_h  // FIXME
