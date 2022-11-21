@@ -405,32 +405,25 @@ int main(int argc, char* argv[]) {
 
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
     const event_kind_t kind = events.kinds[i];
-    const uint64_t start = events.timestamps[i];
-    const uint64_t x = i * (rect_w + rect_margin_right);
-    const uint64_t y = i * (rect_h + rect_margin_top);
+    const uint64_t x = ((float)(1 + i) / pg_array_len(events.kinds) * chart_w);
+    const uint64_t y = (float)i * chart_h;
 
-    //    if (l.end_i == 0) {
-    //      printf(  // clang-format off
+    printf(
+        "<g><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
+        "r=\"%llu\"></circle></g>\n",
+        kind == EK_FREE ? "magenta" : "steelblue", x, y, 3ULL);
+
+    //  const uint64_t w = rect_w;
+    //  const uint64_t h = kind == EK_FREE ? rect_h  // FIXME
+    //                                     : events.arg1s[i];
+    //  printf(  // clang-format off
     //        "<g>"
-    //"           <circle fill=\"green\" cx=\"%llu\" cy=\"%llu\"
-    // r=\"%llu\"></circle> "
+    //"          <rect fill=\"steelblue\" x=\"%llu\" y=\"%llu\" width=\"%llu\"
+    // height=\"%llu\"></rect>"
     //        "</g>\n"
-    //               // clang-format on
-    //          ,
-    //          x, y, 3ULL);
-    //      continue;
-    //    }
-
-    const uint64_t w = rect_w;
-    const uint64_t h = kind == EK_FREE ? rect_h  // FIXME
-                                       : events.arg1s[i];
-    printf(  // clang-format off
-        "<g>"
-"          <rect fill=\"steelblue\" x=\"%llu\" y=\"%llu\" width=\"%llu\" height=\"%llu\"></rect>"
-        "</g>\n"
-             // clang-format on
-        ,
-        x, y, w, h);
+    //           // clang-format on
+    //      ,
+    //      x, y, w, h);
   }
 
   printf(
