@@ -329,12 +329,12 @@ int main(int argc, char* argv[]) {
   //  const uint64_t chart_padding_w = 10;
   //  const uint64_t chart_padding_h = 10;
 
-  uint64_t max = 0, min = 0;
+  uint64_t max_arg0 = 0, min_arg0 = 0;
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
     const event_kind_t kind = events.kinds[i];
     if (kind == EK_ALLOC || kind == EK_REALLOC) {
-      max = MAX(max, events.arg0s[i]);
-      min = MIN(min, events.arg0s[i]);
+      max_arg0 = MAX(max_arg0, events.arg0s[i]);
+      min_arg0 = MIN(min_arg0, events.arg0s[i]);
     }
   }
 
@@ -373,10 +373,14 @@ int main(int argc, char* argv[]) {
     const uint64_t x = chart_margin_w + px * (chart_w - chart_margin_w);
     assert(x <= chart_w + chart_margin_w);
 
-    const float py = (float)(i + 1) / pg_array_len(events.kinds);
+    const uint64_t arg0 = events.arg0s[i];
+    const float py = (kind == EK_ALLOC || kind == EK_REALLOC)
+                         ? (float)(arg0) / max_arg0
+                         : 0  // FIXME
+        ;
     assert(py <= 100);
-    const uint64_t y = chart_margin_h + py * (chart_h - 2 * chart_margin_h);
-    assert(y <= chart_h + chart_margin_h);
+    const uint64_t y = chart_h - py * chart_h;
+    assert(y <= chart_h);
 
     printf(
         "<g><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
