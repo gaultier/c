@@ -324,10 +324,10 @@ int main(int argc, char* argv[]) {
 
   const uint64_t chart_w = 1600;
   const uint64_t chart_h = 800;
-  const uint64_t chart_margin_left = 20;
-  const uint64_t chart_margin_top = 20;
-  const uint64_t chart_padding_left = 5;
-  const uint64_t chart_padding_top = 5;
+  const uint64_t chart_margin_w = 60;
+  const uint64_t chart_margin_h = 20;
+  //  const uint64_t chart_padding_w = 10;
+  //  const uint64_t chart_padding_h = 10;
 
   uint64_t max = 0, min = 0;
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
@@ -349,12 +349,19 @@ int main(int argc, char* argv[]) {
 "      </style>"
 "    </head>"
 "    <body>"
-"        <svg style=\"margin: %llupx 0 0 %llupx\" width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"10\" text-anchor=\"end\">"
+"        <svg style=\"margin: 10px\" width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"10\" text-anchor=\"end\">"
+"            <g><text x=\"%llu\" y=\"%llu\">Time</text></g>"
 "           <g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" stroke=\"black\" stroke-width=\"3\"></line></g>"
-      // clang-format on
+"            <g><text x=\"%llu\" y=\"%llu\">Allocations</text></g>"
+"           <g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" stroke=\"black\" stroke-width=\"3\"></line></g>"
       ,
-      chart_margin_top, chart_margin_left, chart_w, chart_h, 0ULL, 0ULL, 0ULL,
-      chart_h);
+      chart_margin_w + chart_w, chart_margin_h + chart_h, // svg
+       chart_w/2, chart_margin_h + chart_h, // x-axis text
+      chart_margin_w, chart_margin_h, chart_margin_w, chart_h, // x-axis
+      50ULL, chart_h/2, // y-axis text
+      chart_margin_w, chart_h, chart_w, chart_h // y-axis
+      );
+  // clang-format on
 
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
     const event_kind_t kind = events.kinds[i];
@@ -362,13 +369,13 @@ int main(int argc, char* argv[]) {
     const float px = ((float)(ts_ms - monitoring_start)) / monitoring_duration;
     assert(px <= 100);
 
-    const uint64_t x = px * chart_w;
-    assert(x <= chart_w);
+    const uint64_t x = chart_margin_w + px * (chart_w - chart_margin_w);
+    assert(x <= chart_w + chart_margin_w);
 
     const float py = (float)(i + 1) / pg_array_len(events.kinds);
     assert(py <= 100);
-    const uint64_t y = py * chart_h;
-    assert(y <= chart_h);
+    const uint64_t y = chart_margin_h + py * (chart_h - 2 * chart_margin_h);
+    assert(y <= chart_h + chart_margin_h);
 
     printf(
         "<g><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
