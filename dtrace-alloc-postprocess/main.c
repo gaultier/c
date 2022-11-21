@@ -317,9 +317,9 @@ int main(int argc, char* argv[]) {
   // const uint64_t rect_h = 7;
   // const uint64_t rect_margin_top = 1;
   // const uint64_t rect_margin_right = 3;
-  const uint64_t monitoring_start = (float)events.timestamps[0] / 1e6;
+  const uint64_t monitoring_start = (double)events.timestamps[0] / 1e6;
   const uint64_t monitoring_end =
-      (float)events.timestamps[pg_array_len(events.timestamps) - 1] / 1e6;
+      (double)events.timestamps[pg_array_len(events.timestamps) - 1] / 1e6;
   const uint64_t monitoring_duration = monitoring_end - monitoring_start;
 
   const uint64_t chart_w = 1600;
@@ -329,16 +329,16 @@ int main(int argc, char* argv[]) {
   //  const uint64_t chart_padding_w = 10;
   //  const uint64_t chart_padding_h = 10;
 
-  uint64_t max_arg0 = 0, min_arg0 = 0;
+  double max_arg0 = 0;
+  //  double min_arg0 = 0;
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
     const event_kind_t kind = events.kinds[i];
     if (kind == EK_ALLOC || kind == EK_REALLOC) {
-      max_arg0 = MAX(max_arg0, events.arg0s[i]);
-      min_arg0 = MIN(min_arg0, events.arg0s[i]);
+      max_arg0 = MAX(max_arg0, log((double)events.arg0s[i]));
+      //      min_arg0 = MIN(min_arg0, events.arg0s[i]);
     }
   }
 
-  // const float ratio_w = (float)chart_w / (float)max_w;
   printf(
       // clang-format off
 "<!DOCTYPE html>"
@@ -367,16 +367,17 @@ int main(int argc, char* argv[]) {
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
     const event_kind_t kind = events.kinds[i];
     const uint64_t ts_ms = events.timestamps[i] / 1e6;
-    const float px = ((float)(ts_ms - monitoring_start)) / monitoring_duration;
+    const double px =
+        ((double)(ts_ms - monitoring_start)) / monitoring_duration;
     assert(px <= 100);
 
     const uint64_t x = chart_margin_w + px * (chart_w - chart_margin_w);
     assert(x <= chart_w + chart_margin_w);
 
-    const uint64_t arg0 = events.arg0s[i];
-    const float py = (kind == EK_ALLOC || kind == EK_REALLOC)
-                         ? (float)(arg0) / max_arg0
-                         : 0  // FIXME
+    const double arg0 = events.arg0s[i];
+    const double py = (kind == EK_ALLOC || kind == EK_REALLOC)
+                          ? log(arg0) / max_arg0
+                          : 0  // FIXME
         ;
     assert(py <= 100);
     const uint64_t y = chart_h - py * chart_h;
