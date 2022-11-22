@@ -372,16 +372,16 @@ int main(int argc, char* argv[]) {
 "    <body style=\"min-height:1200px;\">"
 "        <div id=\"tooltip\" style=\"background-color: rgb(40, 40, 40); opacity:1; color:white; border-radius:8px; display:none; position: absolute;\"></div>"
 "        <svg style=\"margin: 10px\" width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"%llu\" text-anchor=\"end\">"
-"           <g><text x=\"%llu\" y=\"%llu\">Time</text></g>"
+"           <g><text x=\"%llu\" y=\"%llu\" font-weight=\"bold\">Time</text></g>"
 "           <g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" stroke=\"black\" stroke-width=\"3\"></line></g>"
-"           <g><text x=\"%llu\" y=\"%llu\">Allocations</text></g>"
+"           <g><text x=\"%llu\" y=\"%llu\" font-weight=\"bold\">Allocations</text></g>"
 "           <g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" stroke=\"black\" stroke-width=\"3\"></line></g>"
       ,
       chart_margin_left + chart_w, chart_margin_bottom + chart_h, font_size, // svg
        chart_w/2, chart_margin_bottom + chart_h, // x-axis text
-      chart_margin_left, 0ULL, chart_margin_left, chart_h, // y-axis
-      50ULL, chart_h/2-20ULL, // y-axis text
-      chart_margin_left, chart_h, chart_w, chart_h // x-axis
+      chart_margin_left, 0ULL, chart_margin_left, chart_padding_top+chart_h, // y-axis
+      55ULL, chart_h/2-20ULL, // y-axis text
+      chart_margin_left, chart_padding_top+chart_h, chart_w, chart_padding_top+chart_h // x-axis
       );
   // clang-format on
 
@@ -424,9 +424,8 @@ int main(int argc, char* argv[]) {
 
     const double py = arg0 == 0 ? 0 : (log((double)arg0) / max_log_arg0);
     assert(py <= 1.0);
-    const uint64_t y = chart_padding_top +
-                       (chart_padding_top + chart_h - circle_r) * (1.0 - py);
-    assert(y <= chart_padding_top + (chart_padding_top + chart_h - circle_r));
+    const uint64_t y = chart_padding_top + (chart_h - circle_r) * (1.0 - py);
+    assert(y <= chart_padding_top + (chart_h - circle_r));
 
     const uint64_t arg2 = events.arg2s[i];
     printf(
