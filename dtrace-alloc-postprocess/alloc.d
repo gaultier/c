@@ -12,4 +12,4 @@ pid$target::malloc:return, pid$target::realloc:return, pid$target::calloc:return
   self->old_ptr = 0;
 }
 
-pid$target::free:entry /arg0!=0/ {printf("%u 0 %p",timestamp, arg0); ustack();}
+pid$target::free:entry /arg0!=0/ {printf("%u %p",timestamp, arg0); ustack();}

@@ -2,8 +2,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <sys/_types/_int64_t.h>
-#include <sys/errno.h>
 #include <unistd.h>
 
 #include "../pg/pg.h"
@@ -34,7 +32,8 @@ typedef struct {
 
 typedef struct {
   event_kind_t kind;
-  uint64_t stacktrace_i, timestamp;
+  uint64_t timestamp;
+  pg_array_t(stacktrace_entry_t) stacktrace;
   union {
     event_free_t free;
     event_alloc_t alloc;
@@ -42,30 +41,9 @@ typedef struct {
   } v;
 } event_t;
 
-typedef pg_array_t(stacktrace_entry_t) stacktrace_t;
-typedef struct {
-  pg_array_t(event_kind_t) kinds;
-  pg_array_t(stacktrace_t) stacktraces;
-  pg_array_t(uint64_t) timestamps;
-  pg_array_t(uint64_t) arg0s;
-  pg_array_t(uint64_t) arg1s;
-  pg_array_t(uint64_t) arg2s;
-  pg_array_t(bool) is_entry;
-} events_t;
-
 typedef struct {
   uint64_t ptr, size, start_i, end_i;
 } lifetime_t;
-
-static void events_init(events_t* events) {
-  const uint64_t cap = 10000;
-  pg_array_init_reserve(events->kinds, cap, pg_heap_allocator());
-  pg_array_init_reserve(events->stacktraces, cap, pg_heap_allocator());
-  pg_array_init_reserve(events->timestamps, cap, pg_heap_allocator());
-  pg_array_init_reserve(events->arg0s, cap, pg_heap_allocator());
-  pg_array_init_reserve(events->arg1s, cap, pg_heap_allocator());
-  pg_array_init_reserve(events->arg2s, cap, pg_heap_allocator());
-}
 
 static char* power_of_two_string(uint64_t n) {
   static char res[50];
@@ -116,20 +94,21 @@ static const char* event_kind_to_string(event_kind_t kind) {
   }
 }
 
-static void event_dump(events_t* events, pg_array_t(pg_span_t) fn_names,
-                       uint64_t i) {
-  printf(
-      "Event: kind=%s timestamp=%llu arg0=%llu arg1=%llu arg2=%llu stacktrace=",
-      event_kind_to_string(events->kinds[i]), events->timestamps[i],
-      events->arg0s[i], events->arg1s[i], events->arg2s[i]);
-  for (uint64_t j = 0; j < pg_array_len(events->stacktraces[i]); j++) {
-    const uint64_t fn_i = events->stacktraces[i][j].fn_i;
-    const uint64_t offset = events->stacktraces[i][j].offset;
-    const pg_span_t fn_name = fn_names[fn_i];
-    printf("%.*s+%#llx ", (int)fn_name.len, fn_name.data, offset);
-  }
-  puts("");
-}
+// static void event_dump(events_t* events, pg_array_t(pg_span_t) fn_names,
+//                        uint64_t i) {
+//   printf(
+//       "Event: kind=%s timestamp=%llu arg0=%llu arg1=%llu arg2=%llu
+//       stacktrace=", event_kind_to_string(events->kinds[i]),
+//       events->timestamps[i], events->arg0s[i], events->arg1s[i],
+//       events->arg2s[i]);
+//   for (uint64_t j = 0; j < pg_array_len(events->stacktraces[i]); j++) {
+//     const uint64_t fn_i = events->stacktraces[i][j].fn_i;
+//     const uint64_t offset = events->stacktraces[i][j].offset;
+//     const pg_span_t fn_name = fn_names[fn_i];
+//     printf("%.*s+%#llx ", (int)fn_name.len, fn_name.data, offset);
+//   }
+//   puts("");
+// }
 
 // name is of the form:
 // foo`bar+0xab
@@ -159,7 +138,8 @@ static stacktrace_entry_t fn_name_to_stacktrace_entry(
   return (stacktrace_entry_t){.fn_i = fn_i, .offset = offset};
 }
 
-static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
+static void parse_input(pg_logger_t* logger, pg_span_t input,
+                        pg_array_t(event_t) * events,
                         pg_array_t(pg_span_t) * fn_names) {
   // Skip header, unneeded
   if (pg_span_starts_with(input, pg_span_make_c("CPU")))
@@ -171,9 +151,8 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
   const pg_span_t free_span = pg_span_make_c("free");
 
   while (input.len > 0) {
-    event_kind_t kind = EK_NONE;
-    stacktrace_t stacktrace = {0};
-    pg_array_init_reserve(stacktrace, 10, pg_heap_allocator());
+    event_t event = {.kind = EK_NONE};
+    pg_array_init_reserve(event.stacktrace, 20, pg_heap_allocator());
 
     pg_span_trim_left(&input);
 
@@ -196,11 +175,11 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     pg_span_trim_left(&input);
     if (pg_span_contains(fn_leaf, malloc_span) ||
         pg_span_contains(fn_leaf, calloc_span))
-      kind = EK_ALLOC;
+      event.kind = EK_ALLOC;
     else if (pg_span_contains(fn_leaf, realloc_span))
-      kind = EK_REALLOC;
+      event.kind = EK_REALLOC;
     else if (pg_span_contains(fn_leaf, free_span))
-      kind = EK_FREE;
+      event.kind = EK_FREE;
     else
       pg_log_fatal(logger, EINVAL, "Unkown event kind: %.*s", (int)fn_leaf.len,
                    fn_leaf.data);
@@ -210,7 +189,7 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     pg_span_split_at_first(input, ' ', &timestamp_span, &input);
     pg_span_trim_left(&input);
     bool timestamp_valid = false;
-    const uint64_t timestamp =
+    event.timestamp =
         pg_span_parse_u64_decimal(timestamp_span, &timestamp_valid);
     if (!timestamp_valid)
       pg_log_fatal(logger, EINVAL, "Invalid timestamp: %.*s",
@@ -222,8 +201,9 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     pg_span_trim_left(&input);
     bool arg0_valid = false;
     const uint64_t arg0 =
-        kind == EK_FREE ? pg_span_parse_u64_hex(arg0_span, &arg0_valid)
-                        : pg_span_parse_u64_decimal(arg0_span, &arg0_valid);
+        event.kind == EK_FREE
+            ? pg_span_parse_u64_hex(arg0_span, &arg0_valid)
+            : pg_span_parse_u64_decimal(arg0_span, &arg0_valid);
     if (!arg0_valid)
       pg_log_fatal(logger, EINVAL, "Invalid arg0: %.*s", (int)arg0_span.len,
                    arg0_span.data);
@@ -233,18 +213,20 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
     uint64_t arg1 = 0;
     pg_span_split_at_first(input, ' ', &arg1_span, &input);
     pg_span_trim_left(&input);
-    if (arg1_span.len != 0) {
-      bool arg1_valid = false;
-      arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
-      if (!arg1_valid)
-        pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
-                     arg1_span.data);
+    if (event.kind != EK_FREE) {
+      if (arg1_span.len != 0) {
+        bool arg1_valid = false;
+        arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
+        if (!arg1_valid)
+          pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
+                       arg1_span.data);
+      }
     }
 
     // arg2
     pg_span_t arg2_span = {0};
     uint64_t arg2 = 0;
-    if (kind != EK_FREE) {
+    if (event.kind != EK_FREE) {
       pg_span_split_at_first(input, '\n', &arg2_span, &input);
       pg_span_trim_left(&input);
       if (arg2_span.len != 0) {
@@ -261,12 +243,31 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
       bool more_chars = false;
       char c = pg_span_peek_left(input, &more_chars);
       if (!more_chars || pg_char_is_digit(c)) {  // The End / New frame
-        pg_array_append(events->kinds, kind);
-        pg_array_append(events->stacktraces, stacktrace);
-        pg_array_append(events->timestamps, timestamp);
-        pg_array_append(events->arg0s, arg0);
-        pg_array_append(events->arg1s, arg1);
-        pg_array_append(events->arg2s, arg2);
+        if (event.kind == EK_ALLOC) {
+          event.v.alloc.size = arg0;
+          event.v.alloc.ptr = arg1;
+        } else if (event.kind == EK_REALLOC) {
+          event.v.realloc.size = arg0;
+          event.v.realloc.new_ptr = arg1;
+          event.v.realloc.old_ptr = arg2;
+        } else if (event.kind == EK_FREE) {
+          const uint64_t ptr = arg0;
+          for (int64_t j = pg_array_len(*events) - 1; j >= 0; j--) {
+            const event_kind_t other_kind = (*events)[j].kind;
+            if (other_kind == EK_FREE) continue;
+            if (other_kind == EK_ALLOC && (*events)[j].v.alloc.ptr == ptr) {
+              event.v.free.alloc_i = j;
+              break;
+            } else if (other_kind == EK_REALLOC &&
+                       (*events)[j].v.realloc.new_ptr == ptr) {
+              event.v.free.alloc_i = j;
+              break;
+            }
+          }
+        } else {
+          __builtin_unreachable();
+        }
+        pg_array_append(*events, event);
 
         // event_dump(events, *fn_names, pg_array_len(events->kinds) - 1);
         break;
@@ -280,7 +281,7 @@ static void parse_input(pg_logger_t* logger, pg_span_t input, events_t* events,
 
       const stacktrace_entry_t stacktrace_entry =
           fn_name_to_stacktrace_entry(logger, fn_names, fn);
-      pg_array_append(stacktrace, stacktrace_entry);
+      pg_array_append(event.stacktrace, stacktrace_entry);
     }
   }
 }
@@ -306,19 +307,13 @@ int main(int argc, char* argv[]) {
 
   pg_span_t input = {.data = (char*)file_data, .len = pg_array_len(file_data)};
 
-  events_t events = {0};
-  events_init(&events);
+  pg_array_t(event_t) events = {0};
+  pg_array_init_reserve(events, 20000, pg_heap_allocator());
 
   pg_array_t(pg_span_t) fn_names = {0};
   pg_array_init_reserve(fn_names, 500, pg_heap_allocator());
 
   parse_input(&logger, input, &events, &fn_names);
-
-  assert(pg_array_len(events.kinds) == pg_array_len(events.arg0s));
-  assert(pg_array_len(events.arg0s) == pg_array_len(events.arg1s));
-  assert(pg_array_len(events.arg1s) == pg_array_len(events.arg2s));
-  assert(pg_array_len(events.arg2s) == pg_array_len(events.stacktraces));
-  assert(pg_array_len(events.stacktraces) == pg_array_len(events.timestamps));
 
 #if 0
   pg_array_t(lifetime_t) lifetimes = {0};
@@ -366,9 +361,9 @@ int main(int argc, char* argv[]) {
   // const uint64_t rect_h = 7;
   // const uint64_t rect_margin_top = 1;
   // const uint64_t rect_margin_right = 3;
-  const uint64_t monitoring_start = (double)events.timestamps[0];
+  const uint64_t monitoring_start = (double)events[0].timestamp;
   const uint64_t monitoring_end =
-      (double)events.timestamps[pg_array_len(events.timestamps) - 1];
+      (double)events[pg_array_len(events) - 1].timestamp;
   const uint64_t monitoring_duration = monitoring_end - monitoring_start;
 
   const uint64_t chart_w = 1600;
@@ -383,24 +378,6 @@ int main(int argc, char* argv[]) {
   double max_log_arg0 = 0;
   //  double min_arg0 = 0;
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
-    const event_kind_t kind = events.kinds[i];
-    const uint64_t arg0 = events.arg0s[i];
-
-    if (kind == EK_FREE) {
-      const uint64_t ptr_to_free = events.arg1s[i];
-
-      for (int64_t j = i - 1; j >= 0; j--) {
-        const event_kind_t other_kind = events.kinds[j];
-        if (!(other_kind == EK_ALLOC || other_kind == EK_REALLOC)) continue;
-        const uint64_t other_mem_size = events.arg0s[j];
-        const uint64_t new_ptr = events.arg1s[j];
-        if (new_ptr == ptr_to_free) {
-          events.arg0s[i] = other_mem_size;
-          events.arg2s[i] = j;
-          break;
-        }
-      }
-    }
     max_log_arg0 = MAX(max_log_arg0, log((double)arg0));
     //      min_arg0 = MIN(min_arg0, events.arg0s[i]);
   }
