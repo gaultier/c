@@ -45,6 +45,29 @@ static void events_init(events_t* events) {
   pg_array_init_reserve(events->arg2s, cap, pg_heap_allocator());
 }
 
+static char* power_of_two_string(uint64_t n) {
+  static char res[50];
+  if (n < 1024) {
+    snprintf(res, sizeof(res) - 1, "%llu", n);
+    return res;
+  } else if (n < 1024ULL * 1024) {
+    snprintf(res, sizeof(res) - 1, "%llu Ki", n / 1024ULL);
+    return res;
+  } else if (n < 1024ULL * 1024 * 1024) {
+    snprintf(res, sizeof(res) - 1, "%llu Mi", n / 1024ULL / 1024);
+    return res;
+  } else if (n < 1024ULL * 1024 * 1024) {
+    snprintf(res, sizeof(res) - 1, "%llu Gi", n / 1024ULL / 1024);
+    return res;
+  } else if (n < 1024ULL * 1024 * 1024 * 1024) {
+    snprintf(res, sizeof(res) - 1, "%llu Ti", n / 1024ULL / 1024 / 1024);
+    return res;
+  } else {
+    snprintf(res, sizeof(res) - 1, "%llu", n);
+    return res;
+  }
+}
+
 static uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
                              bool* found) {
   for (uint64_t i = 0; i < pg_array_len(fn_names); i++) {
@@ -394,18 +417,19 @@ int main(int argc, char* argv[]) {
         (chart_padding_top + chart_h - /* text height */ 3) * (1.0 - py);
     if (py > 1.0) {
       printf(
-          "<g><text x=\"%llu\" y=\"%llu\">%llu</text></g>"
+          "<g><text x=\"%llu\" y=\"%llu\">%s</text></g>"
           "<g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" "
           "stroke=\"darkgrey\" stroke-width=\"1\"></line></g>",
-          50ULL, font_size, i, chart_margin_left, 0ULL, chart_w, 0ULL);
+          50ULL, font_size, power_of_two_string(i), chart_margin_left, 0ULL,
+          chart_w, 0ULL);
       break;
     }
 
     printf(
-        "<g><text x=\"%llu\" y=\"%llu\">%llu</text></g>"
+        "<g><text x=\"%llu\" y=\"%llu\">%s</text></g>"
         "<g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" "
         "stroke=\"darkgrey\" stroke-width=\"1\"></line></g>",
-        50ULL, y, i, chart_margin_left, y, chart_w, y);
+        50ULL, y, power_of_two_string(i), chart_margin_left, y, chart_w, y);
   }
 
   const uint64_t circle_r = 3ULL;
