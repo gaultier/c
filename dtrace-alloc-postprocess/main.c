@@ -331,7 +331,9 @@ int main(int argc, char* argv[]) {
   const uint64_t chart_margin_left = 60;
   const uint64_t chart_margin_bottom = 20;
   //  const uint64_t chart_padding_w = 10;
-  const uint64_t chart_padding_top = 5;
+  const uint64_t chart_padding_top = 10;
+  const uint64_t chart_grid_gap = 100;
+  const uint64_t font_size = 10;
 
   double max_log_arg0 = 0;
   //  double min_arg0 = 0;
@@ -369,19 +371,42 @@ int main(int argc, char* argv[]) {
 "    </head>"
 "    <body style=\"min-height:1200px;\">"
 "        <div id=\"tooltip\" style=\"background-color: rgb(40, 40, 40); opacity:1; color:white; border-radius:8px; display:none; position: absolute;\"></div>"
-"        <svg style=\"margin: 10px\" width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"10\" text-anchor=\"end\">"
-"            <g><text x=\"%llu\" y=\"%llu\">Time</text></g>"
+"        <svg style=\"margin: 10px\" width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"%llu\" text-anchor=\"end\">"
+"           <g><text x=\"%llu\" y=\"%llu\">Time</text></g>"
 "           <g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" stroke=\"black\" stroke-width=\"3\"></line></g>"
-"            <g><text x=\"%llu\" y=\"%llu\">Allocations</text></g>"
+"           <g><text x=\"%llu\" y=\"%llu\">Allocations</text></g>"
 "           <g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" stroke=\"black\" stroke-width=\"3\"></line></g>"
       ,
-      chart_margin_left + chart_w, chart_margin_bottom + chart_h, // svg
+      chart_margin_left + chart_w, chart_margin_bottom + chart_h, font_size, // svg
        chart_w/2, chart_margin_bottom + chart_h, // x-axis text
-      chart_margin_left, chart_margin_bottom, chart_margin_left, chart_h, // x-axis
-      50ULL, chart_h/2, // y-axis text
-      chart_margin_left, chart_h, chart_w, chart_h // y-axis
+      chart_margin_left, 0ULL, chart_margin_left, chart_h, // y-axis
+      50ULL, chart_h/2-20ULL, // y-axis text
+      chart_margin_left, chart_h, chart_w, chart_h // x-axis
       );
   // clang-format on
+
+  // horizontal lines for grid
+  for (uint64_t i = 2;; i *= 2) {
+    const double val = log((double)i);
+    const double py = val / max_log_arg0;
+    const uint64_t y =
+        chart_padding_top +
+        (chart_padding_top + chart_h - /* text height */ 3) * (1.0 - py);
+    if (py > 1.0) {
+      printf(
+          "<g><text x=\"%llu\" y=\"%llu\">%llu</text></g>"
+          "<g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" "
+          "stroke=\"darkgrey\" stroke-width=\"1\"></line></g>",
+          50ULL, font_size, i, chart_margin_left, 0ULL, chart_w, 0ULL);
+      break;
+    }
+
+    printf(
+        "<g><text x=\"%llu\" y=\"%llu\">%llu</text></g>"
+        "<g><line x1=\"%llu\" y1=\"%llu\" x2=\"%llu\" y2=\"%llu\" "
+        "stroke=\"darkgrey\" stroke-width=\"1\"></line></g>",
+        50ULL, y, i, chart_margin_left, y, chart_w, y);
+  }
 
   const uint64_t circle_r = 3ULL;
   for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
@@ -399,8 +424,9 @@ int main(int argc, char* argv[]) {
 
     const double py = arg0 == 0 ? 0 : (log((double)arg0) / max_log_arg0);
     assert(py <= 1.0);
-    const uint64_t y = (chart_padding_top + chart_h - circle_r) * (1.0 - py);
-    assert(y <= (chart_padding_top + chart_h - circle_r));
+    const uint64_t y = chart_padding_top +
+                       (chart_padding_top + chart_h - circle_r) * (1.0 - py);
+    assert(y <= chart_padding_top + (chart_padding_top + chart_h - circle_r));
 
     const uint64_t arg2 = events.arg2s[i];
     printf(
