@@ -255,7 +255,7 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
           pg_array_append(*events, event);
           event_t* const me = &((*events)[pg_array_len(*events) - 1]);
 
-          for (int64_t j = pg_array_len(*events) - 1; j >= 0; j--) {
+          for (int64_t j = pg_array_len(*events) - 2; j >= 0; j--) {
             event_t* const other = &((*events)[j]);
 
             if (other->kind == EK_FREE) continue;
