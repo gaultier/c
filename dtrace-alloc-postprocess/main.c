@@ -1,4 +1,3 @@
-#include <_types/_uint64_t.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -252,6 +251,10 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
           pg_array_append(*events, event);
         } else if (event.kind == EK_FREE) {
           const uint64_t ptr = arg0;
+          if (ptr == 0)
+            pg_log_fatal(logger, EINVAL, "Invalid arg0 in free: arg0=%llu",
+                         arg0);
+
           pg_array_append(*events, event);
           event_t* const me = &((*events)[pg_array_len(*events) - 1]);
 
