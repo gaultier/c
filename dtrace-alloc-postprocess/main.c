@@ -20,6 +20,28 @@ typedef struct {
   uint64_t offset;
 } stacktrace_entry_t;
 
+typedef struct {
+  uint64_t alloc_i;
+} event_free_t;
+
+typedef struct {
+  uint64_t size, ptr;
+} event_alloc_t;
+
+typedef struct {
+  uint64_t size, new_ptr, old_ptr;
+} event_realloc_t;
+
+typedef struct {
+  event_kind_t kind;
+  uint64_t stacktrace_i, timestamp;
+  union {
+    event_free_t free;
+    event_alloc_t alloc;
+    event_realloc_t realloc;
+  } v;
+} event_t;
+
 typedef pg_array_t(stacktrace_entry_t) stacktrace_t;
 typedef struct {
   pg_array_t(event_kind_t) kinds;
