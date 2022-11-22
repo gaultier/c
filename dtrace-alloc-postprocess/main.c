@@ -19,27 +19,25 @@ typedef struct {
 } stacktrace_entry_t;
 
 typedef struct {
-  uint64_t alloc_i;
-} event_free_t;
-
-typedef struct {
-  uint64_t size, ptr;
+  uint64_t ptr;
 } event_alloc_t;
 
 typedef struct {
-  uint64_t size, new_ptr, old_ptr;
+  uint64_t new_ptr, old_ptr;
 } event_realloc_t;
 
-typedef struct {
+typedef struct event_t event_t;
+struct event_t {
   event_kind_t kind;
-  uint64_t timestamp;
+  PG_PAD(7);
+  uint64_t timestamp, size;
+  event_t* related_event;
   pg_array_t(stacktrace_entry_t) stacktrace;
   union {
-    event_free_t free;
     event_alloc_t alloc;
     event_realloc_t realloc;
   } v;
-} event_t;
+};
 
 typedef struct {
   uint64_t ptr, size, start_i, end_i;
@@ -244,30 +242,39 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
       char c = pg_span_peek_left(input, &more_chars);
       if (!more_chars || pg_char_is_digit(c)) {  // The End / New frame
         if (event.kind == EK_ALLOC) {
-          event.v.alloc.size = arg0;
+          event.size = arg0;
           event.v.alloc.ptr = arg1;
+          pg_array_append(*events, event);
         } else if (event.kind == EK_REALLOC) {
-          event.v.realloc.size = arg0;
+          event.size = arg0;
           event.v.realloc.new_ptr = arg1;
           event.v.realloc.old_ptr = arg2;
+          pg_array_append(*events, event);
         } else if (event.kind == EK_FREE) {
           const uint64_t ptr = arg0;
+          pg_array_append(*events, event);
+          event_t* const me = &((*events)[pg_array_len(*events) - 1]);
+
           for (int64_t j = pg_array_len(*events) - 1; j >= 0; j--) {
-            const event_kind_t other_kind = (*events)[j].kind;
-            if (other_kind == EK_FREE) continue;
-            if (other_kind == EK_ALLOC && (*events)[j].v.alloc.ptr == ptr) {
-              event.v.free.alloc_i = j;
+            event_t* const other = &((*events)[j]);
+
+            if (other->kind == EK_FREE) continue;
+            if (other->kind == EK_ALLOC && other->v.alloc.ptr == ptr) {
+              me->related_event = other;
+              me->size = other->size;
+              other->related_event = me;
               break;
-            } else if (other_kind == EK_REALLOC &&
-                       (*events)[j].v.realloc.new_ptr == ptr) {
-              event.v.free.alloc_i = j;
+            } else if (other->kind == EK_REALLOC &&
+                       other->v.realloc.new_ptr == ptr) {
+              me->related_event = other;
+              me->size = other->size;
+              other->related_event = me;
               break;
             }
           }
         } else {
           __builtin_unreachable();
         }
-        pg_array_append(*events, event);
 
         // event_dump(events, *fn_names, pg_array_len(events->kinds) - 1);
         break;
@@ -375,11 +382,11 @@ int main(int argc, char* argv[]) {
   const uint64_t chart_grid_gap = 100;
   const uint64_t font_size = 10;
 
-  double max_log_arg0 = 0;
+  double max_log_size = 0;
   //  double min_arg0 = 0;
-  for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
-    max_log_arg0 = MAX(max_log_arg0, log((double)arg0));
-    //      min_arg0 = MIN(min_arg0, events.arg0s[i]);
+  for (uint64_t i = 0; i < pg_array_len(events); i++) {
+    const event_t event = events[i];
+    max_log_size = MAX(max_log_size, log((double)event.size));
   }
 
   printf(
@@ -410,7 +417,7 @@ int main(int argc, char* argv[]) {
   // horizontal lines for grid
   for (uint64_t i = 2;; i *= 2) {
     const double val = log((double)i);
-    const double py = val / max_log_arg0;
+    const double py = val / max_log_size;
     const uint64_t y =
         chart_padding_top +
         (chart_padding_top + chart_h - /* text height */ 3) * (1.0 - py);
@@ -432,32 +439,35 @@ int main(int argc, char* argv[]) {
   }
 
   const uint64_t circle_r = 3ULL;
-  for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
-    const event_kind_t kind = events.kinds[i];
-    const uint64_t arg0 = events.arg0s[i];
+  for (uint64_t i = 0; i < pg_array_len(events); i++) {
+    const event_t event = events[i];
+    // Skip free events for which we did not record/find the related allocation
+    // event since we have no useful information in that case
+    if (event.kind == EK_FREE && event.related_event == NULL) continue;
 
-    if (kind == EK_FREE && arg0 == 0) continue;
-
-    const uint64_t ts = events.timestamps[i];
-    const double px = ((double)(ts - monitoring_start)) / monitoring_duration;
+    const double px =
+        ((double)(event.timestamp - monitoring_start)) / monitoring_duration;
     assert(px <= 1.0);
 
     const uint64_t x = chart_margin_left + px * (chart_w - chart_margin_left);
     assert(x <= chart_w + chart_margin_left);
 
-    const double py = arg0 == 0 ? 0 : (log((double)arg0) / max_log_arg0);
+    const double py =
+        event.size == 0 ? 0 : (log((double)event.size) / max_log_size);
     assert(py <= 1.0);
     const uint64_t y = chart_padding_top + (chart_h - circle_r) * (1.0 - py);
     assert(y <= chart_padding_top + (chart_h - circle_r));
 
-    const uint64_t arg2 = events.arg2s[i];
+    const uint64_t related_event_i =
+        event.related_event == NULL ? -1ULL : (event.related_event - events);
     printf(
         "<g class=\"datapoint\"><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
         "r=\"%llu\" data-kind=\"%s\" data-id=\"%llu\" "
         "data-refid=\"%llu\" "
         "data-value=\"%llu\" data-timestamp=\"%llu\"></circle></g>\n",
-        kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r,
-        kind == EK_FREE ? "free" : "alloc", i, arg2, arg0, ts);
+        event.kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r,
+        event.kind == EK_FREE ? "free" : "alloc", i, related_event_i,
+        event.size, event.timestamp);
   }
 
   printf(
@@ -469,16 +479,14 @@ int main(int argc, char* argv[]) {
   );
 
   printf("var stacktraces=[");
-  for (uint64_t i = 0; i < pg_array_len(events.stacktraces); i++) {
-    const event_kind_t kind = events.kinds[i];
-    const uint64_t arg0 = events.arg0s[i];
+  for (uint64_t i = 0; i < pg_array_len(events); i++) {
+    const event_t event = events[i];
 
-    if (kind == EK_FREE && arg0 == 0) continue;
+    if (event.kind == EK_FREE && event.related_event == NULL) continue;
 
-    const stacktrace_t st = events.stacktraces[i];
     printf("'");
-    for (uint64_t j = 0; j < pg_array_len(st); j++) {
-      const uint64_t fn_i = st[j].fn_i;
+    for (uint64_t j = 0; j < pg_array_len(event.stacktrace); j++) {
+      const uint64_t fn_i = event.stacktrace[j].fn_i;
       const pg_span_t fn_name = fn_names[fn_i];
       printf("%.*s\\n", (int)fn_name.len, fn_name.data);
     }
