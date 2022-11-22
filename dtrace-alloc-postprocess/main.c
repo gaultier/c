@@ -464,10 +464,17 @@ int main(int argc, char* argv[]) {
         "<g class=\"datapoint\"><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
         "r=\"%llu\" data-kind=\"%s\" data-id=\"%llu\" "
         "data-refid=\"%llu\" "
-        "data-value=\"%llu\" data-timestamp=\"%llu\"></circle></g>\n",
+        "data-value=\"%llu\" data-timestamp=\"%llu\" data-stacktrace=\"",
         event.kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r,
         event.kind == EK_FREE ? "free" : "alloc", i, related_event_i,
         event.size, event.timestamp);
+
+    for (uint64_t j = 0; j < pg_array_len(event.stacktrace); j++) {
+      const uint64_t fn_i = event.stacktrace[j].fn_i;
+      const pg_span_t fn_name = fn_names[fn_i];
+      printf("%.*s%c", (int)fn_name.len, fn_name.data, 0x0a);
+    }
+    printf("\"></circle></g>\n");
   }
 
   printf(
@@ -477,22 +484,6 @@ int main(int argc, char* argv[]) {
 "   <script>"
       // clang-format on
   );
-
-  printf("var stacktraces=[");
-  for (uint64_t i = 0; i < pg_array_len(events); i++) {
-    const event_t event = events[i];
-
-    if (event.kind == EK_FREE && event.related_event == NULL) continue;
-
-    printf("'");
-    for (uint64_t j = 0; j < pg_array_len(event.stacktrace); j++) {
-      const uint64_t fn_i = event.stacktrace[j].fn_i;
-      const pg_span_t fn_name = fn_names[fn_i];
-      printf("%.*s\\n", (int)fn_name.len, fn_name.data);
-    }
-    printf("',");
-  }
-  printf("];\n");
 
   printf(
       // clang-format off
@@ -507,7 +498,8 @@ int main(int argc, char* argv[]) {
 "      circles.forEach(function(e, i){\n"
 "        e.addEventListener('mouseover', function() {\n"
 "           var value = e.getAttribute('data-value');\n"
-"           tooltip.innerText = value + '\\n\\n' + stacktraces[i]; \n"
+"           var stacktrace = e.getAttribute('data-stacktrace');"
+"           tooltip.innerText = value + '\\n\\n' + stacktrace; \n"
 "           tooltip.style.display = '';\n"
 "           tooltip.style.padding = '5px';\n"
 "           tooltip.style.left = 5 + mouse_x + 'px';\n"
@@ -515,33 +507,38 @@ int main(int argc, char* argv[]) {
 
 "           if (e.getAttribute('data-kind')=='free'){\n"
 "console.log('free='+i);\n"
-"             var refId = e.getAttribute('data-refid');\n"
+"             var refId = parseInt(e.getAttribute('data-refid'));\n"
 "console.log(refId);\n"
-"             var alloc = document.querySelector('circle[data-id=\"' + refId + '\"]');\n"
-"             alloc.setAttribute('r', 10);\n" 
-"             alloc.setAttribute('fill', 'blueviolet');\n"
-"             e.setAttribute('r', 10);\n"
+"             if (refId>=0) {"
+"               var alloc = document.querySelector('circle[data-id=\"' + refId + '\"]');\n"
+"               var alloc_stacktrace = alloc.getAttribute('data-stacktrace');"
+"               alloc.setAttribute('r', 10);\n" 
+"               alloc.setAttribute('fill', 'blueviolet');\n"
+"               e.setAttribute('r', 10);\n"
 
-"             tooltip.innerText += '\\n\\nAllocated:\\n' + stacktraces[parseInt(refId)]; \n"
-"             var allocTimestamp = parseInt(alloc.getAttribute('data-timestamp'));"
-"             var freeTimestamp = parseInt(e.getAttribute('data-timestamp'));"
-"             var durationNs = (freeTimestamp-allocTimestamp);"
-"             tooltip.innerText += '\\n\\nLifetime: ';\n"
-"             if (durationNs<1000) tooltip.innerText += durationNs.toFixed(2) + ' ns';\n"
-"             else if (durationNs<1000*1000) tooltip.innerText += (durationNs /1000).toFixed(2) + ' us';\n"
-"             else if (durationNs<1000* 1000*1000) tooltip.innerText += (durationNs / 1000 /1000).toFixed(2) + ' ms';\n"
-"             else tooltip.innerText += (durationNs / 1e9).toFixed(2) + ' s';\n"
+"               tooltip.innerText += '\\n\\nAllocated:\\n' + alloc_stacktrace; \n"
+"               var allocTimestamp = parseInt(alloc.getAttribute('data-timestamp'));"
+"               var freeTimestamp = parseInt(e.getAttribute('data-timestamp'));"
+"               var durationNs = (freeTimestamp-allocTimestamp);"
+"               tooltip.innerText += '\\n\\nLifetime: ';\n"
+"               if (durationNs<1000) tooltip.innerText += durationNs.toFixed(2) + ' ns';\n"
+"               else if (durationNs<1000*1000) tooltip.innerText += (durationNs /1000).toFixed(2) + ' us';\n"
+"               else if (durationNs<1000* 1000*1000) tooltip.innerText += (durationNs / 1000 /1000).toFixed(2) + ' ms';\n"
+"               else tooltip.innerText += (durationNs / 1e9).toFixed(2) + ' s';\n"
+"             }"
 "           }\n"
 "        });\n"
 "        e.addEventListener('mouseleave', function() {\n"
 "          tooltip.innerText = ''; \n"
 "          tooltip.style.display = 'none';\n"
 "           if (e.getAttribute('data-kind')=='free'){\n"
-"             var refId = e.getAttribute('data-refid');"
-"             var alloc = document.querySelector('circle[data-id=\"' + refId + '\"]');\n"
-"             alloc.setAttribute('r', %llu);\n" 
-"             alloc.setAttribute('fill', 'steelblue');\n"
-"             e.setAttribute('r', %llu);\n"
+"             var refId = parseInt(e.getAttribute('data-refid'));"
+"             if (refId>=0) {"
+"               var alloc = document.querySelector('circle[data-id=\"' + refId + '\"]');\n"
+"               alloc.setAttribute('r', %llu);\n" 
+"               alloc.setAttribute('fill', 'steelblue');\n"
+"               e.setAttribute('r', %llu);\n"
+"             }"
 "           }\n"
 "        });\n"
 "      });\n"
