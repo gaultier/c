@@ -483,6 +483,7 @@ int main(int argc, char* argv[]) {
                    strerror(ret));
     }
   }
+  assert(file_data != NULL);
 
   pg_span_t input = {.data = (char*)file_data, .len = pg_array_len(file_data)};
 
