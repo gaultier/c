@@ -521,12 +521,12 @@ __attribute__((unused)) static uint32_t pg_hash(uint8_t *n, uint64_t len) {
 // ------------------ Span
 
 __attribute__((unused)) static char pg_span_peek_left(pg_span_t span,
-                                                      bool *found) {
+                                                      bool *more_chars) {
   if (span.len > 0) {
-    if (found != NULL) *found = true;
+    if (more_chars != NULL) *more_chars = true;
     return span.data[0];
   } else {
-    if (found != NULL) *found = false;
+    if (more_chars != NULL) *more_chars = false;
     return 0;
   }
 }

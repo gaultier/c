@@ -1,6 +1,8 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
 #include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -16,7 +18,7 @@ typedef enum : uint8_t {
   BC_KIND_DICTIONARY,
 } bc_kind_t;
 
-const char *bc_value_kind_to_string(int n) {
+static const char *bc_value_kind_to_string(int n) {
   switch (n) {
     case BC_KIND_NONE:
       return "BC_KIND_NONE";
@@ -35,20 +37,20 @@ const char *bc_value_kind_to_string(int n) {
 
 typedef struct {
   pg_array_t(pg_span_t) spans;
-  pg_array_t(uint32_t) lengths;
+  pg_array_t(uint64_t) lengths;
   pg_array_t(bc_kind_t) kinds;
-  uint32_t parent;
+  uint64_t parent;
   PG_PAD(4);
 } bc_parser_t;
 
-void bc_parser_init(pg_allocator_t allocator, bc_parser_t *parser,
-                    uint32_t estimate_items_count) {
+static void bc_parser_init(pg_allocator_t allocator, bc_parser_t *parser,
+                           uint64_t estimate_items_count) {
   pg_array_init_reserve(parser->spans, estimate_items_count, allocator);
   pg_array_init_reserve(parser->lengths, estimate_items_count, allocator);
   pg_array_init_reserve(parser->kinds, estimate_items_count, allocator);
 }
 
-void bc_parser_destroy(bc_parser_t *parser) {
+static void bc_parser_destroy(bc_parser_t *parser) {
   pg_array_free(parser->spans);
   pg_array_free(parser->lengths);
   pg_array_free(parser->kinds);
@@ -62,7 +64,7 @@ typedef enum : uint8_t {
   BC_PE_INVALID_DICT,
 } bc_parse_error_t;
 
-const char *bc_parse_error_to_string(int e) {
+static const char *bc_parse_error_to_string(int e) {
   switch (e) {
     case BC_PE_NONE:
       return "BC_PE_NONE";
@@ -79,18 +81,18 @@ const char *bc_parse_error_to_string(int e) {
   }
 }
 
-bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span_t *input) {
+static bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span_t *input) {
   assert(pg_array_len(parser->spans) == pg_array_len(parser->lengths));
   assert(pg_array_len(parser->lengths) == pg_array_len(parser->kinds));
 
-  const char c = pg_span_peek(*input);
+  const char c = pg_span_peek_left(*input, NULL);
 
   switch (c) {
     case 'i': {
-      if (parser->parent != -1U) parser->lengths[parser->parent] += 1;
+      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
 
       pg_span_t left = {0}, right = {0};
-      const bool found = pg_span_split_left(*input, 'e', &left, &right);
+      const bool found = pg_span_split_at_first(*input, 'e', &left, &right);
       if (!found) return BC_PE_INVALID_NUMBER;
 
       assert(left.len >= 1);
@@ -111,7 +113,7 @@ bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span_t *input) {
 
       pg_span_consume_left(&right, 1);  // Skip 'e'
 
-      for (uint32_t i = 1; i < left.len; i++) {
+      for (uint64_t i = 1; i < left.len; i++) {
         if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_NUMBER;
       }
       if (left.len > 1 && left.data[0] == '0')
@@ -133,18 +135,18 @@ bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span_t *input) {
     case '7':
     case '8':
     case '9': {
-      if (parser->parent != -1U) parser->lengths[parser->parent] += 1;
+      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
 
       pg_span_t left = {0}, right = {0};
-      const bool found = pg_span_split_left(*input, ':', &left, &right);
+      const bool found = pg_span_split_at_first(*input, ':', &left, &right);
       if (!found) return BC_PE_INVALID_STRING;
 
       assert(left.len >= 1);
 
       pg_span_consume_left(&right, 1);  // Skip ':'
 
-      uint32_t len = 0;
-      for (uint32_t i = 0; i < left.len; i++) {
+      uint64_t len = 0;
+      for (uint64_t i = 0; i < left.len; i++) {
         if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_STRING;
         len *= 10;
         len += left.data[i] - '0';
@@ -162,7 +164,7 @@ bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span_t *input) {
       break;
     }
     case 'l': {
-      if (parser->parent != -1U) parser->lengths[parser->parent] += 1;
+      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
 
       pg_span_consume_left(input, 1);  // Skip 'l'
 
@@ -170,21 +172,23 @@ bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span_t *input) {
       pg_array_append(parser->lengths, 0);  // Will be patched at the end
       pg_array_append(parser->kinds, BC_KIND_ARRAY);
 
-      const uint32_t parent = parser->parent;
+      const uint64_t parent = parser->parent;
       parser->parent = pg_array_len(parser->kinds) - 1;
 
-      while (pg_span_peek(*input) != 'e' && pg_span_peek(*input) != 0) {
+      bool more_chars = false;
+      while (pg_span_peek_left(*input, &more_chars) != 'e' && more_chars) {
         bc_parse_error_t err = bc_parse(parser, input);
         if (err != BC_PE_NONE) return err;
       }
-      if (pg_span_peek(*input) != 'e') return BC_PE_UNEXPECTED_CHARACTER;
+      if (pg_span_peek_left(*input, NULL) != 'e')
+        return BC_PE_UNEXPECTED_CHARACTER;
       pg_span_consume_left(input, 1);  // Skip 'e'
 
       parser->parent = parent;
       break;
     }
     case 'd': {
-      if (parser->parent != -1U) parser->lengths[parser->parent] += 1;
+      if (parser->parent != -1ULL) parser->lengths[parser->parent] += 1;
 
       const pg_span_t original = *input;
 
@@ -194,25 +198,27 @@ bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span_t *input) {
       pg_array_append(parser->lengths, 0);       // Will be patched at the end
       pg_array_append(parser->kinds, BC_KIND_DICTIONARY);
 
-      const uint32_t parent = parser->parent;
+      const uint64_t parent = parser->parent;
       parser->parent = pg_array_len(parser->kinds) - 1;
-      const uint32_t me = parser->parent;
+      const uint64_t me = parser->parent;
 
-      while (pg_span_peek(*input) != 'e' && pg_span_peek(*input) != 0) {
+      bool more_chars = false;
+      while (pg_span_peek_left(*input, &more_chars) != 'e' && more_chars) {
         bc_parse_error_t err = bc_parse(parser, input);
         if (err != BC_PE_NONE) return err;
       }
-      if (pg_span_peek(*input) != 'e') return BC_PE_UNEXPECTED_CHARACTER;
+      if (pg_span_peek_left(*input, NULL) != 'e')
+        return BC_PE_UNEXPECTED_CHARACTER;
       pg_span_consume_left(input, 1);  // Skip 'e'
 
       assert(me < pg_array_len(parser->kinds));
-      const uint32_t kv_count = parser->lengths[me];
+      const uint64_t kv_count = parser->lengths[me];
       if (kv_count % 2 != 0) {
         return BC_PE_INVALID_DICT;
       }
 
-      uint32_t j = me + 1;
-      for (uint32_t i = 0; i < kv_count; i += 2) {
+      uint64_t j = me + 1;
+      for (uint64_t i = 0; i < kv_count; i += 2) {
         assert(j < pg_array_len(parser->kinds));
 
         if (parser->kinds[j] != BC_KIND_STRING) {
@@ -240,17 +246,17 @@ bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span_t *input) {
   return BC_PE_NONE;
 }
 
-void bc_dump_value_indent(FILE *f, uint64_t indent) {
+static void bc_dump_value_indent(FILE *f, uint64_t indent) {
   for (uint64_t i = 0; i < indent; i++) fprintf(f, " ");
 }
 
-uint32_t bc_dump_value(bc_parser_t *parser, FILE *f, uint64_t indent,
-                       uint32_t index) {
+static uint64_t bc_dump_value(bc_parser_t *parser, FILE *f, uint64_t indent,
+                              uint64_t index) {
   assert(index < pg_array_len(parser->kinds));
 
   const bc_kind_t kind = parser->kinds[index];
   const pg_span_t span = parser->spans[index];
-  const uint32_t len = parser->lengths[index];
+  const uint64_t len = parser->lengths[index];
 
   switch (kind) {
     case BC_KIND_INTEGER:
@@ -258,7 +264,7 @@ uint32_t bc_dump_value(bc_parser_t *parser, FILE *f, uint64_t indent,
       return 1;
     case BC_KIND_STRING: {
       fprintf(f, "\"");
-      for (uint32_t i = 0; i < span.len; i++) {
+      for (uint64_t i = 0; i < span.len; i++) {
         uint8_t c = span.data[i];
         if (pg_char_is_alphanumeric(c) || c == ' ' || c == '-' || c == '.' ||
             c == '_' || c == '/')
@@ -272,8 +278,8 @@ uint32_t bc_dump_value(bc_parser_t *parser, FILE *f, uint64_t indent,
     }
     case BC_KIND_ARRAY: {
       fprintf(f, "[\n");
-      uint32_t j = index + 1;
-      for (uint32_t i = 0; i < len; i++) {
+      uint64_t j = index + 1;
+      for (uint64_t i = 0; i < len; i++) {
         bc_dump_value_indent(f, indent + 2);
         j += bc_dump_value(parser, f, indent + 2, j);
 
@@ -288,8 +294,8 @@ uint32_t bc_dump_value(bc_parser_t *parser, FILE *f, uint64_t indent,
     }
     case BC_KIND_DICTIONARY: {
       fprintf(f, "{\n");
-      uint32_t j = index + 1;
-      for (uint32_t i = 0; i < len; i += 2) {
+      uint64_t j = index + 1;
+      for (uint64_t i = 0; i < len; i += 2) {
         bc_dump_value_indent(f, indent + 2);
 
         j += bc_dump_value(parser, f, indent + 2, j);
@@ -311,7 +317,7 @@ uint32_t bc_dump_value(bc_parser_t *parser, FILE *f, uint64_t indent,
   __builtin_unreachable();
 }
 
-void bc_dump_values(bc_parser_t *parser, FILE *f, uint64_t indent) {
+static void bc_dump_values(bc_parser_t *parser, FILE *f, uint64_t indent) {
   assert(pg_array_len(parser->spans) == pg_array_len(parser->lengths));
   assert(pg_array_len(parser->lengths) == pg_array_len(parser->kinds));
 
@@ -345,7 +351,7 @@ typedef enum : uint8_t {
   BC_ME_PIECES_INVALID_VALUE,
 } bc_metainfo_error_t;
 
-const char *bc_metainfo_error_to_string(int err) {
+static const char *bc_metainfo_error_to_string(int err) {
   switch (err) {
     case BC_ME_NONE:
       return "BC_ME_NONE";
@@ -376,9 +382,9 @@ const char *bc_metainfo_error_to_string(int err) {
   }
 }
 
-bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
-                                            bc_metainfo_t *metainfo,
-                                            pg_span_t *info_span) {
+static bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
+                                                   bc_metainfo_t *metainfo,
+                                                   pg_span_t *info_span) {
   if (pg_array_len(parser->kinds) == 0) return BC_ME_METAINFO_NOT_DICTIONARY;
   if (parser->kinds[0] != BC_KIND_DICTIONARY)
     return BC_ME_METAINFO_NOT_DICTIONARY;
@@ -413,8 +419,12 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
     } else if (in_info && key_kind == BC_KIND_STRING &&
                pg_span_eq(piece_length_key, key_span) &&
                value_kind == BC_KIND_INTEGER) {
-      metainfo->piece_length = pg_span_parse_u64(value_span);
-      if (metainfo->piece_length == 0) return BC_ME_PIECE_LENGTH_INVALID_VALUE;
+      bool value_valid = false;
+      const int64_t piece_length =
+          pg_span_parse_i64_decimal(value_span, &value_valid);
+      if (!value_valid || piece_length <= 0 || piece_length > UINT32_MAX)
+        return BC_ME_PIECE_LENGTH_INVALID_VALUE;
+      metainfo->piece_length = (uint32_t)piece_length;
     } else if (in_info && key_kind == BC_KIND_STRING &&
                pg_span_eq(name_key, key_span) && value_kind == BC_KIND_STRING) {
       // TODO: more validation
@@ -424,8 +434,11 @@ bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
     } else if (in_info && key_kind == BC_KIND_STRING &&
                pg_span_eq(length_key, key_span) &&
                value_kind == BC_KIND_INTEGER) {
-      metainfo->length = pg_span_parse_u64(value_span);
-      if (metainfo->length == 0) return BC_ME_LENGTH_INVALID_VALUE;
+      bool value_valid = false;
+      const int64_t length =
+          pg_span_parse_i64_decimal(value_span, &value_valid);
+      if (!value_valid || length <= 0) metainfo->length = (uint64_t)length;
+      return BC_ME_LENGTH_INVALID_VALUE;
     } else if (in_info && key_kind == BC_KIND_STRING &&
                pg_span_eq(pieces_key, key_span) &&
                value_kind == BC_KIND_STRING) {

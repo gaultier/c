@@ -138,7 +138,7 @@ TEST test_bc_parse_number() {
     ASSERT_EQ_FMT(1ULL, pg_array_len(parser.kinds), "%llu");
 
     ASSERT_STRN_EQ("-123", parser.spans[0].data, parser.spans[0].len);
-    ASSERT_EQ_FMT(4U, parser.lengths[0], "%u");
+    ASSERT_EQ_FMT(4ULL, parser.lengths[0], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_INTEGER, parser.kinds[0], bc_value_kind_to_string);
 
     bc_parser_destroy(&parser);
@@ -220,7 +220,7 @@ TEST test_bc_parse_string() {
     ASSERT_EQ_FMT(1ULL, pg_array_len(parser.kinds), "%llu");
 
     ASSERT_STRN_EQ("abc", parser.spans[0].data, parser.spans[0].len);
-    ASSERT_EQ_FMT(3U, parser.lengths[0], "%u");
+    ASSERT_EQ_FMT(3ULL, parser.lengths[0], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_STRING, parser.kinds[0], bc_value_kind_to_string);
 
     bc_parser_destroy(&parser);
@@ -261,7 +261,7 @@ TEST test_bc_parse_array() {
     ASSERT_EQ_FMT(1ULL, pg_array_len(parser.lengths), "%llu");
     ASSERT_EQ_FMT(1ULL, pg_array_len(parser.kinds), "%llu");
 
-    ASSERT_EQ_FMT(0U, parser.lengths[0], "%u");
+    ASSERT_EQ_FMT(0ULL, parser.lengths[0], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_ARRAY, parser.kinds[0], bc_value_kind_to_string);
 
     bc_parser_destroy(&parser);
@@ -277,19 +277,19 @@ TEST test_bc_parse_array() {
     ASSERT_EQ_FMT(5ULL, pg_array_len(parser.lengths), "%llu");
     ASSERT_EQ_FMT(5ULL, pg_array_len(parser.kinds), "%llu");
 
-    ASSERT_EQ_FMT(3U, parser.lengths[0], "%u");
+    ASSERT_EQ_FMT(3ULL, parser.lengths[0], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_ARRAY, parser.kinds[0], bc_value_kind_to_string);
 
-    ASSERT_EQ_FMT(1U, parser.lengths[1], "%u");
+    ASSERT_EQ_FMT(1ULL, parser.lengths[1], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_INTEGER, parser.kinds[1], bc_value_kind_to_string);
 
-    ASSERT_EQ_FMT(2U, parser.lengths[2], "%u");
+    ASSERT_EQ_FMT(2ULL, parser.lengths[2], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_STRING, parser.kinds[2], bc_value_kind_to_string);
 
-    ASSERT_EQ_FMT(1U, parser.lengths[3], "%u");
+    ASSERT_EQ_FMT(1ULL, parser.lengths[3], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_ARRAY, parser.kinds[3], bc_value_kind_to_string);
 
-    ASSERT_EQ_FMT(1U, parser.lengths[4], "%u");
+    ASSERT_EQ_FMT(1ULL, parser.lengths[4], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_INTEGER, parser.kinds[4], bc_value_kind_to_string);
 
     bc_parser_destroy(&parser);
@@ -340,7 +340,7 @@ TEST test_bc_parse_dictionary() {
     ASSERT_EQ_FMT(1ULL, pg_array_len(parser.lengths), "%llu");
     ASSERT_EQ_FMT(1ULL, pg_array_len(parser.kinds), "%llu");
 
-    ASSERT_EQ_FMT(0U, parser.lengths[0], "%u");
+    ASSERT_EQ_FMT(0ULL, parser.lengths[0], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_DICTIONARY, parser.kinds[0],
                    bc_value_kind_to_string);
 
@@ -357,16 +357,16 @@ TEST test_bc_parse_dictionary() {
     ASSERT_EQ_FMT(3ULL, pg_array_len(parser.lengths), "%llu");
     ASSERT_EQ_FMT(3ULL, pg_array_len(parser.kinds), "%llu");
 
-    ASSERT_EQ_FMT(9U, parser.spans[0].len, "%u");
+    ASSERT_EQ_FMT(9ULL, parser.spans[0].len, "%llu");
     ASSERT_STRN_EQ("d2:abi3ee", parser.spans[0].data, 9ULL);
-    ASSERT_EQ_FMT(2U, parser.lengths[0], "%u");
+    ASSERT_EQ_FMT(2ULL, parser.lengths[0], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_DICTIONARY, parser.kinds[0],
                    bc_value_kind_to_string);
 
-    ASSERT_EQ_FMT(2U, parser.lengths[1], "%u");
+    ASSERT_EQ_FMT(2ULL, parser.lengths[1], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_STRING, parser.kinds[1], bc_value_kind_to_string);
 
-    ASSERT_EQ_FMT(1U, parser.lengths[2], "%u");
+    ASSERT_EQ_FMT(1ULL, parser.lengths[2], "%llu");
     ASSERT_ENUM_EQ(BC_KIND_INTEGER, parser.kinds[2], bc_value_kind_to_string);
 
     bc_parser_destroy(&parser);
@@ -386,7 +386,7 @@ TEST test_bc_parse_value_info_span() {
   ASSERT_EQ_FMT(7ULL, pg_array_len(parser.lengths), "%llu");
   ASSERT_EQ_FMT(7ULL, pg_array_len(parser.kinds), "%llu");
 
-  ASSERT_EQ_FMT(4U, parser.lengths[0], "%u");
+  ASSERT_EQ_FMT(4ULL, parser.lengths[0], "%llu");
   ASSERT_ENUM_EQ(BC_KIND_DICTIONARY, parser.kinds[0], bc_value_kind_to_string);
   PASS();
 }
