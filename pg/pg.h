@@ -288,7 +288,7 @@ typedef struct pg_string_header_t {
 
 #define PG_STRING_HEADER(str) ((pg_string_header_t *)((void *)str) - 1)
 
-__attribute__((unused)) static void pg__set_string_length(pg_string_t str,
+__attribute__((unused)) static void pg__set_string_len(pg_string_t str,
                                                           uint64_t len) {
   PG_STRING_HEADER(str)->length = len;
 }
@@ -383,7 +383,7 @@ __attribute__((unused)) static uint64_t pg_string_available_space(
 }
 
 __attribute__((unused)) static void pg_string_clear(pg_string_t str) {
-  pg__set_string_length(str, 0);
+  pg__set_string_len(str, 0);
   str[0] = '\0';
 }
 
@@ -429,7 +429,7 @@ __attribute__((unused)) static pg_string_t pg_string_append_length(
 
     memcpy(str + curr_len, other, other_len);
     str[curr_len + other_len] = '\0';
-    pg__set_string_length(str, curr_len + other_len);
+    pg__set_string_len(str, curr_len + other_len);
   }
   return str;
 }
@@ -1069,7 +1069,7 @@ __attribute__((unused)) static bool pg_string_read_file_fd(
     if (ret == 0) return 0;
     const uint64_t new_len = pg_string_len(*str) + (uint64_t)ret;
     pg_string_make_space_for(*str, new_len);
-    pg__set_string_length(*str, new_len);
+    pg__set_string_len(*str, new_len);
   }
   return 0;
 }

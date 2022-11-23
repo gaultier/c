@@ -1,3 +1,4 @@
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -25,7 +26,9 @@ static void open_url_in_browser(pg_string_t url) {
 static void copy_to_clipboard(gbAllocator allocator, pg_string_t s) {
     pg_string_t cmd = pg_string_make_reserve(
         allocator, sizeof("printf '' | pbcopy") + pg_string_len(s));
-    cmd = pg_string_append_fmt(cmd, "printf '%s' | pbcopy", s);
+    const uint64_t cmd_len =
+        (uint64_t)snprintf(cmd, pg_string_cap(cmd), "printf '%s' | pbcopy", s);
+    pg__set_string_len(cmd, cmd_len);
     printf("Running: %s\n", cmd);
     FILE* cmd_handle = popen(cmd, "r");
     assert(cmd_handle != NULL);
