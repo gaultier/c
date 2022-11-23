@@ -1,3 +1,4 @@
+#include <_types/_uint32_t.h>
 #include <errno.h>
 #include <getopt.h>
 #include <inttypes.h>
@@ -7,12 +8,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/errno.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "../pg/pg.h"
+
 typedef struct {
-    uint64_t max_retries, max_duration_seconds, wait_milliseconds;
+    uint64_t max_retries, max_duration_seconds;
+    uint32_t wait_milliseconds;
+    PG_PAD(4);
 } options_t;
 
 static void print_usage(char* argv0) {
@@ -63,7 +67,8 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
                 break;
             }
             case 'w': {
-                options->wait_milliseconds = strtoull(optarg, NULL, 10);
+                options->wait_milliseconds =
+                    (uint32_t)strtoul(optarg, NULL, 10);
                 break;
             }
             default:
@@ -73,8 +78,8 @@ static void options_parse_from_cli(int argc, char* argv[], options_t* options) {
     }
 }
 
-void* exit_after_max_duration(void* arg) {
-    uint64_t* max_duration_seconds = arg;
+static void* exit_after_max_duration(void* arg) {
+    uint32_t* max_duration_seconds = arg;
     sleep(*max_duration_seconds);
     exit(EINTR);
     return NULL;
@@ -95,7 +100,7 @@ int main(int argc, char* argv[], char* envp[]) {
                        &options.max_duration_seconds);
     }
 
-    uint64_t sleep_milliseconds = 100;
+    uint32_t sleep_milliseconds = 100;
     for (uint64_t attempt = 0; attempt < options.max_retries; attempt++) {
         for (int i = 0; i < argc; i++) {
             printf("%s ", argv[i]);
@@ -122,7 +127,8 @@ int main(int argc, char* argv[], char* envp[]) {
                 usleep(1000 * (options.wait_milliseconds > 0
                                    ? options.wait_milliseconds
                                    : sleep_milliseconds));
-                sleep_milliseconds *= 1.5;  // TODO: jitter, random
+                sleep_milliseconds = (uint32_t)(sleep_milliseconds *
+                                                1.5);  // TODO: jitter, random
                 continue;
             }
         }

@@ -1,5 +1,4 @@
 -std=c99
 -g
--Wall
--Wextra
+-Weverything
 -I/usr/local/include
