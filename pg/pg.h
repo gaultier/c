@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -1120,6 +1121,8 @@ __attribute__((unused)) static bool pg_string_read_file_fd(int fd,
   }
   const uint64_t read_buffer_size =
       MIN((uint64_t)UINT32_MAX, (uint64_t)st.st_size);
+  *str = pg_string_make_space_for(*str, (uint64_t)st.st_size);
+
   while (pg_string_len(*str) < (uint64_t)st.st_size) {
     int64_t ret = read(fd, *str + pg_string_len(*str), read_buffer_size);
     if (ret == -1) {
@@ -1127,7 +1130,7 @@ __attribute__((unused)) static bool pg_string_read_file_fd(int fd,
     }
     if (ret == 0) return true;
     const uint64_t new_len = pg_string_len(*str) + (uint64_t)ret;
-    pg_string_make_space_for(*str, new_len);
+    *str = pg_string_make_space_for(*str, new_len);
     pg__set_string_len(*str, new_len);
   }
   return true;

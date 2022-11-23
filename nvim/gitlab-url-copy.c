@@ -44,13 +44,14 @@ static pg_string_t get_path_from_git_root() {
 
     pg_string_t output = pg_string_make_reserve(pg_heap_allocator(), 100);
 
-    if (pg_string_read_file_fd(fileno(cmd_handle), &output)) {
+    if (!pg_string_read_file_fd(fileno(cmd_handle), &output)) {
         fprintf(stderr, "Failed to read(2) output from command: %d %s\n", errno,
                 strerror(errno));
         exit(errno);
     }
 
     output = pg_string_trim(output, "\n");
+    assert(pg_string_len(output) > 0);
 
     return output;
 }
@@ -64,8 +65,7 @@ static pg_string_t get_current_git_commit() {
     pg_string_t output =
         pg_string_make_reserve(pg_heap_allocator(), GIT_COMMIT_LENGTH);
 
-    int ret = 0;
-    if ((ret = pg_string_read_file_fd(fileno(cmd_handle), &output)) != 0) {
+    if (!pg_string_read_file_fd(fileno(cmd_handle), &output)) {
         fprintf(stderr, "Failed to read(2) output from command: %d %s\n", errno,
                 strerror(errno));
         exit(errno);
@@ -90,6 +90,7 @@ static pg_string_t get_git_origin_remote_url() {
     }
 
     output = pg_string_trim(output, "\n");
+    assert(pg_string_len(output) > 0);
 
     return output;
 }
