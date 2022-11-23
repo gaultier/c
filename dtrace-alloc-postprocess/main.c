@@ -327,12 +327,12 @@ static void print_html(const pg_array_t(event_t) events,
 "       </div>\n"
 "\n"
 "       <div>\n"
-"         <input type=\"checkbox\" id=\"failed_allocations\" name=\"failed_allocations\" checked onchange=\"document.querySelectorAll('circle[data-ptr=0]').forEach(function(e) {e.setAttribute('fill-opacity', checked | 0)})\">\n"
+"         <input type=\"checkbox\" id=\"failed_allocations\" name=\"failed_allocations\" checked onchange=\"toggleFailedAllocations(this.checked)\">\n"
 "         <label for=\"failed_allocations\">Failed allocations</label>\n"
 "       </div>\n"
 "\n"
 "       <div>\n"
-"         <input type=\"checkbox\" id=\"zero_allocations\" name=\"zero_allocations\" checked onchange=\"document.querySelectorAll('circle[data-size=0]').forEach(function(e) {e.setAttribute('fill-opacity', checked | 0)})\">\n"
+"         <input type=\"checkbox\" id=\"zero_allocations\" name=\"zero_allocations\" checked onchange=\"toggleZeroSizedAllocations(this.checked)\">\n"
 "         <label for=\"zero_allocations\">Zero size allocations</label>\n"
 "       </div>\n"
 "   </fieldset>\n"
@@ -424,6 +424,12 @@ static void print_html(const pg_array_t(event_t) events,
 
   printf(
       // clang-format off
+"      function toggleFailedAllocations(checked) {"
+"        document.querySelectorAll('circle[data-ptr=\"0\"]').forEach(function(e) {e.setAttribute('fill-opacity', checked | 0)});"
+"      }"
+"      function toggleZeroSizedAllocations(checked) {"
+"        document.querySelectorAll('circle[data-size=\"0\"]').forEach(function(e) {e.setAttribute('fill-opacity', checked | 0)});"
+"      }"
 "      var tooltip = document.getElementById('tooltip');\n"
 "      var mouse_x= 0;\n"
 "      var mouse_y=0;\n"
