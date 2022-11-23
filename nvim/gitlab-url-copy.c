@@ -144,6 +144,7 @@ int main(int argc, char* argv[]) {
                 errno, strerror(errno));
         exit(errno);
     }
+    printf("Changed directory to: %s\n", dir);
 
     pg_string_t git_repository_url = get_git_origin_remote_url();
     printf("git_repository_url=%s\n", git_repository_url);
