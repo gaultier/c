@@ -5,6 +5,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <math.h>
+#include <poll.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -1154,39 +1155,92 @@ __attribute__((unused)) static char const *pg_path_base_name(char const *path) {
   ls = pg_char_last_occurence(path, '/');
   return (ls == NULL) ? path : ls + 1;
 }
+__attribute__((unused)) static bool pg_string_read_from_stream_once(
+    int fd, pg_string_t *str) {
+  const uint64_t read_batch_size = 4096;
+  if (pg_string_available_space(*str) < read_batch_size)
+    *str =
+        pg_string_make_space_for(*str, pg_string_len(*str) + read_batch_size);
+
+  const int64_t ret = read(fd, *str + pg_string_len(*str), read_batch_size);
+  if (ret == -1) return false;
+  if (ret == 0) return true;
+
+  const uint64_t new_len = pg_string_len(*str) + (uint64_t)ret;
+  pg__set_string_len(*str, new_len);
+
+  return true;
+}
+
+__attribute__((unused)) static bool pg_string_read_from_stream(
+    int fd, pg_string_t *str) {
+  while (true) {
+    if (!pg_string_read_from_stream_once(fd, str)) return false;
+  }
+  __builtin_unreachable();
+}
 
 // ------------------------------------- Child process
-__attribute__((unused)) static bool pg_exec(
-    char **argv, char **envp, int *child_stdio /*, int *child_stderr */) {
-  int fds[2] = {0};
-  if (pipe(fds) != 0) {
+__attribute__((unused)) static bool pg_exec(char **argv, pg_string_t *cmd_stdio,
+                                            pg_string_t *cmd_stderr,
+                                            int *exit_status) {
+  int stdio_pipe[2] = {0};
+  if (pipe(stdio_pipe) != 0) {
     return false;
   }
+
+  int stderr_pipe[2] = {0};
+  if (pipe(stderr_pipe) != 0) {
+    return false;
+  }
+
   const pid_t pid = fork();
   if (pid == -1) return false;
 
-  if (pid > 0) {    // Child
-    close(fds[0]);  // Child does not read from parent
-    close(0);       // Close stdin
+  if (pid == 0) {           // Child
+    close(stdio_pipe[0]);   // Child does not read from parent
+    close(stderr_pipe[0]);  // Child does not read from parent
+    close(0);               // Close child's stdin
 
-    if (dup2(fds[1], 1) ==
-        -1)  // Direct stdout to the pipe for the parent to read
+    if (dup2(stdio_pipe[1], 1) ==
+        -1)  // Direct child's stdout to the pipe for the parent to read
       exit(errno);
 
-    close(fds[1]);  // Not needed anymore
+    if (dup2(stderr_pipe[1], 2) ==
+        -1)  // Direct child's stderr to the pipe for the parent to read
+      exit(errno);
 
-    if (execve(argv[0], argv, envp) == -1) exit(errno);
+    close(stdio_pipe[1]);   // Not needed anymore
+    close(stderr_pipe[1]);  // Not needed anymore
+
+    if (execvp(argv[0], argv) == -1) exit(errno);
 
     __builtin_unreachable();
   }
 
-  int stat_loc = 0;
-  const pid_t ret_pid = wait(&stat_loc);
+  struct pollfd fds[] = {{.fd = stdio_pipe[0], .events = POLLIN},
+                         {.fd = stderr_pipe[0], .events = POLLIN}};
+  while (1) {
+    const int ret = poll(fds, 2, 0);
+    if (ret == -1) break;
+
+    for (uint64_t i = 0; i < (uint64_t)ret; i++) {
+      if (i == 0 && (fds[i].revents & POLLIN)) {
+        if (!pg_string_read_from_stream_once(stdio_pipe[0], cmd_stdio)) break;
+      }
+      if (i == 1 && (fds[i].revents & POLLIN)) {
+        if (!pg_string_read_from_stream_once(stderr_pipe[0], cmd_stderr)) break;
+      }
+    }
+  }
+
+  const pid_t ret_pid = wait4(pid, exit_status, 0, 0);
   if (ret_pid == -1) {
     fprintf(stderr, "Failed to wait(2): %d %s\n", errno, strerror(errno));
     exit(errno);
   }
+  close(stdio_pipe[0]);
+  close(stderr_pipe[0]);
 
-  *child_stdio = fds[0];
   return true;
 }

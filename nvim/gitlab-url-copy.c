@@ -5,7 +5,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/_types/_pid_t.h>
 
 #include "../pg/pg.h"
 
@@ -80,19 +79,29 @@ static pg_string_t get_git_origin_remote_url() {
     const char* const cmd = "git remote get-url origin";
     printf("Running: %s\n", cmd);
 
-    pg_string_t output =
+    char* argv[] = {"git", "remote", "get-url", "origin", 0};
+    pg_string_t cmd_stdio =
         pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
-
-    if (!pg_string_read_file_fd(fd[1], &output)) {
-        fprintf(stderr, "Failed to read(2) output from command: %d %s\n", errno,
+    pg_string_t cmd_stderr = pg_string_make_reserve(pg_heap_allocator(), 0);
+    int exit_status = 0;
+    if (!pg_exec(argv, &cmd_stdio, &cmd_stderr, &exit_status)) {
+        fprintf(stderr, "Failed to execute command: %d %s\n", errno,
                 strerror(errno));
         exit(errno);
     }
+    if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
+        fprintf(stderr,
+                "Command exited with non-zero status code: status=%d err=%s\n",
+                WEXITSTATUS(exit_status), cmd_stderr);
+        exit(errno);
+    }
 
-    output = pg_string_trim(output, "\n");
-    assert(pg_string_len(output) > 0);
+    cmd_stdio = pg_string_trim(cmd_stdio, "\n");
+    assert(pg_string_len(cmd_stdio) > 0);
 
-    return output;
+    pg_string_free(cmd_stderr);
+
+    return cmd_stdio;
 }
 
 static pg_string_t path_get_directory(pg_string_t path) {
