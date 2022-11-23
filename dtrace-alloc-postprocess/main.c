@@ -381,7 +381,7 @@ int main(int argc, char* argv[]) {
 "      <style>"
 "      </style>"
 "    </head>"
-"    <body style=\"min-height:1200px;\">"
+"    <body>"
 "        <div id=\"tooltip\" style=\"background-color: rgb(40, 40, 40); opacity:1; color:white; border-radius:8px; display:none; position: absolute;\"></div>"
 "        <svg style=\"margin: 10px\" width=\"%llu\" height=\"%llu\" font-family=\"sans-serif\" font-size=\"%llu\" text-anchor=\"end\">"
 "           <g><text x=\"%llu\" y=\"%llu\" font-weight=\"bold\">Time</text></g>"
@@ -403,7 +403,7 @@ int main(int argc, char* argv[]) {
     const double py = val / max_log_size;
     const uint64_t y =
         chart_padding_top +
-        (chart_padding_top + chart_h - /* text height */ 3) * (1.0 - py);
+        (chart_padding_top + chart_h - ((double)font_size / 2)) * (1.0 - py);
     if (py > 1.0) {
       printf(
           "<g><text x=\"%llu\" y=\"%llu\">%s</text></g>"
@@ -483,7 +483,7 @@ int main(int argc, char* argv[]) {
 "           var ptr = e.getAttribute('data-ptr');\n"
 "           var timestamp = parseInt(e.getAttribute('data-timestamp'));\n"
 "           var stacktrace = e.getAttribute('data-stacktrace');\n"
-"           tooltip.innerText = 'Size: ' + value + '\\n' + 'Pointer: ' + ptr + '\\nStacktrace:' + stacktrace; \n"
+"           tooltip.innerText = 'Size: ' + value + '\\nTimestamp:' + timestamp + '\\nPointer: ' + ptr + '\\nStacktrace:' + stacktrace; \n"
 "           tooltip.style.display = '';\n"
 "           tooltip.style.padding = '5px';\n"
 "           tooltip.style.left = 5 + mouse_x + 'px';\n"
@@ -498,8 +498,8 @@ int main(int argc, char* argv[]) {
 "             related.setAttribute('r', 12);\n" 
 "             related.setAttribute('fill-opacity', '60%%');\n"
 
-"             tooltip.innerText += '\\n\\nRelates to:\\n' + stracktraceRelated; \n"
 "             var timestampRelated = parseInt(related.getAttribute('data-timestamp'));\n"
+"             tooltip.innerText += '\\n\\nRelates to:\\nTimestamp: ' + timestampRelated + '\\nStacktrace:' + stracktraceRelated; \n"
 "             var durationNs = Math.abs(timestamp - timestampRelated);\n"
 "             tooltip.innerText += '\\n\\nLifetime: ';\n"
 "             if (durationNs<1000) tooltip.innerText += durationNs.toFixed(2) + ' ns';\n"
