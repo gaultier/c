@@ -1155,3 +1155,38 @@ __attribute__((unused)) static char const *pg_path_base_name(char const *path) {
   return (ls == NULL) ? path : ls + 1;
 }
 
+// ------------------------------------- Child process
+__attribute__((unused)) static bool pg_exec(
+    char **argv, char **envp, int *child_stdio /*, int *child_stderr */) {
+  int fds[2] = {0};
+  if (pipe(fds) != 0) {
+    return false;
+  }
+  const pid_t pid = fork();
+  if (pid == -1) return false;
+
+  if (pid > 0) {    // Child
+    close(fds[0]);  // Child does not read from parent
+    close(0);       // Close stdin
+
+    if (dup2(fds[1], 1) ==
+        -1)  // Direct stdout to the pipe for the parent to read
+      exit(errno);
+
+    close(fds[1]);  // Not needed anymore
+
+    if (execve(argv[0], argv, envp) == -1) exit(errno);
+
+    __builtin_unreachable();
+  }
+
+  int stat_loc = 0;
+  const pid_t ret_pid = wait(&stat_loc);
+  if (ret_pid == -1) {
+    fprintf(stderr, "Failed to wait(2): %d %s\n", errno, strerror(errno));
+    exit(errno);
+  }
+
+  *child_stdio = fds[0];
+  return true;
+}

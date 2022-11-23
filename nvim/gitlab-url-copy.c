@@ -1,9 +1,11 @@
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
+#include <spawn.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/_types/_pid_t.h>
 
 #include "../pg/pg.h"
 
@@ -77,13 +79,11 @@ static pg_string_t get_current_git_commit() {
 static pg_string_t get_git_origin_remote_url() {
     const char* const cmd = "git remote get-url origin";
     printf("Running: %s\n", cmd);
-    FILE* const cmd_handle = popen(cmd, "r");
-    assert(cmd_handle != NULL);
 
     pg_string_t output =
         pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
 
-    if (!pg_string_read_file_fd(fileno(cmd_handle), &output)) {
+    if (!pg_string_read_file_fd(fd[1], &output)) {
         fprintf(stderr, "Failed to read(2) output from command: %d %s\n", errno,
                 strerror(errno));
         exit(errno);
