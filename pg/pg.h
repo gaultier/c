@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -177,17 +178,19 @@ typedef struct pg_array_header_t {
 #define pg_array_capacity(x) (PG_ARRAY_HEADER(x)->capacity)
 #define pg_array_available_space(x) (pg_array_capacity(x) - pg_array_len(x))
 
-#define pg_array_init_reserve(x, cap, my_allocator)                          \
-  do {                                                                       \
-    void **pg__array_ = (void **)&(x);                                       \
-    pg_array_header_t *pg__ah =                                              \
-        (pg_array_header_t *)(my_allocator)                                  \
-            .realloc(NULL, sizeof(pg_array_header_t) + sizeof(*(x)) * (cap), \
-                     0);                                                     \
-    pg__ah->len = 0;                                                         \
-    pg__ah->capacity = cap;                                                  \
-    pg__ah->allocator = my_allocator;                                        \
-    *pg__array_ = (void *)(pg__ah + 1);                                      \
+#define pg_array_init_reserve(x, cap, my_allocator)                         \
+  do {                                                                      \
+    void **pg__array_ = (void **)&(x);                                      \
+    pg_array_header_t *pg__ah =                                             \
+        (pg_array_header_t *)(my_allocator)                                 \
+            .realloc(                                                       \
+                NULL,                                                       \
+                sizeof(pg_array_header_t) + sizeof(*(x)) * ((uint64_t)cap), \
+                0);                                                         \
+    pg__ah->len = 0;                                                        \
+    pg__ah->capacity = (uint64_t)cap;                                       \
+    pg__ah->allocator = my_allocator;                                       \
+    *pg__array_ = (void *)(pg__ah + 1);                                     \
   } while (0)
 
 #define pg_array_init(x, my_allocator) pg_array_init_reserve(x, 0, my_allocator)

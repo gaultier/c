@@ -1,13 +1,12 @@
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <stdio.h>
 #include <time.h>
 
-#define GB_IMPLEMENTATION
-#define GB_STATIC
-#include "../vendor/gb/gb.h"
+#include "../pg/pg.h"
 
-static const u16 hourly_week_end_rate = 15;
-static const u16 hourly_week_rate = 10;
+static const uint64_t hourly_week_end_rate = 15;
+static const uint64_t hourly_week_rate = 10;
 
 #ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -25,8 +24,8 @@ typedef struct {
 
 typedef struct {
     int month, year;  // In ISO range
-    u16 week_money, week_hours, week_end_money, week_end_hours, total_hours,
-        total_money;
+    uint64_t week_money, week_hours, week_end_money, week_end_hours,
+        total_hours, total_money;
 } monthly_bill_t;
 
 static bool datetime_is_week_end(const struct tm* d) {
@@ -62,12 +61,12 @@ static time_t get_start_of_next_month(const struct tm* d) {
     return timelocal(&tmp);
 }
 
-static void bill_shift_monthly(gbArray(monthly_bill_t) monthly_bills,
+static void bill_shift_monthly(pg_array_t(monthly_bill_t) monthly_bills,
                                datetime_range_t* shift) {
     monthly_bill_t* monthly_bill = NULL;
     // Upsert
     {
-        const u64 monthly_bills_len = gb_array_count(monthly_bills);
+        const uint64_t monthly_bills_len = pg_array_len(monthly_bills);
         if (monthly_bills_len > 0 &&
             (monthly_bills[monthly_bills_len - 1].month - 1) ==
                 shift->start.tm_mon &&
@@ -75,11 +74,11 @@ static void bill_shift_monthly(gbArray(monthly_bill_t) monthly_bills,
                 shift->start.tm_year) {
             monthly_bill = &monthly_bills[monthly_bills_len - 1];
         } else {
-            gb_array_append(
+            pg_array_append(
                 monthly_bills,
                 ((monthly_bill_t){.month = shift->start.tm_mon + 1,
                                   .year = shift->start.tm_year + 1900}));
-            monthly_bill = &monthly_bills[gb_array_count(monthly_bills) - 1];
+            monthly_bill = &monthly_bills[pg_array_len(monthly_bills) - 1];
         }
     }
 
@@ -99,10 +98,10 @@ static void bill_shift_monthly(gbArray(monthly_bill_t) monthly_bills,
     // Handle the case of a shift spanning 2 months so it appears in 2 monthly
     // bills
     assert(shift->start.tm_mon + 1 == shift->end.tm_mon);
-    gb_array_append(monthly_bills,
+    pg_array_append(monthly_bills,
                     ((monthly_bill_t){.month = shift->end.tm_mon + 1,
                                       .year = shift->end.tm_year + 1900}));
-    monthly_bill = &monthly_bills[gb_array_count(monthly_bills) - 1];
+    monthly_bill = &monthly_bills[pg_array_len(monthly_bills) - 1];
 
     // Bill from the first of the month to the end of the shift
     while (it < end) {
@@ -111,29 +110,29 @@ static void bill_shift_monthly(gbArray(monthly_bill_t) monthly_bills,
     }
 }
 
-static void bill_shifts(datetime_range_t* shifts, u64 shifts_len) {
+static void bill_shifts(datetime_range_t* shifts, uint64_t shifts_len) {
     assert(shifts != NULL);
     assert(shifts_len > 0);
 
-    gbArray(monthly_bill_t) monthly_bills = NULL;
-    gb_array_init_reserve(monthly_bills, gb_heap_allocator(), 100);
+    pg_array_t(monthly_bill_t) monthly_bills = {0};
+    pg_array_init_reserve(monthly_bills, 100, pg_heap_allocator());
 
-    for (u64 i = 0; i < shifts_len; i++) {
+    for (uint64_t i = 0; i < shifts_len; i++) {
         bill_shift_monthly(monthly_bills, &shifts[i]);
     }
 
-    const float tax_rate = 0.425;
-    u64 total_money = 0;
+    const double tax_rate = 0.425;
+    uint64_t total_money = 0;
     // clang-format off
     printf("┌──────────┬────────────┬────────┬────────────────┬────────────┬─────────────┬─────────────────┬───────────────┐\n");
     printf("│   Month  │ Week hours │ Week € │ Week-end hours │ Week-end € │ Total hours │ Total (gross) € │ Total (net) € │ \n");
     printf("├──────────┼────────────┼────────┼────────────────┼────────────┼─────────────┼─────────────────┼───────────────┤\n"); 
-    for (int i = 0; i < gb_array_count(monthly_bills); i++) {
+    for (uint64_t i = 0; i < pg_array_len(monthly_bills); i++) {
         const monthly_bill_t* const bill = &monthly_bills[i];
-        printf("│ %4d-%02d  │   %5d    │ %5d  │     %5d      │    %5d   │    %5d    │      %5d      │   %7.02f     │  \n", 
+        printf("│ %4d-%02d  │   %5llu    │ %5llu  │     %5llu      │    %5llu   │    %5llu    │      %5llu      │   %7.02f     │  \n", 
             bill->year, bill->month, bill->week_hours, bill->week_money,
             bill->week_end_hours, bill->week_end_money, bill->total_hours,
-            bill->total_money,            bill->total_money*(1-tax_rate));
+            bill->total_money,            (double)bill->total_money*(1-tax_rate));
 
         total_money += bill->total_money;
     }

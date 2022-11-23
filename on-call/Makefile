@@ -1,5 +1,4 @@
 LDFLAGS += -lpthread -ldl
 
 on-call: main.c
-	$(CC) $(CFLAGS) -Wall -Wextra -Wno-unused-function -g main.c -o on-call $(LDFLAGS)
-
+	$(CC) $(CFLAGS) -Weverything -g main.c -o on-call $(LDFLAGS) -Wno-used-but-marked-unused
