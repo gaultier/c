@@ -9,7 +9,6 @@
 #include "../pg/pg.h"
 
 #define MAX_URL_LEN 2048
-#define GIT_COMMIT_LENGTH (2 * 20)
 
 static void open_url_in_browser(pg_string_t url) {
     pg_string_t cmd = pg_string_make_reserve(

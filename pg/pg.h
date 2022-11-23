@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -1227,23 +1226,17 @@ __attribute__((unused)) static bool pg_exec(char **argv, pg_string_t *cmd_stdio,
 
     for (uint64_t i = 0; i < (uint64_t)ret; i++) {
       if (i == 0 && (fds[i].revents & POLLIN)) {
-        fprintf(stderr, "[D001] poll %d\n", ret);
-        if (!pg_string_read_from_stream_once(stdio_pipe[0], cmd_stdio)) break;
-        fprintf(stderr, "[D002] %llu %s\n", pg_string_len(*cmd_stdio),
-                *cmd_stdio);
+        if (!pg_string_read_from_stream_once(fds[i].fd, cmd_stdio)) break;
       }
       if (i == 1 && (fds[i].revents & POLLIN)) {
-        fprintf(stderr, "[D003] poll %d\n", ret);
-        if (!pg_string_read_from_stream_once(stderr_pipe[0], cmd_stderr)) break;
+        if (!pg_string_read_from_stream_once(fds[i].fd, cmd_stderr)) break;
       }
     }
 
     ret_pid = wait4(pid, exit_status, 0, 0);
-    fprintf(stderr, "[D003] ret_pid=%d\n", ret_pid);
     if (ret_pid == -1) continue;
 
     if (WIFEXITED(*exit_status)) {
-      fprintf(stderr, "[D004]\n");
       goto end;
     }
   }
