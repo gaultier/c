@@ -1030,3 +1030,36 @@ __attribute__((unused)) static void pg_bitarray_resize(pg_bitarray_t *bitarr,
   const uint64_t len = (uint64_t)(ceil(((double)max_index) / 8.0));
   pg_array_resize(bitarr->data, len);
 }
+
+// ------------- File utils
+
+int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
+                        pg_array_t(uint8_t) * buf) {
+  struct stat st = {0};
+  if (fstat(fd, &st) == -1) {
+    return errno;
+  }
+  const uint64_t read_buffer_size =
+      MIN((uint64_t)UINT32_MAX, (uint64_t)st.st_size);
+  pg_array_init_reserve(*buf, st.st_size, allocator);
+  while (pg_array_len(*buf) < (uint64_t)st.st_size) {
+    int64_t ret = read(fd, *buf + pg_array_len(*buf), read_buffer_size);
+    if (ret == -1) {
+      return errno;
+    }
+    if (ret == 0) return 0;
+    pg_array_resize(*buf, pg_array_len(*buf) + ret);
+  }
+  return 0;
+}
+
+int64_t pg_read_file(pg_allocator_t allocator, char *path,
+                     pg_array_t(uint8_t) * buf) {
+  int fd = open(path, O_RDONLY);
+  if (fd == -1) {
+    return errno;
+  }
+  int ret = pg_read_file_fd(allocator, fd, buf);
+  close(fd);
+  return ret;
+}
