@@ -174,8 +174,10 @@ typedef struct pg_array_header_t {
 #endif
 
 #define PG_ARRAY_HEADER(x) (((pg_array_header_t *)((void *)x)) - 1)
-#define pg_array_len(x) (PG_ARRAY_HEADER(x)->len)
-#define pg_array_capacity(x) (PG_ARRAY_HEADER(x)->capacity)
+#define PG_CONST_ARRAY_HEADER(x) \
+  (((const pg_array_header_t *)((const void *)x)) - 1)
+#define pg_array_len(x) (PG_CONST_ARRAY_HEADER(x)->len)
+#define pg_array_capacity(x) (PG_CONST_ARRAY_HEADER(x)->capacity)
 #define pg_array_available_space(x) (pg_array_capacity(x) - pg_array_len(x))
 
 #define pg_array_init_reserve(x, cap, my_allocator)                         \
@@ -219,7 +221,7 @@ typedef struct pg_array_header_t {
 #define pg_array_append(x, item)                                         \
   do {                                                                   \
     if (pg_array_capacity(x) < pg_array_len(x) + 1) pg_array_grow(x, 0); \
-    (x)[pg_array_len(x)++] = (item);                                     \
+    (x)[PG_ARRAY_HEADER(x)->len++] = (item);                             \
   } while (0)
 
 #define pg_array_pop(x)                  \
@@ -765,7 +767,7 @@ typedef struct {
       fprintf(stderr, "%s[FATAL] " fmt "%s\n",                    \
               (isatty(2) ? "\x1b[38:5:124m" : ""), ##__VA_ARGS__, \
               (isatty(2) ? "\x1b[0m" : ""));                      \
-      exit(exit_code);                                            \
+      exit((int)exit_code);                                       \
     }                                                             \
   } while (0)
 

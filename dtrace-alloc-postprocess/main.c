@@ -1,6 +1,9 @@
+#include <_types/_uint64_t.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#include <sys/_types/_int64_t.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "../pg/pg.h"
@@ -83,13 +86,13 @@ static uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
 static stacktrace_entry_t fn_name_to_stacktrace_entry(
     pg_logger_t* logger, pg_array_t(pg_span_t) * fn_names, pg_span_t name) {
   pg_span_t left = {0}, right = {0};
-  uint64_t offset = 0;
+  int64_t offset = 0;
   if (pg_span_split_at_last(name, '+', &left,
                             &right) &&
       right.len > 0) {  // +0xab present at the end
     bool valid = false;
     offset = pg_span_parse_i64_hex(right, &valid);
-    if (!valid)
+    if (!valid || offset < 0)
       pg_log_fatal(logger, EINVAL, "Invalid offset: name=%.*s offset=%.*s",
                    (int)name.len, name.data, (int)right.len, right.data);
   }
@@ -101,7 +104,7 @@ static stacktrace_entry_t fn_name_to_stacktrace_entry(
     fn_i = pg_array_len(*fn_names) - 1;
   }
 
-  return (stacktrace_entry_t){.fn_i = fn_i, .offset = offset};
+  return (stacktrace_entry_t){.fn_i = fn_i, .offset = (uint64_t)offset};
 }
 
 static void parse_input(pg_logger_t* logger, pg_span_t input,
@@ -166,24 +169,24 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
     pg_span_split_at_first(input, ' ', &arg0_span, &input);
     pg_span_trim_left(&input);
     bool arg0_valid = false;
-    const uint64_t arg0 =
+    const int64_t arg0 =
         event.kind == EK_FREE
             ? pg_span_parse_i64_hex(arg0_span, &arg0_valid)
-            : (uint64_t)(pg_span_parse_i64_decimal(arg0_span, &arg0_valid));
-    if (!arg0_valid)
+            : (pg_span_parse_i64_decimal(arg0_span, &arg0_valid));
+    if (!arg0_valid || arg0 < 0)
       pg_log_fatal(logger, EINVAL, "Invalid arg0: %.*s", (int)arg0_span.len,
                    arg0_span.data);
 
     // arg1
     pg_span_t arg1_span = {0};
-    uint64_t arg1 = 0;
+    int64_t arg1 = 0;
     pg_span_split_at_first(input, ' ', &arg1_span, &input);
     pg_span_trim_left(&input);
     if (event.kind != EK_FREE) {
       if (arg1_span.len != 0) {
         bool arg1_valid = false;
         arg1 = pg_span_parse_i64_hex(arg1_span, &arg1_valid);
-        if (!arg1_valid)
+        if (!arg1_valid || arg1 < 0)
           pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
                        arg1_span.data);
       }
@@ -191,14 +194,14 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
 
     // arg2
     pg_span_t arg2_span = {0};
-    uint64_t arg2 = 0;
+    int64_t arg2 = 0;
     if (event.kind != EK_FREE) {
       pg_span_split_at_first(input, '\n', &arg2_span, &input);
       pg_span_trim_left(&input);
       if (arg2_span.len != 0) {
         bool arg2_valid = false;
         arg2 = pg_span_parse_i64_hex(arg1_span, &arg2_valid);
-        if (!arg2_valid)
+        if (!arg2_valid || arg2 < 0)
           pg_log_fatal(logger, EINVAL, "Invalid arg2: %.*s", (int)arg2_span.len,
                        arg2_span.data);
       }
@@ -210,38 +213,34 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
       char c = pg_span_peek_left(input, &more_chars);
       if (!more_chars || pg_char_is_digit(c)) {  // The End / New frame
         if (event.kind == EK_ALLOC) {
-          event.size = arg0;
-          event.v.alloc.ptr = arg1;
+          event.size = (uint64_t)arg0;
+          event.v.alloc.ptr = (uint64_t)arg1;
           pg_array_append(*events, event);
         } else if (event.kind == EK_REALLOC) {
-          event.size = arg0;
-          event.v.realloc.new_ptr = arg1;
-          event.v.realloc.old_ptr = arg2;
+          event.size = (uint64_t)arg0;
+          event.v.realloc.new_ptr = (uint64_t)arg1;
+          event.v.realloc.old_ptr = (uint64_t)arg2;
           pg_array_append(*events, event);
         } else if (event.kind == EK_FREE) {
-          const uint64_t ptr = arg0;
+          const uint64_t ptr = (uint64_t)arg0;
           if (ptr == 0)
             pg_log_fatal(logger, EINVAL, "Invalid arg0 in free: arg0=%llu",
-                         arg0);
+                         (uint64_t)arg0);
 
           pg_array_append(*events, event);
           event_t* const me = &((*events)[pg_array_len(*events) - 1]);
           me->related_event = -1;
 
-          for (int64_t j = pg_array_len(*events) - 2; j >= 0; j--) {
+          for (int64_t j = (int64_t)pg_array_len(*events) - 2; j >= 0; j--) {
             event_t* const other = &((*events)[j]);
 
             if (other->kind == EK_FREE) continue;
-            if (other->kind == EK_ALLOC && other->v.alloc.ptr == ptr) {
+            if ((other->kind == EK_ALLOC && other->v.alloc.ptr == ptr) ||
+                (other->kind == EK_REALLOC &&
+                 other->v.realloc.new_ptr == ptr)) {
               me->related_event = j;
               me->size = other->size;
-              other->related_event = pg_array_len(*events) - 1;
-              break;
-            } else if (other->kind == EK_REALLOC &&
-                       other->v.realloc.new_ptr == ptr) {
-              me->related_event = j;
-              me->size = other->size;
-              other->related_event = pg_array_len(*events) - 1;
+              other->related_event = (int64_t)(pg_array_len(*events) - 1);
               break;
             }
           }
@@ -281,9 +280,8 @@ static void print_html(const pg_array_t(event_t) events,
   // const uint64_t rect_margin_top = 1;
   // const uint64_t rect_margin_right = 3;
 
-  const uint64_t monitoring_start = (double)events[0].timestamp;
-  const uint64_t monitoring_end =
-      (double)events[pg_array_len(events) - 1].timestamp;
+  const uint64_t monitoring_start = events[0].timestamp;
+  const uint64_t monitoring_end = events[pg_array_len(events) - 1].timestamp;
   const uint64_t monitoring_duration = monitoring_end - monitoring_start;
 
   const uint64_t chart_w = 1600;
@@ -355,8 +353,9 @@ static void print_html(const pg_array_t(event_t) events,
     const double val = log((double)i);
     const double py = val / max_log_size;
     const uint64_t y =
-        chart_padding_top +
-        (chart_padding_top + chart_h - ((double)font_size / 2)) * (1.0 - py);
+        (uint64_t)(chart_padding_top +
+                   (chart_padding_top + chart_h - ((double)font_size / 2)) *
+                       (1.0 - py));
     if (py > 1.0) {
       printf(
           "<g><text x=\"%llu\" y=\"%llu\">%s</text></g>"
@@ -381,17 +380,19 @@ static void print_html(const pg_array_t(event_t) events,
     // event since we have no useful information in that case
     if (event.kind == EK_FREE && event.related_event == -1) continue;
 
-    const double px =
-        ((double)(event.timestamp - monitoring_start)) / monitoring_duration;
+    const double px = (((double)event.timestamp - (double)monitoring_start)) /
+                      (double)monitoring_duration;
     assert(px <= 1.0);
 
-    const uint64_t x = chart_margin_left + px * (chart_w - chart_margin_left);
+    const uint64_t x =
+        (uint64_t)(chart_margin_left + px * (chart_w - chart_margin_left));
     assert(x <= chart_w + chart_margin_left);
 
     const double py =
         event.size == 0 ? 0 : (log((double)event.size) / max_log_size);
     assert(py <= 1.0);
-    const uint64_t y = chart_padding_top + (chart_h - circle_r) * (1.0 - py);
+    const uint64_t y = (uint64_t)(chart_padding_top +
+                                  (double)(chart_h - circle_r) * (1.0 - py));
     assert(y <= chart_padding_top + (chart_h - circle_r));
 
     const uint64_t ptr = event_ptr(events, &event);
@@ -504,10 +505,10 @@ int main(int argc, char* argv[]) {
       pg_log_fatal(&logger, errno, "Failed to open file %s: %s", argv[1],
                    strerror(errno));
     }
-    int ret = 0;
+    int64_t ret = 0;
     if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &file_data)) != 0) {
       pg_log_fatal(&logger, ret, "Failed to read file %s: %s", argv[1],
-                   strerror(ret));
+                   strerror((int)ret));
     }
   } else {
     return EINVAL;
