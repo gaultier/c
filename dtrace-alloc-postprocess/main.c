@@ -441,15 +441,17 @@ int main(int argc, char* argv[]) {
     const uint64_t y = chart_padding_top + (chart_h - circle_r) * (1.0 - py);
     assert(y <= chart_padding_top + (chart_h - circle_r));
 
+    const uint64_t ptr = event_ptr(events, &event);
     printf(
         "<g class=\"datapoint\"><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
         "r=\"%llu\" data-kind=\"%s\" data-id=\"%llu\" "
         "data-refid=\"%lld\" "
         "data-size=\"%llu\" data-ptr=\"%#llx\" data-timestamp=\"%llu\" "
         "data-stacktrace=\"",
-        event.kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r,
-        event.kind == EK_FREE ? "free" : "alloc", i, event.related_event,
-        event.size, event_ptr(events, &event), event.timestamp);
+        event.kind == EK_FREE ? "goldenrod"
+                              : (ptr == 0 ? "crimson" : "steelblue"),
+        x, y, circle_r, event.kind == EK_FREE ? "free" : "alloc", i,
+        event.related_event, event.size, ptr, event.timestamp);
 
     for (uint64_t j = 0; j < pg_array_len(event.stacktrace); j++) {
       const uint64_t fn_i = event.stacktrace[j].fn_i;
