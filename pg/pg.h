@@ -289,14 +289,6 @@ __attribute__((unused)) static bool pg_char_is_alphanumeric(char c) {
   return pg_char_is_alpha(c) || pg_char_is_digit(c);
 }
 
-__attribute__((unused)) static bool pg_str_has_prefix(char *haystack0,
-                                                      char *needle0) {
-  uint64_t haystack0_len = strlen(haystack0);
-  uint64_t needle0_len = strlen(needle0);
-  if (needle0_len > haystack0_len) return false;
-  return memcmp(haystack0, needle0, needle0_len) == 0;
-}
-
 // ------------------ Strings
 
 typedef char *pg_string_t;
@@ -410,6 +402,26 @@ __attribute__((unused)) static void pg_string_clear(pg_string_t str) {
   str[0] = '\0';
 }
 
+__attribute__((unused)) static bool pg_str_has_suffix(char const *str,
+                                                      char const *suffix) {
+  uint64_t i = strlen(str);
+  uint64_t j = strlen(suffix);
+  if (j <= i) {
+    return strcmp(str + i - j, suffix) == 0;
+  }
+  return false;
+}
+
+__attribute__((unused)) static bool pg_str_has_prefix(char const *str,
+                                                      char const *prefix) {
+  while (*prefix) {
+    if (*str++ != *prefix++) {
+      return false;
+    }
+  }
+  return true;
+}
+
 __attribute__((unused)) static pg_string_t pg_string_make_space_for(
     pg_string_t str, uint64_t add_len) {
   const uint64_t available = pg_string_available_space(str);
@@ -476,7 +488,8 @@ __attribute__((unused)) static pg_string_t pg_string_url_encode(
   return pg_span_url_encode(allocator, span);
 }
 
-pg_string_t pg_string_trim(pg_string_t str, char const *cut_set) {
+__attribute__((unused)) static pg_string_t pg_string_trim(pg_string_t str,
+                                                          char const *cut_set) {
   char *start = NULL, *end = NULL, *start_pos = NULL, *end_pos = NULL;
   uint64_t len = 0;
 
