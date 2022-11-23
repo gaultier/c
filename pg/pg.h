@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -1097,7 +1096,7 @@ __attribute__((unused)) static bool pg_array_read_file_fd(
     pg_allocator_t allocator, int fd, pg_array_t(uint8_t) * buf) {
   struct stat st = {0};
   if (fstat(fd, &st) == -1) {
-    return errno;
+    return false;
   }
   const uint64_t read_buffer_size =
       MIN((uint64_t)UINT32_MAX, (uint64_t)st.st_size);
@@ -1105,33 +1104,33 @@ __attribute__((unused)) static bool pg_array_read_file_fd(
   while (pg_array_len(*buf) < (uint64_t)st.st_size) {
     int64_t ret = read(fd, *buf + pg_array_len(*buf), read_buffer_size);
     if (ret == -1) {
-      return errno;
+      return false;
     }
-    if (ret == 0) return 0;
+    if (ret == 0) return true;
     pg_array_resize(*buf, pg_array_len(*buf) + (uint64_t)ret);
   }
-  return 0;
+  return true;
 }
 
 __attribute__((unused)) static bool pg_string_read_file_fd(int fd,
                                                            pg_string_t *str) {
   struct stat st = {0};
   if (fstat(fd, &st) == -1) {
-    return errno;
+    return false;
   }
   const uint64_t read_buffer_size =
       MIN((uint64_t)UINT32_MAX, (uint64_t)st.st_size);
   while (pg_string_len(*str) < (uint64_t)st.st_size) {
     int64_t ret = read(fd, *str + pg_string_len(*str), read_buffer_size);
     if (ret == -1) {
-      return errno;
+      return false;
     }
-    if (ret == 0) return 0;
+    if (ret == 0) return true;
     const uint64_t new_len = pg_string_len(*str) + (uint64_t)ret;
     pg_string_make_space_for(*str, new_len);
     pg__set_string_len(*str, new_len);
   }
-  return 0;
+  return true;
 }
 
 __attribute__((unused)) static bool pg_read_file(pg_allocator_t allocator,

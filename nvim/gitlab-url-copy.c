@@ -1,4 +1,3 @@
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -76,9 +75,9 @@ static pg_string_t get_current_git_commit() {
 }
 
 static pg_string_t get_git_origin_remote_url() {
-    char* cmd = "git remote get-url origin";
+    const char* const cmd = "git remote get-url origin";
     printf("Running: %s\n", cmd);
-    FILE* cmd_handle = popen(cmd, "r");
+    FILE* const cmd_handle = popen(cmd, "r");
     assert(cmd_handle != NULL);
 
     pg_string_t output =

@@ -1,5 +1,5 @@
 pg_test: pg_test.c
-	$(CC) -Weverything -g $(CFLAGS) $^ -o $@ $(LDFLAGS) -lm -Wno-used-but-marked-unused
+	$(CC) -Weverything -Wno-used-but-marked-unused -g $(CFLAGS) $^ -o $@ $(LDFLAGS) -lm -std=c99
 
 test: pg_test
 	./$^
