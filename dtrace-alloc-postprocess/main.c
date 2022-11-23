@@ -1,3 +1,4 @@
+#include <_types/_uint64_t.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -88,7 +89,7 @@ static stacktrace_entry_t fn_name_to_stacktrace_entry(
                             &right) &&
       right.len > 0) {  // +0xab present at the end
     bool valid = false;
-    offset = pg_span_parse_u64_hex(right, &valid);
+    offset = pg_span_parse_i64_hex(right, &valid);
     if (!valid)
       pg_log_fatal(logger, EINVAL, "Invalid offset: name=%.*s offset=%.*s",
                    (int)name.len, name.data, (int)right.len, right.data);
@@ -156,7 +157,7 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
     pg_span_trim_left(&input);
     bool timestamp_valid = false;
     event.timestamp =
-        pg_span_parse_u64_decimal(timestamp_span, &timestamp_valid);
+        (uint64_t)(pg_span_parse_i64_decimal(timestamp_span, &timestamp_valid));
     if (!timestamp_valid)
       pg_log_fatal(logger, EINVAL, "Invalid timestamp: %.*s",
                    (int)timestamp_span.len, timestamp_span.data);
@@ -168,8 +169,8 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
     bool arg0_valid = false;
     const uint64_t arg0 =
         event.kind == EK_FREE
-            ? pg_span_parse_u64_hex(arg0_span, &arg0_valid)
-            : pg_span_parse_u64_decimal(arg0_span, &arg0_valid);
+            ? pg_span_parse_i64_hex(arg0_span, &arg0_valid)
+            : (uint64_t)(pg_span_parse_i64_decimal(arg0_span, &arg0_valid));
     if (!arg0_valid)
       pg_log_fatal(logger, EINVAL, "Invalid arg0: %.*s", (int)arg0_span.len,
                    arg0_span.data);
@@ -182,7 +183,7 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
     if (event.kind != EK_FREE) {
       if (arg1_span.len != 0) {
         bool arg1_valid = false;
-        arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
+        arg1 = pg_span_parse_i64_hex(arg1_span, &arg1_valid);
         if (!arg1_valid)
           pg_log_fatal(logger, EINVAL, "Invalid arg1: %.*s", (int)arg1_span.len,
                        arg1_span.data);
@@ -197,7 +198,7 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
       pg_span_trim_left(&input);
       if (arg2_span.len != 0) {
         bool arg2_valid = false;
-        arg2 = pg_span_parse_u64_hex(arg1_span, &arg2_valid);
+        arg2 = pg_span_parse_i64_hex(arg1_span, &arg2_valid);
         if (!arg2_valid)
           pg_log_fatal(logger, EINVAL, "Invalid arg2: %.*s", (int)arg2_span.len,
                        arg2_span.data);

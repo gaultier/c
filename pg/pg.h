@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -56,56 +55,28 @@ struct pg_allocator_t {
   void (*free)(void *memory);
 };
 
-void *pg_heap_realloc(void *old_memory, uint64_t new_size, uint64_t old_size) {
+__attribute__((unused)) static void *pg_heap_realloc(void *old_memory,
+                                                     uint64_t new_size,
+                                                     uint64_t old_size) {
   void *res = realloc(old_memory, new_size);
   memset((uint8_t *)res + old_size, 0, new_size - old_size);
   return res;
 }
 
-void pg_heap_free(void *memory) { free(memory); }
+__attribute__((unused)) static void pg_heap_free(void *memory) { free(memory); }
 
-pg_allocator_t pg_heap_allocator() {
+__attribute__((unused)) static pg_allocator_t pg_heap_allocator() {
   return (pg_allocator_t){.realloc = pg_heap_realloc, .free = pg_heap_free};
-}
-
-void *pg_stack_realloc(void *old_memory, uint64_t new_size, uint64_t old_size) {
-  (void)old_memory;
-  (void)old_size;
-
-  void *res = alloca(new_size);
-  memset(res, 0, new_size);
-  return res;
-}
-
-void pg_stack_free(void *memory) {
-  (void)memory;  // no-op
-}
-
-pg_allocator_t pg_stack_allocator() {
-  return (pg_allocator_t){.realloc = pg_stack_realloc, .free = pg_stack_free};
-}
-
-void *pg_null_realloc(void *old_memory, uint64_t new_size, uint64_t old_size) {
-  (void)new_size;
-  (void)old_memory;
-  (void)old_size;
-  __builtin_unreachable();
-}
-
-void pg_null_free(void *memory) {
-  (void)memory;
-  __builtin_unreachable();
-}
-
-pg_allocator_t pg_null_allocator() {
-  return (pg_allocator_t){.realloc = pg_null_realloc, .free = pg_null_free};
 }
 
 // -------------------------- Pool
 
-bool pg_is_power_of_two(uint64_t x) { return (x & (x - 1)) == 0; }
+__attribute__((unused)) static bool pg_is_power_of_two(uint64_t x) {
+  return (x & (x - 1)) == 0;
+}
 
-uint64_t pg_align_forward(uint64_t ptr, uint64_t align) {
+__attribute__((unused)) static uint64_t pg_align_forward(uint64_t ptr,
+                                                         uint64_t align) {
   uint64_t p = 0, a = 0, modulo = 0;
 
   assert(pg_is_power_of_two(align));
@@ -136,7 +107,7 @@ typedef struct {
   pg_pool_free_node_t *head;
 } pg_pool_t;
 
-void pg_pool_free_all(pg_pool_t *pool) {
+__attribute__((unused)) static void pg_pool_free_all(pg_pool_t *pool) {
   for (uint64_t i = 0; i < pool->buf_len / pool->chunk_size; i++) {
     void *ptr = &pool->buf[i * pool->chunk_size];
     pg_pool_free_node_t *node = (pg_pool_free_node_t *)ptr;
@@ -145,7 +116,7 @@ void pg_pool_free_all(pg_pool_t *pool) {
   }
 }
 
-void *pg_pool_alloc(pg_pool_t *pool) {
+__attribute__((unused)) static void *pg_pool_alloc(pg_pool_t *pool) {
   pg_pool_free_node_t *node = pool->head;
   if (node == NULL) return NULL;  // No more space
 
@@ -154,7 +125,7 @@ void *pg_pool_alloc(pg_pool_t *pool) {
   return memset(node, 0, pool->chunk_size);
 }
 
-void pg_pool_free(pg_pool_t *pool, void *ptr) {
+__attribute__((unused)) static void pg_pool_free(pg_pool_t *pool, void *ptr) {
   assert(ptr != NULL);
   assert(ptr >= (void *)pool->buf);
   assert((uint8_t *)ptr <
@@ -165,8 +136,9 @@ void pg_pool_free(pg_pool_t *pool, void *ptr) {
   pool->head = node;
 }
 
-void pg_pool_init(pg_pool_t *pool, uint64_t chunk_size,
-                  uint64_t max_items_count) {
+__attribute__((unused)) static void pg_pool_init(pg_pool_t *pool,
+                                                 uint64_t chunk_size,
+                                                 uint64_t max_items_count) {
   // TODO: allow using existing chunk of mem
   // TODO: alignement
 
@@ -182,7 +154,9 @@ void pg_pool_init(pg_pool_t *pool, uint64_t chunk_size,
   pg_pool_free_all(pool);
 }
 
-void pg_pool_destroy(pg_pool_t *pool) { free(pool->buf); }
+__attribute__((unused)) static void pg_pool_destroy(pg_pool_t *pool) {
+  free(pool->buf);
+}
 
 // --------------------------- Array
 
@@ -195,10 +169,10 @@ typedef struct pg_array_header_t {
 #define pg_array_t(Type) Type *
 
 #ifndef PG_ARRAY_GROW_FORMULA
-#define PG_ARRAY_GROW_FORMULA(x) (1.5 * (x) + 8)
+#define PG_ARRAY_GROW_FORMULA(x) ((uint64_t)(1.5 * (x) + 8))
 #endif
 
-#define PG_ARRAY_HEADER(x) ((pg_array_header_t *)(x)-1)
+#define PG_ARRAY_HEADER(x) (((pg_array_header_t *)((void *)x)) - 1)
 #define pg_array_len(x) (PG_ARRAY_HEADER(x)->len)
 #define pg_array_capacity(x) (PG_ARRAY_HEADER(x)->capacity)
 #define pg_array_available_space(x) (pg_array_capacity(x) - pg_array_len(x))
@@ -262,32 +236,33 @@ typedef struct pg_array_header_t {
     PG_ARRAY_HEADER(x)->len = (uint64_t)(new_count);          \
   } while (0)
 
-char pg_char_to_lower(char c) {
+__attribute__((unused)) static char pg_char_to_lower(char c) {
   if (c >= 'A' && c <= 'Z') return 'a' + (c - 'A');
   return c;
 }
 
-bool pg_char_is_space(char c) {
+__attribute__((unused)) static bool pg_char_is_space(char c) {
   if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f' || c == '\v')
     return true;
   return false;
 }
 
-bool pg_char_is_digit(char c) {
+__attribute__((unused)) static bool pg_char_is_digit(char c) {
   if (c >= '0' && c <= '9') return true;
   return false;
 }
 
-bool pg_char_is_alpha(char c) {
+__attribute__((unused)) static bool pg_char_is_alpha(char c) {
   if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) return true;
   return false;
 }
 
-bool pg_char_is_alphanumeric(char c) {
+__attribute__((unused)) static bool pg_char_is_alphanumeric(char c) {
   return pg_char_is_alpha(c) || pg_char_is_digit(c);
 }
 
-bool pg_str_has_prefix(char *haystack0, char *needle0) {
+__attribute__((unused)) static bool pg_str_has_prefix(char *haystack0,
+                                                      char *needle0) {
   uint64_t haystack0_len = strlen(haystack0);
   uint64_t needle0_len = strlen(needle0);
   if (needle0_len > haystack0_len) return false;
@@ -306,17 +281,20 @@ typedef struct pg_string_header_t {
   uint64_t capacity;
 } pg_string_header_t;
 
-#define PG_STRING_HEADER(str) ((pg_string_header_t *)(str)-1)
+#define PG_STRING_HEADER(str) ((pg_string_header_t *)((void *)str) - 1)
 
-void pg__set_string_length(pg_string_t str, uint64_t len) {
+__attribute__((unused)) static void pg__set_string_length(pg_string_t str,
+                                                          uint64_t len) {
   PG_STRING_HEADER(str)->length = len;
 }
 
-void pg__set_string_capacity(pg_string_t str, uint64_t cap) {
+__attribute__((unused)) static void pg__set_string_capacity(pg_string_t str,
+                                                            uint64_t cap) {
   PG_STRING_HEADER(str)->capacity = cap;
 }
 
-pg_string_t pg_string_make_reserve(pg_allocator_t a, uint64_t capacity) {
+__attribute__((unused)) static pg_string_t pg_string_make_reserve(
+    pg_allocator_t a, uint64_t capacity) {
   uint64_t header_size = sizeof(pg_string_header_t);
   void *ptr = a.realloc(NULL, header_size + capacity + 1, 0);
 
@@ -336,8 +314,8 @@ pg_string_t pg_string_make_reserve(pg_allocator_t a, uint64_t capacity) {
   return str;
 }
 
-pg_string_t pg_string_make_length(pg_allocator_t a, void const *init_str,
-                                  uint64_t num_bytes) {
+__attribute__((unused)) static pg_string_t pg_string_make_length(
+    pg_allocator_t a, void const *init_str, uint64_t num_bytes) {
   uint64_t header_size = sizeof(pg_string_header_t);
   void *ptr = a.realloc(NULL, header_size + num_bytes + 1, 0);
 
@@ -360,33 +338,40 @@ pg_string_t pg_string_make_length(pg_allocator_t a, void const *init_str,
   return str;
 }
 
-pg_string_t pg_string_make(pg_allocator_t a, char const *str) {
+__attribute__((unused)) static pg_string_t pg_string_make(pg_allocator_t a,
+                                                          char const *str) {
   uint64_t len = str ? strlen(str) : 0;
   return pg_string_make_length(a, str, len);
 }
 
-void pg_string_free(pg_string_t str) {
+__attribute__((unused)) static void pg_string_free(pg_string_t str) {
   if (str) {
     pg_string_header_t *header = PG_STRING_HEADER(str);
     header->allocator.free(header);
   }
 }
 
-void pg_string_free_ptr(pg_string_t *str) { pg_string_free(*str); }
+__attribute__((unused)) static void pg_string_free_ptr(pg_string_t *str) {
+  pg_string_free(*str);
+}
 
-uint64_t pg_string_length(pg_string_t const str) {
+__attribute__((unused)) static uint64_t pg_string_length(
+    pg_string_t const str) {
   return PG_STRING_HEADER(str)->length;
 }
 
-pg_string_t pg_string_duplicate(pg_allocator_t a, pg_string_t const str) {
+__attribute__((unused)) static pg_string_t pg_string_duplicate(
+    pg_allocator_t a, pg_string_t const str) {
   return pg_string_make_length(a, str, pg_string_length(str));
 }
 
-uint64_t pg_string_capacity(pg_string_t const str) {
+__attribute__((unused)) static uint64_t pg_string_capacity(
+    pg_string_t const str) {
   return PG_STRING_HEADER(str)->capacity;
 }
 
-uint64_t pg_string_available_space(pg_string_t const str) {
+__attribute__((unused)) static uint64_t pg_string_available_space(
+    pg_string_t const str) {
   pg_string_header_t *h = PG_STRING_HEADER(str);
   if (h->capacity > h->length) {
     return h->capacity - h->length;
@@ -394,20 +379,21 @@ uint64_t pg_string_available_space(pg_string_t const str) {
   return 0;
 }
 
-void pg_string_clear(pg_string_t str) {
+__attribute__((unused)) static void pg_string_clear(pg_string_t str) {
   pg__set_string_length(str, 0);
   str[0] = '\0';
 }
 
-pg_string_t pg_string_make_space_for(pg_string_t str, int64_t add_len) {
-  int64_t available = pg_string_available_space(str);
+__attribute__((unused)) static pg_string_t pg_string_make_space_for(
+    pg_string_t str, uint64_t add_len) {
+  const uint64_t available = pg_string_available_space(str);
 
   // NOTE(bill): Return if there is enough space left
   if (available >= add_len) {
     return str;
   } else {
-    int64_t new_len, old_size, new_size;
-    void *ptr, *new_ptr;
+    uint64_t new_len = 0, old_size = 0, new_size = 0;
+    void *ptr = NULL, *new_ptr = NULL;
     pg_allocator_t a = PG_STRING_HEADER(str)->allocator;
     pg_string_header_t *header;
 
@@ -428,8 +414,8 @@ pg_string_t pg_string_make_space_for(pg_string_t str, int64_t add_len) {
     return str;
   }
 }
-pg_string_t pg_string_append_length(pg_string_t str, void const *other,
-                                    uint64_t other_len) {
+__attribute__((unused)) static pg_string_t pg_string_append_length(
+    pg_string_t str, void const *other, uint64_t other_len) {
   if (other_len > 0) {
     uint64_t curr_len = pg_string_length(str);
 
@@ -445,17 +431,21 @@ pg_string_t pg_string_append_length(pg_string_t str, void const *other,
   return str;
 }
 
-pg_string_t pg_string_append(pg_string_t str, pg_string_t const other) {
+__attribute__((unused)) static pg_string_t pg_string_append(
+    pg_string_t str, pg_string_t const other) {
   return pg_string_append_length(str, other, pg_string_length(other));
 }
 
-pg_string_t pg_string_appendc(pg_string_t str, char const *other) {
+__attribute__((unused)) static pg_string_t pg_string_appendc(
+    pg_string_t str, char const *other) {
   return pg_string_append_length(str, other, strlen(other));
 }
 
-pg_string_t pg_span_url_encode(pg_allocator_t allocator, pg_span_t src);
+__attribute__((unused)) static pg_string_t pg_span_url_encode(
+    pg_allocator_t allocator, pg_span_t src);
 
-pg_string_t pg_string_url_encode(pg_allocator_t allocator, pg_string_t src) {
+__attribute__((unused)) static pg_string_t pg_string_url_encode(
+    pg_allocator_t allocator, pg_string_t src) {
   pg_span_t span = {.data = src, .len = pg_string_length(src)};
   return pg_span_url_encode(allocator, span);
 }
@@ -463,7 +453,7 @@ pg_string_t pg_string_url_encode(pg_allocator_t allocator, pg_string_t src) {
 // ---------------- Hashtable
 
 // FNV-1a
-uint32_t pg_hash(uint8_t *n, uint64_t len) {
+__attribute__((unused)) static uint32_t pg_hash(uint8_t *n, uint64_t len) {
   uint32_t hash = 2166136261u;
   for (uint64_t i = 0; i < len; i++) {
     hash ^= (uint8_t)n[i];
@@ -473,7 +463,8 @@ uint32_t pg_hash(uint8_t *n, uint64_t len) {
 }
 // ------------------ Span
 
-char pg_span_peek_left(pg_span_t span, bool *found) {
+__attribute__((unused)) static char pg_span_peek_left(pg_span_t span,
+                                                      bool *found) {
   if (span.len > 0) {
     if (found != NULL) *found = true;
     return span.data[0];
@@ -483,7 +474,8 @@ char pg_span_peek_left(pg_span_t span, bool *found) {
   }
 }
 
-char pg_span_peek_right(pg_span_t span, bool *found) {
+__attribute__((unused)) static char pg_span_peek_right(pg_span_t span,
+                                                       bool *found) {
   if (span.len > 0) {
     if (found != NULL) *found = true;
     return span.data[span.len - 1];
@@ -493,7 +485,8 @@ char pg_span_peek_right(pg_span_t span, bool *found) {
   }
 }
 
-void pg_span_consume_left(pg_span_t *span, uint64_t n) {
+__attribute__((unused)) static void pg_span_consume_left(pg_span_t *span,
+                                                         uint64_t n) {
   assert(span != NULL);
 
   if (span->len == 0) return;
@@ -505,7 +498,8 @@ void pg_span_consume_left(pg_span_t *span, uint64_t n) {
   span->len -= n;
 }
 
-void pg_span_consume_right(pg_span_t *span, uint64_t n) {
+__attribute__((unused)) static void pg_span_consume_right(pg_span_t *span,
+                                                          uint64_t n) {
   assert(span != NULL);
 
   if (span->len == 0) return;
@@ -516,8 +510,10 @@ void pg_span_consume_right(pg_span_t *span, uint64_t n) {
   span->len -= n;
 }
 
-bool pg_span_split_at_first(pg_span_t span, char needle, pg_span_t *left,
-                            pg_span_t *right) {
+__attribute__((unused)) static bool pg_span_split_at_first(pg_span_t span,
+                                                           char needle,
+                                                           pg_span_t *left,
+                                                           pg_span_t *right) {
   *left = (pg_span_t){0};
   *right = (pg_span_t){0};
 
@@ -537,17 +533,19 @@ bool pg_span_split_at_first(pg_span_t span, char needle, pg_span_t *left,
   return false;
 }
 
-bool pg_span_split_at_last(pg_span_t span, char needle, pg_span_t *left,
-                           pg_span_t *right) {
+__attribute__((unused)) static bool pg_span_split_at_last(pg_span_t span,
+                                                          char needle,
+                                                          pg_span_t *left,
+                                                          pg_span_t *right) {
   *left = (pg_span_t){0};
   *right = (pg_span_t){0};
-  for (int64_t i = span.len - 1; i >= 0; i--) {
+  for (int64_t i = (int64_t)(span.len - 1); i >= 0; i--) {
     if (span.data[i] == needle) {
       left->data = span.data;
-      left->len = i;
+      left->len = (uint64_t)i;
 
       right->data = &span.data[i];
-      right->len = span.len - i;
+      right->len = span.len - (uint64_t)i;
       assert(right->data[0] == needle);
 
       return true;
@@ -557,7 +555,8 @@ bool pg_span_split_at_last(pg_span_t span, char needle, pg_span_t *left,
   return false;
 }
 
-bool pg_span_skip_left_until_inclusive(pg_span_t *span, char needle) {
+__attribute__((unused)) static bool pg_span_skip_left_until_inclusive(
+    pg_span_t *span, char needle) {
   pg_span_t left = {0}, right = {0};
   if (!pg_span_split_at_first(*span, needle, &left, &right)) {
     return false;
@@ -568,7 +567,7 @@ bool pg_span_skip_left_until_inclusive(pg_span_t *span, char needle) {
   return true;
 }
 
-void pg_span_trim_left(pg_span_t *span) {
+__attribute__((unused)) static void pg_span_trim_left(pg_span_t *span) {
   bool more_chars = false;
   char c = 0;
   while (true) {
@@ -581,7 +580,7 @@ void pg_span_trim_left(pg_span_t *span) {
   }
 }
 
-void pg_span_trim_right(pg_span_t *span) {
+__attribute__((unused)) static void pg_span_trim_right(pg_span_t *span) {
   bool more_chars = false;
   char c = 0;
   while (true) {
@@ -594,57 +593,62 @@ void pg_span_trim_right(pg_span_t *span) {
   }
 }
 
-void pg_span_trim(pg_span_t *span) {
+__attribute__((unused)) static void pg_span_trim(pg_span_t *span) {
   pg_span_trim_left(span);
   pg_span_trim_right(span);
 }
 
-bool pg_span_contains(pg_span_t haystack, pg_span_t needle) {
+__attribute__((unused)) static bool pg_span_contains(pg_span_t haystack,
+                                                     pg_span_t needle) {
   if (needle.len > haystack.len) return false;
   return memmem(haystack.data, haystack.len, needle.data, needle.len) != NULL;
 }
 
-bool pg_span_ends_with(pg_span_t haystack, pg_span_t needle) {
+__attribute__((unused)) static bool pg_span_ends_with(pg_span_t haystack,
+                                                      pg_span_t needle) {
   if (needle.len > haystack.len) return false;
   return memmem(haystack.data + haystack.len - needle.len, needle.len,
                 needle.data, needle.len) != NULL;
 }
 
-pg_string_t pg_span_url_encode(pg_allocator_t allocator, pg_span_t src) {
+__attribute__((unused)) static pg_string_t pg_span_url_encode(
+    pg_allocator_t allocator, pg_span_t src) {
   pg_string_t res = pg_string_make_reserve(allocator, 3 * src.len);
 
   for (uint64_t i = 0; i < src.len; i++) {
     char buf[4] = {0};
     const uint64_t len =
-        snprintf(buf, sizeof(buf), "%%%02X", (uint8_t)src.data[i]);
+        (uint64_t)(snprintf(buf, sizeof(buf), "%%%02X", (uint8_t)src.data[i]));
     res = pg_string_append_length(res, buf, len);
   }
 
   return res;
 }
 
-pg_span_t pg_span_make(pg_string_t s) {
+__attribute__((unused)) static pg_span_t pg_span_make(pg_string_t s) {
   return (pg_span_t){.data = s, .len = pg_string_length(s)};
 }
 
-pg_span_t pg_span_make_c(char *s) {
+__attribute__((unused)) static pg_span_t pg_span_make_c(char *s) {
   return (pg_span_t){.data = s, .len = strlen(s)};
 }
 
-bool pg_span_starts_with(pg_span_t haystack, pg_span_t needle) {
+__attribute__((unused)) static bool pg_span_starts_with(pg_span_t haystack,
+                                                        pg_span_t needle) {
   if (needle.len > haystack.len) return false;
   return memmem(haystack.data, needle.len, needle.data, needle.len) != NULL;
 }
 
-bool pg_span_eq(pg_span_t a, pg_span_t b) {
+__attribute__((unused)) static bool pg_span_eq(pg_span_t a, pg_span_t b) {
   return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
 }
 
-uint64_t pg_span_parse_u64_hex(pg_span_t span, bool *valid) {
+__attribute__((unused)) static int64_t pg_span_parse_i64_hex(pg_span_t span,
+                                                             bool *valid) {
   pg_span_trim(&span);
 
-  uint64_t res = 0;
-  uint64_t sign = 1;
+  int64_t res = 0;
+  int64_t sign = 1;
   if (pg_span_peek_left(span, NULL) == '-') {
     sign = -1;
     pg_span_consume_left(&span, 1);
@@ -662,7 +666,7 @@ uint64_t pg_span_parse_u64_hex(pg_span_t span, bool *valid) {
     }
 
     res *= 16;
-    uint64_t n = 0;
+    int64_t n = 0;
     char c = pg_char_to_lower(span.data[i]);
 
     if (c == 'a')
@@ -678,7 +682,7 @@ uint64_t pg_span_parse_u64_hex(pg_span_t span, bool *valid) {
     else if (c == 'f')
       n = 15;
     else if (pg_char_is_digit(c))
-      n = c - '0';
+      n = (uint8_t)c - '0';
     else {
       *valid = false;
       return 0;
@@ -690,11 +694,12 @@ uint64_t pg_span_parse_u64_hex(pg_span_t span, bool *valid) {
   return sign * res;
 }
 
-uint64_t pg_span_parse_u64_decimal(pg_span_t span, bool *valid) {
+__attribute__((unused)) static int64_t pg_span_parse_i64_decimal(pg_span_t span,
+                                                                 bool *valid) {
   pg_span_trim(&span);
 
-  uint64_t res = 0;
-  uint64_t sign = 1;
+  int64_t res = 0;
+  int64_t sign = 1;
 
   if (pg_span_peek_left(span, NULL) == '-') {
     sign = -1;
@@ -710,139 +715,10 @@ uint64_t pg_span_parse_u64_decimal(pg_span_t span, bool *valid) {
     }
 
     res *= 10;
-    res += span.data[i] - '0';
+    res += (uint8_t)span.data[i] - '0';
   }
   *valid = true;
   return sign * res;
-}
-
-// ------------- Span u32
-
-char pg_span32_peek(pg_span32_t span) {
-  if (span.len > 0)
-    return span.data[0];
-  else
-    return 0;
-}
-
-void pg_span32_consume_left(pg_span32_t *span, uint32_t n) {
-  assert(span != NULL);
-
-  if (span->len == 0) return;
-
-  assert(span->data != NULL);
-  assert(span->len >= n);
-
-  span->data += n;
-  span->len -= n;
-}
-
-void pg_span32_consume_right(pg_span32_t *span, uint32_t n) {
-  assert(span != NULL);
-
-  if (span->len == 0) return;
-
-  assert(span->data != NULL);
-  assert(span->len >= n);
-
-  span->len -= n;
-}
-
-bool pg_span32_split_left(pg_span32_t span, char needle, pg_span32_t *left,
-                          pg_span32_t *right) {
-  char *end = memchr(span.data, needle, span.len);
-  *left = (pg_span32_t){0};
-  *right = (pg_span32_t){0};
-
-  if (end == NULL) {
-    *left = span;
-    return false;
-  }
-
-  left->data = span.data;
-  left->len = end - span.data;
-
-  if ((uint32_t)(end - span.data) < span.len - 1) {
-    right->data = end;
-    right->len = span.len - left->len;
-    assert(right->data[0] == needle);
-  }
-  return true;
-}
-
-pg_string_t pg_span32_url_encode(pg_allocator_t allocator, pg_span32_t src) {
-  pg_string_t res = pg_string_make_reserve(allocator, 3 * src.len);
-
-  for (uint32_t i = 0; i < src.len; i++) {
-    char buf[4] = {0};
-    const uint64_t len =
-        snprintf(buf, sizeof(buf), "%%%02X", (uint8_t)src.data[i]);
-    res = pg_string_append_length(res, buf, len);
-  }
-
-  return res;
-}
-
-pg_span32_t pg_span32_make(pg_string_t s) {
-  return (pg_span32_t){.data = s, .len = pg_string_length(s)};
-}
-
-pg_span32_t pg_span32_make_c(char *s) {
-  return (pg_span32_t){.data = s, .len = strlen(s)};
-}
-
-bool pg_span32_starts_with(pg_span32_t haystack, pg_span32_t needle) {
-  if (needle.len > haystack.len) return false;
-  return memmem(haystack.data, haystack.len, needle.data, needle.len) == 0;
-}
-
-bool pg_span32_eq(pg_span32_t a, pg_span32_t b) {
-  return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
-}
-
-uint64_t pg_span32_parse_u64(pg_span32_t span) {
-  uint64_t res = 0;
-
-  for (uint64_t i = 0; i < span.len; i++) {
-    assert(pg_char_is_digit(span.data[i]));
-
-    res *= 10;
-    res += span.data[i] - '0';
-  }
-  return res;
-}
-
-// ------------- File utils
-
-int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
-                        pg_array_t(uint8_t) * buf) {
-  struct stat st = {0};
-  if (fstat(fd, &st) == -1) {
-    return errno;
-  }
-  const uint64_t read_buffer_size =
-      MIN((uint64_t)UINT32_MAX, (uint64_t)st.st_size);
-  pg_array_init_reserve(*buf, st.st_size, allocator);
-  while (pg_array_len(*buf) < (uint64_t)st.st_size) {
-    int64_t ret = read(fd, *buf + pg_array_len(*buf), read_buffer_size);
-    if (ret == -1) {
-      return errno;
-    }
-    if (ret == 0) return 0;
-    pg_array_resize(*buf, pg_array_len(*buf) + ret);
-  }
-  return 0;
-}
-
-int64_t pg_read_file(pg_allocator_t allocator, char *path,
-                     pg_array_t(uint8_t) * buf) {
-  int fd = open(path, O_RDONLY);
-  if (fd == -1) {
-    return errno;
-  }
-  int ret = pg_read_file_fd(allocator, fd, buf);
-  close(fd);
-  return ret;
 }
 
 // -------------------------- Log
@@ -898,7 +774,9 @@ typedef struct {
   pg_allocator_t allocator;
 } pg_ring_t;
 
-void pg_ring_init(pg_allocator_t allocator, pg_ring_t *ring, uint64_t cap) {
+__attribute__((unused)) static void pg_ring_init(pg_allocator_t allocator,
+                                                 pg_ring_t *ring,
+                                                 uint64_t cap) {
   assert(cap > 0);
 
   ring->len = ring->offset = 0;
@@ -907,13 +785,20 @@ void pg_ring_init(pg_allocator_t allocator, pg_ring_t *ring, uint64_t cap) {
   ring->allocator = allocator;
 }
 
-uint64_t pg_ring_len(pg_ring_t *ring) { return ring->len; }
+__attribute__((unused)) static uint64_t pg_ring_len(pg_ring_t *ring) {
+  return ring->len;
+}
 
-uint64_t pg_ring_cap(pg_ring_t *ring) { return ring->cap; }
+__attribute__((unused)) static uint64_t pg_ring_cap(pg_ring_t *ring) {
+  return ring->cap;
+}
 
-void pg_ring_destroy(pg_ring_t *ring) { ring->allocator.free(ring->data); }
+__attribute__((unused)) static void pg_ring_destroy(pg_ring_t *ring) {
+  ring->allocator.free(ring->data);
+}
 
-uint8_t *pg_ring_get_ptr(pg_ring_t *ring, uint64_t i) {
+__attribute__((unused)) static uint8_t *pg_ring_get_ptr(pg_ring_t *ring,
+                                                        uint64_t i) {
   if (ring->cap == 0) return NULL;
 
   assert(i < ring->cap);
@@ -921,27 +806,33 @@ uint8_t *pg_ring_get_ptr(pg_ring_t *ring, uint64_t i) {
   return &ring->data[index];
 }
 
-uint8_t pg_ring_get(pg_ring_t *ring, uint64_t i) {
+__attribute__((unused)) static uint8_t pg_ring_get(pg_ring_t *ring,
+                                                   uint64_t i) {
   return *pg_ring_get_ptr(ring, i);
 }
 
-uint8_t *pg_ring_front_ptr(pg_ring_t *ring) {
+__attribute__((unused)) static uint8_t *pg_ring_front_ptr(pg_ring_t *ring) {
   assert(ring->offset < ring->cap);
   return &ring->data[ring->offset];
 }
 
-uint8_t pg_ring_front(pg_ring_t *ring) { return *pg_ring_front_ptr(ring); }
+__attribute__((unused)) static uint8_t pg_ring_front(pg_ring_t *ring) {
+  return *pg_ring_front_ptr(ring);
+}
 
-uint8_t *pg_ring_back_ptr(pg_ring_t *ring) {
+__attribute__((unused)) static uint8_t *pg_ring_back_ptr(pg_ring_t *ring) {
   if (ring->cap == 0) return NULL;
 
   const uint64_t index = (ring->offset + ring->len - 1) % ring->cap;
   return &ring->data[index];
 }
 
-uint8_t pg_ring_back(pg_ring_t *ring) { return *pg_ring_back_ptr(ring); }
+__attribute__((unused)) static uint8_t pg_ring_back(pg_ring_t *ring) {
+  return *pg_ring_back_ptr(ring);
+}
 
-void pg_ring_push_back(pg_ring_t *ring, uint8_t x) {
+__attribute__((unused)) static void pg_ring_push_back(pg_ring_t *ring,
+                                                      uint8_t x) {
   assert(ring->len < ring->cap);
 
   const uint64_t index = (ring->offset + ring->len) % ring->cap;
@@ -950,7 +841,8 @@ void pg_ring_push_back(pg_ring_t *ring, uint8_t x) {
   ring->len += 1;
 }
 
-void pg_ring_push_front(pg_ring_t *ring, uint8_t x) {
+__attribute__((unused)) static void pg_ring_push_front(pg_ring_t *ring,
+                                                       uint8_t x) {
   assert(ring->len < ring->cap);
 
   ring->offset = (ring->offset - 1 + ring->cap) % ring->cap;
@@ -959,7 +851,7 @@ void pg_ring_push_front(pg_ring_t *ring, uint8_t x) {
   ring->len += 1;
 }
 
-uint8_t pg_ring_pop_back(pg_ring_t *ring) {
+__attribute__((unused)) static uint8_t pg_ring_pop_back(pg_ring_t *ring) {
   assert(ring->len > 0);
   ring->len -= 1;
   const uint64_t index = (ring->offset + ring->len) % ring->cap;
@@ -967,7 +859,7 @@ uint8_t pg_ring_pop_back(pg_ring_t *ring) {
   return ring->data[index];
 }
 
-uint8_t pg_ring_pop_front(pg_ring_t *ring) {
+__attribute__((unused)) static uint8_t pg_ring_pop_front(pg_ring_t *ring) {
   assert(ring->len > 0);
   assert(ring->offset < ring->cap);
   const uint8_t res = ring->data[ring->offset];
@@ -978,25 +870,31 @@ uint8_t pg_ring_pop_front(pg_ring_t *ring) {
   return res;
 }
 
-void pg_ring_consume_front(pg_ring_t *ring, uint64_t n) {
+__attribute__((unused)) static void pg_ring_consume_front(pg_ring_t *ring,
+                                                          uint64_t n) {
   assert(n <= ring->len);
   ring->offset = (ring->offset + n) % ring->cap;
   ring->len -= n;
 }
 
-void pg_ring_consume_back(pg_ring_t *ring, uint64_t n) {
+__attribute__((unused)) static void pg_ring_consume_back(pg_ring_t *ring,
+                                                         uint64_t n) {
   assert(n <= ring->len);
   ring->len -= n;
 }
 
-void pg_ring_clear(pg_ring_t *ring) {
+__attribute__((unused)) static void pg_ring_clear(pg_ring_t *ring) {
   ring->offset = 0;
   ring->len = 0;
 }
 
-uint64_t pg_ring_space(pg_ring_t *ring) { return ring->cap - ring->len; }
+__attribute__((unused)) static uint64_t pg_ring_space(pg_ring_t *ring) {
+  return ring->cap - ring->len;
+}
 
-void pg_ring_push_backv(pg_ring_t *ring, uint8_t *data, uint64_t len) {
+__attribute__((unused)) static void pg_ring_push_backv(pg_ring_t *ring,
+                                                       uint8_t *data,
+                                                       uint64_t len) {
   assert(ring->len + len <= ring->cap);
 
   const uint64_t index = (ring->offset + ring->len) % ring->cap;
@@ -1021,42 +919,50 @@ typedef struct {
   uint64_t max_index;
 } pg_bitarray_t;
 
-void pg_bitarray_init(pg_allocator_t allocator, pg_bitarray_t *bitarr,
-                      uint64_t max_index) {
+__attribute__((unused)) static void pg_bitarray_init(pg_allocator_t allocator,
+                                                     pg_bitarray_t *bitarr,
+                                                     uint64_t max_index) {
   bitarr->max_index = max_index;
-  const uint64_t len = 1 + (uint64_t)ceil(((double)max_index) / 8.0);
+  const uint64_t len = 1 + (uint64_t)(ceil(((double)max_index) / 8.0));
   pg_array_init_reserve(bitarr->data, len, allocator);
   pg_array_resize(bitarr->data, len);
 }
 
-void pg_bitarray_setv(pg_bitarray_t *bitarr, uint8_t *data, uint64_t len) {
+__attribute__((unused)) static void pg_bitarray_setv(pg_bitarray_t *bitarr,
+                                                     uint8_t *data,
+                                                     uint64_t len) {
   assert(len <= 1 + bitarr->max_index);
 
   memcpy(bitarr->data, data, len);
 }
 
-void pg_bitarray_destroy(pg_bitarray_t *bitarr) { pg_array_free(bitarr->data); }
+__attribute__((unused)) static void pg_bitarray_destroy(pg_bitarray_t *bitarr) {
+  pg_array_free(bitarr->data);
+}
 
-uint64_t pg_bitarray_len(const pg_bitarray_t *bitarr) {
+__attribute__((unused)) static uint64_t pg_bitarray_len(
+    const pg_bitarray_t *bitarr) {
   return bitarr->max_index + 1;
 }
 
-void pg_bitarray_set(pg_bitarray_t *bitarr, uint64_t index) {
-  const uint64_t i = index / 8.0;
+__attribute__((unused)) static void pg_bitarray_set(pg_bitarray_t *bitarr,
+                                                    uint64_t index) {
+  const uint64_t i = (uint64_t)((double)(index) / 8.0);
   assert(i < pg_array_len(bitarr->data));
 
   bitarr->data[i] |= 1 << (index % 8);
 }
 
-bool pg_bitarray_get(const pg_bitarray_t *bitarr, uint64_t index) {
-  const uint64_t i = index / 8.0;
+__attribute__((unused)) static bool pg_bitarray_get(const pg_bitarray_t *bitarr,
+                                                    uint64_t index) {
+  const uint64_t i = (uint64_t)((double)(index) / 8.0);
   assert(i < pg_array_len(bitarr->data));
 
   return bitarr->data[i] & (1 << (index % 8));
 }
 
-bool pg_bitarray_next(const pg_bitarray_t *bitarr, uint64_t *index,
-                      bool *is_set) {
+__attribute__((unused)) static bool pg_bitarray_next(
+    const pg_bitarray_t *bitarr, uint64_t *index, bool *is_set) {
   if (*index >= pg_bitarray_len(bitarr)) return false;
 
   *is_set = pg_bitarray_get(bitarr, *index);
@@ -1064,14 +970,16 @@ bool pg_bitarray_next(const pg_bitarray_t *bitarr, uint64_t *index,
   return true;
 }
 
-void pg_bitarray_unset(pg_bitarray_t *bitarr, uint64_t index) {
-  const uint64_t i = index / 8.0;
+__attribute__((unused)) static void pg_bitarray_unset(pg_bitarray_t *bitarr,
+                                                      uint64_t index) {
+  const uint64_t i = (uint64_t)((double)(index) / 8.0);
   assert(i < pg_array_len(bitarr->data));
 
   bitarr->data[i] &= ~(1 << (index % 8));
 }
 
-uint64_t pg_bitarray_count_set(pg_bitarray_t *bitarr) {
+__attribute__((unused)) static uint64_t pg_bitarray_count_set(
+    pg_bitarray_t *bitarr) {
   uint64_t res = 0;
   for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
     res += pg_bitarray_get(bitarr, i);
@@ -1079,7 +987,8 @@ uint64_t pg_bitarray_count_set(pg_bitarray_t *bitarr) {
   return res;
 }
 
-uint64_t pg_bitarray_count_unset(pg_bitarray_t *bitarr) {
+__attribute__((unused)) static uint64_t pg_bitarray_count_unset(
+    pg_bitarray_t *bitarr) {
   uint64_t res = 0;
   for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
     res += !pg_bitarray_get(bitarr, i);
@@ -1087,30 +996,34 @@ uint64_t pg_bitarray_count_unset(pg_bitarray_t *bitarr) {
   return res;
 }
 
-bool pg_bitarray_is_all_set(pg_bitarray_t *bitarr) {
+__attribute__((unused)) static bool pg_bitarray_is_all_set(
+    pg_bitarray_t *bitarr) {
   for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
     if (!pg_bitarray_get(bitarr, i)) return false;
   }
   return true;
 }
 
-bool pg_bitarray_is_all_unset(pg_bitarray_t *bitarr) {
+__attribute__((unused)) static bool pg_bitarray_is_all_unset(
+    pg_bitarray_t *bitarr) {
   for (uint64_t i = 0; i < pg_bitarray_len(bitarr); i++) {
     if (pg_bitarray_get(bitarr, i)) return false;
   }
   return true;
 }
 
-void pg_bitarray_set_all(pg_bitarray_t *bitarr) {
+__attribute__((unused)) static void pg_bitarray_set_all(pg_bitarray_t *bitarr) {
   memset(bitarr->data, 0xff, pg_array_len(bitarr->data));
 }
 
-void pg_bitarray_unset_all(pg_bitarray_t *bitarr) {
+__attribute__((unused)) static void pg_bitarray_unset_all(
+    pg_bitarray_t *bitarr) {
   memset(bitarr->data, 0, pg_array_len(bitarr->data));
 }
 
-void pg_bitarray_resize(pg_bitarray_t *bitarr, uint64_t max_index) {
+__attribute__((unused)) static void pg_bitarray_resize(pg_bitarray_t *bitarr,
+                                                       uint64_t max_index) {
   bitarr->max_index = max_index;
-  const uint64_t len = (uint64_t)ceil(((double)max_index) / 8.0);
+  const uint64_t len = (uint64_t)(ceil(((double)max_index) / 8.0));
   pg_array_resize(bitarr->data, len);
 }
