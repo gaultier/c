@@ -117,7 +117,7 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
   const pg_span_t free_span = pg_span_make_c("free");
 
   while (input.len > 0) {
-    event_t event = {.kind = EK_NONE};
+    event_t event = {.kind = EK_NONE, .related_event = -1};
     pg_array_init_reserve(event.stacktrace, 20, pg_heap_allocator());
 
     pg_span_trim_left(&input);
@@ -264,6 +264,16 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
       pg_array_append(event.stacktrace, stacktrace_entry);
     }
   }
+}
+
+static uint64_t event_ptr(const pg_array_t(event_t) events,
+                          const event_t* event) {
+  if (event->kind == EK_ALLOC) return event->v.alloc.ptr;
+  if (event->kind == EK_REALLOC) return event->v.realloc.new_ptr;
+
+  assert(event->kind == EK_FREE);
+  if (event->related_event == -1) return 0ULL;
+  return event_ptr(events, &events[event->related_event]);
 }
 
 int main(int argc, char* argv[]) {
@@ -435,10 +445,11 @@ int main(int argc, char* argv[]) {
         "<g class=\"datapoint\"><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
         "r=\"%llu\" data-kind=\"%s\" data-id=\"%llu\" "
         "data-refid=\"%lld\" "
-        "data-value=\"%llu\" data-timestamp=\"%llu\" data-stacktrace=\"",
+        "data-size=\"%llu\" data-ptr=\"%#llx\" data-timestamp=\"%llu\" "
+        "data-stacktrace=\"",
         event.kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r,
         event.kind == EK_FREE ? "free" : "alloc", i, event.related_event,
-        event.size, event.timestamp);
+        event.size, event_ptr(events, &event), event.timestamp);
 
     for (uint64_t j = 0; j < pg_array_len(event.stacktrace); j++) {
       const uint64_t fn_i = event.stacktrace[j].fn_i;
@@ -468,9 +479,11 @@ int main(int argc, char* argv[]) {
 "      var circles = document.querySelectorAll('g.datapoint > circle')\n"
 "      circles.forEach(function(e, i){\n"
 "        e.addEventListener('mouseover', function() {\n"
-"           var value = e.getAttribute('data-value');\n"
+"           var value = e.getAttribute('data-size');\n"
+"           var ptr = e.getAttribute('data-ptr');\n"
+"           var timestamp = parseInt(e.getAttribute('data-timestamp'));\n"
 "           var stacktrace = e.getAttribute('data-stacktrace');\n"
-"           tooltip.innerText = value + '\\n\\n' + stacktrace; \n"
+"           tooltip.innerText = 'Size: ' + value + '\\n' + 'Pointer: ' + ptr + '\\nStacktrace:' + stacktrace; \n"
 "           tooltip.style.display = '';\n"
 "           tooltip.style.padding = '5px';\n"
 "           tooltip.style.left = 5 + mouse_x + 'px';\n"
@@ -480,15 +493,14 @@ int main(int argc, char* argv[]) {
 "           var refId = parseInt(e.getAttribute('data-refid'));\n"
 "           if (refId>=0) {\n"
 "             var related = document.querySelector('circle[data-id=\"' + refId + '\"]');\n"
-"             var relatedStacktrace = related.getAttribute('data-stacktrace');\n"
+"             var stracktraceRelated = related.getAttribute('data-stacktrace');\n"
 "             e.setAttribute('r', 12);\n"
 "             related.setAttribute('r', 12);\n" 
 "             related.setAttribute('fill-opacity', '60%%');\n"
 
-"             tooltip.innerText += '\\n\\nRelates to:\\n' + relatedStacktrace; \n"
-"             var tsRelated = parseInt(related.getAttribute('data-timestamp'));\n"
-"             var tsMe = parseInt(e.getAttribute('data-timestamp'));\n"
-"             var durationNs = Math.abs(tsMe-tsRelated);\n"
+"             tooltip.innerText += '\\n\\nRelates to:\\n' + stracktraceRelated; \n"
+"             var timestampRelated = parseInt(related.getAttribute('data-timestamp'));\n"
+"             var durationNs = Math.abs(timestamp - timestampRelated);\n"
 "             tooltip.innerText += '\\n\\nLifetime: ';\n"
 "             if (durationNs<1000) tooltip.innerText += durationNs.toFixed(2) + ' ns';\n"
 "             else if (durationNs<1000*1000) tooltip.innerText += (durationNs /1000).toFixed(2) + ' us';\n"
