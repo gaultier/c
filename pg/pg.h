@@ -241,6 +241,29 @@ typedef struct pg_array_header_t {
     PG_ARRAY_HEADER(x)->len = (uint64_t)(new_count);          \
   } while (0)
 
+__attribute__((unused)) static char const *pg_char_last_occurence(char const *s,
+                                                                  char c) {
+  char const *result = NULL;
+  do {
+    if (*s == c) {
+      result = s;
+    }
+  } while (*s++);
+
+  return result;
+}
+
+__attribute__((unused)) static char const *pg_char_first_occurence(
+    char const *s, char c) {
+  char ch = c;
+  for (; *s != ch; s++) {
+    if (*s == '\0') {
+      return NULL;
+    }
+  }
+  return s;
+}
+
 __attribute__((unused)) static char pg_char_to_lower(char c) {
   if (c >= 'A' && c <= 'Z') return 'a' + (c - 'A');
   return c;
@@ -289,7 +312,7 @@ typedef struct pg_string_header_t {
 #define PG_STRING_HEADER(str) ((pg_string_header_t *)((void *)str) - 1)
 
 __attribute__((unused)) static void pg__set_string_len(pg_string_t str,
-                                                          uint64_t len) {
+                                                       uint64_t len) {
   PG_STRING_HEADER(str)->length = len;
 }
 
@@ -451,6 +474,30 @@ __attribute__((unused)) static pg_string_t pg_string_url_encode(
     pg_allocator_t allocator, pg_string_t src) {
   pg_span_t span = {.data = src, .len = pg_string_len(src)};
   return pg_span_url_encode(allocator, span);
+}
+
+pg_string_t pg_string_trim(pg_string_t str, char const *cut_set) {
+  char *start = NULL, *end = NULL, *start_pos = NULL, *end_pos = NULL;
+  uint64_t len = 0;
+
+  start_pos = start = str;
+  end_pos = end = str + pg_string_len(str) - 1;
+
+  while (start_pos <= end && pg_char_first_occurence(cut_set, *start_pos)) {
+    start_pos++;
+  }
+  while (end_pos > start_pos && pg_char_first_occurence(cut_set, *end_pos)) {
+    end_pos--;
+  }
+
+  len = (start_pos > end_pos) ? 0ULL : ((uint64_t)(end_pos - start_pos) + 1);
+
+  if (str != start_pos) memmove(str, start_pos, len);
+  str[len] = '\0';
+
+  pg__set_string_len(str, len);
+
+  return str;
 }
 
 // ---------------- Hashtable
@@ -1053,8 +1100,8 @@ __attribute__((unused)) static bool pg_array_read_file_fd(
   return 0;
 }
 
-__attribute__((unused)) static bool pg_string_read_file_fd(
-    pg_allocator_t allocator, int fd, pg_string_t *str) {
+__attribute__((unused)) static bool pg_string_read_file_fd(int fd,
+                                                           pg_string_t *str) {
   struct stat st = {0};
   if (fstat(fd, &st) == -1) {
     return errno;
@@ -1085,3 +1132,11 @@ __attribute__((unused)) static bool pg_read_file(pg_allocator_t allocator,
   close(fd);
   return ok;
 }
+
+__attribute__((unused)) static char const *pg_path_base_name(char const *path) {
+  char const *ls;
+  assert(path != NULL);
+  ls = pg_char_last_occurence(path, '/');
+  return (ls == NULL) ? path : ls + 1;
+}
+
