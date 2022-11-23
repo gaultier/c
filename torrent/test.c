@@ -45,11 +45,11 @@ TEST test_on_read() {
   pg_pool_init(&peer_pool, sizeof(peer_t), 1);
 
   bc_metainfo_t metainfo = {
-      .announce = pg_span32_make_c("http://localhost"),
+      .announce = pg_span_make_c("http://localhost"),
       .length = 3 * BC_BLOCK_LENGTH + 1,
       .piece_length = 2 * BC_BLOCK_LENGTH,
-      .pieces = pg_span32_make_c("0000000000000000000000000000000000000000"),
-      .name = pg_span32_make_c("foo"),
+      .pieces = pg_span_make_c("0000000000000000000000000000000000000000"),
+      .name = pg_span_make_c("foo"),
       .blocks_count = 4,
       .last_piece_length = BC_BLOCK_LENGTH + 1,
       .last_piece_block_count = 2,
@@ -138,11 +138,11 @@ TEST test_on_read() {
 TEST test_picker() {
   const uint32_t pieces_count = 2;
   bc_metainfo_t metainfo = {
-      .announce = pg_span32_make_c("http://localhost"),
+      .announce = pg_span_make_c("http://localhost"),
       .length = 3 * BC_BLOCK_LENGTH + 1,
       .piece_length = 2 * BC_BLOCK_LENGTH,
-      .pieces = pg_span32_make_c("0000000000000000000000000000000000000000"),
-      .name = pg_span32_make_c("foo"),
+      .pieces = pg_span_make_c("0000000000000000000000000000000000000000"),
+      .name = pg_span_make_c("foo"),
       .blocks_count = 4,
       .last_piece_length = BC_BLOCK_LENGTH + 1,
       .last_piece_block_count = 2,

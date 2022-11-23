@@ -30,8 +30,8 @@ int main(int argc, char* argv[]) {
             UINT32_MAX, pg_array_len(torrent_file_data));
     exit(EINVAL);
   }
-  pg_span32_t torrent_file_span = {.data = (char*)torrent_file_data,
-                                   .len = pg_array_len(torrent_file_data)};
+  pg_span_t torrent_file_span = {.data = (char*)torrent_file_data,
+                                 .len = pg_array_len(torrent_file_data)};
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 100);
   bc_parse_error_t bc_err = bc_parse(&parser, &torrent_file_span);
@@ -41,7 +41,7 @@ int main(int argc, char* argv[]) {
   }
 
   bc_metainfo_t metainfo = {0};
-  pg_span32_t info_span = {0};
+  pg_span_t info_span = {0};
   bc_metainfo_error_t err_metainfo =
       bc_parser_init_metainfo(&parser, &metainfo, &info_span);
   if (err_metainfo != BC_ME_NONE) {
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
                  bc_metainfo_error_to_string(err_metainfo));
   }
 
-  if (pg_span32_starts_with(metainfo.announce, pg_span32_make_c("http://"))) {
+  if (pg_span_starts_with(metainfo.announce, pg_span_make_c("http://"))) {
     pg_log_fatal(&logger, EINVAL,
                  "Tracker url is not http, not supported (yet): %.*s",
                  metainfo.announce.len, metainfo.announce.data);

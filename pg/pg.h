@@ -42,12 +42,6 @@ typedef struct {
   uint64_t len;
 } pg_span_t;
 
-typedef struct {
-  char *data;
-  uint32_t len;
-  PG_PAD(4);
-} pg_span32_t;
-
 typedef struct pg_allocator_t pg_allocator_t;
 struct pg_allocator_t {
   //  void *backing_memory;

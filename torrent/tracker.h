@@ -33,7 +33,7 @@ const char *tracker_error_to_string(int err) {
 }
 
 typedef struct {
-  pg_span32_t url;
+  pg_span_t url;
   uint64_t uploaded;
   uint64_t downloaded;
   uint64_t left;
@@ -63,19 +63,19 @@ tracker_error_t tracker_parse_peer_addresses(
   if (parser->kinds[0] != BC_KIND_DICTIONARY) return TK_ERR_INVALID_PEERS;
 
   uint32_t cur = 1;
-  const pg_span32_t peers_key = pg_span32_make_c("peers");
-  const pg_span32_t peers6_key = pg_span32_make_c("peers6");
-  const pg_span32_t failure_reason_key = pg_span32_make_c("failure reason");
-  const pg_span32_t warning_message_key = pg_span32_make_c("warning message");
+  const pg_span_t peers_key = pg_span_make_c("peers");
+  const pg_span_t peers6_key = pg_span_make_c("peers6");
+  const pg_span_t failure_reason_key = pg_span_make_c("failure reason");
+  const pg_span_t warning_message_key = pg_span_make_c("warning message");
   const uint32_t root_len = parser->lengths[0];
 
   for (uint32_t i = 0; i < root_len; i += 2) {
     bc_kind_t key_kind = parser->kinds[cur + i];
-    pg_span32_t key_span = parser->spans[cur + i];
+    pg_span_t key_span = parser->spans[cur + i];
     bc_kind_t value_kind = parser->kinds[cur + i + 1];
-    pg_span32_t value_span = parser->spans[cur + i + 1];
+    pg_span_t value_span = parser->spans[cur + i + 1];
 
-    if (key_kind == BC_KIND_STRING && pg_span32_eq(peers_key, key_span) &&
+    if (key_kind == BC_KIND_STRING && pg_span_eq(peers_key, key_span) &&
         value_kind == BC_KIND_STRING) {
       if (value_span.len % 6 != 0) return TK_ERR_INVALID_PEERS;
 
@@ -88,8 +88,7 @@ tracker_error_t tracker_parse_peer_addresses(
         if (pg_array_len(*peer_addresses_ipv4) >= TRACKER_MAX_PEERS)
           return TK_ERR_NONE;
       }
-    } else if (key_kind == BC_KIND_STRING &&
-               pg_span32_eq(peers6_key, key_span) &&
+    } else if (key_kind == BC_KIND_STRING && pg_span_eq(peers6_key, key_span) &&
                value_kind == BC_KIND_STRING) {
       if (value_span.len % 18 != 0) return TK_ERR_INVALID_PEERS;
 
@@ -104,12 +103,12 @@ tracker_error_t tracker_parse_peer_addresses(
           return TK_ERR_NONE;
       }
     } else if (key_kind == BC_KIND_STRING &&
-               pg_span32_eq(failure_reason_key, key_span) &&
+               pg_span_eq(failure_reason_key, key_span) &&
                value_kind == BC_KIND_STRING) {
       pg_log_error(logger, "Tracker error: %.*s", value_span.len,
                    value_span.data);
     } else if (key_kind == BC_KIND_STRING &&
-               pg_span32_eq(warning_message_key, key_span) &&
+               pg_span_eq(warning_message_key, key_span) &&
                value_kind == BC_KIND_STRING) {
       pg_log_error(logger, "Tracker warning: %.*s", value_span.len,
                    value_span.data);
@@ -121,15 +120,14 @@ tracker_error_t tracker_parse_peer_addresses(
 
 pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
                                          tracker_query_t *q) {
-  pg_span32_t info_hash_span =
-      (pg_span32_t){.data = (char *)q->info_hash, .len = sizeof(q->info_hash)};
+  pg_span_t info_hash_span =
+      (pg_span_t){.data = (char *)q->info_hash, .len = sizeof(q->info_hash)};
   pg_string_t info_hash_url_encoded =
-      pg_span32_url_encode(allocator, info_hash_span);
+      pg_span_url_encode(allocator, info_hash_span);
 
-  pg_span32_t peer_id_span =
-      (pg_span32_t){.data = (char *)peer_id, .len = sizeof(peer_id)};
-  pg_string_t peer_id_url_encoded =
-      pg_span32_url_encode(allocator, peer_id_span);
+  pg_span_t peer_id_span =
+      (pg_span_t){.data = (char *)peer_id, .len = sizeof(peer_id)};
+  pg_string_t peer_id_url_encoded = pg_span_url_encode(allocator, peer_id_span);
 
   pg_string_t res = pg_string_make_reserve(allocator, 5000);
   assert(q->url.len < 4196);
@@ -187,7 +185,7 @@ tracker_error_t tracker_fetch_peers(
     goto end;
   }
 
-  pg_span32_t response_span = {.data = response, .len = pg_array_len(response)};
+  pg_span_t response_span = {.data = response, .len = pg_array_len(response)};
 
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 100);

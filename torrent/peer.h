@@ -609,7 +609,7 @@ end:
 
 peer_error_t peer_send_heartbeat(peer_t *peer);
 peer_error_t peer_put_block(peer_t *peer, uint32_t piece, uint32_t block,
-                            pg_span32_t data) {
+                            pg_span_t data) {
   assert(piece < peer->metainfo->pieces_count);
   assert(block < peer->metainfo->blocks_count);
 
@@ -744,7 +744,7 @@ peer_error_t peer_message_handle(peer_t *peer, peer_message_t *msg,
           peer->metainfo, piece, block_for_piece);
       assert(block < peer->metainfo->blocks_count);
 
-      const pg_span32_t span = (pg_span32_t){
+      const pg_span_t span = (pg_span_t){
           .data = (char *)piece_msg.data,
           .len = metainfo_block_for_piece_length(peer->metainfo, piece,
                                                  block_for_piece),
@@ -1189,7 +1189,8 @@ peer_error_t picker_checksum_all(pg_allocator_t allocator, pg_logger_t *logger,
 
   peer_error_t err = {0};
   pg_array_t(uint8_t) file_data = {0};
-  const int64_t ret = pg_array_read_file_fd(allocator, download->fd, &file_data);
+  const int64_t ret =
+      pg_array_read_file_fd(allocator, download->fd, &file_data);
   if (ret != 0) {
     err = (peer_error_t){.kind = PEK_OS};
     goto end;

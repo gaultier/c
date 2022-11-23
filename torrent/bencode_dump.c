@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
     exit(EINVAL);
   }
 
-  pg_span32_t input = {.data = (char*)buf, .len = pg_array_len(buf)};
+  pg_span_t input = {.data = (char*)buf, .len = pg_array_len(buf)};
 
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 100);
@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
   puts("");
 
   bc_metainfo_t metainfo = {0};
-  pg_span32_t info_span = {0};
+  pg_span_t info_span = {0};
   bc_metainfo_error_t err_metainfo =
       bc_parser_init_metainfo(&parser, &metainfo, &info_span);
   if (err_metainfo != BC_ME_NONE) {
