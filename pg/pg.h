@@ -1220,25 +1220,41 @@ __attribute__((unused)) static bool pg_exec(char **argv, pg_string_t *cmd_stdio,
 
   struct pollfd fds[] = {{.fd = stdio_pipe[0], .events = POLLIN},
                          {.fd = stderr_pipe[0], .events = POLLIN}};
+  pid_t ret_pid = 0;
   while (1) {
-    const int ret = poll(fds, 2, 0);
+    const int ret = poll(fds, 2, 200);
     if (ret == -1) break;
 
     for (uint64_t i = 0; i < (uint64_t)ret; i++) {
       if (i == 0 && (fds[i].revents & POLLIN)) {
+        fprintf(stderr, "[D001] poll %d\n", ret);
         if (!pg_string_read_from_stream_once(stdio_pipe[0], cmd_stdio)) break;
+        fprintf(stderr, "[D002] %llu %s\n", pg_string_len(*cmd_stdio),
+                *cmd_stdio);
       }
       if (i == 1 && (fds[i].revents & POLLIN)) {
+        fprintf(stderr, "[D003] poll %d\n", ret);
         if (!pg_string_read_from_stream_once(stderr_pipe[0], cmd_stderr)) break;
       }
     }
+
+    ret_pid = wait4(pid, exit_status, 0, 0);
+    fprintf(stderr, "[D003] ret_pid=%d\n", ret_pid);
+    if (ret_pid == -1) continue;
+
+    if (WIFEXITED(*exit_status)) {
+      fprintf(stderr, "[D004]\n");
+      goto end;
+    }
   }
 
-  const pid_t ret_pid = wait4(pid, exit_status, 0, 0);
+  ret_pid = wait4(pid, exit_status, 0, 0);
   if (ret_pid == -1) {
     fprintf(stderr, "Failed to wait(2): %d %s\n", errno, strerror(errno));
     exit(errno);
   }
+
+end:
   close(stdio_pipe[0]);
   close(stderr_pipe[0]);
 
