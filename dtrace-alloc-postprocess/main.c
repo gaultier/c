@@ -5,7 +5,7 @@
 
 #include "../pg/pg.h"
 
-typedef enum : uint8_t {
+typedef enum {
   EK_NONE,
   EK_ALLOC,
   EK_REALLOC,
@@ -28,7 +28,7 @@ typedef struct {
 typedef struct event_t event_t;
 struct event_t {
   event_kind_t kind;
-  PG_PAD(7);
+  PG_PAD(4);
   uint64_t timestamp, size;
   int64_t related_event;
   pg_array_t(stacktrace_entry_t) stacktrace;
