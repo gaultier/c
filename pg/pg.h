@@ -893,7 +893,7 @@ __attribute__((unused)) static uint64_t pg_ring_space(pg_ring_t *ring) {
 }
 
 __attribute__((unused)) static void pg_ring_push_backv(pg_ring_t *ring,
-                                                       uint8_t *data,
+                                                       const uint8_t *data,
                                                        uint64_t len) {
   assert(ring->len + len <= ring->cap);
 

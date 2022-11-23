@@ -69,9 +69,9 @@ TEST test_pg_span_split_at_first() {
 
     ASSERT_EQ(false, pg_span_split_at_first(span, '\n', &left, &right));
     ASSERT_EQ_FMT(span.len, left.len, "%llu");
-    ASSERT_EQ_FMT(span.data, left.data, "%p");
+    ASSERT_EQ_FMT((void *)span.data, (void *)left.data, "%p");
     ASSERT_EQ_FMT(0ULL, right.len, "%llu");
-    ASSERT_EQ_FMT(NULL, right.data, "%p");
+    ASSERT_EQ_FMT(NULL, (void *)right.data, "%p");
   }
   {
     pg_span_t span = pg_span_make_c("z");
@@ -81,7 +81,7 @@ TEST test_pg_span_split_at_first() {
     ASSERT_EQ_FMT(1ULL, left.len, "%llu");
     ASSERT_STRN_EQ("z", left.data, left.len);
     ASSERT_EQ_FMT(0ULL, right.len, "%llu");
-    ASSERT_EQ_FMT(NULL, right.data, "%p");
+    ASSERT_EQ_FMT(NULL, (void *)right.data, "%p");
   }
   {
     pg_span_t span = pg_span_make_c("z\n");
@@ -124,9 +124,9 @@ TEST test_pg_span_split_at_last() {
 
     ASSERT_EQ(false, pg_span_split_at_last(span, '\n', &left, &right));
     ASSERT_EQ_FMT(span.len, left.len, "%llu");
-    ASSERT_EQ_FMT(span.data, left.data, "%p");
+    ASSERT_EQ_FMT((void *)span.data, (void *)left.data, "%p");
     ASSERT_EQ_FMT(0ULL, right.len, "%llu");
-    ASSERT_EQ_FMT(NULL, right.data, "%p");
+    ASSERT_EQ_FMT(NULL, (void *)right.data, "%p");
   }
   {
     pg_span_t span = pg_span_make_c("z");
@@ -136,7 +136,7 @@ TEST test_pg_span_split_at_last() {
     ASSERT_EQ_FMT(1ULL, left.len, "%llu");
     ASSERT_STRN_EQ("z", left.data, left.len);
     ASSERT_EQ_FMT(0ULL, right.len, "%llu");
-    ASSERT_EQ_FMT(NULL, right.data, "%p");
+    ASSERT_EQ_FMT(NULL, (void *)right.data, "%p");
   }
   {
     pg_span_t span = pg_span_make_c("z\n");
@@ -271,7 +271,7 @@ TEST test_pg_ring() {
   ASSERT_EQ_FMT(0ULL, pg_ring_len(&ring), "%llu");
 
   const char buf[] = "hello world!";
-  pg_ring_push_backv(&ring, (uint8_t *)buf, sizeof(buf) - 1);
+  pg_ring_push_backv(&ring, (const uint8_t *)buf, sizeof(buf) - 1);
   ASSERT_EQ_FMT((uint64_t)(sizeof(buf) - 1), pg_ring_len(&ring), "%llu");
   ASSERT_EQ_FMT('h', pg_ring_front(&ring), "%c");
   ASSERT_EQ_FMT('!', pg_ring_back(&ring), "%c");

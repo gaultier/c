@@ -1,4 +1,5 @@
 -std=c99
--g
 -Weverything
+-Wno-used-but-marked-unused
 -I/usr/local/include
+
