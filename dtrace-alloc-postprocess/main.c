@@ -276,81 +276,13 @@ static uint64_t event_ptr(const pg_array_t(event_t) events,
   return event_ptr(events, &events[event->related_event]);
 }
 
-int main(int argc, char* argv[]) {
-  pg_logger_t logger = {.level = PG_LOG_INFO};
-  pg_array_t(uint8_t) file_data = {0};
-  if (argc == 1) {
-    // int fd = STDIN_FILENO;
-    pg_log_fatal(&logger, EINVAL, "TODO read from stdin");
-  } else if (argc == 2) {
-    int fd = open(argv[1], O_RDONLY);
-    if (fd == -1) {
-      pg_log_fatal(&logger, errno, "Failed to open file %s: %s", argv[1],
-                   strerror(errno));
-    }
-    int64_t ret = 0;
-    if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &file_data)) != 0) {
-      pg_log_fatal(&logger, ret, "Failed to read file %s: %s", argv[1],
-                   strerror(ret));
-    }
-  }
-
-  pg_span_t input = {.data = (char*)file_data, .len = pg_array_len(file_data)};
-
-  pg_array_t(event_t) events = {0};
-  pg_array_init_reserve(events, 20000, pg_heap_allocator());
-
-  pg_array_t(pg_span_t) fn_names = {0};
-  pg_array_init_reserve(fn_names, 500, pg_heap_allocator());
-
-  parse_input(&logger, input, &events, &fn_names);
-
-#if 0
-  pg_array_t(lifetime_t) lifetimes = {0};
-  pg_array_init_reserve(lifetimes, pg_array_len(events.kinds),
-                        pg_heap_allocator());
-  for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
-    const event_kind_t kind = events.kinds[i];
-    if (kind == EK_ALLOC) {
-      pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
-                                               .start_i = i,
-                                               .size = events.arg0s[i]}));
-    } else if (kind == EK_FREE) {
-      const uint64_t ptr = events.arg0s[i];
-      for (int64_t j = pg_array_len(lifetimes) - 1; j >= 0; j--) {
-        if (lifetimes[j].ptr == ptr && lifetimes[j].end_i == 0) {
-          lifetimes[j].end_i = i;
-          break;
-        }
-      }
-    } else if (kind == EK_REALLOC) {
-      const uint64_t old_ptr = events.arg2s[i];
-      if (old_ptr == 0) {  // Same as malloc
-        pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
-                                                 .start_i = i,
-                                                 .size = events.arg0s[i]}));
-      } else {  // Same as free + malloc
-        for (int64_t j = pg_array_len(lifetimes) - 1; j >= 0; j--) {
-          if (lifetimes[j].ptr == old_ptr && lifetimes[j].end_i == 0) {
-            lifetimes[j].end_i = i;
-            break;
-          }
-        }
-        pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
-                                                 .start_i = i,
-                                                 .size = events.arg0s[i]}));
-      }
-    } else
-      __builtin_unreachable();
-  }
-#endif
-
-  // Output html
-
+static void print_html(const pg_array_t(event_t) events,
+                       pg_array_t(pg_span_t) fn_names) {
   // const uint64_t rect_w = 5;
   // const uint64_t rect_h = 7;
   // const uint64_t rect_margin_top = 1;
   // const uint64_t rect_margin_right = 3;
+
   const uint64_t monitoring_start = (double)events[0].timestamp;
   const uint64_t monitoring_end =
       (double)events[pg_array_len(events) - 1].timestamp;
@@ -531,5 +463,77 @@ int main(int argc, char* argv[]) {
       // clang-format on
       ,
       circle_r, circle_r);
+}
+
+int main(int argc, char* argv[]) {
+  pg_logger_t logger = {.level = PG_LOG_INFO};
+  pg_array_t(uint8_t) file_data = {0};
+  if (argc == 1) {
+    // int fd = STDIN_FILENO;
+    pg_log_fatal(&logger, EINVAL, "TODO read from stdin");
+  } else if (argc == 2) {
+    int fd = open(argv[1], O_RDONLY);
+    if (fd == -1) {
+      pg_log_fatal(&logger, errno, "Failed to open file %s: %s", argv[1],
+                   strerror(errno));
+    }
+    int64_t ret = 0;
+    if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &file_data)) != 0) {
+      pg_log_fatal(&logger, ret, "Failed to read file %s: %s", argv[1],
+                   strerror(ret));
+    }
+  }
+
+  pg_span_t input = {.data = (char*)file_data, .len = pg_array_len(file_data)};
+
+  pg_array_t(event_t) events = {0};
+  pg_array_init_reserve(events, 20000, pg_heap_allocator());
+
+  pg_array_t(pg_span_t) fn_names = {0};
+  pg_array_init_reserve(fn_names, 500, pg_heap_allocator());
+
+  parse_input(&logger, input, &events, &fn_names);
+
+#if 0
+  pg_array_t(lifetime_t) lifetimes = {0};
+  pg_array_init_reserve(lifetimes, pg_array_len(events.kinds),
+                        pg_heap_allocator());
+  for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
+    const event_kind_t kind = events.kinds[i];
+    if (kind == EK_ALLOC) {
+      pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
+                                               .start_i = i,
+                                               .size = events.arg0s[i]}));
+    } else if (kind == EK_FREE) {
+      const uint64_t ptr = events.arg0s[i];
+      for (int64_t j = pg_array_len(lifetimes) - 1; j >= 0; j--) {
+        if (lifetimes[j].ptr == ptr && lifetimes[j].end_i == 0) {
+          lifetimes[j].end_i = i;
+          break;
+        }
+      }
+    } else if (kind == EK_REALLOC) {
+      const uint64_t old_ptr = events.arg2s[i];
+      if (old_ptr == 0) {  // Same as malloc
+        pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
+                                                 .start_i = i,
+                                                 .size = events.arg0s[i]}));
+      } else {  // Same as free + malloc
+        for (int64_t j = pg_array_len(lifetimes) - 1; j >= 0; j--) {
+          if (lifetimes[j].ptr == old_ptr && lifetimes[j].end_i == 0) {
+            lifetimes[j].end_i = i;
+            break;
+          }
+        }
+        pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
+                                                 .start_i = i,
+                                                 .size = events.arg0s[i]}));
+      }
+    } else
+      __builtin_unreachable();
+  }
+#endif
+
+  print_html(events, fn_names);
   return 0;
 }
