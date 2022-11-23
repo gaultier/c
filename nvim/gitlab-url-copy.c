@@ -56,6 +56,7 @@ static pg_string_t get_path_from_git_root() {
     }
 
     cmd_stdio = pg_string_trim(cmd_stdio, "\n");
+    pg_string_free(cmd_stderr);
 
     return cmd_stdio;
 }
@@ -80,6 +81,8 @@ static pg_string_t get_current_git_commit() {
 
     cmd_stdio = pg_string_trim(cmd_stdio, "\n");
     assert(pg_string_len(cmd_stdio) > 0);
+
+    pg_string_free(cmd_stderr);
 
     return cmd_stdio;
 }
