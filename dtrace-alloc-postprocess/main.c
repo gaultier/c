@@ -482,6 +482,8 @@ int main(int argc, char* argv[]) {
       pg_log_fatal(&logger, ret, "Failed to read file %s: %s", argv[1],
                    strerror(ret));
     }
+  } else {
+    return EINVAL;
   }
   assert(file_data != NULL);
 
