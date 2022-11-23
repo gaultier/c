@@ -38,41 +38,50 @@ static void copy_to_clipboard(pg_string_t s) {
 }
 
 static pg_string_t get_path_from_git_root() {
-    const char* const cmd = "git rev-parse --show-prefix";
-    printf("Running: %s\n", cmd);
-    FILE* cmd_handle = popen(cmd, "r");
-    assert(cmd_handle != NULL);
-
-    pg_string_t output = pg_string_make_reserve(pg_heap_allocator(), 100);
-
-    if (!pg_string_read_file_fd(fileno(cmd_handle), &output)) {
-        fprintf(stderr, "Failed to read(2) output from command: %d %s\n", errno,
+    char* argv[] = {"git", "rev-parse", "--show-prefix", 0};
+    pg_string_t cmd_stdio =
+        pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
+    pg_string_t cmd_stderr = pg_string_make_reserve(pg_heap_allocator(), 0);
+    int exit_status = 0;
+    if (!pg_exec(argv, &cmd_stdio, &cmd_stderr, &exit_status)) {
+        fprintf(stderr, "Failed to execute command: %d %s\n", errno,
                 strerror(errno));
         exit(errno);
     }
+    if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
+        fprintf(stderr,
+                "Command exited with non-zero status code: status=%d err=%s\n",
+                WEXITSTATUS(exit_status), cmd_stderr);
+        exit(errno);
+    }
 
-    output = pg_string_trim(output, "\n");
-    assert(pg_string_len(output) > 0);
+    cmd_stdio = pg_string_trim(cmd_stdio, "\n");
 
-    return output;
+    return cmd_stdio;
 }
 
 static pg_string_t get_current_git_commit() {
-    const char* const cmd = "git rev-parse HEAD";
-    printf("Running: %s\n", cmd);
-    FILE* cmd_handle = popen(cmd, "r");
-    assert(cmd_handle != NULL);
-
-    pg_string_t output =
-        pg_string_make_reserve(pg_heap_allocator(), GIT_COMMIT_LENGTH);
-
-    if (!pg_string_read_file_fd(fileno(cmd_handle), &output)) {
-        fprintf(stderr, "Failed to read(2) output from command: %d %s\n", errno,
+    char* argv[] = {"git", "rev-parse", "HEAD", 0};
+    pg_string_t cmd_stdio =
+        pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
+    pg_string_t cmd_stderr = pg_string_make_reserve(pg_heap_allocator(), 0);
+    int exit_status = 0;
+    if (!pg_exec(argv, &cmd_stdio, &cmd_stderr, &exit_status)) {
+        fprintf(stderr, "Failed to execute command: %d %s\n", errno,
                 strerror(errno));
         exit(errno);
     }
+    if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
+        fprintf(stderr,
+                "Command exited with non-zero status code: status=%d err=%s\n",
+                WEXITSTATUS(exit_status), cmd_stderr);
+        exit(errno);
+    }
 
-    return output;
+    cmd_stdio = pg_string_trim(cmd_stdio, "\n");
+    assert(pg_string_len(cmd_stdio) > 0);
+
+    return cmd_stdio;
 }
 
 static pg_string_t get_git_origin_remote_url() {
