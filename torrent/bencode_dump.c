@@ -16,7 +16,7 @@ int main(int argc, char* argv[]) {
       exit(ret);
     }
   } else if (argc == 1) {
-    if ((ret = pg_read_file_fd(pg_heap_allocator(), 0, &buf)) != 0) {
+    if ((ret = pg_array_read_file_fd(pg_heap_allocator(), 0, &buf)) != 0) {
       fprintf(stderr, "Failed to read from stdin: %s\n", strerror(ret));
       exit(ret);
     }

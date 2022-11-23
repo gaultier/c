@@ -360,18 +360,16 @@ __attribute__((unused)) static void pg_string_free_ptr(pg_string_t *str) {
   pg_string_free(*str);
 }
 
-__attribute__((unused)) static uint64_t pg_string_length(
-    pg_string_t const str) {
+__attribute__((unused)) static uint64_t pg_string_len(pg_string_t const str) {
   return PG_STRING_HEADER(str)->length;
 }
 
 __attribute__((unused)) static pg_string_t pg_string_duplicate(
     pg_allocator_t a, pg_string_t const str) {
-  return pg_string_make_length(a, str, pg_string_length(str));
+  return pg_string_make_length(a, str, pg_string_len(str));
 }
 
-__attribute__((unused)) static uint64_t pg_string_capacity(
-    pg_string_t const str) {
+__attribute__((unused)) static uint64_t pg_string_cap(pg_string_t const str) {
   return PG_STRING_HEADER(str)->capacity;
 }
 
@@ -402,9 +400,9 @@ __attribute__((unused)) static pg_string_t pg_string_make_space_for(
     pg_allocator_t a = PG_STRING_HEADER(str)->allocator;
     pg_string_header_t *header;
 
-    new_len = pg_string_length(str) + add_len;
+    new_len = pg_string_len(str) + add_len;
     ptr = PG_STRING_HEADER(str);
-    old_size = sizeof(pg_string_header_t) + pg_string_length(str) + 1;
+    old_size = sizeof(pg_string_header_t) + pg_string_len(str) + 1;
     new_size = sizeof(pg_string_header_t) + new_len + 1;
 
     new_ptr = PG_STRING_HEADER(str)->allocator.realloc(ptr, new_size, old_size);
@@ -422,7 +420,7 @@ __attribute__((unused)) static pg_string_t pg_string_make_space_for(
 __attribute__((unused)) static pg_string_t pg_string_append_length(
     pg_string_t str, void const *other, uint64_t other_len) {
   if (other_len > 0) {
-    uint64_t curr_len = pg_string_length(str);
+    uint64_t curr_len = pg_string_len(str);
 
     str = pg_string_make_space_for(str, other_len);
     if (str == NULL) {
@@ -438,7 +436,7 @@ __attribute__((unused)) static pg_string_t pg_string_append_length(
 
 __attribute__((unused)) static pg_string_t pg_string_append(
     pg_string_t str, pg_string_t const other) {
-  return pg_string_append_length(str, other, pg_string_length(other));
+  return pg_string_append_length(str, other, pg_string_len(other));
 }
 
 __attribute__((unused)) static pg_string_t pg_string_appendc(
@@ -451,7 +449,7 @@ __attribute__((unused)) static pg_string_t pg_span_url_encode(
 
 __attribute__((unused)) static pg_string_t pg_string_url_encode(
     pg_allocator_t allocator, pg_string_t src) {
-  pg_span_t span = {.data = src, .len = pg_string_length(src)};
+  pg_span_t span = {.data = src, .len = pg_string_len(src)};
   return pg_span_url_encode(allocator, span);
 }
 
@@ -631,7 +629,7 @@ __attribute__((unused)) static pg_string_t pg_span_url_encode(
 }
 
 __attribute__((unused)) static pg_span_t pg_span_make(pg_string_t s) {
-  return (pg_span_t){.data = s, .len = pg_string_length(s)};
+  return (pg_span_t){.data = s, .len = pg_string_len(s)};
 }
 
 __attribute__((unused)) static pg_span_t pg_span_make_c(char *s) {
@@ -1035,9 +1033,8 @@ __attribute__((unused)) static void pg_bitarray_resize(pg_bitarray_t *bitarr,
 
 // ------------- File utils
 
-__attribute__((unused)) static bool pg_read_file_fd(pg_allocator_t allocator,
-                                                    int fd,
-                                                    pg_array_t(uint8_t) * buf) {
+__attribute__((unused)) static bool pg_array_read_file_fd(
+    pg_allocator_t allocator, int fd, pg_array_t(uint8_t) * buf) {
   struct stat st = {0};
   if (fstat(fd, &st) == -1) {
     return errno;
@@ -1056,6 +1053,27 @@ __attribute__((unused)) static bool pg_read_file_fd(pg_allocator_t allocator,
   return 0;
 }
 
+__attribute__((unused)) static bool pg_string_read_file_fd(
+    pg_allocator_t allocator, int fd, pg_string_t *str) {
+  struct stat st = {0};
+  if (fstat(fd, &st) == -1) {
+    return errno;
+  }
+  const uint64_t read_buffer_size =
+      MIN((uint64_t)UINT32_MAX, (uint64_t)st.st_size);
+  while (pg_string_len(*str) < (uint64_t)st.st_size) {
+    int64_t ret = read(fd, *str + pg_string_len(*str), read_buffer_size);
+    if (ret == -1) {
+      return errno;
+    }
+    if (ret == 0) return 0;
+    const uint64_t new_len = pg_string_len(*str) + (uint64_t)ret;
+    pg_string_make_space_for(*str, new_len);
+    pg__set_string_length(*str, new_len);
+  }
+  return 0;
+}
+
 __attribute__((unused)) static bool pg_read_file(pg_allocator_t allocator,
                                                  char *path,
                                                  pg_array_t(uint8_t) * buf) {
@@ -1063,7 +1081,7 @@ __attribute__((unused)) static bool pg_read_file(pg_allocator_t allocator,
   if (fd == -1) {
     return errno;
   }
-  const bool ok = pg_read_file_fd(allocator, fd, buf);
+  const bool ok = pg_array_read_file_fd(allocator, fd, buf);
   close(fd);
   return ok;
 }

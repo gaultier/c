@@ -156,8 +156,8 @@ TEST test_pg_string_url_encode() {
   pg_string_t src = pg_string_make(pg_heap_allocator(), "foo?_. ");
 
   pg_string_t res = pg_string_url_encode(pg_heap_allocator(), src);
-  ASSERT_EQ_FMT(21ULL, pg_string_length(res), "%llu");
-  ASSERT_STRN_EQ("%66%6F%6F%3F%5F%2E%20", res, pg_string_length(res));
+  ASSERT_EQ_FMT(21ULL, pg_string_len(res), "%llu");
+  ASSERT_STRN_EQ("%66%6F%6F%3F%5F%2E%20", res, pg_string_len(res));
 
   PASS();
 }

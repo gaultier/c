@@ -1189,7 +1189,7 @@ peer_error_t picker_checksum_all(pg_allocator_t allocator, pg_logger_t *logger,
 
   peer_error_t err = {0};
   pg_array_t(uint8_t) file_data = {0};
-  const int64_t ret = pg_read_file_fd(allocator, download->fd, &file_data);
+  const int64_t ret = pg_array_read_file_fd(allocator, download->fd, &file_data);
   if (ret != 0) {
     err = (peer_error_t){.kind = PEK_OS};
     goto end;
