@@ -505,10 +505,9 @@ int main(int argc, char* argv[]) {
       pg_log_fatal(&logger, errno, "Failed to open file %s: %s", argv[1],
                    strerror(errno));
     }
-    int64_t ret = 0;
-    if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &file_data)) != 0) {
-      pg_log_fatal(&logger, ret, "Failed to read file %s: %s", argv[1],
-                   strerror((int)ret));
+    if ((!pg_read_file(pg_heap_allocator(), argv[1], &file_data)) != 0) {
+      pg_log_fatal(&logger, errno, "Failed to read file %s: %s", argv[1],
+                   strerror(errno));
     }
   } else {
     return EINVAL;

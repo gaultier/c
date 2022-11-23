@@ -1035,8 +1035,9 @@ __attribute__((unused)) static void pg_bitarray_resize(pg_bitarray_t *bitarr,
 
 // ------------- File utils
 
-int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
-                        pg_array_t(uint8_t) * buf) {
+__attribute__((unused)) static bool pg_read_file_fd(pg_allocator_t allocator,
+                                                    int fd,
+                                                    pg_array_t(uint8_t) * buf) {
   struct stat st = {0};
   if (fstat(fd, &st) == -1) {
     return errno;
@@ -1050,18 +1051,19 @@ int64_t pg_read_file_fd(pg_allocator_t allocator, int fd,
       return errno;
     }
     if (ret == 0) return 0;
-    pg_array_resize(*buf, pg_array_len(*buf) + ret);
+    pg_array_resize(*buf, pg_array_len(*buf) + (uint64_t)ret);
   }
   return 0;
 }
 
-int64_t pg_read_file(pg_allocator_t allocator, char *path,
-                     pg_array_t(uint8_t) * buf) {
+__attribute__((unused)) static bool pg_read_file(pg_allocator_t allocator,
+                                                 char *path,
+                                                 pg_array_t(uint8_t) * buf) {
   int fd = open(path, O_RDONLY);
   if (fd == -1) {
     return errno;
   }
-  int ret = pg_read_file_fd(allocator, fd, buf);
+  const bool ok = pg_read_file_fd(allocator, fd, buf);
   close(fd);
-  return ret;
+  return ok;
 }
