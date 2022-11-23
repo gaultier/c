@@ -30,7 +30,7 @@ struct event_t {
   event_kind_t kind;
   PG_PAD(7);
   uint64_t timestamp, size;
-  event_t* related_event;
+  int64_t related_event;
   pg_array_t(stacktrace_entry_t) stacktrace;
   union {
     event_alloc_t alloc;
@@ -75,37 +75,6 @@ static uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
   }
   return false;
 }
-
-static const char* event_kind_to_string(event_kind_t kind) {
-  switch (kind) {
-    case EK_NONE:
-      return "EK_NONE";
-    case EK_ALLOC:
-      return "EK_ALLOC";
-    case EK_REALLOC:
-      return "EK_REALLOC";
-    case EK_FREE:
-      return "EK_FREE";
-    default:
-      __builtin_unreachable();
-  }
-}
-
-// static void event_dump(events_t* events, pg_array_t(pg_span_t) fn_names,
-//                        uint64_t i) {
-//   printf(
-//       "Event: kind=%s timestamp=%llu arg0=%llu arg1=%llu arg2=%llu
-//       stacktrace=", event_kind_to_string(events->kinds[i]),
-//       events->timestamps[i], events->arg0s[i], events->arg1s[i],
-//       events->arg2s[i]);
-//   for (uint64_t j = 0; j < pg_array_len(events->stacktraces[i]); j++) {
-//     const uint64_t fn_i = events->stacktraces[i][j].fn_i;
-//     const uint64_t offset = events->stacktraces[i][j].offset;
-//     const pg_span_t fn_name = fn_names[fn_i];
-//     printf("%.*s+%#llx ", (int)fn_name.len, fn_name.data, offset);
-//   }
-//   puts("");
-// }
 
 // name is of the form:
 // foo`bar+0xab
@@ -257,21 +226,22 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
 
           pg_array_append(*events, event);
           event_t* const me = &((*events)[pg_array_len(*events) - 1]);
+          me->related_event = -1;
 
           for (int64_t j = pg_array_len(*events) - 2; j >= 0; j--) {
             event_t* const other = &((*events)[j]);
 
             if (other->kind == EK_FREE) continue;
             if (other->kind == EK_ALLOC && other->v.alloc.ptr == ptr) {
-              me->related_event = other;
+              me->related_event = j;
               me->size = other->size;
-              other->related_event = me;
+              other->related_event = pg_array_len(*events) - 1;
               break;
             } else if (other->kind == EK_REALLOC &&
                        other->v.realloc.new_ptr == ptr) {
-              me->related_event = other;
+              me->related_event = j;
               me->size = other->size;
-              other->related_event = me;
+              other->related_event = pg_array_len(*events) - 1;
               break;
             }
           }
@@ -382,7 +352,7 @@ int main(int argc, char* argv[]) {
   const uint64_t chart_margin_bottom = 20;
   //  const uint64_t chart_padding_w = 10;
   const uint64_t chart_padding_top = 10;
-  const uint64_t chart_grid_gap = 100;
+  // const uint64_t chart_grid_gap = 100;
   const uint64_t font_size = 10;
 
   double max_log_size = 0;
@@ -446,7 +416,7 @@ int main(int argc, char* argv[]) {
     const event_t event = events[i];
     // Skip free events for which we did not record/find the related allocation
     // event since we have no useful information in that case
-    if (event.kind == EK_FREE && event.related_event == NULL) continue;
+    if (event.kind == EK_FREE && event.related_event == -1) continue;
 
     const double px =
         ((double)(event.timestamp - monitoring_start)) / monitoring_duration;
@@ -461,15 +431,13 @@ int main(int argc, char* argv[]) {
     const uint64_t y = chart_padding_top + (chart_h - circle_r) * (1.0 - py);
     assert(y <= chart_padding_top + (chart_h - circle_r));
 
-    const int64_t related_event_i =
-        event.related_event == NULL ? -1 : (event.related_event - events);
     printf(
         "<g class=\"datapoint\"><circle fill=\"%s\" cx=\"%llu\" cy=\"%llu\" "
         "r=\"%llu\" data-kind=\"%s\" data-id=\"%llu\" "
         "data-refid=\"%lld\" "
         "data-value=\"%llu\" data-timestamp=\"%llu\" data-stacktrace=\"",
         event.kind == EK_FREE ? "goldenrod" : "steelblue", x, y, circle_r,
-        event.kind == EK_FREE ? "free" : "alloc", i, related_event_i,
+        event.kind == EK_FREE ? "free" : "alloc", i, event.related_event,
         event.size, event.timestamp);
 
     for (uint64_t j = 0; j < pg_array_len(event.stacktrace); j++) {
