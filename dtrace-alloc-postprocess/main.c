@@ -248,8 +248,6 @@ static void parse_input(pg_logger_t* logger, pg_span_t input,
         } else {
           __builtin_unreachable();
         }
-
-        // event_dump(events, *fn_names, pg_array_len(events->kinds) - 1);
         break;
       }
 
