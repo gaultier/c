@@ -535,7 +535,7 @@ static void *watch_workers(void *varg) {
         if (children_spawner_finished)
           break;
         else {
-          usleep(100 * 1000);
+          sleep(1);
           continue;
         }
       }
