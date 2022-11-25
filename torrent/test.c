@@ -1,12 +1,12 @@
 #include <unistd.h>
 
+#include "../vendor/greatest/greatest.h"
 #include "bencode.h"
 #include "peer.h"
 #include "tracker.h"
 #include "uv.h"
-#include "../vendor/greatest/greatest.h"
 
-static uint8_t info_hash[20] = {0};
+  static uint8_t info_hash[20] = {0};
 static const uint8_t handshake_header[] = {
     PEER_HANDSHAKE_HEADER_LENGTH,
     'B',
@@ -65,13 +65,13 @@ TEST test_on_read(void) {
   picker_t picker = {0};
   picker_init(pg_heap_allocator(), &logger, &picker, &metainfo);
 
-  peer_t* peer = pg_pool_alloc(&peer_pool);
+  peer_t *peer = pg_pool_alloc(&peer_pool);
   assert(peer != NULL);
   peer_init(peer, &logger, &peer_pool, &download, &metainfo, &picker, addr);
 
   {
     uv_buf_t buf1 = {0};
-    peer_alloc((uv_handle_t*)&peer->connection, 65536, &buf1);
+    peer_alloc((uv_handle_t *)&peer->connection, 65536, &buf1);
     ASSERT(buf1.base != NULL);
 
     memcpy(buf1.base, handshake_header, sizeof(handshake_header));
@@ -92,7 +92,7 @@ TEST test_on_read(void) {
 
   {
     uv_buf_t buf1 = {0};
-    peer_alloc((uv_handle_t*)&peer->connection, 5, &buf1);
+    peer_alloc((uv_handle_t *)&peer->connection, 5, &buf1);
     ASSERT(buf1.base != NULL);
     buf1.base[0] = 0;
     buf1.base[1] = 0;
@@ -105,7 +105,7 @@ TEST test_on_read(void) {
   }
   {
     uv_buf_t buf1 = {0};
-    peer_alloc((uv_handle_t*)&peer->connection, 3, &buf1);
+    peer_alloc((uv_handle_t *)&peer->connection, 3, &buf1);
     ASSERT(buf1.base != NULL);
     buf1.base[0] = 0;
     buf1.base[1] = 0;
@@ -116,14 +116,14 @@ TEST test_on_read(void) {
     peer_on_read(&stream, 3, &buf1);
 
     uv_buf_t buf2 = {0};
-    peer_alloc((uv_handle_t*)&peer->connection, 1, &buf2);
+    peer_alloc((uv_handle_t *)&peer->connection, 1, &buf2);
     ASSERT(buf2.base != NULL);
     buf2.base[0] = 5;
     buf2.len = 1;
     peer_on_read(&stream, 1, &buf2);
 
     uv_buf_t buf3 = {0};
-    peer_alloc((uv_handle_t*)&peer->connection, 1, &buf3);
+    peer_alloc((uv_handle_t *)&peer->connection, 1, &buf3);
     ASSERT(buf3.base != NULL);
     buf3.base[0] = PT_INTERESTED;
     buf3.len = 1;
@@ -207,7 +207,7 @@ TEST test_picker(void) {
 
 GREATEST_MAIN_DEFS();
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   GREATEST_MAIN_BEGIN(); /* command-line options, initialization. */
 
   RUN_TEST(test_on_read);
