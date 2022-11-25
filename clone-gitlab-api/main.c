@@ -1,3 +1,4 @@
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -16,7 +17,6 @@
 #include "../pg/pg.h"
 #define JSMN_STATIC
 #include "../vendor/jsmn/jsmn.h"
-#include "../vendor/sds/sds.c"
 
 #define MAX_URL_LEN 4096
 
@@ -36,10 +36,10 @@ static const char pg_colors[2][COL_COUNT][14] = {
 static struct timeval start;
 
 struct process_t {
-  sds path_with_namespace;
+  pg_string_t path_with_namespace;
   int stderr_fd;
   pid_t pid;
-  sds err;
+  pg_string_t err;
   struct process_t *next; // TODO: improve
 };
 typedef struct process_t process_t;
@@ -50,9 +50,9 @@ typedef enum {
 } git_clone_method_t;
 
 typedef struct {
-  sds root_directory;
-  sds api_token;
-  sds gitlab_domain;
+  pg_string_t root_directory;
+  pg_string_t api_token;
+  pg_string_t gitlab_domain;
   git_clone_method_t clone_method;
   PG_PAD(4);
 } options_t;
@@ -64,8 +64,8 @@ typedef struct {
 
 typedef struct {
   CURL *http_handle;
-  sds response_body;
-  sds url;
+  pg_string_t response_body;
+  pg_string_t url;
   pg_array_t(jsmntok_t) tokens;
   struct curl_slist *curl_headers;
   bool finished;
@@ -174,8 +174,8 @@ static uint64_t on_http_response_body_chunk(void *contents, uint64_t size,
   assert(userp != NULL);
 
   const uint64_t real_size = size * nmemb;
-  sds *response_body = userp;
-  *response_body = sdscatlen(*response_body, contents, real_size);
+  pg_string_t *response_body = userp;
+  *response_body = pg_string_append_length(*response_body, contents, real_size);
 
   return real_size;
 }
@@ -227,8 +227,8 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
     }
 
     assert(api->url != NULL);
-    sdsclear(api->url);
-    api->url = sdscatlen(api->url, val, val_len);
+    pg_string_clear(api->url);
+    api->url = pg_string_append_length(api->url, val, val_len);
   } else if (str_iequal_c(buffer, key_len, "X-Total")) {
     uint64_t total = str_to_u64(val, val_len);
     uint64_t expected = 0;
@@ -255,20 +255,19 @@ static void api_init(api_t *api, options_t *options) {
   assert(options != NULL);
   assert(options->gitlab_domain != NULL);
 
-  api->response_body = sdsempty();
-  api->response_body = sdsMakeRoomFor(api->response_body, 4 * 1024);
+  api->response_body = pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
 
   pg_array_init_reserve(api->tokens, 8 * 1000, pg_heap_allocator());
 
   api->http_handle = curl_easy_init();
   assert(api->http_handle != NULL);
 
-  api->url = sdsdup(options->gitlab_domain);
-  api->url = sdscat(api->url,
-                    "/api/v4/"
-                    "projects?statistics=false&top_level=&with_custom_"
-                    "attributes=false&simple=true&per_page=100&all_available="
-                    "true&order_by=id&sort=asc");
+  api->url = pg_string_duplicate(pg_heap_allocator(), options->gitlab_domain);
+  api->url = pg_string_appendc(
+      api->url, "/api/v4/"
+                "projects?statistics=false&top_level=&with_custom_"
+                "attributes=false&simple=true&per_page=100&all_available="
+                "true&order_by=id&sort=asc");
   assert(curl_easy_setopt(api->http_handle, CURLOPT_SOCKOPTFUNCTION,
                           on_curl_socktopt) == CURLE_OK);
   assert(curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose) ==
@@ -304,8 +303,8 @@ static void api_init(api_t *api, options_t *options) {
 static void api_destroy(api_t *api) {
   assert(api != NULL);
 
-  sdsfree(api->url);
-  sdsfree(api->response_body);
+  pg_string_free(api->url);
+  pg_string_free(api->response_body);
   pg_array_free(api->tokens);
 
   curl_slist_free_all(api->curl_headers);
@@ -355,7 +354,7 @@ static void options_parse_from_cli(int argc, char *argv[], options_t *options) {
                 PATH_MAX);
         exit(EINVAL);
       }
-      options->root_directory = sdsnew(optarg);
+      options->root_directory = pg_string_make(pg_heap_allocator(), optarg);
       break;
     }
     case 't': {
@@ -368,7 +367,7 @@ static void options_parse_from_cli(int argc, char *argv[], options_t *options) {
         fprintf(stderr, "Token is too long: maximum 128 characters\n");
         exit(EINVAL);
       }
-      options->api_token = sdsnew(optarg);
+      options->api_token = pg_string_make(pg_heap_allocator(), optarg);
       break;
     }
     case 'u': {
@@ -379,11 +378,14 @@ static void options_parse_from_cli(int argc, char *argv[], options_t *options) {
         exit(EINVAL);
       }
 
-      options->gitlab_domain = sdsempty();
+      options->gitlab_domain =
+          pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
       if (!pg_str_has_prefix(optarg, "https://")) {
-        options->gitlab_domain = sdscat(options->gitlab_domain, "https://");
+        options->gitlab_domain =
+            pg_string_appendc(options->gitlab_domain, "https://");
       }
-      options->gitlab_domain = sdscat(options->gitlab_domain, optarg);
+      options->gitlab_domain =
+          pg_string_appendc(options->gitlab_domain, optarg);
 
       break;
     }
@@ -415,7 +417,8 @@ static int api_query_projects(api_t *api) {
            CURLE_OK);
   }
 
-  api->response_body = sdsMakeRoomFor(api->response_body, 4 * 1024);
+  api->response_body =
+      pg_string_make_space_for(api->response_body, MAX_URL_LEN);
   CURLcode res = 0;
   if ((res = curl_easy_perform(api->http_handle)) != 0) {
     int error;
@@ -426,12 +429,11 @@ static int api_query_projects(api_t *api) {
             api->url, api->response_body, res, curl_easy_strerror(res), error);
     return (int)res;
   }
-  api->response_body = sdsRemoveFreeSpace(api->response_body);
 
   return 0;
 }
 
-static int upsert_project(sds path, char *git_url, char *fs_path,
+static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
                           const options_t *options, int queue);
 
 static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
@@ -446,7 +448,7 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
 
   do {
     jsmn_init(&p);
-    res = jsmn_parse(&p, api->response_body, sdslen(api->response_body),
+    res = jsmn_parse(&p, api->response_body, pg_string_len(api->response_body),
                      api->tokens, (uint32_t)pg_array_capacity(api->tokens));
     if (res == JSMN_ERROR_NOMEM) {
       pg_array_grow(api->tokens, pg_array_capacity(api->tokens) * 2 + 8);
@@ -487,7 +489,7 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
   const uint64_t key_git_url_len = strlen(key_git_url);
 
   char *fs_path = NULL;
-  sds path_with_namespace = NULL;
+  pg_string_t path_with_namespace = NULL;
   char *git_url = NULL;
   uint64_t field_count = 0;
 
@@ -505,7 +507,7 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
     if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
                   key_path_with_namespace_len)) {
       field_count++;
-      path_with_namespace = sdsnewlen(next_s, next_s_len);
+      path_with_namespace = pg_string_make_length(pg_heap_allocator(), next_s, next_s_len);
 
       // `execvp(2)` expects null terminated strings
       // This is safe to do because we override the terminating double
@@ -579,12 +581,15 @@ static void *watch_workers(void *varg) {
         assert(process != NULL);
 
         const uint64_t max_read = MIN((uint64_t)event->data, 128ULL);
-        process->err = sdsMakeRoomFor(process->err, max_read);
+        process->err = pg_string_make_space_for(process->err, max_read);
         ssize_t res = read(process->stderr_fd, process->err, max_read);
         if (res == -1) {
           fprintf(stderr, "Failed to read(2): err=%s\n", strerror(errno));
         }
-        sdsIncrLen(process->err, res);
+        if (res != 0) {
+          const uint64_t new_len = pg_string_len(process->err) + (uint64_t)res;
+          pg__set_string_len(process->err, new_len);
+        }
         close(process->stderr_fd);
       } else if ((event->filter == EVFILT_PROC) &&
                  (event->fflags & proc_fflags)) {
@@ -607,8 +612,8 @@ static void *watch_workers(void *varg) {
                  process->path_with_namespace, exit_status, process->err,
                  pg_colors[is_tty][COL_RESET]);
         }
-        sdsfree(process->path_with_namespace);
-        sdsfree(process->err);
+        pg_string_free(process->path_with_namespace);
+        pg_string_free(process->err);
         close(process->stderr_fd);
         free(process);
       }
@@ -623,7 +628,7 @@ static void *watch_workers(void *varg) {
   return NULL;
 }
 
-static int worker_update_project(char *fs_path, sds git_url,
+static int worker_update_project(char *fs_path, pg_string_t git_url,
                                  const options_t *options) {
   assert(fs_path != NULL);
   assert(git_url != NULL);
@@ -646,7 +651,7 @@ static int worker_update_project(char *fs_path, sds git_url,
   return 0;
 }
 
-static int worker_clone_project(char *fs_path, sds git_url,
+static int worker_clone_project(char *fs_path, pg_string_t git_url,
                                 const options_t *options) {
   assert(fs_path != NULL);
   assert(git_url != NULL);
@@ -719,7 +724,7 @@ static int record_process_finished_event(int queue, process_t *process) {
   return 0;
 }
 
-static int upsert_project(sds path, char *git_url, char *fs_path,
+static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
                           const options_t *options, int queue) {
   assert(path != NULL);
   assert(git_url != NULL);
@@ -757,7 +762,7 @@ static int upsert_project(sds path, char *git_url, char *fs_path,
     process->pid = pid;
     process->stderr_fd = fds[0];
     process->path_with_namespace = path;
-    process->err = sdsempty();
+    process->err = pg_string_make_reserve(pg_heap_allocator(), 256);
     int res = 0;
     if ((res = record_process_finished_event(queue, process)) != 0)
       return res;
@@ -771,7 +776,7 @@ static int api_fetch_projects(api_t *api, const options_t *options, int queue,
   assert(options != NULL);
 
   int res = 0;
-  sdsclear(api->response_body);
+  pg_string_clear(api->response_body);
 
   if ((res = api_query_projects(api)) != 0) {
     return res;

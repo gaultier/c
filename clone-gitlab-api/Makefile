@@ -1,6 +1,6 @@
 .PHONY: install
 
-CFLAGS_COMMON := -g -Weverything -Wno-used-but-marked-unused -Wno-declaration-after-statement -Wno-gnu-zero-variadic-macro-arguments -Wno-disabled-macro-expansion -isystem /usr/local/include/ -isystem ./vendor/ -isystem ../vendor -std=c99
+CFLAGS_COMMON := -g -Weverything -Wno-used-but-marked-unused -Wno-declaration-after-statement -Wno-gnu-zero-variadic-macro-arguments -Wno-disabled-macro-expansion -isystem /usr/local/include/ -isystem .. -std=c99
 LDLIBS := -lcurl -lpthread
 LDFLAGS := -flto -L /usr/local/lib/
 
