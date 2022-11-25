@@ -2,6 +2,7 @@
 -Weverything
 -Wno-used-but-marked-unused
 -isystem/usr/local/include
+-isystem.
 -Wno-declaration-after-statement
 -Wno-gnu-zero-variadic-macro-arguments
 -Wno-disabled-macro-expansion

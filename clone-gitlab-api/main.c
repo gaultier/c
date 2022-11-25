@@ -1,4 +1,3 @@
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -16,7 +15,7 @@
 
 #include "../pg/pg.h"
 #define JSMN_STATIC
-#include "../vendor/jsmn/jsmn.h"
+#include "vendor/jsmn/jsmn.h"
 
 #define MAX_URL_LEN 4096
 
@@ -507,7 +506,8 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
     if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
                   key_path_with_namespace_len)) {
       field_count++;
-      path_with_namespace = pg_string_make_length(pg_heap_allocator(), next_s, next_s_len);
+      path_with_namespace =
+          pg_string_make_length(pg_heap_allocator(), next_s, next_s_len);
 
       // `execvp(2)` expects null terminated strings
       // This is safe to do because we override the terminating double
