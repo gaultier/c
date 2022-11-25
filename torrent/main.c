@@ -36,7 +36,7 @@ int main(int argc, char* argv[]) {
   bc_parse_error_t bc_err = bc_parse(&parser, &torrent_file_span);
   if (bc_err != BC_PE_NONE) {
     pg_log_fatal(&logger, EINVAL, "Failed to parse: %s",
-                 bc_parse_error_to_string(bc_err));
+                 bc_parse_error_to_string((int)bc_err));
   }
 
   bc_metainfo_t metainfo = {0};
@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
       bc_parser_init_metainfo(&parser, &metainfo, &info_span);
   if (err_metainfo != BC_ME_NONE) {
     pg_log_fatal(&logger, EINVAL, "Failed to bc_metainfo_init_from_value: %s",
-                 bc_metainfo_error_to_string(err_metainfo));
+                 bc_metainfo_error_to_string((int)err_metainfo));
   }
 
   if (pg_span_starts_with(metainfo.announce, pg_span_make_c("http://"))) {
@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
                           &peer_addresses_ipv4, &peer_addresses_ipv6);
   if (tracker_err != TK_ERR_NONE) {
     pg_log_fatal(&logger, EINVAL, "Failed to contact tracker: %s",
-                 tracker_error_to_string(tracker_err));
+                 tracker_error_to_string((int)tracker_err));
   }
   if (pg_array_len(peer_addresses_ipv4) == 0 &&
       pg_array_len(peer_addresses_ipv6) == 0) {
