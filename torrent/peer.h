@@ -287,7 +287,7 @@ __attribute__((unused)) static void peer_message_destroy(peer_t *peer,
   case PMK_HAVE:
   case PMK_REQUEST:
   case PMK_CANCEL:
-    assert(0);
+    return; // no-op
 
   case PMK_BITFIELD:
     pg_array_free(msg->v.bitfield.bitfield);
