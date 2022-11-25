@@ -7,7 +7,7 @@
 #include "bencode.h"
 #include "sha1.h"
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   pg_array_t(uint8_t) buf = {0};
   int64_t ret = 0;
   if (argc == 2) {
@@ -27,7 +27,7 @@ int main(int argc, char* argv[]) {
     exit(EINVAL);
   }
 
-  pg_span_t input = {.data = (char*)buf, .len = pg_array_len(buf)};
+  pg_span_t input = {.data = (char *)buf, .len = pg_array_len(buf)};
 
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 100);
@@ -48,20 +48,19 @@ int main(int argc, char* argv[]) {
             bc_metainfo_error_to_string(err_metainfo));
     exit(EINVAL);
   }
-  printf(
-      "Metainfo:\n"
-      "  - name: %.*s\n"
-      "  - announce: %.*s\n"
-      "  - length: %llu\n"
-      "  - piece length: %u\n",
-      (int)metainfo.name.len, metainfo.name.data, (int)metainfo.announce.len,
-      metainfo.announce.data, metainfo.length, metainfo.piece_length);
+  printf("Metainfo:\n"
+         "  - name: %.*s\n"
+         "  - announce: %.*s\n"
+         "  - length: %llu\n"
+         "  - piece length: %u\n",
+         (int)metainfo.name.len, metainfo.name.data, (int)metainfo.announce.len,
+         metainfo.announce.data, metainfo.length, metainfo.piece_length);
   puts("");
 
   bc_parser_destroy(&parser);
 
   uint8_t sha1[20] = {0};
-  assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len, sha1) == 0);
+  assert(mbedtls_sha1((uint8_t *)info_span.data, info_span.len, sha1) == 0);
   printf("info_hash: ");
   for (uint64_t i = 0; i < sizeof(sha1); i++) {
     printf("%02x ", sha1[i]);

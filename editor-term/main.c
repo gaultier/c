@@ -54,25 +54,25 @@ static pg_key_t term_read_key(void) {
   return (pg_key_t)c;
 }
 
-static uint8_t editor_get_line_column_width(editor_t* e) {
+static uint8_t editor_get_line_column_width(editor_t *e) {
   char tmp[25] = "";
   return (uint8_t)snprintf(tmp, sizeof(tmp), "%td", gb_array_count(e->lines)) +
          /* border */ 1;
 }
 
-static void editor_parse_text(editor_t* e) {
+static void editor_parse_text(editor_t *e) {
   gb_array_clear(e->lines);
 
   uint64_t i = 0;
   while (i < (uint64_t)gb_string_length(e->text)) {
-    char* nl = memchr(e->text + i, '\n', gb_string_length(e->text) - i);
+    char *nl = memchr(e->text + i, '\n', gb_string_length(e->text) - i);
     if (nl == NULL) {
       span_t span = {.start = i, .len = gb_string_length(e->text) - i};
       gb_array_append(e->lines, span);
       break;
     }
 
-    const char* const start = e->text + i;
+    const char *const start = e->text + i;
     uint64_t len = 0;
     if (nl > start) {
       len = nl - (e->text + i) - 1;
@@ -86,93 +86,95 @@ static void editor_parse_text(editor_t* e) {
   e->line_column_width = editor_get_line_column_width(e);
 }
 
-static void editor_del_char(editor_t* e, uint64_t pos) {
+static void editor_del_char(editor_t *e, uint64_t pos) {
   span_t line = e->lines[e->cy];
-  if (line.len == 0) return;
+  if (line.len == 0)
+    return;
 
   assert(pos < (uint64_t)gb_string_length(e->text));
 
   memmove(e->text + pos, e->text + pos + 1,
           gb_string_length(e->text) - pos - 1);
-  e->text[gb_string_length(e->text) - 1] = '?';  // For debuggability
+  e->text[gb_string_length(e->text) - 1] = '?'; // For debuggability
   gb__set_string_length(e->text, gb_string_length(e->text) - 1);
 
   editor_parse_text(e);
 }
 
-static void editor_handle_key(editor_t* e, pg_key_t key) {
+static void editor_handle_key(editor_t *e, pg_key_t key) {
   switch ((int)key) {
-    case K_ESC:
-      exit(0);
-      break;
-    case 'x':
-      editor_del_char(e, e->coffset);
-      break;
-    case 'h':
-      if (e->cx > 0) {
-        e->cx--;
-        e->coffset--;
-      }
-      break;
-    case 'j': {
-      if (e->cy < (uint64_t)gb_array_count(e->lines) - 1) {
-        span_t prev_line = e->lines[e->cy];
-        e->cy++;
+  case K_ESC:
+    exit(0);
+    break;
+  case 'x':
+    editor_del_char(e, e->coffset);
+    break;
+  case 'h':
+    if (e->cx > 0) {
+      e->cx--;
+      e->coffset--;
+    }
+    break;
+  case 'j': {
+    if (e->cy < (uint64_t)gb_array_count(e->lines) - 1) {
+      span_t prev_line = e->lines[e->cy];
+      e->cy++;
 
-        e->coffset += prev_line.len;
-      }
-      break;
+      e->coffset += prev_line.len;
     }
-    case 'k': {
-      if (e->cy > 0) {
-        e->cy--;
-        span_t cur_line = e->lines[e->cy];
+    break;
+  }
+  case 'k': {
+    if (e->cy > 0) {
+      e->cy--;
+      span_t cur_line = e->lines[e->cy];
 
-        assert(e->coffset >= cur_line.len);
-        e->coffset -= cur_line.len;
-      }
-      break;
+      assert(e->coffset >= cur_line.len);
+      e->coffset -= cur_line.len;
     }
-    case 'l': {
-      const span_t line = e->lines[e->cy];
-      if (e->cx < line.len) {
-        e->cx++;
-        e->coffset++;
-      }
-      break;
+    break;
+  }
+  case 'l': {
+    const span_t line = e->lines[e->cy];
+    if (e->cx < line.len) {
+      e->cx++;
+      e->coffset++;
     }
-    case '$': {
-      const span_t line = e->lines[e->cy];
-      const uint64_t prev_cx = e->cx;
-      e->cx = line.len - 1;
-      e->coffset += e->cx - prev_cx;
-      break;
-    }
-    case '0':
-      e->coffset -= e->cx;
-      e->cx = 0;
-      break;
-    case '_': {
-      const span_t line = e->lines[e->cy];
+    break;
+  }
+  case '$': {
+    const span_t line = e->lines[e->cy];
+    const uint64_t prev_cx = e->cx;
+    e->cx = line.len - 1;
+    e->coffset += e->cx - prev_cx;
+    break;
+  }
+  case '0':
+    e->coffset -= e->cx;
+    e->cx = 0;
+    break;
+  case '_': {
+    const span_t line = e->lines[e->cy];
 
-      for (uint64_t i = 0; i < line.len; i++) {
-        const uint64_t offset = line.start + i;
-        if (gb_char_is_space(e->text[offset])) continue;
+    for (uint64_t i = 0; i < line.len; i++) {
+      const uint64_t offset = line.start + i;
+      if (gb_char_is_space(e->text[offset]))
+        continue;
 
-        e->cx = i;
-        e->coffset = offset;
-        break;
-      }
+      e->cx = i;
+      e->coffset = offset;
       break;
     }
-    default:
-      break;
+    break;
+  }
+  default:
+    break;
   }
 }
 
 static void term_disable_raw_mode_and_reset(void) {
   write(STDOUT_FILENO, "\x1b[0m\x1b[J\x1b[H",
-        10);  // Reset, Clear screen, Go home
+        10); // Reset, Clear screen, Go home
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
 }
 
@@ -204,7 +206,7 @@ static void term_enable_raw_mode(void) {
   atexit(term_disable_raw_mode_and_reset);
 }
 
-static void term_get_window_size(uint64_t* cols, uint64_t* rows) {
+static void term_get_window_size(uint64_t *cols, uint64_t *rows) {
   struct winsize ws = {0};
   if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1) {
     fprintf(stderr, "ioctl(2) failed: %s\n", strerror(errno));
@@ -214,27 +216,27 @@ static void term_get_window_size(uint64_t* cols, uint64_t* rows) {
   *rows = ws.ws_row;
 }
 
-__attribute__((unused)) 
-static void editor_draw_rgb_color_bg(editor_t* e, uint32_t rgb) {
+__attribute__((unused)) static void editor_draw_rgb_color_bg(editor_t *e,
+                                                             uint32_t rgb) {
   uint8_t r = (rgb & 0xff0000) >> 16;
   uint8_t g = (rgb & 0x00ff00) >> 8;
   uint8_t b = (rgb & 0x0000ff);
   e->draw = gb_string_append_fmt(e->draw, "\x1b[48;2;%d;%d;%dm", r, g, b);
 }
 
-__attribute__((unused)) 
-static void editor_draw_rgb_color_fg(editor_t* e, uint32_t rgb) {
+__attribute__((unused)) static void editor_draw_rgb_color_fg(editor_t *e,
+                                                             uint32_t rgb) {
   uint8_t r = (rgb & 0xff0000) >> 16;
   uint8_t g = (rgb & 0x00ff00) >> 8;
   uint8_t b = (rgb & 0x0000ff);
   e->draw = gb_string_append_fmt(e->draw, "\x1b[38;2;%d;%d;%dm", r, g, b);
 }
 
-static void editor_draw_line_number(editor_t* e, uint64_t line_i) {
+static void editor_draw_line_number(editor_t *e, uint64_t line_i) {
   e->draw = gb_string_append_fmt(e->draw, "%d ", line_i + 1);
 }
 
-static void editor_draw_line_trailing_padding(editor_t* e, uint64_t line_i) {
+static void editor_draw_line_trailing_padding(editor_t *e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
   for (uint64_t i = 0;
        i < e->cols - e->line_column_width - span.len - /* trailing newline */ 1;
@@ -244,9 +246,9 @@ static void editor_draw_line_trailing_padding(editor_t* e, uint64_t line_i) {
   e->draw = gb_string_append_length(e->draw, "\n", 1);
 }
 
-static void editor_draw_line(editor_t* e, uint64_t line_i) {
+static void editor_draw_line(editor_t *e, uint64_t line_i) {
   const span_t span = e->lines[line_i];
-  const char* const line = e->text + span.start;
+  const char *const line = e->text + span.start;
 
   e->draw = gb_string_append_length(e->draw, "\x1b[0K", 4);
   editor_draw_line_number(e, line_i);
@@ -256,7 +258,7 @@ static void editor_draw_line(editor_t* e, uint64_t line_i) {
   editor_draw_line_trailing_padding(e, line_i);
 }
 
-static void editor_draw_lines(editor_t* e) {
+static void editor_draw_lines(editor_t *e) {
   for (uint64_t i = 0; i < MIN((uint64_t)gb_array_count(e->lines),
                                e->rows - /* debug line */ 1);
        i++) {
@@ -264,17 +266,17 @@ static void editor_draw_lines(editor_t* e) {
   }
 }
 
-static void editor_draw_debug_ui(editor_t* e) {
-  const uint64_t mem_len = 0;  // FIXME
+static void editor_draw_debug_ui(editor_t *e) {
+  const uint64_t mem_len = 0; // FIXME
   e->ui = gb_string_append_fmt(
       e->ui, "cols=%d | rows=%d | cx=%d | cy=%d | coffset=%d | mem=%td",
       e->cols, e->rows, e->cx, e->cy, e->coffset, mem_len);
   e->draw = gb_string_append(e->draw, e->ui);
 }
 
-static void editor_draw_vert_padding(editor_t* e) {
+static void editor_draw_vert_padding(editor_t *e) {
   if ((uint64_t)gb_array_count(e->lines) >= e->rows - /* debug line */ 1)
-    return;  // nothing to do
+    return; // nothing to do
 
   const uint64_t vert_padding_rows =
       e->rows - (uint64_t)gb_array_count(e->lines) - /* debug line */ 1;
@@ -283,19 +285,19 @@ static void editor_draw_vert_padding(editor_t* e) {
   }
 }
 
-static void editor_draw_cursor(editor_t* e) {
+static void editor_draw_cursor(editor_t *e) {
   e->draw =
       gb_string_append_fmt(e->draw, "\x1b[%d;%dH", e->cy + 1,
-                           e->line_column_width + e->cx + 1);  // Go to (cx, cy)
-  e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6);  // Show cursor
+                           e->line_column_width + e->cx + 1); // Go to (cx, cy)
+  e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6); // Show cursor
 }
 
-static void editor_draw(editor_t* e) {
+static void editor_draw(editor_t *e) {
   assert(e->rows > 0);
   assert(e->cols > 0);
 
-  e->draw = gb_string_append_length(e->draw, "\x1b[J", 3);  // Clear screen
-  e->draw = gb_string_append_length(e->draw, "\x1b[H", 3);  // Go home
+  e->draw = gb_string_append_length(e->draw, "\x1b[J", 3); // Clear screen
+  e->draw = gb_string_append_length(e->draw, "\x1b[H", 3); // Go home
 
   editor_draw_lines(e);
   editor_draw_vert_padding(e);
@@ -310,8 +312,10 @@ static void editor_draw(editor_t* e) {
 static editor_t editor_make(uint64_t rows, uint64_t cols) {
   // Can happen if inside a debugger
   // In that case allocate a reasonable size to be able to debug meaningfully
-  if (cols == 0) cols = 100;
-  if (rows == 0) rows = 100;
+  if (cols == 0)
+    cols = 100;
+  if (rows == 0)
+    rows = 100;
 
   gbAllocator allocator = gb_heap_allocator();
   editor_t e = {
@@ -327,7 +331,7 @@ static editor_t editor_make(uint64_t rows, uint64_t cols) {
   return e;
 }
 
-static void editor_ingest_text(editor_t* e, const char* text, uint64_t len) {
+static void editor_ingest_text(editor_t *e, const char *text, uint64_t len) {
   e->text = gb_string_append_length(e->text, text, len);
   editor_parse_text(e);
 }

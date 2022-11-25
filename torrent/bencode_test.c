@@ -420,17 +420,16 @@ TEST test_bc_metainfo(void) {
   ASSERT_EQ_FMT(20U, metainfo.piece_length, "%u");
   ASSERT_EQ_FMT(20ULL, metainfo.length, "%llu");
 
-  ASSERT_STRN_EQ(
-      "d3:foo4:true6:lengthi20e12:piece "
-      "lengthi20e6:pieces20:000000000000000000004:name5:helloee",
-      info_span.data, info_span.len);
+  ASSERT_STRN_EQ("d3:foo4:true6:lengthi20e12:piece "
+                 "lengthi20e6:pieces20:000000000000000000004:name5:helloee",
+                 info_span.data, info_span.len);
 
   PASS();
 }
 
 GREATEST_MAIN_DEFS();
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   GREATEST_MAIN_BEGIN(); /* command-line options, initialization. */
 
   RUN_TEST(test_bc_parse_number);

@@ -7,7 +7,7 @@
 #include "bencode.h"
 
 static uint8_t peer_id[20] = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
-                                    11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
+                              11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
 
 typedef enum {
   TK_ERR_NONE,
@@ -16,19 +16,18 @@ typedef enum {
   TK_ERR_INVALID_PEERS,
 } tracker_error_t;
 
-__attribute__((unused)) static
-const char *tracker_error_to_string(int err) {
+__attribute__((unused)) static const char *tracker_error_to_string(int err) {
   switch (err) {
-    case TK_ERR_NONE:
-      return "TK_ERR_NONE";
-    case TK_ERR_CURL:
-      return "TK_ERR_CURL";
-    case TK_ERR_BENCODE_PARSE:
-      return "TK_ERR_BENCODE_PARSE";
-    case TK_ERR_INVALID_PEERS:
-      return "TK_ERR_INVALID_PEERS";
-    default:
-      assert(0);
+  case TK_ERR_NONE:
+    return "TK_ERR_NONE";
+  case TK_ERR_CURL:
+    return "TK_ERR_CURL";
+  case TK_ERR_BENCODE_PARSE:
+    return "TK_ERR_BENCODE_PARSE";
+  case TK_ERR_INVALID_PEERS:
+    return "TK_ERR_INVALID_PEERS";
+  default:
+    assert(0);
   }
 }
 
@@ -55,13 +54,14 @@ typedef struct {
 
 #define TRACKER_MAX_PEERS 50
 
-__attribute__((unused)) static
-tracker_error_t tracker_parse_peer_addresses(
+__attribute__((unused)) static tracker_error_t tracker_parse_peer_addresses(
     pg_logger_t *logger, bc_parser_t *parser,
     pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses_ipv4,
     pg_array_t(tracker_peer_address_ipv6_t) * peer_addresses_ipv6) {
-  if (pg_array_len(parser->kinds) == 0) return TK_ERR_INVALID_PEERS;
-  if (parser->kinds[0] != BC_KIND_DICTIONARY) return TK_ERR_INVALID_PEERS;
+  if (pg_array_len(parser->kinds) == 0)
+    return TK_ERR_INVALID_PEERS;
+  if (parser->kinds[0] != BC_KIND_DICTIONARY)
+    return TK_ERR_INVALID_PEERS;
 
   uint64_t cur = 1;
   const pg_span_t peers_key = pg_span_make_c("peers");
@@ -78,12 +78,13 @@ tracker_error_t tracker_parse_peer_addresses(
 
     if (key_kind == BC_KIND_STRING && pg_span_eq(peers_key, key_span) &&
         value_kind == BC_KIND_STRING) {
-      if (value_span.len % 6 != 0) return TK_ERR_INVALID_PEERS;
+      if (value_span.len % 6 != 0)
+        return TK_ERR_INVALID_PEERS;
 
       for (uint64_t j = 0; j < value_span.len; j += 6) {
         tracker_peer_address_ipv4_t addr = {
-            .ip = *(uint32_t *)(void*)(&value_span.data[j]),
-            .port = *(uint16_t *)(void*)(&value_span.data[j + 4]),
+            .ip = *(uint32_t *)(void *)(&value_span.data[j]),
+            .port = *(uint16_t *)(void *)(&value_span.data[j + 4]),
         };
         pg_array_append(*peer_addresses_ipv4, addr);
         if (pg_array_len(*peer_addresses_ipv4) >= TRACKER_MAX_PEERS)
@@ -91,11 +92,12 @@ tracker_error_t tracker_parse_peer_addresses(
       }
     } else if (key_kind == BC_KIND_STRING && pg_span_eq(peers6_key, key_span) &&
                value_kind == BC_KIND_STRING) {
-      if (value_span.len % 18 != 0) return TK_ERR_INVALID_PEERS;
+      if (value_span.len % 18 != 0)
+        return TK_ERR_INVALID_PEERS;
 
       for (uint64_t j = 0; j < value_span.len; j += 6) {
         tracker_peer_address_ipv6_t addr = {
-            .port = *(uint16_t *)(void*)(&value_span.data[j + 16]),
+            .port = *(uint16_t *)(void *)(&value_span.data[j + 16]),
         };
         memcpy(addr.ip, &value_span.data[j], 16);
         pg_array_append(*peer_addresses_ipv6, addr);
@@ -118,9 +120,8 @@ tracker_error_t tracker_parse_peer_addresses(
   return TK_ERR_NONE;
 }
 
-__attribute__((unused)) static
-pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
-                                         tracker_query_t *q) {
+__attribute__((unused)) static pg_string_t
+tracker_build_url_from_query(pg_allocator_t allocator, tracker_query_t *q) {
   pg_span_t info_hash_span =
       (pg_span_t){.data = (char *)q->info_hash, .len = sizeof(q->info_hash)};
   pg_string_t info_hash_url_encoded =
@@ -141,14 +142,15 @@ pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
   return res;
 }
 
-__attribute__((unused)) static
-uint64_t tracker_on_response_chunk(void *ptr, uint64_t size, uint64_t nmemb,
-                                   void *user_data) {
+__attribute__((unused)) static uint64_t
+tracker_on_response_chunk(void *ptr, uint64_t size, uint64_t nmemb,
+                          void *user_data) {
   const uint64_t ptr_len = size * nmemb;
   pg_array_t(char) *response = user_data;
 
   const uint64_t new_len = pg_array_len(*response) + ptr_len;
-  if (new_len > UINT16_MAX) return 0;
+  if (new_len > UINT16_MAX)
+    return 0;
 
   pg_array_grow(*response, new_len);
   assert(pg_array_capacity(*response) >= ptr_len);
@@ -159,8 +161,7 @@ uint64_t tracker_on_response_chunk(void *ptr, uint64_t size, uint64_t nmemb,
   return new_len;
 }
 
-__attribute__((unused)) static
-tracker_error_t tracker_fetch_peers(
+__attribute__((unused)) static tracker_error_t tracker_fetch_peers(
     pg_logger_t *logger, pg_allocator_t allocator, tracker_query_t *q,
     pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses_ipv4,
     pg_array_t(tracker_peer_address_ipv6_t) * peer_addresses_ipv6) {

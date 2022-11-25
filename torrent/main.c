@@ -12,7 +12,7 @@
 #include "tracker.h"
 #include "uv.h"
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
   assert(argc == 2);
 
   // pg_logger_t logger = {.level = PG_LOG_DEBUG};
@@ -29,7 +29,7 @@ int main(int argc, char* argv[]) {
             UINT32_MAX, pg_array_len(torrent_file_data));
     exit(EINVAL);
   }
-  pg_span_t torrent_file_span = {.data = (char*)torrent_file_data,
+  pg_span_t torrent_file_span = {.data = (char *)torrent_file_data,
                                  .len = pg_array_len(torrent_file_data)};
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 100);
@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
       .url = metainfo.announce,
       .left = metainfo.length,
   };
-  assert(mbedtls_sha1((uint8_t*)info_span.data, info_span.len,
+  assert(mbedtls_sha1((uint8_t *)info_span.data, info_span.len,
                       tracker_query.info_hash) == 0);
 
   pg_array_t(tracker_peer_address_ipv4_t) peer_addresses_ipv4 = {0};
@@ -117,7 +117,7 @@ int main(int argc, char* argv[]) {
 
   for (uint64_t i = 0; i < pg_array_len(peer_addresses_ipv4); i++) {
     const tracker_peer_address_ipv4_t addr = peer_addresses_ipv4[i];
-    peer_t* peer = pg_pool_alloc(&peer_pool);
+    peer_t *peer = pg_pool_alloc(&peer_pool);
     assert(peer != NULL);
     peer_init(peer, &logger, &peer_pool, &download, &metainfo, &picker, addr);
     peer_connect(peer, addr);

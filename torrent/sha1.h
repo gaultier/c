@@ -23,30 +23,29 @@ typedef struct mbedtls_sha1_context {
 }
 
 mbedtls_sha1_context;
-__attribute__((unused)) static
-void mbedtls_sha1_init(mbedtls_sha1_context *ctx) {
+__attribute__((unused)) static void
+mbedtls_sha1_init(mbedtls_sha1_context *ctx) {
   memset(ctx, 0, sizeof(mbedtls_sha1_context));
 }
 
-__attribute__((unused)) static
-void mbedtls_sha1_free(mbedtls_sha1_context *ctx) {
+__attribute__((unused)) static void
+mbedtls_sha1_free(mbedtls_sha1_context *ctx) {
   if (ctx == NULL)
     return;
 
   memset(ctx, 0, sizeof(mbedtls_sha1_context));
 }
 
-__attribute__((unused)) static
-void mbedtls_sha1_clone(mbedtls_sha1_context *dst,
-                        const mbedtls_sha1_context *src) {
+__attribute__((unused)) static void
+mbedtls_sha1_clone(mbedtls_sha1_context *dst, const mbedtls_sha1_context *src) {
   *dst = *src;
 }
 
 /*
  * SHA-1 context setup
  */
-__attribute__((unused)) static
-int mbedtls_sha1_starts(mbedtls_sha1_context *ctx) {
+__attribute__((unused)) static int
+mbedtls_sha1_starts(mbedtls_sha1_context *ctx) {
   ctx->total[0] = 0;
   ctx->total[1] = 0;
 
@@ -66,9 +65,9 @@ int mbedtls_sha1_starts(mbedtls_sha1_context *ctx) {
    ((uint32_t)(data)[(offset) + 2] << 8) | ((uint32_t)(data)[(offset) + 3]))
 #endif
 
-__attribute__((unused)) static
-int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
-                                  const unsigned char data[64]) {
+__attribute__((unused)) static int
+mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
+                              const unsigned char data[64]) {
   struct {
     uint32_t temp, W[16], A, B, C, D, E;
   } local;
@@ -234,9 +233,9 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
  */
 #define MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED -0x006E
 
-__attribute__((unused)) static
-int mbedtls_sha1_update(mbedtls_sha1_context *ctx, const unsigned char *input,
-                        size_t ilen) {
+__attribute__((unused)) static int
+mbedtls_sha1_update(mbedtls_sha1_context *ctx, const unsigned char *input,
+                    size_t ilen) {
   int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
   size_t fill;
   uint32_t left;
@@ -282,8 +281,8 @@ int mbedtls_sha1_update(mbedtls_sha1_context *ctx, const unsigned char *input,
  * SHA-1 final digest
  */
 
-__attribute__((unused)) static
-int mbedtls_sha1_finish(mbedtls_sha1_context *ctx, unsigned char output[20]) {
+__attribute__((unused)) static int
+mbedtls_sha1_finish(mbedtls_sha1_context *ctx, unsigned char output[20]) {
   int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
   uint32_t used;
   uint32_t high, low;
@@ -335,9 +334,9 @@ int mbedtls_sha1_finish(mbedtls_sha1_context *ctx, unsigned char output[20]) {
 /*
  * output = SHA-1( input buffer )
  */
-__attribute__((unused)) static
-int mbedtls_sha1(const unsigned char *input, size_t ilen,
-                 unsigned char output[20]) {
+__attribute__((unused)) static int mbedtls_sha1(const unsigned char *input,
+                                                size_t ilen,
+                                                unsigned char output[20]) {
   int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
   mbedtls_sha1_context ctx;
 

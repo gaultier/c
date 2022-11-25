@@ -15,7 +15,7 @@
 #include "tracker.h"
 
 #define PEER_HANDSHAKE_HEADER_LENGTH ((uint64_t)19)
-#define PEER_HANDSHAKE_LENGTH \
+#define PEER_HANDSHAKE_LENGTH                                                  \
   ((uint64_t)(1 + PEER_HANDSHAKE_HEADER_LENGTH + 8 + 20 + 20))
 #define PEER_MAX_MESSAGE_LENGTH ((uint64_t)1 << 27)
 #define PEER_MAX_IN_FLIGHT_REQUESTS ((uint64_t)5)
@@ -151,9 +151,10 @@ typedef struct {
   uv_write_t req;
 } peer_write_ctx_t;
 
-__attribute__((unused)) static
-void picker_init(pg_allocator_t allocator, pg_logger_t *logger,
-                 picker_t *picker, bc_metainfo_t *metainfo) {
+__attribute__((unused)) static void picker_init(pg_allocator_t allocator,
+                                                pg_logger_t *logger,
+                                                picker_t *picker,
+                                                bc_metainfo_t *metainfo) {
   picker->metainfo = metainfo;
   assert(metainfo->blocks_count > 0);
   assert(metainfo->pieces_count > 0);
@@ -174,14 +175,15 @@ void picker_init(pg_allocator_t allocator, pg_logger_t *logger,
 }
 
 // TODO: randomness, rarity
-__attribute__((unused)) static
-uint32_t picker_pick_block(const picker_t *picker,
-                           const pg_bitarray_t *them_have_pieces, bool *found) {
+__attribute__((unused)) static uint32_t
+picker_pick_block(const picker_t *picker, const pg_bitarray_t *them_have_pieces,
+                  bool *found) {
   uint64_t i = 0;
   bool is_set = false;
   while (pg_bitarray_next(&picker->blocks_to_download, &i, &is_set)) {
     assert(i > 0);
-    if (!is_set) continue;
+    if (!is_set)
+      continue;
 
     const uint32_t block = (uint32_t)i - 1;
     assert(block < picker->metainfo->blocks_count);
@@ -207,8 +209,8 @@ uint32_t picker_pick_block(const picker_t *picker,
   return 0;
 }
 
-__attribute__((unused)) static
-bool picker_have_all_blocks_for_piece(const picker_t *picker, uint32_t piece) {
+__attribute__((unused)) static bool
+picker_have_all_blocks_for_piece(const picker_t *picker, uint32_t piece) {
   assert(piece < picker->metainfo->pieces_count);
 
   const uint32_t first_block = piece * picker->metainfo->blocks_per_piece;
@@ -225,22 +227,24 @@ bool picker_have_all_blocks_for_piece(const picker_t *picker, uint32_t piece) {
     const uint32_t block = (uint32_t)i - 1;
     assert(block < picker->metainfo->blocks_count);
 
-    if (block > last_block) return true;
-    if (!is_set) return false;
+    if (block > last_block)
+      return true;
+    if (!is_set)
+      return false;
   }
 
   return true;
 }
 
-__attribute__((unused)) static
-void picker_mark_block_as_downloading(picker_t *picker, uint32_t block) {
+__attribute__((unused)) static void
+picker_mark_block_as_downloading(picker_t *picker, uint32_t block) {
   assert(block < picker->metainfo->blocks_count);
   pg_bitarray_set(&picker->blocks_downloading, block);
   pg_bitarray_unset(&picker->blocks_to_download, block);
 }
 
-__attribute__((unused)) static
-void picker_mark_piece_as_to_download(picker_t *picker, uint32_t piece) {
+__attribute__((unused)) static void
+picker_mark_piece_as_to_download(picker_t *picker, uint32_t piece) {
   assert(piece < picker->metainfo->pieces_count);
 
   const uint32_t first_block = piece * picker->metainfo->blocks_per_piece;
@@ -258,49 +262,46 @@ void picker_mark_piece_as_to_download(picker_t *picker, uint32_t piece) {
   }
 }
 
-__attribute__((unused)) static
-void picker_mark_block_as_downloaded(picker_t *picker, uint32_t block) {
+__attribute__((unused)) static void
+picker_mark_block_as_downloaded(picker_t *picker, uint32_t block) {
   assert(block < picker->metainfo->blocks_count);
   pg_bitarray_set(&picker->blocks_downloaded, block);
   pg_bitarray_unset(&picker->blocks_downloading, block);
 }
 
-__attribute__((unused)) static
-void picker_destroy(picker_t *picker) {
+__attribute__((unused)) static void picker_destroy(picker_t *picker) {
   pg_bitarray_destroy(&picker->blocks_to_download);
   pg_bitarray_destroy(&picker->blocks_downloading);
   pg_bitarray_destroy(&picker->blocks_downloaded);
 }
 
-
-__attribute__((unused)) static
-void peer_message_destroy(peer_t *peer, peer_message_t *msg) {
+__attribute__((unused)) static void peer_message_destroy(peer_t *peer,
+                                                         peer_message_t *msg) {
   switch (msg->kind) {
-    case PMK_NONE: 
-    case  PMK_HEARTBEAT:
-    case  PMK_CHOKE:
-    case  PMK_UNCHOKE:
-    case  PMK_INTERESTED:
-    case  PMK_UNINTERESTED:
-    case  PMK_HAVE:
-    case  PMK_REQUEST:
-    case  PMK_CANCEL:
-      assert(0);
+  case PMK_NONE:
+  case PMK_HEARTBEAT:
+  case PMK_CHOKE:
+  case PMK_UNCHOKE:
+  case PMK_INTERESTED:
+  case PMK_UNINTERESTED:
+  case PMK_HAVE:
+  case PMK_REQUEST:
+  case PMK_CANCEL:
+    assert(0);
 
-    case PMK_BITFIELD:
-      pg_array_free(msg->v.bitfield.bitfield);
-      return;
-    case PMK_PIECE:
-      pg_pool_free(&peer->block_pool, msg->v.piece.data);
-      return;
+  case PMK_BITFIELD:
+    pg_array_free(msg->v.bitfield.bitfield);
+    return;
+  case PMK_PIECE:
+    pg_pool_free(&peer->block_pool, msg->v.piece.data);
+    return;
   }
 }
 
-__attribute__((unused)) static
-void peer_close(peer_t *peer);
+__attribute__((unused)) static void peer_close(peer_t *peer);
 
-__attribute__((unused)) static
-void peer_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
+__attribute__((unused)) static void
+peer_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
   (void)suggested_size;
 
   peer_t *peer = handle->data;
@@ -309,17 +310,17 @@ void peer_alloc(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf) {
   buf->len = peer->read_buf_pool.chunk_size;
 }
 
-__attribute__((unused)) static
-peer_error_t peer_check_handshaked(peer_t *peer) {
-  if (peer->handshaked) return (peer_error_t){0};
+__attribute__((unused)) static peer_error_t
+peer_check_handshaked(peer_t *peer) {
+  if (peer->handshaked)
+    return (peer_error_t){0};
 
   const uint64_t recv_data_len = pg_ring_len(&peer->recv_data);
   if (recv_data_len < PEER_HANDSHAKE_LENGTH)
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
-  const uint8_t handshake_header_expected[] =
-      "\x13"
-      "BitTorrent protocol";
+  const uint8_t handshake_header_expected[] = "\x13"
+                                              "BitTorrent protocol";
   uint8_t handshake_got[PEER_HANDSHAKE_LENGTH] = "";
   for (uint64_t i = 0; i < PEER_HANDSHAKE_LENGTH; i++)
     handshake_got[i] = pg_ring_pop_front(&peer->recv_data);
@@ -341,37 +342,36 @@ peer_error_t peer_check_handshaked(peer_t *peer) {
   return (peer_error_t){0};
 }
 
-__attribute__((unused)) static
-uint32_t peer_read_u32(pg_ring_t *ring) {
+__attribute__((unused)) static uint32_t peer_read_u32(pg_ring_t *ring) {
   assert(pg_ring_len(ring) >= sizeof(uint32_t));
-   uint8_t parts[] = {
+  uint8_t parts[] = {
       pg_ring_pop_front(ring),
       pg_ring_pop_front(ring),
       pg_ring_pop_front(ring),
       pg_ring_pop_front(ring),
   };
-  return ntohl(*(uint32_t *)(void*)parts);
+  return ntohl(*(uint32_t *)(void *)parts);
 }
 
-__attribute__((unused)) static
-uint32_t peer_peek_read_u32(pg_ring_t *ring) {
+__attribute__((unused)) static uint32_t peer_peek_read_u32(pg_ring_t *ring) {
   assert(pg_ring_len(ring) >= sizeof(uint32_t));
-   uint8_t parts[] = {
+  uint8_t parts[] = {
       pg_ring_get(ring, 0),
       pg_ring_get(ring, 1),
       pg_ring_get(ring, 2),
       pg_ring_get(ring, 3),
   };
-  return ntohl(*(uint32_t *)(void*)parts);
+  return ntohl(*(uint32_t *)(void *)parts);
 }
 
-__attribute__((unused)) static
-peer_error_t peer_message_parse(peer_t *peer, peer_message_t *msg) {
+__attribute__((unused)) static peer_error_t
+peer_message_parse(peer_t *peer, peer_message_t *msg) {
   peer_error_t err = peer_check_handshaked(peer);
-  if (err.kind > PEK_NEED_MORE) return err;
+  if (err.kind > PEK_NEED_MORE)
+    return err;
 
   if (pg_ring_len(&peer->recv_data) <
-      sizeof(uint32_t))  // Check there is room for the announced_len
+      sizeof(uint32_t)) // Check there is room for the announced_len
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
   const uint32_t announced_len = peer_peek_read_u32(&peer->recv_data);
@@ -379,14 +379,14 @@ peer_error_t peer_message_parse(peer_t *peer, peer_message_t *msg) {
     // Heartbeat
     msg->kind = PMK_HEARTBEAT;
 
-    pg_ring_consume_front(&peer->recv_data, 4);  // Consume the announced_len
+    pg_ring_consume_front(&peer->recv_data, 4); // Consume the announced_len
     return err;
   }
   if (announced_len > PEER_MAX_MESSAGE_LENGTH)
     return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
   if (pg_ring_len(&peer->recv_data) <
-      4 + 1)  // Check there is room for the announced_len + tag
+      4 + 1) // Check there is room for the announced_len + tag
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
   const uint8_t tag = pg_ring_get(&peer->recv_data, 4);
@@ -406,197 +406,195 @@ peer_error_t peer_message_parse(peer_t *peer, peer_message_t *msg) {
       pg_ring_len(&peer->recv_data) > 6 ? pg_ring_get(&peer->recv_data, 6) : 0);
 
   switch (tag) {
-    case PT_CHOKE:
-      msg->kind = PMK_CHOKE;
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
-      return (peer_error_t){0};
-    case PT_UNCHOKE:
-      msg->kind = PMK_UNCHOKE;
+  case PT_CHOKE:
+    msg->kind = PMK_CHOKE;
+    pg_ring_consume_front(&peer->recv_data,
+                          4 + 1); // consume announced_len + tag
+    return (peer_error_t){0};
+  case PT_UNCHOKE:
+    msg->kind = PMK_UNCHOKE;
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+    pg_ring_consume_front(&peer->recv_data,
+                          4 + 1); // consume announced_len + tag
 
-      return (peer_error_t){0};
-    case PT_INTERESTED:
-      msg->kind = PMK_INTERESTED;
+    return (peer_error_t){0};
+  case PT_INTERESTED:
+    msg->kind = PMK_INTERESTED;
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+    pg_ring_consume_front(&peer->recv_data,
+                          4 + 1); // consume announced_len + tag
 
-      return (peer_error_t){0};
-    case PT_UNINTERESTED:
-      msg->kind = PMK_UNINTERESTED;
+    return (peer_error_t){0};
+  case PT_UNINTERESTED:
+    msg->kind = PMK_UNINTERESTED;
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+    pg_ring_consume_front(&peer->recv_data,
+                          4 + 1); // consume announced_len + tag
 
-      return (peer_error_t){0};
-    case PT_HAVE: {
-      if (announced_len != 5)
-        return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
+    return (peer_error_t){0};
+  case PT_HAVE: {
+    if (announced_len != 5)
+      return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
-      if (pg_ring_len(&peer->recv_data) < announced_len + 4)
-        return (peer_error_t){.kind = PEK_NEED_MORE};
+    if (pg_ring_len(&peer->recv_data) < announced_len + 4)
+      return (peer_error_t){.kind = PEK_NEED_MORE};
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+    pg_ring_consume_front(&peer->recv_data,
+                          4 + 1); // consume announced_len + tag
 
-      const uint32_t have = peer_read_u32(&peer->recv_data);
-      if (have > peer->metainfo->pieces_count)
-        return (peer_error_t){.kind = PEK_INVALID_HAVE};
+    const uint32_t have = peer_read_u32(&peer->recv_data);
+    if (have > peer->metainfo->pieces_count)
+      return (peer_error_t){.kind = PEK_INVALID_HAVE};
 
-      msg->kind = PMK_HAVE;
-      msg->v.have = (peer_message_have_t){have};
-      return (peer_error_t){0};
+    msg->kind = PMK_HAVE;
+    msg->v.have = (peer_message_have_t){have};
+    return (peer_error_t){0};
+  }
+  case PT_BITFIELD: {
+    const uint64_t expected_bitfield_len =
+        (uint64_t)(ceil(((double)peer->metainfo->pieces_count - 1) / 8.0));
+    if (announced_len != expected_bitfield_len + /* tag */ 1)
+      return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
+
+    if (pg_ring_len(&peer->recv_data) < announced_len + 4)
+      return (peer_error_t){.kind = PEK_NEED_MORE};
+
+    msg->kind = PMK_BITFIELD;
+    msg->v.bitfield = (peer_message_bitfield_t){0};
+
+    const uint64_t len =
+        1 + (uint64_t)(ceil(((double)peer->metainfo->pieces_count - 1) / 8.0));
+    pg_array_init_reserve(msg->v.bitfield.bitfield, len, peer->allocator);
+
+    pg_ring_consume_front(&peer->recv_data,
+                          4 + 1); // consume announced_len + tag
+
+    for (uint64_t i = 0; i < announced_len - 1; i++) {
+      const uint8_t byte = pg_ring_pop_front(&peer->recv_data);
+      pg_array_append(msg->v.bitfield.bitfield, __builtin_bitreverse8(byte));
     }
-    case PT_BITFIELD: {
-      const uint64_t expected_bitfield_len =
-          (uint64_t)(ceil(((double)peer->metainfo->pieces_count - 1) / 8.0));
-      if (announced_len != expected_bitfield_len + /* tag */ 1)
-        return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
+    pg_log_debug(peer->logger, "[%s] bitfield: last=%#x", peer->addr_s,
+                 (uint8_t)msg->v.bitfield.bitfield[announced_len - 2]);
+    return (peer_error_t){0};
+  }
+  case PT_REQUEST: {
+    if (announced_len != 1 + 3 * 4)
+      return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
-      if (pg_ring_len(&peer->recv_data) < announced_len + 4)
-        return (peer_error_t){.kind = PEK_NEED_MORE};
+    if (pg_ring_len(&peer->recv_data) < announced_len + 4)
+      return (peer_error_t){.kind = PEK_NEED_MORE};
 
-      msg->kind = PMK_BITFIELD;
-      msg->v.bitfield = (peer_message_bitfield_t){0};
+    pg_ring_consume_front(&peer->recv_data,
+                          4 + 1); // consume announced_len + tag
 
-      const uint64_t len =
-          1 + (uint64_t)(ceil(((double)peer->metainfo->pieces_count - 1) / 8.0));
-      pg_array_init_reserve(msg->v.bitfield.bitfield, len, peer->allocator);
+    msg->kind = PMK_REQUEST;
+    msg->v.request = (peer_message_request_t){
+        .index = peer_read_u32(&peer->recv_data),
+        .begin = peer_read_u32(&peer->recv_data),
+        .length = peer_read_u32(&peer->recv_data),
+    };
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+    return (peer_error_t){0};
+  }
+  case PT_PIECE: {
+    if (announced_len < 1 + 2 * 4 + /* Require at least 1 byte of data */ 1)
+      return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
-      for (uint64_t i = 0; i < announced_len - 1; i++) {
-        const uint8_t byte = pg_ring_pop_front(&peer->recv_data);
-        pg_array_append(msg->v.bitfield.bitfield, __builtin_bitreverse8(byte));
-      }
-      pg_log_debug(peer->logger, "[%s] bitfield: last=%#x", peer->addr_s,
-                   (uint8_t)msg->v.bitfield.bitfield[announced_len - 2]);
-      return (peer_error_t){0};
+    if (pg_ring_len(&peer->recv_data) < announced_len + 4)
+      return (peer_error_t){.kind = PEK_NEED_MORE};
+
+    pg_ring_consume_front(&peer->recv_data,
+                          4 + 1); // consume announced_len + tag
+
+    msg->kind = PMK_PIECE;
+    msg->v.piece = (peer_message_piece_t){
+        .index = peer_read_u32(&peer->recv_data),
+        .begin = peer_read_u32(&peer->recv_data),
+    };
+    const uint64_t data_len = announced_len - (1 + 2 * 4);
+    // TODO: validate block is in 'downloading'
+    if (msg->v.piece.index >= peer->metainfo->pieces_count ||
+        msg->v.piece.begin + data_len >
+            metainfo_piece_length(peer->metainfo, msg->v.piece.index))
+      return (peer_error_t){.kind = PEK_INVALID_PIECE};
+
+    const uint32_t block_for_piece = msg->v.piece.begin / BC_BLOCK_LENGTH;
+    if (data_len != metainfo_block_for_piece_length(
+                        peer->metainfo, msg->v.piece.index, block_for_piece))
+      return (peer_error_t){.kind = PEK_INVALID_PIECE};
+
+    msg->v.piece.data = pg_pool_alloc(&peer->block_pool);
+    for (uint64_t i = 0; i < data_len; i++) {
+      msg->v.piece.data[i] = pg_ring_pop_front(&peer->recv_data);
     }
-    case PT_REQUEST: {
-      if (announced_len != 1 + 3 * 4)
-        return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
+    pg_log_debug(peer->logger, "[%s] piece: begin=%u index=%u len=%llu",
+                 peer->addr_s, msg->v.piece.begin, msg->v.piece.index,
+                 pg_array_len(msg->v.piece.data));
 
-      if (pg_ring_len(&peer->recv_data) < announced_len + 4)
-        return (peer_error_t){.kind = PEK_NEED_MORE};
+    return (peer_error_t){0};
+  }
+  case PT_CANCEL: {
+    if (announced_len != 1 + 3 * 4)
+      return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
+    if (pg_ring_len(&peer->recv_data) < announced_len + 4)
+      return (peer_error_t){.kind = PEK_NEED_MORE};
 
-      msg->kind = PMK_REQUEST;
-      msg->v.request = (peer_message_request_t){
-          .index = peer_read_u32(&peer->recv_data),
-          .begin = peer_read_u32(&peer->recv_data),
-          .length = peer_read_u32(&peer->recv_data),
-      };
+    pg_ring_consume_front(&peer->recv_data,
+                          4 + 1); // consume announced_len + tag
+    msg->kind = PMK_CANCEL;
+    msg->v.request = (peer_message_request_t){
+        .index = peer_read_u32(&peer->recv_data),
+        .begin = peer_read_u32(&peer->recv_data),
+        .length = peer_read_u32(&peer->recv_data),
+    };
+    return (peer_error_t){0};
+  }
 
-      return (peer_error_t){0};
-    }
-    case PT_PIECE: {
-      if (announced_len < 1 + 2 * 4 + /* Require at least 1 byte of data */ 1)
-        return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
-
-      if (pg_ring_len(&peer->recv_data) < announced_len + 4)
-        return (peer_error_t){.kind = PEK_NEED_MORE};
-
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
-
-      msg->kind = PMK_PIECE;
-      msg->v.piece = (peer_message_piece_t){
-          .index = peer_read_u32(&peer->recv_data),
-          .begin = peer_read_u32(&peer->recv_data),
-      };
-      const uint64_t data_len = announced_len - (1 + 2 * 4);
-      // TODO: validate block is in 'downloading'
-      if (msg->v.piece.index >= peer->metainfo->pieces_count ||
-          msg->v.piece.begin + data_len >
-              metainfo_piece_length(peer->metainfo, msg->v.piece.index))
-        return (peer_error_t){.kind = PEK_INVALID_PIECE};
-
-      const uint32_t block_for_piece = msg->v.piece.begin / BC_BLOCK_LENGTH;
-      if (data_len != metainfo_block_for_piece_length(
-                          peer->metainfo, msg->v.piece.index, block_for_piece))
-        return (peer_error_t){.kind = PEK_INVALID_PIECE};
-
-      msg->v.piece.data = pg_pool_alloc(&peer->block_pool);
-      for (uint64_t i = 0; i < data_len; i++) {
-        msg->v.piece.data[i] = pg_ring_pop_front(&peer->recv_data);
-      }
-      pg_log_debug(peer->logger, "[%s] piece: begin=%u index=%u len=%llu",
-                   peer->addr_s, msg->v.piece.begin, msg->v.piece.index,
-                   pg_array_len(msg->v.piece.data));
-
-      return (peer_error_t){0};
-    }
-    case PT_CANCEL: {
-      if (announced_len != 1 + 3 * 4)
-        return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
-
-      if (pg_ring_len(&peer->recv_data) < announced_len + 4)
-        return (peer_error_t){.kind = PEK_NEED_MORE};
-
-      pg_ring_consume_front(&peer->recv_data,
-                            4 + 1);  // consume announced_len + tag
-      msg->kind = PMK_CANCEL;
-      msg->v.request = (peer_message_request_t){
-          .index = peer_read_u32(&peer->recv_data),
-          .begin = peer_read_u32(&peer->recv_data),
-          .length = peer_read_u32(&peer->recv_data),
-      };
-      return (peer_error_t){0};
-    }
-
-    default:
-      return (peer_error_t){.kind = PEK_INVALID_MESSAGE_TAG};
+  default:
+    return (peer_error_t){.kind = PEK_INVALID_MESSAGE_TAG};
   }
   __builtin_unreachable();
 }
 
-__attribute__((unused)) static
-const char *peer_message_kind_to_string(int k) {
+__attribute__((unused)) static const char *peer_message_kind_to_string(int k) {
   switch (k) {
-    case PMK_NONE:
-      return "PMK_NONE";
-    case PMK_HEARTBEAT:
-      return "PMK_HEARTBEAT";
-    case PMK_CHOKE:
-      return "PMK_CHOKE";
-    case PMK_UNCHOKE:
-      return "PMK_UNCHOKE";
-    case PMK_INTERESTED:
-      return "PMK_INTERESTED";
-    case PMK_UNINTERESTED:
-      return "PMK_UNINTERESTED";
-    case PMK_BITFIELD:
-      return "PMK_BITFIELD";
-    case PMK_HAVE:
-      return "PMK_HAVE";
-    case PMK_REQUEST:
-      return "PMK_REQUEST";
-    case PMK_PIECE:
-      return "PMK_PIECE";
-    case PMK_CANCEL:
-      return "PMK_CANCEL";
+  case PMK_NONE:
+    return "PMK_NONE";
+  case PMK_HEARTBEAT:
+    return "PMK_HEARTBEAT";
+  case PMK_CHOKE:
+    return "PMK_CHOKE";
+  case PMK_UNCHOKE:
+    return "PMK_UNCHOKE";
+  case PMK_INTERESTED:
+    return "PMK_INTERESTED";
+  case PMK_UNINTERESTED:
+    return "PMK_UNINTERESTED";
+  case PMK_BITFIELD:
+    return "PMK_BITFIELD";
+  case PMK_HAVE:
+    return "PMK_HAVE";
+  case PMK_REQUEST:
+    return "PMK_REQUEST";
+  case PMK_PIECE:
+    return "PMK_PIECE";
+  case PMK_CANCEL:
+    return "PMK_CANCEL";
 
-    default:
-      assert(0);
+  default:
+    assert(0);
   }
 }
 
-__attribute__((unused)) static
-peer_error_t download_checksum_piece(pg_logger_t *logger,
-                                     pg_allocator_t allocator,
-                                     download_t *download,
-                                     bc_metainfo_t *metainfo, uint32_t piece) {
+__attribute__((unused)) static peer_error_t
+download_checksum_piece(pg_logger_t *logger, pg_allocator_t allocator,
+                        download_t *download, bc_metainfo_t *metainfo,
+                        uint32_t piece) {
   const uint64_t offset = piece * metainfo->piece_length;
   const uint64_t length = metainfo_piece_length(metainfo, piece);
 
-  if (lseek(download->fd,(off_t) offset, SEEK_SET) == -1) {
+  if (lseek(download->fd, (off_t)offset, SEEK_SET) == -1) {
     pg_log_error(logger, "Failed to lseek(2): err=%s", strerror(errno));
     return (peer_error_t){.kind = PEK_OS};
   }
@@ -635,12 +633,10 @@ end:
   return err;
 }
 
-__attribute__((unused)) static
-peer_error_t peer_send_heartbeat(peer_t *peer);
+__attribute__((unused)) static peer_error_t peer_send_heartbeat(peer_t *peer);
 
-__attribute__((unused)) static
-peer_error_t peer_put_block(peer_t *peer, uint32_t piece, uint32_t block,
-                            pg_span_t data) {
+__attribute__((unused)) static peer_error_t
+peer_put_block(peer_t *peer, uint32_t piece, uint32_t block, pg_span_t data) {
   assert(piece < peer->metainfo->pieces_count);
   assert(block < peer->metainfo->blocks_count);
 
@@ -650,7 +646,7 @@ peer_error_t peer_put_block(peer_t *peer, uint32_t piece, uint32_t block,
   const uint64_t offset = (uint64_t)block * BC_BLOCK_LENGTH;
   assert(offset + BC_BLOCK_LENGTH <= peer->metainfo->length);
 
-  if (lseek(peer->download->fd,(off_t) offset, SEEK_SET) == -1) {
+  if (lseek(peer->download->fd, (off_t)offset, SEEK_SET) == -1) {
     pg_log_error(peer->logger, "[%s] Failed to lseek(2): err=%s", peer->addr_s,
                  strerror(errno));
     return (peer_error_t){.kind = PEK_OS};
@@ -706,8 +702,10 @@ peer_error_t peer_put_block(peer_t *peer, uint32_t piece, uint32_t block,
   }
 
   const uint64_t now = uv_hrtime();
-  const double time_diff_s = ((double)now - (double)peer->download->start_ts) / 1e9;
-  const double rate = (double)peer->download->downloaded_bytes / (double)time_diff_s;
+  const double time_diff_s =
+      ((double)now - (double)peer->download->start_ts) / 1e9;
+  const double rate =
+      (double)peer->download->downloaded_bytes / (double)time_diff_s;
   pg_log_info(peer->logger,
               "[%s] Downloaded %u/%u pieces, %u/%u blocks, %.2f MiB / %.2f "
               "MiB, %2.f B/s",
@@ -721,92 +719,91 @@ peer_error_t peer_put_block(peer_t *peer, uint32_t piece, uint32_t block,
   return (peer_error_t){0};
 }
 
-__attribute__((unused)) static
-peer_error_t peer_message_handle(peer_t *peer, peer_message_t *msg,
-                                 peer_action_t *action) {
+__attribute__((unused)) static peer_error_t
+peer_message_handle(peer_t *peer, peer_message_t *msg, peer_action_t *action) {
   switch (msg->kind) {
-    case PMK_NONE: assert(0);
-    case PMK_HEARTBEAT:
-      return peer_send_heartbeat(peer);
-    case PMK_CHOKE:
-      peer->them_choked = true;
-      *action = PEER_ACTION_STOP_REQUESTING;
-      return (peer_error_t){0};
-    case PMK_UNCHOKE:
-      peer->them_choked = false;
-      *action = PEER_ACTION_REQUEST_MORE;
-      return (peer_error_t){0};
-    case PMK_INTERESTED:
-      peer->them_interested = true;
-      return (peer_error_t){0};
-    case PMK_UNINTERESTED:
-      peer->them_interested = false;
-      return (peer_error_t){0};
-    case PMK_HAVE: {
-      const uint32_t have = msg->v.have.have;
-      pg_bitarray_set(&peer->them_have_pieces, have);
+  case PMK_NONE:
+    assert(0);
+  case PMK_HEARTBEAT:
+    return peer_send_heartbeat(peer);
+  case PMK_CHOKE:
+    peer->them_choked = true;
+    *action = PEER_ACTION_STOP_REQUESTING;
+    return (peer_error_t){0};
+  case PMK_UNCHOKE:
+    peer->them_choked = false;
+    *action = PEER_ACTION_REQUEST_MORE;
+    return (peer_error_t){0};
+  case PMK_INTERESTED:
+    peer->them_interested = true;
+    return (peer_error_t){0};
+  case PMK_UNINTERESTED:
+    peer->them_interested = false;
+    return (peer_error_t){0};
+  case PMK_HAVE: {
+    const uint32_t have = msg->v.have.have;
+    pg_bitarray_set(&peer->them_have_pieces, have);
 
-      *action = PEER_ACTION_REQUEST_MORE;
-      return (peer_error_t){0};
+    *action = PEER_ACTION_REQUEST_MORE;
+    return (peer_error_t){0};
+  }
+  case PMK_BITFIELD: {
+    pg_array_t(uint8_t) bitfield = msg->v.bitfield.bitfield;
+
+    // TODO: don't allocate `msg->v.bitfield.bitfield`, simply set
+    // `them_have_pieces` directly
+    pg_bitarray_setv(&peer->them_have_pieces, bitfield, pg_array_len(bitfield));
+
+    *action = PEER_ACTION_REQUEST_MORE;
+    return (peer_error_t){0};
+  }
+  case PMK_PIECE: {
+    const peer_message_piece_t piece_msg = msg->v.piece;
+    const uint32_t piece = piece_msg.index;
+
+    if (peer->in_flight_requests == 0) {
+      pg_log_error(peer->logger, "Received unwanted piece: piece=%u", piece);
+      return (peer_error_t){.kind = PEK_INVALID_PIECE};
     }
-    case PMK_BITFIELD: {
-      pg_array_t(uint8_t) bitfield = msg->v.bitfield.bitfield;
 
-      // TODO: don't allocate `msg->v.bitfield.bitfield`, simply set
-      // `them_have_pieces` directly
-      pg_bitarray_setv(&peer->them_have_pieces, bitfield,
-                       pg_array_len(bitfield));
+    const uint32_t block_for_piece = piece_msg.begin / BC_BLOCK_LENGTH;
+    assert(block_for_piece <
+           metainfo_block_count_for_piece(peer->metainfo, piece));
 
-      *action = PEER_ACTION_REQUEST_MORE;
-      return (peer_error_t){0};
-    }
-    case PMK_PIECE: {
-      const peer_message_piece_t piece_msg = msg->v.piece;
-      const uint32_t piece = piece_msg.index;
+    const uint32_t block = metainfo_block_for_piece_to_block(
+        peer->metainfo, piece, block_for_piece);
+    assert(block < peer->metainfo->blocks_count);
 
-      if (peer->in_flight_requests == 0) {
-        pg_log_error(peer->logger, "Received unwanted piece: piece=%u", piece);
-        return (peer_error_t){.kind = PEK_INVALID_PIECE};
-      }
+    const pg_span_t span = (pg_span_t){
+        .data = (char *)piece_msg.data,
+        .len = metainfo_block_for_piece_length(peer->metainfo, piece,
+                                               block_for_piece),
+    };
 
-      const uint32_t block_for_piece = piece_msg.begin / BC_BLOCK_LENGTH;
-      assert(block_for_piece <
-             metainfo_block_count_for_piece(peer->metainfo, piece));
+    pg_log_debug(
+        peer->logger,
+        "[%s] piece: begin=%u piece=%u len=%llu block_for_piece=%u block=%u",
+        peer->addr_s, piece_msg.begin, piece, pg_array_len(piece_msg.data),
+        block_for_piece, block);
+    peer_put_block(peer, piece, block, span);
 
-      const uint32_t block = metainfo_block_for_piece_to_block(
-          peer->metainfo, piece, block_for_piece);
-      assert(block < peer->metainfo->blocks_count);
-
-      const pg_span_t span = (pg_span_t){
-          .data = (char *)piece_msg.data,
-          .len = metainfo_block_for_piece_length(peer->metainfo, piece,
-                                                 block_for_piece),
-      };
-
-      pg_log_debug(
-          peer->logger,
-          "[%s] piece: begin=%u piece=%u len=%llu block_for_piece=%u block=%u",
-          peer->addr_s, piece_msg.begin, piece, pg_array_len(piece_msg.data),
-          block_for_piece, block);
-      peer_put_block(peer, piece, block, span);
-
-      *action = PEER_ACTION_REQUEST_MORE;
-      return (peer_error_t){0};
-    }
-    case PMK_REQUEST:
-      // TODO
-      return (peer_error_t){0};
-    case PMK_CANCEL:
-      // TODO
-      return (peer_error_t){0};
+    *action = PEER_ACTION_REQUEST_MORE;
+    return (peer_error_t){0};
+  }
+  case PMK_REQUEST:
+    // TODO
+    return (peer_error_t){0};
+  case PMK_CANCEL:
+    // TODO
+    return (peer_error_t){0};
   }
 }
 
-__attribute__((unused)) static
-peer_error_t peer_send_request(peer_t *peer, uint32_t block);
+__attribute__((unused)) static peer_error_t peer_send_request(peer_t *peer,
+                                                              uint32_t block);
 
-__attribute__((unused)) static
-peer_error_t peer_request_more_blocks(peer_t *peer, peer_action_t *action) {
+__attribute__((unused)) static peer_error_t
+peer_request_more_blocks(peer_t *peer, peer_action_t *action) {
   if (peer->in_flight_requests >= PEER_MAX_IN_FLIGHT_REQUESTS ||
       peer->them_choked) {
     pg_log_debug(peer->logger,
@@ -839,14 +836,14 @@ peer_error_t peer_request_more_blocks(peer_t *peer, peer_action_t *action) {
     peer->in_flight_requests += 1;
 
     peer_error_t err = peer_send_request(peer, block);
-    if (err.kind != PEK_NONE) return err;
+    if (err.kind != PEK_NONE)
+      return err;
   }
 
   return (peer_error_t){0};
 }
 
-__attribute__((unused)) static
-void peer_on_idle(uv_idle_t *handle) {
+__attribute__((unused)) static void peer_on_idle(uv_idle_t *handle) {
   peer_t *peer = handle->data;
 
   peer_action_t action = PEER_ACTION_NONE;
@@ -863,8 +860,8 @@ void peer_on_idle(uv_idle_t *handle) {
   }
 }
 
-__attribute__((unused)) static
-void peer_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
+__attribute__((unused)) static void
+peer_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
   peer_t *peer = stream->data;
   pg_log_debug(peer->logger, "[%s] peer_on_read: %ld", peer->addr_s, nread);
 
@@ -886,10 +883,11 @@ void peer_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
   }
 
   bool idle_started = false;
-  while (true) {  // Parse as many messages as available in the recv_data
+  while (true) { // Parse as many messages as available in the recv_data
     peer_message_t msg = {0};
     peer_error_t err = peer_message_parse(peer, &msg);
-    if (err.kind == PEK_NEED_MORE) break;
+    if (err.kind == PEK_NEED_MORE)
+      break;
     if (err.kind != PEK_NONE) {
       pg_log_error(peer->logger, "[%s] peer_message_parse failed: %d",
                    peer->addr_s, err.kind);
@@ -919,8 +917,7 @@ void peer_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
   }
 }
 
-__attribute__((unused)) static
-void peer_on_write(uv_write_t *req, int status) {
+__attribute__((unused)) static void peer_on_write(uv_write_t *req, int status) {
   peer_write_ctx_t *ctx = req->data;
   peer_t *peer = ctx->peer;
 
@@ -937,8 +934,8 @@ void peer_on_write(uv_write_t *req, int status) {
   }
 }
 
-__attribute__((unused)) static
-peer_error_t peer_send_buf(peer_t *peer, uv_buf_t buf) {
+__attribute__((unused)) static peer_error_t peer_send_buf(peer_t *peer,
+                                                          uv_buf_t buf) {
   peer_write_ctx_t *ctx = pg_pool_alloc(&peer->write_ctx_pool);
   assert(ctx != NULL);
   ctx->req.data = ctx;
@@ -959,15 +956,13 @@ peer_error_t peer_send_buf(peer_t *peer, uv_buf_t buf) {
   return (peer_error_t){0};
 }
 
-__attribute__((unused)) static
-peer_error_t peer_send_heartbeat(peer_t *peer) {
+__attribute__((unused)) static peer_error_t peer_send_heartbeat(peer_t *peer) {
   uv_buf_t buf = uv_buf_init(peer->allocator.realloc(NULL, sizeof(uint32_t), 0),
                              sizeof(uint32_t));
   return peer_send_buf(peer, buf);
 }
 
-__attribute__((unused)) static
-peer_error_t peer_send_handshake(peer_t *peer) {
+__attribute__((unused)) static peer_error_t peer_send_handshake(peer_t *peer) {
   uv_buf_t buf =
       uv_buf_init(peer->allocator.realloc(NULL, PEER_HANDSHAKE_LENGTH, 0),
                   PEER_HANDSHAKE_LENGTH);
@@ -1005,29 +1000,29 @@ peer_error_t peer_send_handshake(peer_t *peer) {
   memcpy(buf.base, handshake_header, sizeof(handshake_header));
   memcpy(buf.base + sizeof(handshake_header), peer->download->info_hash,
          sizeof(peer->download->info_hash));
-  memcpy(
-      buf.base + sizeof(handshake_header) + sizeof(peer->download->info_hash),
-      peer_id, sizeof(peer_id));
+  memcpy(buf.base + sizeof(handshake_header) +
+             sizeof(peer->download->info_hash),
+         peer_id, sizeof(peer_id));
 
   return peer_send_buf(peer, buf);
 }
 
-__attribute__((unused)) static
-uint8_t *peer_write_u32(uint8_t *buf, uint64_t *buf_len, uint32_t x) {
-  *(uint32_t *)(void*)buf = htonl(x);
+__attribute__((unused)) static uint8_t *
+peer_write_u32(uint8_t *buf, uint64_t *buf_len, uint32_t x) {
+  *(uint32_t *)(void *)buf = htonl(x);
   *buf_len += 4;
   return buf + 4;
 }
 
-__attribute__((unused)) static
-uint8_t *peer_write_u8(uint8_t *buf, uint64_t *buf_len, uint8_t x) {
+__attribute__((unused)) static uint8_t *
+peer_write_u8(uint8_t *buf, uint64_t *buf_len, uint8_t x) {
   buf[0] = x;
   *buf_len += 1;
   return buf + 1;
 }
 
-__attribute__((unused)) static
-peer_error_t peer_send_request(peer_t *peer, uint32_t block) {
+__attribute__((unused)) static peer_error_t peer_send_request(peer_t *peer,
+                                                              uint32_t block) {
   const uint32_t piece = block / peer->metainfo->blocks_per_piece;
   const uint32_t begin =
       block * BC_BLOCK_LENGTH - piece * peer->metainfo->piece_length;
@@ -1052,12 +1047,12 @@ peer_error_t peer_send_request(peer_t *peer, uint32_t block) {
       "[%s] Sent Request: index=%u begin=%u length=%u in_flight_requests=%u",
       peer->addr_s, piece, begin, length, peer->in_flight_requests);
 
-  if (peer->download->start_ts == 0ULL) peer->download->start_ts = uv_hrtime();
+  if (peer->download->start_ts == 0ULL)
+    peer->download->start_ts = uv_hrtime();
   return peer_send_buf(peer, buf);
 }
 
-__attribute__((unused)) static
-peer_error_t peer_send_choke(peer_t *peer) {
+__attribute__((unused)) static peer_error_t peer_send_choke(peer_t *peer) {
   uv_buf_t buf = uv_buf_init(peer->allocator.realloc(NULL, 4 + 1, 0), 0);
 
   uint8_t *bytes = (uint8_t *)buf.base;
@@ -1067,8 +1062,7 @@ peer_error_t peer_send_choke(peer_t *peer) {
   return peer_send_buf(peer, buf);
 }
 
-__attribute__((unused)) static
-peer_error_t peer_send_interested(peer_t *peer) {
+__attribute__((unused)) static peer_error_t peer_send_interested(peer_t *peer) {
   uv_buf_t buf = uv_buf_init(peer->allocator.realloc(NULL, 4 + 1, 0), 0);
 
   uint8_t *bytes = (uint8_t *)buf.base;
@@ -1078,22 +1072,23 @@ peer_error_t peer_send_interested(peer_t *peer) {
   return peer_send_buf(peer, buf);
 }
 
-__attribute__((unused)) static
-peer_error_t peer_send_prologue(peer_t *peer) {
+__attribute__((unused)) static peer_error_t peer_send_prologue(peer_t *peer) {
   peer_error_t err = {0};
   err = peer_send_handshake(peer);
-  if (err.kind != PEK_NONE) return err;
+  if (err.kind != PEK_NONE)
+    return err;
 
   err = peer_send_interested(peer);
-  if (err.kind != PEK_NONE) return err;
+  if (err.kind != PEK_NONE)
+    return err;
 
   peer->me_interested = true;
 
   return err;
 }
 
-__attribute__((unused)) static
-void peer_on_connect(uv_connect_t *handle, int status) {
+__attribute__((unused)) static void peer_on_connect(uv_connect_t *handle,
+                                                    int status) {
   peer_t *peer = handle->data;
   assert(peer != NULL);
 
@@ -1123,11 +1118,11 @@ void peer_on_connect(uv_connect_t *handle, int status) {
   uv_idle_init(uv_default_loop(), &peer->idle_handle);
 }
 
-__attribute__((unused)) static
-void peer_init(peer_t *peer, pg_logger_t *logger, pg_pool_t *peer_pool,
-               download_t *download, bc_metainfo_t *metainfo, picker_t *picker,
-               tracker_peer_address_ipv4_t address) {
-  peer->allocator = pg_heap_allocator();  // FIXME
+__attribute__((unused)) static void
+peer_init(peer_t *peer, pg_logger_t *logger, pg_pool_t *peer_pool,
+          download_t *download, bc_metainfo_t *metainfo, picker_t *picker,
+          tracker_peer_address_ipv4_t address) {
+  peer->allocator = pg_heap_allocator(); // FIXME
   peer->picker = picker;
 
   pg_pool_init(
@@ -1141,8 +1136,8 @@ void peer_init(peer_t *peer, pg_logger_t *logger, pg_pool_t *peer_pool,
       30);
 
   pg_pool_init(&peer->block_pool, BC_BLOCK_LENGTH,
-               PEER_MAX_IN_FLIGHT_REQUESTS);  // TODO: increase when starting to
-                                              // handle Request msg
+               PEER_MAX_IN_FLIGHT_REQUESTS); // TODO: increase when starting to
+                                             // handle Request msg
 
   peer->peer_pool = peer_pool;
   peer->logger = logger;
@@ -1165,8 +1160,8 @@ void peer_init(peer_t *peer, pg_logger_t *logger, pg_pool_t *peer_pool,
   peer->me_interested = false;
 }
 
-__attribute__((unused)) static
-peer_error_t peer_connect(peer_t *peer, tracker_peer_address_ipv4_t address) {
+__attribute__((unused)) static peer_error_t
+peer_connect(peer_t *peer, tracker_peer_address_ipv4_t address) {
   int ret = 0;
   if ((ret = uv_tcp_init(uv_default_loop(), &peer->connection)) != 0) {
     pg_log_error(peer->logger, "[%s] Failed to uv_tcp_init: %d %s",
@@ -1189,8 +1184,7 @@ peer_error_t peer_connect(peer_t *peer, tracker_peer_address_ipv4_t address) {
   return (peer_error_t){.kind = PEK_NONE};
 }
 
-__attribute__((unused)) static
-void peer_destroy(peer_t *peer) {
+__attribute__((unused)) static void peer_destroy(peer_t *peer) {
   pg_bitarray_destroy(&peer->them_have_pieces);
   pg_ring_destroy(&peer->recv_data);
 
@@ -1201,8 +1195,7 @@ void peer_destroy(peer_t *peer) {
   pg_pool_free(peer->peer_pool, peer);
 }
 
-__attribute__((unused)) static
-void peer_on_close(uv_handle_t *handle) {
+__attribute__((unused)) static void peer_on_close(uv_handle_t *handle) {
   peer_t *peer = handle->data;
   assert(peer != NULL);
 
@@ -1215,16 +1208,15 @@ void peer_on_close(uv_handle_t *handle) {
   peer_destroy(peer);
 }
 
-__attribute__((unused)) static
-void peer_close(peer_t *peer) {
+__attribute__((unused)) static void peer_close(peer_t *peer) {
   // `peer_close` is thus idempotent
   if (!uv_is_closing((uv_handle_t *)&peer->connection)) {
     uv_tcp_close_reset(&peer->connection, peer_on_close);
   }
 }
 
-__attribute__((unused)) static
-void download_init(download_t *download, uint8_t *info_hash, int fd) {
+__attribute__((unused)) static void download_init(download_t *download,
+                                                  uint8_t *info_hash, int fd) {
   assert(fd >= 0);
 
   download->fd = fd;
@@ -1233,10 +1225,10 @@ void download_init(download_t *download, uint8_t *info_hash, int fd) {
   memcpy(download->info_hash, info_hash, 20);
 }
 
-__attribute__((unused))
-static peer_error_t picker_checksum_all(pg_allocator_t allocator, pg_logger_t *logger,
-                                 picker_t *picker, bc_metainfo_t *metainfo,
-                                 download_t *download) {
+__attribute__((unused)) static peer_error_t
+picker_checksum_all(pg_allocator_t allocator, pg_logger_t *logger,
+                    picker_t *picker, bc_metainfo_t *metainfo,
+                    download_t *download) {
   pg_log_debug(logger, "Checksumming file");
 
   peer_error_t err = {0};
