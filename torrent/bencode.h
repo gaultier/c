@@ -18,7 +18,7 @@ typedef enum : uint8_t {
   BC_KIND_DICTIONARY,
 } bc_kind_t;
 
-static const char *bc_value_kind_to_string(int n) {
+__attribute__((unused)) static const char *bc_value_kind_to_string(int n) {
   switch (n) {
     case BC_KIND_NONE:
       return "BC_KIND_NONE";
@@ -43,14 +43,15 @@ typedef struct {
   PG_PAD(4);
 } bc_parser_t;
 
-static void bc_parser_init(pg_allocator_t allocator, bc_parser_t *parser,
-                           uint64_t estimate_items_count) {
+__attribute__((unused)) static void bc_parser_init(
+    pg_allocator_t allocator, bc_parser_t *parser,
+    uint64_t estimate_items_count) {
   pg_array_init_reserve(parser->spans, estimate_items_count, allocator);
   pg_array_init_reserve(parser->lengths, estimate_items_count, allocator);
   pg_array_init_reserve(parser->kinds, estimate_items_count, allocator);
 }
 
-static void bc_parser_destroy(bc_parser_t *parser) {
+__attribute__((unused)) static void bc_parser_destroy(bc_parser_t *parser) {
   pg_array_free(parser->spans);
   pg_array_free(parser->lengths);
   pg_array_free(parser->kinds);
@@ -64,7 +65,7 @@ typedef enum : uint8_t {
   BC_PE_INVALID_DICT,
 } bc_parse_error_t;
 
-static const char *bc_parse_error_to_string(int e) {
+__attribute__((unused)) static const char *bc_parse_error_to_string(int e) {
   switch (e) {
     case BC_PE_NONE:
       return "BC_PE_NONE";
@@ -81,7 +82,8 @@ static const char *bc_parse_error_to_string(int e) {
   }
 }
 
-static bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span_t *input) {
+__attribute__((unused)) static bc_parse_error_t bc_parse(bc_parser_t *parser,
+                                                         pg_span_t *input) {
   assert(pg_array_len(parser->spans) == pg_array_len(parser->lengths));
   assert(pg_array_len(parser->lengths) == pg_array_len(parser->kinds));
 
@@ -246,12 +248,14 @@ static bc_parse_error_t bc_parse(bc_parser_t *parser, pg_span_t *input) {
   return BC_PE_NONE;
 }
 
-static void bc_dump_value_indent(FILE *f, uint64_t indent) {
+__attribute__((unused)) static void bc_dump_value_indent(FILE *f,
+                                                         uint64_t indent) {
   for (uint64_t i = 0; i < indent; i++) fprintf(f, " ");
 }
 
-static uint64_t bc_dump_value(bc_parser_t *parser, FILE *f, uint64_t indent,
-                              uint64_t index) {
+__attribute__((unused)) static uint64_t bc_dump_value(bc_parser_t *parser,
+                                                      FILE *f, uint64_t indent,
+                                                      uint64_t index) {
   assert(index < pg_array_len(parser->kinds));
 
   const bc_kind_t kind = parser->kinds[index];
@@ -317,7 +321,8 @@ static uint64_t bc_dump_value(bc_parser_t *parser, FILE *f, uint64_t indent,
   __builtin_unreachable();
 }
 
-static void bc_dump_values(bc_parser_t *parser, FILE *f, uint64_t indent) {
+__attribute__((unused)) static void bc_dump_values(bc_parser_t *parser, FILE *f,
+                                                   uint64_t indent) {
   assert(pg_array_len(parser->spans) == pg_array_len(parser->lengths));
   assert(pg_array_len(parser->lengths) == pg_array_len(parser->kinds));
 
@@ -351,7 +356,8 @@ typedef enum : uint8_t {
   BC_ME_PIECES_INVALID_VALUE,
 } bc_metainfo_error_t;
 
-static const char *bc_metainfo_error_to_string(int err) {
+__attribute__((unused)) static const char *bc_metainfo_error_to_string(
+    int err) {
   switch (err) {
     case BC_ME_NONE:
       return "BC_ME_NONE";
@@ -382,9 +388,8 @@ static const char *bc_metainfo_error_to_string(int err) {
   }
 }
 
-static bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
-                                                   bc_metainfo_t *metainfo,
-                                                   pg_span_t *info_span) {
+__attribute__((unused)) static bc_metainfo_error_t bc_parser_init_metainfo(
+    bc_parser_t *parser, bc_metainfo_t *metainfo, pg_span_t *info_span) {
   if (pg_array_len(parser->kinds) == 0) return BC_ME_METAINFO_NOT_DICTIONARY;
   if (parser->kinds[0] != BC_KIND_DICTIONARY)
     return BC_ME_METAINFO_NOT_DICTIONARY;
@@ -466,21 +471,21 @@ static bc_metainfo_error_t bc_parser_init_metainfo(bc_parser_t *parser,
   return BC_ME_NONE;
 }
 
-bool metainfo_is_last_piece(bc_metainfo_t *metainfo, uint32_t piece) {
+__attribute__((unused)) static bool metainfo_is_last_piece(
+    bc_metainfo_t *metainfo, uint32_t piece) {
   return piece == metainfo->pieces_count - 1;
 }
 
-uint32_t metainfo_block_count_for_piece(bc_metainfo_t *metainfo,
-                                        uint32_t piece) {
+__attribute__((unused)) static uint32_t metainfo_block_count_for_piece(
+    bc_metainfo_t *metainfo, uint32_t piece) {
   if (metainfo_is_last_piece(metainfo, piece))
     return metainfo->last_piece_block_count;
   else
     return metainfo->blocks_per_piece;
 }
 
-uint32_t metainfo_block_for_piece_length(bc_metainfo_t *metainfo,
-                                         uint32_t piece,
-                                         uint32_t block_for_piece) {
+__attribute__((unused)) static uint32_t metainfo_block_for_piece_length(
+    bc_metainfo_t *metainfo, uint32_t piece, uint32_t block_for_piece) {
   assert(block_for_piece < metainfo->blocks_per_piece);
 
   // Special case for last block of last piece
@@ -492,15 +497,16 @@ uint32_t metainfo_block_for_piece_length(bc_metainfo_t *metainfo,
   return BC_BLOCK_LENGTH;
 }
 
-uint32_t metainfo_piece_length(bc_metainfo_t *metainfo, uint32_t piece) {
+__attribute__((unused)) static uint32_t metainfo_piece_length(
+    bc_metainfo_t *metainfo, uint32_t piece) {
   if (metainfo_is_last_piece(metainfo, piece))
     return metainfo->last_piece_length;
 
   return metainfo->piece_length;
 }
 
-uint32_t metainfo_block_to_block_for_piece(bc_metainfo_t *metainfo,
-                                           uint32_t piece, uint32_t block) {
+__attribute__((unused)) static uint32_t metainfo_block_to_block_for_piece(
+    bc_metainfo_t *metainfo, uint32_t piece, uint32_t block) {
   assert(piece < metainfo->pieces_count);
   assert(block < metainfo->blocks_count);
 
@@ -516,9 +522,8 @@ uint32_t metainfo_block_to_block_for_piece(bc_metainfo_t *metainfo,
   return block_for_piece;
 }
 
-uint32_t metainfo_block_for_piece_to_block(bc_metainfo_t *metainfo,
-                                           uint32_t piece,
-                                           uint32_t block_for_piece) {
+__attribute__((unused)) static uint32_t metainfo_block_for_piece_to_block(
+    bc_metainfo_t *metainfo, uint32_t piece, uint32_t block_for_piece) {
   assert(piece < metainfo->pieces_count);
   assert(block_for_piece < metainfo_block_count_for_piece(metainfo, piece));
 
