@@ -1,5 +1,3 @@
-#include <_types/_uint64_t.h>
-#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -412,13 +410,13 @@ static int api_query_projects(api_t *api) {
   assert(api != NULL);
   assert(api->url != NULL);
 
-  int res = 0;
   {
     assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
            CURLE_OK);
   }
 
   api->response_body = sdsMakeRoomFor(api->response_body, 4 * 1024);
+  CURLcode res = 0;
   if ((res = curl_easy_perform(api->http_handle)) != 0) {
     int error;
     curl_easy_getinfo(api->http_handle, CURLINFO_OS_ERRNO, &error);
@@ -426,7 +424,7 @@ static int api_query_projects(api_t *api) {
             "Failed to query api: url=%s response_body=%s res=%d err=%s "
             "errno=%d\n",
             api->url, api->response_body, res, curl_easy_strerror(res), error);
-    return res;
+    return (int)res;
   }
   api->response_body = sdsRemoveFreeSpace(api->response_body);
 
@@ -449,7 +447,7 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
   do {
     jsmn_init(&p);
     res = jsmn_parse(&p, api->response_body, sdslen(api->response_body),
-                     api->tokens, pg_array_capacity(api->tokens));
+                     api->tokens, (uint32_t)pg_array_capacity(api->tokens));
     if (res == JSMN_ERROR_NOMEM) {
       pg_array_grow(api->tokens, pg_array_capacity(api->tokens) * 2 + 8);
       continue;
@@ -500,9 +498,9 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
       continue;
 
     char *const cur_s = &api->response_body[cur->start];
-    const uint64_t cur_s_len = cur->end - cur->start;
+    const uint64_t cur_s_len = (uint64_t)(cur->end - cur->start);
     char *const next_s = &api->response_body[next->start];
-    const uint64_t next_s_len = next->end - next->start;
+    const uint64_t next_s_len = (uint64_t)(next->end - next->start);
 
     if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
                   key_path_with_namespace_len)) {
@@ -564,6 +562,7 @@ static void *watch_workers(void *varg) {
 #elif defined(__FreeBSD__)
       NOTE_EXIT;
 #endif
+  uint64_t count = 0;
   do {
     int event_count = kevent(arg->queue, NULL, 0, events, 512, 0);
     if (event_count == -1) {
@@ -579,9 +578,9 @@ static void *watch_workers(void *varg) {
         process_t *process = event->udata;
         assert(process != NULL);
 
-        const uint64_t max_read = MIN(event->data, 128);
+        const uint64_t max_read = MIN((uint64_t)event->data, 128ULL);
         process->err = sdsMakeRoomFor(process->err, max_read);
-        int res = read(process->stderr_fd, process->err, max_read);
+        ssize_t res = read(process->stderr_fd, process->err, max_read);
         if (res == -1) {
           fprintf(stderr, "Failed to read(2): err=%s\n", strerror(errno));
         }
@@ -589,14 +588,13 @@ static void *watch_workers(void *varg) {
         close(process->stderr_fd);
       } else if ((event->filter == EVFILT_PROC) &&
                  (event->fflags & proc_fflags)) {
-        const int exit_status = (event->data >> 8);
+        const int exit_status = ((int)event->data >> 8);
         process_t *process = event->udata;
         assert(process != NULL);
 
         finished += 1;
 
-        const uint64_t count =
-            __c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST);
+        __atomic_load(&projects_count, &count, __ATOMIC_SEQ_CST);
         if (exit_status == 0) {
           printf("%s[%" PRIu64 "/%" PRIu64 "] ✓ "
                  "%s%s\n",
@@ -615,8 +613,8 @@ static void *watch_workers(void *varg) {
         free(process);
       }
     }
-  } while (__c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST) == 0 ||
-           finished < __c11_atomic_load(&projects_count, __ATOMIC_SEQ_CST));
+    __atomic_load(&projects_count, &count, __ATOMIC_SEQ_CST);
+  } while (count == 0 || finished < count);
 
   struct timeval end = {0};
   gettimeofday(&end, NULL);
@@ -843,9 +841,8 @@ int main(int argc, char *argv[]) {
                                                     &projects_handled)) == 0) {
   }
   uint64_t expected = 0;
-  __c11_atomic_compare_exchange_strong(&projects_count, &expected,
-                                       projects_handled, __ATOMIC_SEQ_CST,
-                                       __ATOMIC_SEQ_CST);
+  __atomic_compare_exchange(&projects_count, &expected, &projects_handled,
+                            false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 
 end:
   if ((res = change_directory(cwd)) != 0)
