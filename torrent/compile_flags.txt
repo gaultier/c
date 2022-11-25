@@ -4,3 +4,4 @@
 -isystem/usr/local/include
 -Wno-declaration-after-statement
 -Wno-gnu-zero-variadic-macro-arguments
+-Wno-disabled-macro-expansion

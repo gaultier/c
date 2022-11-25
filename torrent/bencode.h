@@ -263,6 +263,7 @@ __attribute__((unused)) static uint64_t bc_dump_value(bc_parser_t *parser,
   const uint64_t len = parser->lengths[index];
 
   switch (kind) {
+    case BC_KIND_NONE: assert(0);
     case BC_KIND_INTEGER:
       fprintf(f, "%.*s", (int)span.len, span.data);
       return 1;
@@ -315,8 +316,6 @@ __attribute__((unused)) static uint64_t bc_dump_value(bc_parser_t *parser,
 
       return j - index;
     }
-    default:
-      assert(0);
   }
   __builtin_unreachable();
 }

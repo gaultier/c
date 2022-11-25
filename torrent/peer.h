@@ -1,8 +1,5 @@
 #pragma once
 
-#include <_types/_uint32_t.h>
-#include <_types/_uint64_t.h>
-#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -10,7 +7,6 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/_types/_off_t.h>
 #include <sys/socket.h>
 #include <uv.h>
 
@@ -280,14 +276,22 @@ void picker_destroy(picker_t *picker) {
 __attribute__((unused)) static
 void peer_message_destroy(peer_t *peer, peer_message_t *msg) {
   switch (msg->kind) {
+    case PMK_NONE: 
+    case  PMK_HEARTBEAT:
+    case  PMK_CHOKE:
+    case  PMK_UNCHOKE:
+    case  PMK_INTERESTED:
+    case  PMK_UNINTERESTED:
+    case  PMK_HAVE:
+    case  PMK_REQUEST:
+    case  PMK_CANCEL:
+      assert(0);
+
     case PMK_BITFIELD:
       pg_array_free(msg->v.bitfield.bitfield);
       return;
     case PMK_PIECE:
       pg_pool_free(&peer->block_pool, msg->v.piece.data);
-      return;
-
-    default:
       return;
   }
 }
@@ -721,6 +725,7 @@ __attribute__((unused)) static
 peer_error_t peer_message_handle(peer_t *peer, peer_message_t *msg,
                                  peer_action_t *action) {
   switch (msg->kind) {
+    case PMK_NONE: assert(0);
     case PMK_HEARTBEAT:
       return peer_send_heartbeat(peer);
     case PMK_CHOKE:
@@ -794,9 +799,6 @@ peer_error_t peer_message_handle(peer_t *peer, peer_message_t *msg,
     case PMK_CANCEL:
       // TODO
       return (peer_error_t){0};
-
-    default:
-      assert(0);
   }
 }
 

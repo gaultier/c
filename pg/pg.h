@@ -60,7 +60,7 @@ __attribute__((unused)) static void *pg_heap_realloc(void *old_memory,
 
 __attribute__((unused)) static void pg_heap_free(void *memory) { free(memory); }
 
-__attribute__((unused)) static pg_allocator_t pg_heap_allocator() {
+__attribute__((unused)) static pg_allocator_t pg_heap_allocator(void) {
   return (pg_allocator_t){.realloc = pg_heap_realloc, .free = pg_heap_free};
 }
 
