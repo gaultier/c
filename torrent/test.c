@@ -7,7 +7,7 @@
 #include "vendor/greatest/greatest.h"
 
 static uint8_t info_hash[20] = {0};
-const uint8_t handshake_header[] = {
+static const uint8_t handshake_header[] = {
     PEER_HANDSHAKE_HEADER_LENGTH,
     'B',
     'i',
@@ -40,7 +40,7 @@ const uint8_t handshake_header[] = {
 
 static pg_logger_t logger = {.level = PG_LOG_DEBUG};
 
-TEST test_on_read() {
+TEST test_on_read(void) {
   pg_pool_t peer_pool = {0};
   pg_pool_init(&peer_pool, sizeof(peer_t), 1);
 
@@ -135,7 +135,7 @@ TEST test_on_read() {
   PASS();
 }
 
-TEST test_picker() {
+TEST test_picker(void) {
   const uint32_t pieces_count = 2;
   bc_metainfo_t metainfo = {
       .announce = pg_span_make_c("http://localhost"),
