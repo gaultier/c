@@ -57,10 +57,6 @@ typedef struct {
 static bool verbose = false;
 
 typedef struct {
-  const int queue;
-} watch_project_cloning_arg_t;
-
-typedef struct {
   CURL *http_handle;
   pg_string_t response_body;
   pg_string_t url;
@@ -434,10 +430,9 @@ static int api_query_projects(api_t *api) {
 }
 
 static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
-                          const options_t *options, int queue);
+                          const options_t *options);
 
 static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
-                                         int queue,
                                          uint64_t *projects_handled) {
   assert(api != NULL);
 
@@ -536,7 +531,7 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
         assert(path_with_namespace != NULL);
 
         if ((res = upsert_project(path_with_namespace, git_url, fs_path,
-                                  options, queue)) != 0)
+                                  options)) != 0)
           return res;
         git_url = NULL;
 
@@ -551,76 +546,47 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
 }
 
 static void *watch_workers(void *varg) {
-  assert(varg != NULL);
-  watch_project_cloning_arg_t *arg = varg;
+  (void)varg;
 
   uint64_t finished = 0;
-  struct kevent events[512] = {0};
 
   const bool is_tty = isatty(fileno(stdout));
 
-  const uint32_t proc_fflags =
-#if defined(__APPLE__)
-      NOTE_EXITSTATUS;
-#elif defined(__FreeBSD__)
-      NOTE_EXIT;
-#endif
   uint64_t count = 0;
-  do {
-    int event_count = kevent(arg->queue, NULL, 0, events, 512, 0);
-    if (event_count == -1) {
-      fprintf(stderr, "Failed to kevent(2) to query events: err=%s\n",
-              strerror(errno));
-      return NULL;
-    }
-
-    for (int i = 0; i < event_count; i++) {
-      const struct kevent *const event = &events[i];
-
-      if (event->filter == EVFILT_READ) {
-        process_t *process = event->udata;
-        assert(process != NULL);
-
-        const uint64_t max_read = MIN((uint64_t)event->data, 128ULL);
-        process->err = pg_string_make_space_for(process->err, max_read);
-        ssize_t res = read(process->stderr_fd, process->err, max_read);
-        if (res == -1) {
-          fprintf(stderr, "Failed to read(2): err=%s\n", strerror(errno));
-        }
-        if (res != 0) {
-          const uint64_t new_len = pg_string_len(process->err) + (uint64_t)res;
-          pg__set_string_len(process->err, new_len);
-        }
-        close(process->stderr_fd);
-      } else if ((event->filter == EVFILT_PROC) &&
-                 (event->fflags & proc_fflags)) {
-        const int exit_status = ((int)event->data >> 8);
-        process_t *process = event->udata;
-        assert(process != NULL);
-
-        finished += 1;
-
-        __atomic_load(&projects_count, &count, __ATOMIC_SEQ_CST);
-        if (exit_status == 0) {
-          printf("%s[%" PRIu64 "/%" PRIu64 "] ✓ "
-                 "%s%s\n",
-                 pg_colors[is_tty][COL_GREEN], finished, count,
-                 process->path_with_namespace, pg_colors[is_tty][COL_RESET]);
-        } else {
-          printf("%s[%" PRIu64 "/%" PRIu64 "] ❌ "
-                 "%s (%d): %s%s\n",
-                 pg_colors[is_tty][COL_RED], finished, count,
-                 process->path_with_namespace, exit_status, process->err,
-                 pg_colors[is_tty][COL_RESET]);
-        }
-        pg_string_free(process->path_with_namespace);
-        pg_string_free(process->err);
-        close(process->stderr_fd);
-        free(process);
-      }
-    }
+  while (1) {
+    int stat_loc = 0;
+    pid_t child_pid = wait(&stat_loc);
     __atomic_load(&projects_count, &count, __ATOMIC_SEQ_CST);
-  } while (count == 0 || finished < count);
+    if (child_pid < 0) {
+      if (errno == ECHILD)
+        break;
+
+      fprintf(stderr, "Failed to wait(): %s\n", strerror(errno));
+      exit(errno);
+    }
+
+    const int exit_status = WEXITSTATUS(stat_loc);
+    printf("Child finished: pid=%d exited=%d status=%d\n", child_pid,
+           WIFEXITED(stat_loc), exit_status);
+
+    if (exit_status == 0) {
+      printf("%s[%" PRIu64 "/%" PRIu64 "] ✓ "
+             "%s%s\n",
+             pg_colors[is_tty][COL_GREEN], finished, count,
+             /*process->path_with_namespace*/ "FIXME",
+             pg_colors[is_tty][COL_RESET]);
+    } else {
+      printf("%s[%" PRIu64 "/%" PRIu64 "] ❌ "
+             "%s (%d): %s%s\n",
+             pg_colors[is_tty][COL_RED], finished, count,
+             /* process->path_with_namespace */ "FIXME", exit_status,
+             /*process->err */ "FIXME", pg_colors[is_tty][COL_RESET]);
+    }
+    //    pg_string_free(process->path_with_namespace);
+    //   pg_string_free(process->err);
+    //  close(process->stderr_fd);
+    // free(process);
+  }
 
   struct timeval end = {0};
   gettimeofday(&end, NULL);
@@ -695,39 +661,8 @@ static int change_directory(char *path) {
   return 0;
 }
 
-static int record_process_finished_event(int queue, process_t *process) {
-  assert(process != NULL);
-
-  uint32_t proc_fflags = NOTE_EXIT;
-#if defined(__APPLE__)
-  proc_fflags |= NOTE_EXITSTATUS;
-#endif
-  struct kevent events[2] = {
-      {
-          .filter = EVFILT_PROC,
-          .ident = (uintptr_t)process->pid,
-          .flags = EV_ADD | EV_ONESHOT,
-          .fflags = proc_fflags,
-          .udata = process,
-      },
-      {
-          .filter = EVFILT_READ,
-          .ident = (uintptr_t)process->stderr_fd,
-          .flags = EV_ADD | EV_ONESHOT,
-          .udata = process,
-      },
-  };
-  if (kevent(queue, events, 2, NULL, 0, 0) == -1) {
-    fprintf(stderr, "Failed to kevent(2) to watch for child process: err=%s\n",
-            strerror(errno));
-    return errno;
-  }
-
-  return 0;
-}
-
 static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
-                          const options_t *options, int queue) {
+                          const options_t *options) {
   assert(path != NULL);
   assert(git_url != NULL);
   assert(options != NULL);
@@ -766,10 +701,10 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
                          .err = pg_string_make_reserve(pg_heap_allocator(), 0)};
     pg_array_append(processes, process);
   }
-    return 0;
+  return 0;
 }
 
-static int api_fetch_projects(api_t *api, const options_t *options, int queue,
+static int api_fetch_projects(api_t *api, const options_t *options,
                               uint64_t *projects_handled) {
   assert(api != NULL);
   assert(options != NULL);
@@ -781,8 +716,8 @@ static int api_fetch_projects(api_t *api, const options_t *options, int queue,
     return res;
   }
 
-  if ((res = api_parse_and_upsert_projects(api, options, queue,
-                                           projects_handled)) != 0) {
+  if ((res = api_parse_and_upsert_projects(api, options, projects_handled)) !=
+      0) {
     return res;
   }
 
@@ -804,13 +739,6 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  // Queue to get notified that child processes finished
-  int queue = kqueue();
-  if (queue == -1) {
-    fprintf(stderr, "Failed to kqueue(2): err=%s\n", strerror(errno));
-    return errno;
-  }
-
   api_t api = {0};
   api_init(&api, &options);
 
@@ -825,15 +753,11 @@ int main(int argc, char *argv[]) {
 
   printf("Changed directory to: %s\n", options.root_directory);
 
-  watch_project_cloning_arg_t arg = {
-      .queue = queue,
-  };
-
   // Start process exit watcher thread, only after we know from the first API
   // query how many items there are
   pthread_t process_exit_watcher = {0};
   {
-    if (pthread_create(&process_exit_watcher, NULL, watch_workers, &arg) != 0) {
+    if (pthread_create(&process_exit_watcher, NULL, watch_workers, NULL) != 0) {
       fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
               strerror(errno));
       goto end;
@@ -841,12 +765,9 @@ int main(int argc, char *argv[]) {
   }
 
   uint64_t projects_handled = 0;
-  while (!api.finished && (res = api_fetch_projects(&api, &options, queue,
-                                                    &projects_handled)) == 0) {
+  while (!api.finished &&
+         (res = api_fetch_projects(&api, &options, &projects_handled)) == 0) {
   }
-  uint64_t expected = 0;
-  __atomic_compare_exchange(&projects_count, &expected, &projects_handled,
-                            false, __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
 
 end:
   if ((res = change_directory(cwd)) != 0)
