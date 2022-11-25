@@ -63,23 +63,20 @@ foo.bar
 hello.world
 ```
 
-## Limitations
-
-- We use `kqueue` internally so it's MacOS/BSDs only for now. It should work on Linux by installing `libkqueue` but this is untested.
-
 ## Roadmap
 
 - [ ] Retrying HTTP requests
 - [ ] `--me` option to only clone my repositories
 - [ ] Max network rate CLI option
 - [ ] Git clone/pull options
-- [ ] Linux support
 
 
 ## Implementation
 
 This command is essentially a small git driver. It will fetch the list of projects from Gitlab's API, and for each project, issue a git command in a child process. If the directory already exists, it will be `git pull`, otherwise `git clone`.
 
-A background thread waits for those child processes to finish and prints whether the corresponding project succeeded or not. The stderr output of the child processes is captured and printed alongside.
+A background thread waits for those child processes to finish and prints whether the corresponding project succeeded or not. The stderr output of the child processes is captured and printed alongside nicely (althought it might get truncated if it's too long).
 
 We make sure we use the least amount of memory and don't do anything we don't absolutely have to do (e.g. parsing all of the JSON fields returned by Gitlab's API when we only are interested in two of them).
+
+Most of the memory is actually used by curl and OpenSSL.
