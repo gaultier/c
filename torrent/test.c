@@ -6,7 +6,7 @@
 #include "tracker.h"
 #include "uv.h"
 
-  static uint8_t info_hash[20] = {0};
+static uint8_t info_hash[20] = {0};
 static const uint8_t handshake_header[] = {
     PEER_HANDSHAKE_HEADER_LENGTH,
     'B',
