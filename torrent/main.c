@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
                  bc_metainfo_error_to_string((int)err_metainfo));
   }
 
-  if (pg_span_starts_with(metainfo.announce, pg_span_make_c("http://"))) {
+  if (!pg_span_starts_with(metainfo.announce, pg_span_make_c("http://"))) {
     pg_log_fatal(&logger, EINVAL,
                  "Tracker url is not http, not supported (yet): %.*s",
                  (int)metainfo.announce.len, metainfo.announce.data);
