@@ -1,10 +1,10 @@
 #include "pg.h"
 
-#include "vendor/greatest/greatest.h"
+#include "../vendor/greatest/greatest.h"
 
 static void foo(pg_array_t(int) * arr) { pg_array_append(*arr, 1); }
 
-TEST test_pg_array_append() {
+TEST test_pg_array_append(void) {
   {
     pg_array_t(int) array;
     pg_array_init_reserve(array, 10, pg_heap_allocator());
@@ -28,14 +28,15 @@ TEST test_pg_array_append() {
   {
     pg_array_t(int) array;
     pg_array_init_reserve(array, 10, pg_heap_allocator());
-    for (uint64_t i = 0; i < 16; i++) foo(&array);
+    for (uint64_t i = 0; i < 16; i++)
+      foo(&array);
     ASSERT_EQ(1, array[15]);
   }
 
   PASS();
 }
 
-TEST test_pg_array_capacity() {
+TEST test_pg_array_capacity(void) {
   pg_array_t(uint64_t) array;
   pg_array_init_reserve(array, 3, pg_heap_allocator());
 
@@ -52,7 +53,7 @@ SUITE(pg_array) {
   RUN_TEST(test_pg_array_capacity);
 }
 
-TEST test_pg_span_split_at_first() {
+TEST test_pg_span_split_at_first(void) {
   {
     pg_span_t span = pg_span_make_c("foo\nhe\nllo");
     pg_span_t left = {0}, right = {0};
@@ -97,7 +98,7 @@ TEST test_pg_span_split_at_first() {
   PASS();
 }
 
-TEST test_pg_span_split_at_last() {
+TEST test_pg_span_split_at_last(void) {
   {
     pg_span_t span = pg_span_make_c("foo\nhe\nllo");
     pg_span_t left = {0}, right = {0};
@@ -152,7 +153,7 @@ TEST test_pg_span_split_at_last() {
   PASS();
 }
 
-TEST test_pg_string_url_encode() {
+TEST test_pg_string_url_encode(void) {
   pg_string_t src = pg_string_make(pg_heap_allocator(), "foo?_. ");
 
   pg_string_t res = pg_string_url_encode(pg_heap_allocator(), src);
@@ -162,7 +163,7 @@ TEST test_pg_string_url_encode() {
   PASS();
 }
 
-TEST test_pg_ring() {
+TEST test_pg_ring(void) {
   pg_ring_t ring = {0};
   pg_ring_init(pg_heap_allocator(), &ring, 100);
 
@@ -281,7 +282,7 @@ TEST test_pg_ring() {
   PASS();
 }
 
-TEST test_pg_bitarray() {
+TEST test_pg_bitarray(void) {
   pg_bitarray_t bitarr = {0};
   pg_bitarray_init(pg_heap_allocator(), &bitarr, 10);
 
@@ -409,7 +410,7 @@ TEST test_pg_bitarray() {
   PASS();
 }
 
-TEST test_pg_pool() {
+TEST test_pg_pool(void) {
   pg_pool_t pool = {0};
 
   typedef struct {
