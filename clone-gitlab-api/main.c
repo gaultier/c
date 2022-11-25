@@ -179,7 +179,7 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
   if (str_iequal_c(buffer, key_len, "Link")) {
     const char needle[] = ">; rel=\"next\"";
     const uint64_t needle_len = sizeof(needle) - 1;
-    char *end = memmem(val, val_len, needle, needle_len);
+    char *end = pg_memmem(val, val_len, needle, needle_len);
     if (end == NULL) {
       // Finished - no more pages
       api->finished = true;

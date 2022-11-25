@@ -65,6 +65,28 @@ __attribute__((unused)) static pg_allocator_t pg_heap_allocator(void) {
   return (pg_allocator_t){.realloc = pg_heap_realloc, .free = pg_heap_free};
 }
 
+// memmem
+__attribute__((unused)) static void *pg_memmem(const void *big,
+                                               uint64_t big_len,
+                                               const void *little,
+                                               uint64_t little_len) {
+  const char *sbig = (const char *)big;
+  const char *slittle = (const char *)little;
+  char *s = memchr(big, slittle[0], big_len);
+  if (!s)
+    return NULL;
+
+  uint64_t rem_len = (uint64_t)(s - sbig);
+  if (rem_len < little_len)
+    return NULL;
+
+  for (uint64_t i = 0; i < little_len; i++) {
+    if (s[i] != slittle[i])
+      return NULL;
+  }
+  return s;
+}
+
 // -------------------------- Pool
 
 __attribute__((unused)) static bool pg_is_power_of_two(uint64_t x) {
@@ -680,15 +702,16 @@ __attribute__((unused)) static bool pg_span_contains(pg_span_t haystack,
                                                      pg_span_t needle) {
   if (needle.len > haystack.len)
     return false;
-  return memmem(haystack.data, haystack.len, needle.data, needle.len) != NULL;
+  return pg_memmem(haystack.data, haystack.len, needle.data, needle.len) !=
+         NULL;
 }
 
 __attribute__((unused)) static bool pg_span_ends_with(pg_span_t haystack,
                                                       pg_span_t needle) {
   if (needle.len > haystack.len)
     return false;
-  return memmem(haystack.data + haystack.len - needle.len, needle.len,
-                needle.data, needle.len) != NULL;
+  return pg_memmem(haystack.data + haystack.len - needle.len, needle.len,
+                   needle.data, needle.len) != NULL;
 }
 
 __attribute__((unused)) static pg_string_t
@@ -717,7 +740,7 @@ __attribute__((unused)) static bool pg_span_starts_with(pg_span_t haystack,
                                                         pg_span_t needle) {
   if (needle.len > haystack.len)
     return false;
-  return memmem(haystack.data, needle.len, needle.data, needle.len) != NULL;
+  return pg_memmem(haystack.data, needle.len, needle.data, needle.len) != NULL;
 }
 
 __attribute__((unused)) static bool pg_span_eq(pg_span_t a, pg_span_t b) {
