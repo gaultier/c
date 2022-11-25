@@ -1,3 +1,4 @@
+#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -44,18 +45,18 @@ typedef struct {
   uint64_t line_column_width;
 } editor_t;
 
-static pg_key_t term_read_key() {
+static pg_key_t term_read_key(void) {
   char c = 0;
   if (read(STDIN_FILENO, &c, 1) < 0) {
     fprintf(stderr, "Failed to read(2): %s\n", strerror(errno));
     exit(errno);
   }
-  return c;
+  return (pg_key_t)c;
 }
 
 static uint8_t editor_get_line_column_width(editor_t* e) {
   char tmp[25] = "";
-  return snprintf(tmp, sizeof(tmp), "%td", gb_array_count(e->lines)) +
+  return (uint8_t)snprintf(tmp, sizeof(tmp), "%td", gb_array_count(e->lines)) +
          /* border */ 1;
 }
 
@@ -169,13 +170,13 @@ static void editor_handle_key(editor_t* e, pg_key_t key) {
   }
 }
 
-static void term_disable_raw_mode_and_reset() {
+static void term_disable_raw_mode_and_reset(void) {
   write(STDOUT_FILENO, "\x1b[0m\x1b[J\x1b[H",
         10);  // Reset, Clear screen, Go home
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &original_termios);
 }
 
-static void term_enable_raw_mode() {
+static void term_enable_raw_mode(void) {
   if (tcgetattr(STDIN_FILENO, &original_termios) == -1) {
     fprintf(stderr, "tcgetattr failed: %s\n", strerror(errno));
     exit(errno);
@@ -213,6 +214,7 @@ static void term_get_window_size(uint64_t* cols, uint64_t* rows) {
   *rows = ws.ws_row;
 }
 
+__attribute__((unused)) 
 static void editor_draw_rgb_color_bg(editor_t* e, uint32_t rgb) {
   uint8_t r = (rgb & 0xff0000) >> 16;
   uint8_t g = (rgb & 0x00ff00) >> 8;
@@ -220,6 +222,7 @@ static void editor_draw_rgb_color_bg(editor_t* e, uint32_t rgb) {
   e->draw = gb_string_append_fmt(e->draw, "\x1b[48;2;%d;%d;%dm", r, g, b);
 }
 
+__attribute__((unused)) 
 static void editor_draw_rgb_color_fg(editor_t* e, uint32_t rgb) {
   uint8_t r = (rgb & 0xff0000) >> 16;
   uint8_t g = (rgb & 0x00ff00) >> 8;
