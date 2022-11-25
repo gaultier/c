@@ -11,6 +11,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/_types/_int64_t.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
@@ -726,7 +727,7 @@ __attribute__((unused)) static int64_t pg_span_parse_i64_hex(pg_span_t span,
                                                              bool *valid) {
   pg_span_trim(&span);
 
-  int64_t res = 0;
+  uint64_t res = 0;
   int64_t sign = 1;
   if (pg_span_peek_left(span, NULL) == '-') {
     sign = -1;
@@ -745,7 +746,7 @@ __attribute__((unused)) static int64_t pg_span_parse_i64_hex(pg_span_t span,
     }
 
     res *= 16;
-    int64_t n = 0;
+    uint64_t n = 0;
     char c = pg_char_to_lower(span.data[i]);
 
     if (c == 'a')
@@ -761,7 +762,7 @@ __attribute__((unused)) static int64_t pg_span_parse_i64_hex(pg_span_t span,
     else if (c == 'f')
       n = 15;
     else if (pg_char_is_digit(c))
-      n = (uint8_t)c - '0';
+      n = ((uint8_t)c) - '0';
     else {
       *valid = false;
       return 0;
@@ -770,7 +771,57 @@ __attribute__((unused)) static int64_t pg_span_parse_i64_hex(pg_span_t span,
   }
 
   *valid = true;
-  return sign * res;
+  return sign * (int64_t)res;
+}
+
+__attribute__((unused)) static uint64_t pg_span_parse_u64_hex(pg_span_t span,
+                                                              bool *valid) {
+  pg_span_trim(&span);
+
+  uint64_t res = 0;
+  if (pg_span_peek_left(span, NULL) == '-') {
+    *valid = false;
+    return 0;
+  } else if (pg_span_peek_left(span, NULL) == '+') {
+    pg_span_consume_left(&span, 1);
+  }
+
+  if (pg_span_starts_with(span, pg_span_make_c("0x")))
+    pg_span_consume_left(&span, 2);
+
+  for (uint64_t i = 0; i < span.len; i++) {
+    if (!pg_char_is_alphanumeric(span.data[i])) {
+      *valid = false;
+      return 0;
+    }
+
+    res *= 16;
+    uint64_t n = 0;
+    char c = pg_char_to_lower(span.data[i]);
+
+    if (c == 'a')
+      n = 10;
+    else if (c == 'b')
+      n = 11;
+    else if (c == 'c')
+      n = 12;
+    else if (c == 'd')
+      n = 13;
+    else if (c == 'e')
+      n = 14;
+    else if (c == 'f')
+      n = 15;
+    else if (pg_char_is_digit(c))
+      n = ((uint8_t)c) - '0';
+    else {
+      *valid = false;
+      return 0;
+    }
+    res += n;
+  }
+
+  *valid = true;
+  return res;
 }
 
 __attribute__((unused)) static int64_t pg_span_parse_i64_decimal(pg_span_t span,
