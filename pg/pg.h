@@ -11,7 +11,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/_types/_int64_t.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
