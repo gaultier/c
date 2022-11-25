@@ -39,7 +39,6 @@ struct process_t {
   int stderr_fd;
   pid_t pid;
   pg_string_t err;
-  struct process_t *next; // TODO: improve
 };
 typedef struct process_t process_t;
 
