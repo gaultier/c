@@ -1,5 +1,6 @@
 -std=c99
 -Weverything
 -Wno-used-but-marked-unused
+-Wno-declaration-after-statement
 -I/usr/local/include
 

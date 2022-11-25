@@ -2,7 +2,7 @@
 
 #include "vendor/greatest/greatest.h"
 
-TEST test_bc_parse_number() {
+TEST test_bc_parse_number(void) {
   {
     pg_span_t span = pg_span_make_c("-23");
     bc_parser_t parser = {0};
@@ -147,7 +147,7 @@ TEST test_bc_parse_number() {
   PASS();
 }
 
-TEST test_bc_parse_string() {
+TEST test_bc_parse_string(void) {
   {
     pg_span_t span = pg_span_make_c(":");
     bc_parser_t parser = {0};
@@ -229,7 +229,7 @@ TEST test_bc_parse_string() {
   PASS();
 }
 
-TEST test_bc_parse_array() {
+TEST test_bc_parse_array(void) {
   {
     pg_span_t span = pg_span_make_c("l");
     bc_parser_t parser = {0};
@@ -257,7 +257,6 @@ TEST test_bc_parse_array() {
     bc_parse_error_t err = bc_parse(&parser, &span);
 
     ASSERT_ENUM_EQ(BC_PE_NONE, err, bc_parse_error_to_string);
-    ASSERT_EQ_FMT(1ULL, pg_array_len(parser.spans), "%llu");
     ASSERT_EQ_FMT(1ULL, pg_array_len(parser.lengths), "%llu");
     ASSERT_EQ_FMT(1ULL, pg_array_len(parser.kinds), "%llu");
 
@@ -298,7 +297,7 @@ TEST test_bc_parse_array() {
   PASS();
 }
 
-TEST test_bc_parse_dictionary() {
+TEST test_bc_parse_dictionary(void) {
   {
     pg_span_t span = pg_span_make_c("d");
     bc_parser_t parser = {0};
@@ -375,7 +374,7 @@ TEST test_bc_parse_dictionary() {
   PASS();
 }
 
-TEST test_bc_parse_value_info_span() {
+TEST test_bc_parse_value_info_span(void) {
   pg_span_t span = pg_span_make_c("d8:announce3:foo4:infod3:foo4:trueee");
   bc_parser_t parser = {0};
   bc_parser_init(pg_heap_allocator(), &parser, 1);
@@ -391,7 +390,7 @@ TEST test_bc_parse_value_info_span() {
   PASS();
 }
 
-TEST test_bc_metainfo() {
+TEST test_bc_metainfo(void) {
   pg_span_t span = pg_span_make_c(
       "d8:announce3:foo13:announce-"
       "listl27:http://example.com/"

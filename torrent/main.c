@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/_types/_off_t.h>
 
 #include "../pg/pg.h"
 #include "bencode.h"
@@ -18,11 +19,9 @@ int main(int argc, char* argv[]) {
   pg_logger_t logger = {.level = PG_LOG_INFO};
 
   pg_array_t(uint8_t) torrent_file_data = {0};
-  int64_t ret = 0;
-  if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &torrent_file_data)) !=
-      0) {
-    pg_log_fatal(&logger, ret, "Failed to read file %s: %s", argv[1],
-                 strerror(ret));
+  if (!pg_read_file(pg_heap_allocator(), argv[1], &torrent_file_data)) {
+    pg_log_fatal(&logger, errno, "Failed to read file %s: %s", argv[1],
+                 strerror(errno));
   }
 
   if (pg_array_len(torrent_file_data) > UINT32_MAX) {
@@ -52,7 +51,7 @@ int main(int argc, char* argv[]) {
   if (pg_span_starts_with(metainfo.announce, pg_span_make_c("http://"))) {
     pg_log_fatal(&logger, EINVAL,
                  "Tracker url is not http, not supported (yet): %.*s",
-                 metainfo.announce.len, metainfo.announce.data);
+                 (int)metainfo.announce.len, metainfo.announce.data);
   }
 
   tracker_query_t tracker_query = {
@@ -94,11 +93,11 @@ int main(int argc, char* argv[]) {
   pg_string_free(name);
   if (fd == -1) {
     pg_log_fatal(&logger, errno, "Failed to open file: path=%.*s err=%s",
-                 metainfo.name.len, metainfo.name.data, strerror(errno));
+                 (int)metainfo.name.len, metainfo.name.data, strerror(errno));
   }
-  if (ftruncate(fd, metainfo.length) == -1) {
+  if (ftruncate(fd, (off_t)metainfo.length) == -1) {
     pg_log_fatal(&logger, errno, "Failed to truncate(2) file: path=%.*s err=%s",
-                 metainfo.name.len, metainfo.name.data, strerror(errno));
+                 (int)metainfo.name.len, metainfo.name.data, strerror(errno));
   }
 
   download_t download = {0};
@@ -111,7 +110,7 @@ int main(int argc, char* argv[]) {
                                               &picker, &metainfo, &download);
   if (peer_err.kind != PEK_NONE)
     pg_log_error(&logger, "Failed to checksum file: path=%.*s err=%s",
-                 metainfo.name.len, metainfo.name.data, strerror(errno));
+                 (int)metainfo.name.len, metainfo.name.data, strerror(errno));
 
   pg_pool_t peer_pool = {0};
   pg_pool_init(&peer_pool, sizeof(peer_t), pg_array_len(peer_addresses_ipv4));
