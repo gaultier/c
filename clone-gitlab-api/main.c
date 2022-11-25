@@ -230,7 +230,7 @@ static void api_init(api_t *api, options_t *options) {
 
   api->response_body = pg_string_make_reserve(
       pg_heap_allocator(),
-      /* Empirically observed response size is ~86KiB */ 100 * 1000);
+      /* Empirically observed response size is ~86KiB at most */ 100 * 1000);
 
   pg_array_init_reserve(api->tokens, 8 * 1000, pg_heap_allocator());
 
