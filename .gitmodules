@@ -1,9 +1,6 @@
 [submodule "vendor/gb"]
 	path = vendor/gb
 	url = https://github.com/gaultier/gb.git
-[submodule "clone-gitlab-api/vendor/jsmn"]
-	path = clone-gitlab-api/vendor/jsmn
-	url = https://github.com/zserge/jsmn.git
 [submodule "vendor/cJSON"]
 	path = vendor/cJSON
 	url = https://github.com/gaultier/cJSON.git
