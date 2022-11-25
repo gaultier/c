@@ -535,7 +535,8 @@ static void *watch_workers(void *varg) {
         if (children_spawner_finished)
           break;
         else {
-          // Might happen temporarily
+          // Might happen temporarily. Could use pthread_cond_wait instead but
+          // that should be fine, only reporting would be delayed
           sleep(1);
           continue;
         }
