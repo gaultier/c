@@ -8,9 +8,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <sys/wait.h>
-#include <sys/types.h>
 #include <sys/time.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 #include "../pg/pg.h"
@@ -519,7 +519,7 @@ static void *watch_workers(void *varg) {
 
   static char child_proc_stderr[256] = {0};
 
-  const bool is_tty = isatty(fileno(stdout));
+  const bool is_tty = isatty(STDOUT_FILENO);
 
   uint64_t children_waited_count = 0, children_spawned_count = 0;
 
