@@ -1,11 +1,11 @@
 .PHONY: install
 
-CFLAGS := -O2 -I /usr/local/include/
+CFLAGS_COMMON := -g -Weverything -Wno-used-but-marked-unused -Wno-declaration-after-statement -Wno-gnu-zero-variadic-macro-arguments -Wno-disabled-macro-expansion -isystem /usr/local/include/ -std=c99
 LDLIBS := -lcurl -lpthread
 LDFLAGS := -flto -L /usr/local/lib/
 
 clone-gitlab-api: main.c
-	$(CC) $(CFLAGS) -Wall -Wextra -Wpedantic -Wno-unused-function -g main.c -o clone-gitlab-api $(LDFLAGS) $(LDLIBS)
+	$(CC) $(CFLAGS_COMMON) $(CFLAGS) $< -o $@ $(LDFLAGS) $(LDLIBS)
 
 install: clone-gitlab-api
-	cp clone-gitlab-api /usr/local/bin/
+	cp $< /usr/local/bin/

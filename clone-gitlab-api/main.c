@@ -1,3 +1,5 @@
+#include <_types/_uint64_t.h>
+#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -15,8 +17,8 @@
 
 #include "../pg/pg.h"
 #define JSMN_STATIC
-#include "../vendor/sds/sds.c"
 #include "../vendor/jsmn/jsmn.h"
+#include "../vendor/sds/sds.c"
 
 #define MAX_URL_LEN 4096
 
@@ -54,6 +56,7 @@ typedef struct {
   sds api_token;
   sds gitlab_domain;
   git_clone_method_t clone_method;
+  PG_PAD(4);
 } options_t;
 static bool verbose = false;
 
@@ -66,11 +69,12 @@ typedef struct {
   sds response_body;
   sds url;
   pg_array_t(jsmntok_t) tokens;
-  bool finished;
   struct curl_slist *curl_headers;
+  bool finished;
+  PG_PAD(7);
 } api_t;
 
-static _Atomic uint64_t projects_count = 0;
+static /* _Atomic */ uint64_t projects_count = 0;
 
 static void print_usage(int argc, char *argv[]) {
   (void)argc;
@@ -157,7 +161,7 @@ static uint64_t str_to_u64(const char *s, uint64_t s_len) {
     if (pg_char_is_space(c))
       continue;
     if (pg_char_is_digit(c)) {
-      const int v = c - '0';
+      const uint8_t v = (uint8_t)(c - '0');
       res *= 10;
       res += v;
     } else
@@ -191,9 +195,9 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
 
   assert(val > buffer);
   assert(val < buffer + real_size);
-  const uint64_t key_len = val - buffer;
+  const uint64_t key_len = (uint64_t)(val - buffer);
   val++; // Skip `:`
-  uint64_t val_len = buffer + real_size - val;
+  uint64_t val_len = (uint64_t)(buffer + real_size - val);
 
   if (str_iequal_c(buffer, key_len, "Link")) {
     const char needle[] = ">; rel=\"next\"";
@@ -205,18 +209,18 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
       return real_size;
     }
 
-    char *start = end;
-    while (start > val && *start != '<')
-      start--;
-    if (start == val) {
+    char *start_header = end;
+    while (start_header > val && *start_header != '<')
+      start_header--;
+    if (start_header == val) {
       fprintf(stderr, "Failed to parse HTTP header Link: %.*s\n", (int)val_len,
               val);
       return 0;
     }
 
-    start++; // Skip `<`
-    val_len = end - start;
-    val = start;
+    start_header++; // Skip `<`
+    val_len = (uint64_t)(end - start_header);
+    val = start_header;
 
     if (val_len > MAX_URL_LEN) {
       fprintf(stderr, "Failed to parse HTTP header Link, too long: %.*s\n",
@@ -228,10 +232,10 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
     sdsclear(api->url);
     api->url = sdscatlen(api->url, val, val_len);
   } else if (str_iequal_c(buffer, key_len, "X-Total")) {
-    const uint64_t total = str_to_u64(val, val_len);
+    uint64_t total = str_to_u64(val, val_len);
     uint64_t expected = 0;
-    __c11_atomic_compare_exchange_strong(&projects_count, &expected, total,
-                                         __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+    __atomic_compare_exchange(&projects_count, &expected, &total, false,
+                              __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
   }
 
   return nitems * size;
@@ -558,9 +562,8 @@ static void *watch_workers(void *varg) {
 #if defined(__APPLE__)
       NOTE_EXITSTATUS;
 #elif defined(__FreeBSD__)
-      NOTE_EXIT
+      NOTE_EXIT;
 #endif
-  ;
   do {
     int event_count = kevent(arg->queue, NULL, 0, events, 512, 0);
     if (event_count == -1) {
@@ -698,14 +701,14 @@ static int record_process_finished_event(int queue, process_t *process) {
   struct kevent events[2] = {
       {
           .filter = EVFILT_PROC,
-          .ident = process->pid,
+          .ident = (uintptr_t)process->pid,
           .flags = EV_ADD | EV_ONESHOT,
           .fflags = proc_fflags,
           .udata = process,
       },
       {
           .filter = EVFILT_READ,
-          .ident = process->stderr_fd,
+          .ident = (uintptr_t)process->stderr_fd,
           .flags = EV_ADD | EV_ONESHOT,
           .udata = process,
       },
