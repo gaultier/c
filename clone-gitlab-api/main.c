@@ -1,5 +1,3 @@
-#include <_types/_uint32_t.h>
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -40,10 +38,8 @@ static struct timeval start;
 struct process_t {
   struct process_t *next;
   pg_string_t path_with_namespace;
-  // int stderr_fd;
+  int stderr_fd;
   pid_t pid;
-  PG_PAD(4);
-  // pg_string_t err;
 };
 typedef struct process_t process_t;
 
@@ -530,6 +526,8 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
 static void *watch_workers(void *varg) {
   (void)varg;
 
+  static char child_proc_stderr[256] = {0};
+
   const bool is_tty = isatty(fileno(stdout));
 
   uint64_t children_waited_count = 0, children_spawned_count = 0;
@@ -567,7 +565,7 @@ static void *watch_workers(void *varg) {
       child_proc_next = &(*child_proc_next)->next;
     }
     assert(child_proc_next != NULL && (*child_proc_next)->pid == child_pid);
-    process_t *proc = *child_proc_next;
+    process_t *process = *child_proc_next;
 
     const int exit_status = WEXITSTATUS(stat_loc);
     __atomic_load(&atomic_children_spawned_count, &children_spawned_count,
@@ -576,29 +574,38 @@ static void *watch_workers(void *varg) {
       printf("%s[%" PRIu64 "/%" PRIu64 "] ✓ "
              "%s%s\n",
              pg_colors[is_tty][COL_GREEN], children_waited_count,
-             children_spawned_count, proc->path_with_namespace,
+             children_spawned_count, process->path_with_namespace,
              pg_colors[is_tty][COL_RESET]);
     } else {
+      // Best effort to get the stderr from the child
+      ssize_t stderr_read = 0;
+      {
+        stderr_read = read(process->stderr_fd, child_proc_stderr,
+                           sizeof(child_proc_stderr) - 1);
+        if (stderr_read > 0) {
+          child_proc_stderr[stderr_read] = 0;
+        }
+      }
+
       printf("%s[%" PRIu64 "/%" PRIu64 "] ❌ "
              "%s (%d): %s%s\n",
              pg_colors[is_tty][COL_RED], children_waited_count,
-             children_spawned_count, proc->path_with_namespace, exit_status,
-             /*process->err */ "FIXME", pg_colors[is_tty][COL_RESET]);
+             children_spawned_count, process->path_with_namespace, exit_status,
+             stderr_read > 0 ? child_proc_stderr : "(unknownn)",
+             pg_colors[is_tty][COL_RESET]);
     }
 
     // Rm
     {
-      pg_string_free(proc->path_with_namespace);
+      pg_string_free(process->path_with_namespace);
+      close(process->stderr_fd);
 
       pthread_mutex_lock(&child_processes_mtx);
-      *child_proc_next = proc->next;
+      *child_proc_next = process->next;
       pthread_mutex_unlock(&child_processes_mtx);
 
-      free(proc);
+      free(process);
     }
-    //   pg_string_free(process->err);
-    //  close(process->stderr_fd);
-    // free(process);
   }
 
   struct timeval end = {0};
@@ -680,25 +687,25 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
   assert(git_url != NULL);
   assert(options != NULL);
 
-  //  int fds[2] = {0};
-  //  if (pipe(fds) != 0) {
-  //    fprintf(stderr, "Failed to pipe(2): err=%s\n", strerror(errno));
-  //    return errno;
-  //  }
+  int stderr_pipe[2] = {0};
+  if (pipe(stderr_pipe) != 0) {
+    fprintf(stderr, "Failed to pipe(2): err=%s\n", strerror(errno));
+    return errno;
+  }
 
   pid_t pid = fork();
   if (pid == -1) {
     fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
     return errno;
   } else if (pid == 0) {
-    //    close(fds[0]); // Child does not read
-    //    close(0);      // Close stdin
-    //    close(1);      // Close stdout
-    //    if (dup2(fds[1], 2) ==
-    //        -1) { // Direct stderr to the pipe for the parent to read
-    //      fprintf(stderr, "Failed to dup2(2): err=%s\n", strerror(errno));
-    //    }
-    //    close(fds[1]); // Not needed anymore
+    close(stderr_pipe[0]); // Child does not read
+    close(0);              // Close stdin
+    close(1);              // Close stdout
+    if (dup2(stderr_pipe[1], 2) ==
+        -1) { // Direct stderr to the pipe for the parent to read
+      fprintf(stderr, "Failed to dup2(2): err=%s\n", strerror(errno));
+    }
+    close(stderr_pipe[1]); // Not needed anymore
 
     if (is_directory(fs_path)) {
       worker_update_project(fs_path, git_url, options);
@@ -708,13 +715,14 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
     assert(0 && "Unreachable");
   } else {
     __atomic_fetch_add(&atomic_children_spawned_count, 1, __ATOMIC_SEQ_CST);
-    //   close(fds[1]); // Parent does not write
+    close(stderr_pipe[1]); // Parent does not write
+
     process_t *process = malloc(sizeof(process_t)); // FIXME: custom allocator
     process->pid = pid;
-    //                      .stderr_fd = fds[0],
+    process->stderr_fd = stderr_pipe[0];
     process->path_with_namespace = path;
-    //.err = pg_string_make_reserve(pg_heap_allocator(), 0)
     pthread_mutex_lock(&child_processes_mtx);
+    // Append to the front of the list
     process->next = child_processes;
     child_processes = process;
     pthread_mutex_unlock(&child_processes_mtx);
