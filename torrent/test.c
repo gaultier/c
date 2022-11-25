@@ -38,7 +38,7 @@ static const uint8_t handshake_header[] = {
     0,
 };
 
-static pg_logger_t logger = {.level = PG_LOG_DEBUG};
+static pg_logger_t logger = {.level = PG_LOG_FATAL};
 
 TEST test_on_read(void) {
   pg_pool_t peer_pool = {0};
