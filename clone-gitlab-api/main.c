@@ -6,10 +6,6 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
-#include <sys/event.h>
-#include <sys/fcntl.h>
-#include <sys/param.h>
-#include <sys/proc.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
