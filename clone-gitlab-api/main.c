@@ -66,7 +66,8 @@ typedef struct {
   PG_PAD(7);
 } api_t;
 
-static /* _Atomic */ uint64_t projects_count = 0;
+static uint64_t atomic_children_spawned_count = 0;
+static bool atomic_child_spawner_finished = false;
 
 static pg_array_t(process_t) processes = {0};
 
@@ -225,13 +226,7 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
     assert(api->url != NULL);
     pg_string_clear(api->url);
     api->url = pg_string_append_length(api->url, val, val_len);
-  } else if (str_iequal_c(buffer, key_len, "X-Total")) {
-    uint64_t total = str_to_u64(val, val_len);
-    uint64_t expected = 0;
-    __atomic_compare_exchange(&projects_count, &expected, &total, false,
-                              __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
   }
-
   return nitems * size;
 }
 
@@ -548,37 +543,49 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
 static void *watch_workers(void *varg) {
   (void)varg;
 
-  uint64_t finished = 0;
-
   const bool is_tty = isatty(fileno(stdout));
 
-  uint64_t count = 0;
+  uint64_t children_waited_count = 0, children_spawned_count = 0;
+
   while (1) {
     int stat_loc = 0;
     pid_t child_pid = wait(&stat_loc);
-    __atomic_load(&projects_count, &count, __ATOMIC_SEQ_CST);
     if (child_pid < 0) {
-      if (errno == ECHILD)
-        break;
+      if (errno == ECHILD) {
+        bool children_spawner_finished = false;
+        __atomic_load(&atomic_child_spawner_finished,
+                      &children_spawner_finished, __ATOMIC_SEQ_CST);
+
+        if (children_spawner_finished)
+          break;
+        else {
+          usleep(100 * 1000);
+          continue;
+        }
+      }
 
       fprintf(stderr, "Failed to wait(): %s\n", strerror(errno));
       exit(errno);
     }
 
-    const int exit_status = WEXITSTATUS(stat_loc);
-    printf("Child finished: pid=%d exited=%d status=%d\n", child_pid,
-           WIFEXITED(stat_loc), exit_status);
+    children_waited_count += 1;
 
+    const int exit_status = WEXITSTATUS(stat_loc);
+
+    __atomic_load(&atomic_children_spawned_count, &children_spawned_count,
+                  __ATOMIC_SEQ_CST);
     if (exit_status == 0) {
       printf("%s[%" PRIu64 "/%" PRIu64 "] ✓ "
              "%s%s\n",
-             pg_colors[is_tty][COL_GREEN], finished, count,
+             pg_colors[is_tty][COL_GREEN], children_waited_count,
+             children_spawned_count,
              /*process->path_with_namespace*/ "FIXME",
              pg_colors[is_tty][COL_RESET]);
     } else {
       printf("%s[%" PRIu64 "/%" PRIu64 "] ❌ "
              "%s (%d): %s%s\n",
-             pg_colors[is_tty][COL_RED], finished, count,
+             pg_colors[is_tty][COL_RED], children_waited_count,
+             children_spawned_count,
              /* process->path_with_namespace */ "FIXME", exit_status,
              /*process->err */ "FIXME", pg_colors[is_tty][COL_RESET]);
     }
@@ -667,25 +674,25 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
   assert(git_url != NULL);
   assert(options != NULL);
 
-  int fds[2] = {0};
-  if (pipe(fds) != 0) {
-    fprintf(stderr, "Failed to pipe(2): err=%s\n", strerror(errno));
-    return errno;
-  }
+  //  int fds[2] = {0};
+  //  if (pipe(fds) != 0) {
+  //    fprintf(stderr, "Failed to pipe(2): err=%s\n", strerror(errno));
+  //    return errno;
+  //  }
 
   pid_t pid = fork();
   if (pid == -1) {
     fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
     return errno;
   } else if (pid == 0) {
-    close(fds[0]); // Child does not read
-    close(0);      // Close stdin
-    close(1);      // Close stdout
-    if (dup2(fds[1], 2) ==
-        -1) { // Direct stderr to the pipe for the parent to read
-      fprintf(stderr, "Failed to dup2(2): err=%s\n", strerror(errno));
-    }
-    close(fds[1]); // Not needed anymore
+    //    close(fds[0]); // Child does not read
+    //    close(0);      // Close stdin
+    //    close(1);      // Close stdout
+    //    if (dup2(fds[1], 2) ==
+    //        -1) { // Direct stderr to the pipe for the parent to read
+    //      fprintf(stderr, "Failed to dup2(2): err=%s\n", strerror(errno));
+    //    }
+    //    close(fds[1]); // Not needed anymore
 
     if (is_directory(fs_path)) {
       worker_update_project(fs_path, git_url, options);
@@ -694,9 +701,10 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
     }
     assert(0 && "Unreachable");
   } else {
-    close(fds[1]); // Parent does not write
+    __atomic_fetch_add(&atomic_children_spawned_count, 1, __ATOMIC_SEQ_CST);
+    //   close(fds[1]); // Parent does not write
     process_t process = {.pid = pid,
-                         .stderr_fd = fds[0],
+                         //                      .stderr_fd = fds[0],
                          .path_with_namespace = path,
                          .err = pg_string_make_reserve(pg_heap_allocator(), 0)};
     pg_array_append(processes, process);
@@ -729,15 +737,9 @@ int main(int argc, char *argv[]) {
   options_t options = {0};
   options_parse_from_cli(argc, argv, &options);
 
+  pg_array_init_reserve(processes, 10000, pg_heap_allocator());
+
   int res = 0;
-  // Do not require wait(2) on child processes
-  {
-    struct sigaction sa = {.sa_flags = SA_NOCLDWAIT};
-    if ((res = sigaction(SIGCHLD, &sa, NULL)) == -1) {
-      fprintf(stderr, "Failed to sigaction(2): err=%s\n", strerror(errno));
-      return errno;
-    }
-  }
 
   api_t api = {0};
   api_init(&api, &options);
@@ -768,6 +770,9 @@ int main(int argc, char *argv[]) {
   while (!api.finished &&
          (res = api_fetch_projects(&api, &options, &projects_handled)) == 0) {
   }
+
+  bool btrue = true;
+  __atomic_store(&atomic_child_spawner_finished, &btrue, __ATOMIC_SEQ_CST);
 
 end:
   if ((res = change_directory(cwd)) != 0)
