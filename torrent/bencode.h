@@ -460,8 +460,9 @@ bc_parser_init_metainfo(bc_parser_t *parser, bc_metainfo_t *metainfo,
       const int64_t length =
           pg_span_parse_i64_decimal(value_span, &value_valid);
       if (!value_valid || length <= 0)
-        metainfo->length = (uint64_t)length;
-      return BC_ME_LENGTH_INVALID_VALUE;
+        return BC_ME_LENGTH_INVALID_VALUE;
+
+      metainfo->length = (uint64_t)length;
     } else if (in_info && key_kind == BC_KIND_STRING &&
                pg_span_eq(pieces_key, key_span) &&
                value_kind == BC_KIND_STRING) {
