@@ -1,5 +1,7 @@
 #pragma once
 
+#include <_types/_uint32_t.h>
+#include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
@@ -28,7 +30,7 @@ typedef struct {
   uint64_t start_ts;
 } download_t;
 
-typedef enum : uint8_t {
+typedef enum {
   PEK_NONE,
   PEK_NEED_MORE,
   PEK_UV,
@@ -43,7 +45,7 @@ typedef enum : uint8_t {
   PEK_CHECKSUM_FAILED,
 } peer_error_kind_t;
 
-typedef enum : uint8_t {
+typedef enum {
   PEER_ACTION_NONE,
   PEER_ACTION_REQUEST_MORE,
   PEER_ACTION_STOP_REQUESTING,
@@ -53,7 +55,7 @@ typedef struct {
   peer_error_kind_t kind;
 } peer_error_t;
 
-typedef enum : uint8_t {
+typedef enum {
   PT_CHOKE,
   PT_UNCHOKE,
   PT_INTERESTED,
@@ -65,7 +67,7 @@ typedef enum : uint8_t {
   PT_CANCEL,
 } peer_tag_t;
 
-typedef enum : uint8_t {
+typedef enum {
   PMK_NONE,
   PMK_HEARTBEAT,
   PMK_CHOKE,
@@ -108,7 +110,7 @@ typedef struct {
     peer_message_bitfield_t bitfield;
   } v;
   peer_message_kind_t kind;
-  PG_PAD(7);
+  PG_PAD(4);
 } peer_message_t;
 
 // TODO: investigate how to reduce size
@@ -222,7 +224,7 @@ bool picker_have_all_blocks_for_piece(const picker_t *picker, uint32_t piece) {
   bool is_set = false;
   while (pg_bitarray_next(&picker->blocks_downloaded, &i, &is_set)) {
     assert(i > 0);
-    const uint32_t block = i - 1;
+    const uint32_t block = (uint32_t)i - 1;
     assert(block < picker->metainfo->blocks_count);
 
     if (block > last_block) return true;
@@ -281,8 +283,10 @@ void peer_message_destroy(peer_t *peer, peer_message_t *msg) {
       return;
     case PMK_PIECE:
       pg_pool_free(&peer->block_pool, msg->v.piece.data);
+      return;
 
-    default:;  // no-op
+    default:
+      return;
   }
 }
 
@@ -307,10 +311,10 @@ peer_error_t peer_check_handshaked(peer_t *peer) {
   if (recv_data_len < PEER_HANDSHAKE_LENGTH)
     return (peer_error_t){.kind = PEK_NEED_MORE};
 
-  const char handshake_header_expected[] =
+  const uint8_t handshake_header_expected[] =
       "\x13"
       "BitTorrent protocol";
-  char handshake_got[PEER_HANDSHAKE_LENGTH] = "";
+  uint8_t handshake_got[PEER_HANDSHAKE_LENGTH] = "";
   for (uint64_t i = 0; i < PEER_HANDSHAKE_LENGTH; i++)
     handshake_got[i] = pg_ring_pop_front(&peer->recv_data);
 
@@ -334,25 +338,25 @@ peer_error_t peer_check_handshaked(peer_t *peer) {
 __attribute__((unused)) static
 uint32_t peer_read_u32(pg_ring_t *ring) {
   assert(pg_ring_len(ring) >= sizeof(uint32_t));
-  const uint8_t parts[] = {
+   uint8_t parts[] = {
       pg_ring_pop_front(ring),
       pg_ring_pop_front(ring),
       pg_ring_pop_front(ring),
       pg_ring_pop_front(ring),
   };
-  return ntohl(*(uint32_t *)parts);
+  return ntohl(*(uint32_t *)(void*)parts);
 }
 
 __attribute__((unused)) static
 uint32_t peer_peek_read_u32(pg_ring_t *ring) {
   assert(pg_ring_len(ring) >= sizeof(uint32_t));
-  const uint8_t parts[] = {
+   uint8_t parts[] = {
       pg_ring_get(ring, 0),
       pg_ring_get(ring, 1),
       pg_ring_get(ring, 2),
       pg_ring_get(ring, 3),
   };
-  return ntohl(*(uint32_t *)parts);
+  return ntohl(*(uint32_t *)(void*)parts);
 }
 
 __attribute__((unused)) static
@@ -442,7 +446,7 @@ peer_error_t peer_message_parse(peer_t *peer, peer_message_t *msg) {
     }
     case PT_BITFIELD: {
       const uint64_t expected_bitfield_len =
-          (uint64_t)ceil(((double)peer->metainfo->pieces_count - 1) / 8.0);
+          (uint64_t)(ceil(((double)peer->metainfo->pieces_count - 1) / 8.0));
       if (announced_len != expected_bitfield_len + /* tag */ 1)
         return (peer_error_t){.kind = PEK_INVALID_ANNOUNCED_LENGTH};
 
@@ -453,7 +457,7 @@ peer_error_t peer_message_parse(peer_t *peer, peer_message_t *msg) {
       msg->v.bitfield = (peer_message_bitfield_t){0};
 
       const uint64_t len =
-          1 + (uint64_t)ceil(((double)peer->metainfo->pieces_count - 1) / 8.0);
+          1 + (uint64_t)(ceil(((double)peer->metainfo->pieces_count - 1) / 8.0));
       pg_array_init_reserve(msg->v.bitfield.bitfield, len, peer->allocator);
 
       pg_ring_consume_front(&peer->recv_data,
