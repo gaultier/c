@@ -12,9 +12,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <unistd.h>
 
 #ifndef MIN
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
@@ -1314,7 +1314,7 @@ __attribute__((unused)) static bool pg_exec(char **argv, pg_string_t *cmd_stdio,
       }
     }
 
-    ret_pid = wait4(pid, exit_status, 0, 0);
+    ret_pid = waitpid(pid, exit_status, 0);
     if (ret_pid == -1)
       continue;
 
@@ -1323,7 +1323,7 @@ __attribute__((unused)) static bool pg_exec(char **argv, pg_string_t *cmd_stdio,
     }
   }
 
-  ret_pid = wait4(pid, exit_status, 0, 0);
+  ret_pid = waitpid(pid, exit_status, 0);
   if (ret_pid == -1) {
     fprintf(stderr, "Failed to wait(2): %d %s\n", errno, strerror(errno));
     exit(errno);
