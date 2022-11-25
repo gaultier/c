@@ -557,18 +557,17 @@ static void *watch_workers(void *varg) {
 
     children_waited_count += 1;
 
-    process_t *child_processes_it = NULL;
     pthread_mutex_lock(&child_processes_mtx);
-    child_processes_it = child_processes;
+    process_t **child_proc_next = &child_processes;
     pthread_mutex_unlock(&child_processes_mtx);
 
-    while (child_processes_it != NULL) {
-      if (child_processes_it->pid == child_pid)
-        break;
+    assert(child_proc_next != NULL);
 
-      child_processes_it = child_processes_it->next;
+    while ((*child_proc_next)->pid != child_pid) {
+      child_proc_next = &(*child_proc_next)->next;
     }
-    assert(child_processes_it != NULL && child_processes_it->pid == child_pid);
+    assert(child_proc_next != NULL && (*child_proc_next)->pid == child_pid);
+    process_t *proc = *child_proc_next;
 
     const int exit_status = WEXITSTATUS(stat_loc);
     __atomic_load(&atomic_children_spawned_count, &children_spawned_count,
@@ -577,18 +576,26 @@ static void *watch_workers(void *varg) {
       printf("%s[%" PRIu64 "/%" PRIu64 "] ✓ "
              "%s%s\n",
              pg_colors[is_tty][COL_GREEN], children_waited_count,
-             children_spawned_count, child_processes_it->path_with_namespace,
+             children_spawned_count, proc->path_with_namespace,
              pg_colors[is_tty][COL_RESET]);
     } else {
       printf("%s[%" PRIu64 "/%" PRIu64 "] ❌ "
              "%s (%d): %s%s\n",
              pg_colors[is_tty][COL_RED], children_waited_count,
-             children_spawned_count, child_processes_it->path_with_namespace,
-             exit_status,
+             children_spawned_count, proc->path_with_namespace, exit_status,
              /*process->err */ "FIXME", pg_colors[is_tty][COL_RESET]);
     }
-    // TODO: rm process in list
-    //    pg_string_free(process->path_with_namespace);
+
+    // Rm
+    {
+      pg_string_free(proc->path_with_namespace);
+
+      pthread_mutex_lock(&child_processes_mtx);
+      *child_proc_next = proc->next;
+      pthread_mutex_unlock(&child_processes_mtx);
+
+      free(proc);
+    }
     //   pg_string_free(process->err);
     //  close(process->stderr_fd);
     // free(process);
