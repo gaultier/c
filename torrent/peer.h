@@ -1,6 +1,7 @@
 #pragma once
 
 #include <_types/_uint32_t.h>
+#include <_types/_uint64_t.h>
 #include <_types/_uint8_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
@@ -9,6 +10,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/_types/_off_t.h>
 #include <sys/socket.h>
 #include <uv.h>
 
@@ -578,7 +580,7 @@ const char *peer_message_kind_to_string(int k) {
       return "PMK_CANCEL";
 
     default:
-      __builtin_unreachable();
+      assert(0);
   }
 }
 
@@ -590,7 +592,7 @@ peer_error_t download_checksum_piece(pg_logger_t *logger,
   const uint64_t offset = piece * metainfo->piece_length;
   const uint64_t length = metainfo_piece_length(metainfo, piece);
 
-  if (lseek(download->fd, offset, SEEK_SET) == -1) {
+  if (lseek(download->fd,(off_t) offset, SEEK_SET) == -1) {
     pg_log_error(logger, "Failed to lseek(2): err=%s", strerror(errno));
     return (peer_error_t){.kind = PEK_OS};
   }
@@ -644,7 +646,7 @@ peer_error_t peer_put_block(peer_t *peer, uint32_t piece, uint32_t block,
   const uint64_t offset = (uint64_t)block * BC_BLOCK_LENGTH;
   assert(offset + BC_BLOCK_LENGTH <= peer->metainfo->length);
 
-  if (lseek(peer->download->fd, offset, SEEK_SET) == -1) {
+  if (lseek(peer->download->fd,(off_t) offset, SEEK_SET) == -1) {
     pg_log_error(peer->logger, "[%s] Failed to lseek(2): err=%s", peer->addr_s,
                  strerror(errno));
     return (peer_error_t){.kind = PEK_OS};
@@ -656,9 +658,9 @@ peer_error_t peer_put_block(peer_t *peer, uint32_t piece, uint32_t block,
                  strerror(errno));
     return (peer_error_t){.kind = PEK_OS};
   }
-  if (ret != data.len) {
+  if ((uint64_t)ret != data.len) {
     // TODO: handle partial writes
-    pg_log_error(peer->logger, "[%s] Failed to write(2) all data: %zd/%u",
+    pg_log_error(peer->logger, "[%s] Failed to write(2) all data: %zd/%llu",
                  peer->addr_s, ret, data.len);
     return (peer_error_t){.kind = PEK_OS};
   }
@@ -869,7 +871,7 @@ void peer_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     assert(buf->base != NULL);
     assert(buf->len > 0);
 
-    pg_ring_push_backv(&peer->recv_data, (uint8_t *)buf->base, nread);
+    pg_ring_push_backv(&peer->recv_data, (uint8_t *)buf->base, (uint64_t)nread);
   }
   if (buf != NULL && buf->base != NULL)
     pg_pool_free(&peer->read_buf_pool, buf->base);
@@ -894,7 +896,7 @@ void peer_on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf) {
     }
 
     pg_log_debug(peer->logger, "[%s] msg=%s", peer->addr_s,
-                 peer_message_kind_to_string(msg.kind));
+                 peer_message_kind_to_string((int)msg.kind));
     assert(msg.kind != PMK_NONE);
 
     peer_action_t action = PEER_ACTION_NONE;
@@ -1010,7 +1012,7 @@ peer_error_t peer_send_handshake(peer_t *peer) {
 
 __attribute__((unused)) static
 uint8_t *peer_write_u32(uint8_t *buf, uint64_t *buf_len, uint32_t x) {
-  *(uint32_t *)buf = htonl(x);
+  *(uint32_t *)(void*)buf = htonl(x);
   *buf_len += 4;
   return buf + 4;
 }
