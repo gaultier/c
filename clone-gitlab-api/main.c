@@ -72,6 +72,8 @@ typedef struct {
 
 static /* _Atomic */ uint64_t projects_count = 0;
 
+static pg_array_t(process_t) processes = {0};
+
 static void print_usage(int argc, char *argv[]) {
   (void)argc;
 
@@ -720,6 +722,7 @@ static int record_process_finished_event(int queue, process_t *process) {
             strerror(errno));
     return errno;
   }
+
   return 0;
 }
 
@@ -757,16 +760,13 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
     assert(0 && "Unreachable");
   } else {
     close(fds[1]); // Parent does not write
-    process_t *process = calloc(1, sizeof(process_t));
-    process->pid = pid;
-    process->stderr_fd = fds[0];
-    process->path_with_namespace = path;
-    process->err = pg_string_make_reserve(pg_heap_allocator(), 256);
-    int res = 0;
-    if ((res = record_process_finished_event(queue, process)) != 0)
-      return res;
+    process_t process = {.pid = pid,
+                         .stderr_fd = fds[0],
+                         .path_with_namespace = path,
+                         .err = pg_string_make_reserve(pg_heap_allocator(), 0)};
+    pg_array_append(processes, process);
   }
-  return 0;
+    return 0;
 }
 
 static int api_fetch_projects(api_t *api, const options_t *options, int queue,
