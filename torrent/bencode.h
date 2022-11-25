@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint32_t.h>
 #include <_types/_uint64_t.h>
 #include <inttypes.h>
 #include <stdint.h>
@@ -10,7 +11,7 @@
 
 #define BC_BLOCK_LENGTH ((uint32_t)1 << 14)
 
-typedef enum : uint8_t {
+typedef enum {
   BC_KIND_NONE,
   BC_KIND_INTEGER,
   BC_KIND_STRING,
@@ -40,7 +41,6 @@ typedef struct {
   pg_array_t(uint64_t) lengths;
   pg_array_t(bc_kind_t) kinds;
   uint64_t parent;
-  PG_PAD(4);
 } bc_parser_t;
 
 __attribute__((unused)) static void bc_parser_init(
@@ -57,7 +57,7 @@ __attribute__((unused)) static void bc_parser_destroy(bc_parser_t *parser) {
   pg_array_free(parser->kinds);
 }
 
-typedef enum : uint8_t {
+typedef enum {
   BC_PE_NONE,
   BC_PE_UNEXPECTED_CHARACTER,
   BC_PE_INVALID_NUMBER,
@@ -78,7 +78,7 @@ __attribute__((unused)) static const char *bc_parse_error_to_string(int e) {
     case BC_PE_INVALID_DICT:
       return "BC_PE_INVALID_DICT";
     default:
-      __builtin_unreachable();
+      assert(0);
   }
 }
 
@@ -151,7 +151,7 @@ __attribute__((unused)) static bc_parse_error_t bc_parse(bc_parser_t *parser,
       for (uint64_t i = 0; i < left.len; i++) {
         if (!pg_char_is_digit(left.data[i])) return BC_PE_INVALID_STRING;
         len *= 10;
-        len += left.data[i] - '0';
+        len += (uint64_t)(left.data[i] - '0');
       }
       assert(len > 0);
       if (right.len < len) return BC_PE_INVALID_STRING;  // `5:a`
@@ -269,7 +269,7 @@ __attribute__((unused)) static uint64_t bc_dump_value(bc_parser_t *parser,
     case BC_KIND_STRING: {
       fprintf(f, "\"");
       for (uint64_t i = 0; i < span.len; i++) {
-        uint8_t c = span.data[i];
+        char c = span.data[i];
         if (pg_char_is_alphanumeric(c) || c == ' ' || c == '-' || c == '.' ||
             c == '_' || c == '/')
           fprintf(f, "%c", c);
@@ -316,7 +316,7 @@ __attribute__((unused)) static uint64_t bc_dump_value(bc_parser_t *parser,
       return j - index;
     }
     default:
-      __builtin_unreachable();
+      assert(0);
   }
   __builtin_unreachable();
 }
@@ -341,7 +341,7 @@ typedef struct {
       last_piece_block_count;
 } bc_metainfo_t;
 
-typedef enum : uint8_t {
+typedef enum {
   BC_ME_NONE,
   BC_ME_METAINFO_NOT_DICTIONARY,
   BC_ME_ANNOUNCE_NOT_FOUND,
@@ -384,7 +384,7 @@ __attribute__((unused)) static const char *bc_metainfo_error_to_string(
     case BC_ME_PIECES_INVALID_VALUE:
       return "BC_ME_PIECES_INVALID_VALUE";
     default:
-      __builtin_unreachable();
+      assert(0);
   }
 }
 
@@ -402,8 +402,8 @@ __attribute__((unused)) static bc_metainfo_error_t bc_parser_init_metainfo(
   const pg_span_t pieces_key = pg_span_make_c("pieces");
 
   bool in_info = false;
-  uint32_t info_end = 0;
-  for (uint32_t i = 1; i < pg_array_len(parser->kinds) - 1; i++) {
+  uint64_t info_end = 0;
+  for (uint64_t i = 1; i < pg_array_len(parser->kinds) - 1; i++) {
     if (in_info && i > info_end) {
       in_info = false;
     }
@@ -460,14 +460,14 @@ __attribute__((unused)) static bc_metainfo_error_t bc_parser_init_metainfo(
   if (metainfo->name.len == 0) return BC_ME_NAME_NOT_FOUND;
 
   // Compute QoL values
-  metainfo->pieces_count = metainfo->pieces.len / 20;
+  metainfo->pieces_count = (uint32_t) (metainfo->pieces.len / 20);
   metainfo->blocks_per_piece = metainfo->piece_length / BC_BLOCK_LENGTH;
-  metainfo->last_piece_length =
-      metainfo->length - (metainfo->pieces_count - 1) * metainfo->piece_length;
-  metainfo->last_piece_block_count =
-      (uint64_t)ceil((double)metainfo->last_piece_length / BC_BLOCK_LENGTH);
+  metainfo->last_piece_length =(uint32_t) (
+      metainfo->length - (metainfo->pieces_count - 1) * metainfo->piece_length);
+  metainfo->last_piece_block_count =(uint32_t)(
+      (ceil((double)metainfo->last_piece_length / BC_BLOCK_LENGTH)));
   metainfo->blocks_count =
-      (uint64_t)ceil((double)metainfo->length / BC_BLOCK_LENGTH);
+      (uint32_t)(ceil((double)metainfo->length / BC_BLOCK_LENGTH));
   return BC_ME_NONE;
 }
 
@@ -491,8 +491,8 @@ __attribute__((unused)) static uint32_t metainfo_block_for_piece_length(
   // Special case for last block of last piece
   if (metainfo_is_last_piece(metainfo, piece) &&
       block_for_piece == metainfo->last_piece_block_count - 1)
-    return metainfo->length -
-           (piece * metainfo->piece_length + block_for_piece * BC_BLOCK_LENGTH);
+    return (uint32_t) (metainfo->length -
+           (piece * metainfo->piece_length + block_for_piece * BC_BLOCK_LENGTH));
 
   return BC_BLOCK_LENGTH;
 }

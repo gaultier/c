@@ -164,7 +164,7 @@ typedef struct pg_array_header_t {
 #define pg_array_t(Type) Type *
 
 #ifndef PG_ARRAY_GROW_FORMULA
-#define PG_ARRAY_GROW_FORMULA(x) ((uint64_t)(1.5 * (x) + 8))
+#define PG_ARRAY_GROW_FORMULA(x) ((uint64_t)(1.5 * ((double)x) + 8))
 #endif
 
 #define PG_ARRAY_HEADER(x) (((pg_array_header_t *)((void *)x)) - 1)

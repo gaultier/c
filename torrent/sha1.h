@@ -23,10 +23,12 @@ typedef struct mbedtls_sha1_context {
 }
 
 mbedtls_sha1_context;
+__attribute__((unused)) static
 void mbedtls_sha1_init(mbedtls_sha1_context *ctx) {
   memset(ctx, 0, sizeof(mbedtls_sha1_context));
 }
 
+__attribute__((unused)) static
 void mbedtls_sha1_free(mbedtls_sha1_context *ctx) {
   if (ctx == NULL)
     return;
@@ -34,6 +36,7 @@ void mbedtls_sha1_free(mbedtls_sha1_context *ctx) {
   memset(ctx, 0, sizeof(mbedtls_sha1_context));
 }
 
+__attribute__((unused)) static
 void mbedtls_sha1_clone(mbedtls_sha1_context *dst,
                         const mbedtls_sha1_context *src) {
   *dst = *src;
@@ -42,6 +45,7 @@ void mbedtls_sha1_clone(mbedtls_sha1_context *dst,
 /*
  * SHA-1 context setup
  */
+__attribute__((unused)) static
 int mbedtls_sha1_starts(mbedtls_sha1_context *ctx) {
   ctx->total[0] = 0;
   ctx->total[1] = 0;
@@ -61,6 +65,8 @@ int mbedtls_sha1_starts(mbedtls_sha1_context *ctx) {
    ((uint32_t)(data)[(offset) + 1] << 16) |                                    \
    ((uint32_t)(data)[(offset) + 2] << 8) | ((uint32_t)(data)[(offset) + 3]))
 #endif
+
+__attribute__((unused)) static
 int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
                                   const unsigned char data[64]) {
   struct {
@@ -228,6 +234,7 @@ int mbedtls_internal_sha1_process(mbedtls_sha1_context *ctx,
  */
 #define MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED -0x006E
 
+__attribute__((unused)) static
 int mbedtls_sha1_update(mbedtls_sha1_context *ctx, const unsigned char *input,
                         size_t ilen) {
   int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
@@ -275,6 +282,7 @@ int mbedtls_sha1_update(mbedtls_sha1_context *ctx, const unsigned char *input,
  * SHA-1 final digest
  */
 
+__attribute__((unused)) static
 int mbedtls_sha1_finish(mbedtls_sha1_context *ctx, unsigned char output[20]) {
   int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;
   uint32_t used;
@@ -306,8 +314,8 @@ int mbedtls_sha1_finish(mbedtls_sha1_context *ctx, unsigned char output[20]) {
   high = (ctx->total[0] >> 29) | (ctx->total[1] << 3);
   low = (ctx->total[0] << 3);
 
-  MBEDTLS_PUT_UINT32_BE(high, ctx->buffer, 56);
-  MBEDTLS_PUT_UINT32_BE(low, ctx->buffer, 60);
+  MBEDTLS_PUT_UINT32_BE(high, ctx->buffer, 56)
+  MBEDTLS_PUT_UINT32_BE(low, ctx->buffer, 60)
 
   if ((ret = mbedtls_internal_sha1_process(ctx, ctx->buffer)) != 0)
     return (ret);
@@ -315,11 +323,11 @@ int mbedtls_sha1_finish(mbedtls_sha1_context *ctx, unsigned char output[20]) {
   /*
    * Output final state
    */
-  MBEDTLS_PUT_UINT32_BE(ctx->state[0], output, 0);
-  MBEDTLS_PUT_UINT32_BE(ctx->state[1], output, 4);
-  MBEDTLS_PUT_UINT32_BE(ctx->state[2], output, 8);
-  MBEDTLS_PUT_UINT32_BE(ctx->state[3], output, 12);
-  MBEDTLS_PUT_UINT32_BE(ctx->state[4], output, 16);
+  MBEDTLS_PUT_UINT32_BE(ctx->state[0], output, 0)
+  MBEDTLS_PUT_UINT32_BE(ctx->state[1], output, 4)
+  MBEDTLS_PUT_UINT32_BE(ctx->state[2], output, 8)
+  MBEDTLS_PUT_UINT32_BE(ctx->state[3], output, 12)
+  MBEDTLS_PUT_UINT32_BE(ctx->state[4], output, 16)
 
   return (0);
 }
@@ -327,6 +335,7 @@ int mbedtls_sha1_finish(mbedtls_sha1_context *ctx, unsigned char output[20]) {
 /*
  * output = SHA-1( input buffer )
  */
+__attribute__((unused)) static
 int mbedtls_sha1(const unsigned char *input, size_t ilen,
                  unsigned char output[20]) {
   int ret = MBEDTLS_ERR_ERROR_CORRUPTION_DETECTED;

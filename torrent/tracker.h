@@ -1,22 +1,22 @@
 #pragma once
 
 #include <curl/curl.h>
-#include <curl/easy.h>
 #include <stdint.h>
 
 #include "../pg/pg.h"
 #include "bencode.h"
 
-static const uint8_t peer_id[20] = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
+static uint8_t peer_id[20] = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10,
                                     11, 12, 13, 14, 15, 16, 17, 18, 19, 20};
 
-typedef enum : uint8_t {
+typedef enum {
   TK_ERR_NONE,
   TK_ERR_CURL,
   TK_ERR_BENCODE_PARSE,
   TK_ERR_INVALID_PEERS,
 } tracker_error_t;
 
+__attribute__((unused)) static
 const char *tracker_error_to_string(int err) {
   switch (err) {
     case TK_ERR_NONE:
@@ -28,7 +28,7 @@ const char *tracker_error_to_string(int err) {
     case TK_ERR_INVALID_PEERS:
       return "TK_ERR_INVALID_PEERS";
     default:
-      __builtin_unreachable();
+      assert(0);
   }
 }
 
@@ -55,6 +55,7 @@ typedef struct {
 
 #define TRACKER_MAX_PEERS 50
 
+__attribute__((unused)) static
 tracker_error_t tracker_parse_peer_addresses(
     pg_logger_t *logger, bc_parser_t *parser,
     pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses_ipv4,
@@ -62,14 +63,14 @@ tracker_error_t tracker_parse_peer_addresses(
   if (pg_array_len(parser->kinds) == 0) return TK_ERR_INVALID_PEERS;
   if (parser->kinds[0] != BC_KIND_DICTIONARY) return TK_ERR_INVALID_PEERS;
 
-  uint32_t cur = 1;
+  uint64_t cur = 1;
   const pg_span_t peers_key = pg_span_make_c("peers");
   const pg_span_t peers6_key = pg_span_make_c("peers6");
   const pg_span_t failure_reason_key = pg_span_make_c("failure reason");
   const pg_span_t warning_message_key = pg_span_make_c("warning message");
-  const uint32_t root_len = parser->lengths[0];
+  const uint64_t root_len = parser->lengths[0];
 
-  for (uint32_t i = 0; i < root_len; i += 2) {
+  for (uint64_t i = 0; i < root_len; i += 2) {
     bc_kind_t key_kind = parser->kinds[cur + i];
     pg_span_t key_span = parser->spans[cur + i];
     bc_kind_t value_kind = parser->kinds[cur + i + 1];
@@ -81,8 +82,8 @@ tracker_error_t tracker_parse_peer_addresses(
 
       for (uint64_t j = 0; j < value_span.len; j += 6) {
         tracker_peer_address_ipv4_t addr = {
-            .ip = *(uint32_t *)(&value_span.data[j]),
-            .port = *(uint16_t *)(&value_span.data[j + 4]),
+            .ip = *(uint32_t *)(void*)(&value_span.data[j]),
+            .port = *(uint16_t *)(void*)(&value_span.data[j + 4]),
         };
         pg_array_append(*peer_addresses_ipv4, addr);
         if (pg_array_len(*peer_addresses_ipv4) >= TRACKER_MAX_PEERS)
@@ -94,10 +95,9 @@ tracker_error_t tracker_parse_peer_addresses(
 
       for (uint64_t j = 0; j < value_span.len; j += 6) {
         tracker_peer_address_ipv6_t addr = {
-            .port = *(uint16_t *)(&value_span.data[j + 16]),
+            .port = *(uint16_t *)(void*)(&value_span.data[j + 16]),
         };
         memcpy(addr.ip, &value_span.data[j], 16);
-        __builtin_dump_struct(&addr, &printf);
         pg_array_append(*peer_addresses_ipv6, addr);
         if (pg_array_len(*peer_addresses_ipv6) >= TRACKER_MAX_PEERS)
           return TK_ERR_NONE;
@@ -105,12 +105,12 @@ tracker_error_t tracker_parse_peer_addresses(
     } else if (key_kind == BC_KIND_STRING &&
                pg_span_eq(failure_reason_key, key_span) &&
                value_kind == BC_KIND_STRING) {
-      pg_log_error(logger, "Tracker error: %.*s", value_span.len,
+      pg_log_error(logger, "Tracker error: %.*s", (int)value_span.len,
                    value_span.data);
     } else if (key_kind == BC_KIND_STRING &&
                pg_span_eq(warning_message_key, key_span) &&
                value_kind == BC_KIND_STRING) {
-      pg_log_error(logger, "Tracker warning: %.*s", value_span.len,
+      pg_log_error(logger, "Tracker warning: %.*s", (int)value_span.len,
                    value_span.data);
     }
   }
@@ -118,6 +118,7 @@ tracker_error_t tracker_parse_peer_addresses(
   return TK_ERR_NONE;
 }
 
+__attribute__((unused)) static
 pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
                                          tracker_query_t *q) {
   pg_span_t info_hash_span =
@@ -140,6 +141,7 @@ pg_string_t tracker_build_url_from_query(pg_allocator_t allocator,
   return res;
 }
 
+__attribute__((unused)) static
 uint64_t tracker_on_response_chunk(void *ptr, uint64_t size, uint64_t nmemb,
                                    void *user_data) {
   const uint64_t ptr_len = size * nmemb;
@@ -157,6 +159,7 @@ uint64_t tracker_on_response_chunk(void *ptr, uint64_t size, uint64_t nmemb,
   return new_len;
 }
 
+__attribute__((unused)) static
 tracker_error_t tracker_fetch_peers(
     pg_logger_t *logger, pg_allocator_t allocator, tracker_query_t *q,
     pg_array_t(tracker_peer_address_ipv4_t) * peer_addresses_ipv4,
@@ -177,7 +180,7 @@ tracker_error_t tracker_fetch_peers(
   assert(curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
                           tracker_on_response_chunk) == 0);
 
-  int ret = curl_easy_perform(curl);
+  CURLcode ret = curl_easy_perform(curl);
   if (ret != CURLE_OK) {
     fprintf(stderr, "Failed to contact tracker: url=%s err=%s\n", url,
             curl_easy_strerror(ret));
