@@ -8,7 +8,7 @@
 #define GB_IMPLEMENTATION
 #define GB_STATIC
 #include "../vendor/gb/gb.h"
-#include "vendor/picohttpparser/picohttpparser.h"
+#include "../vendor/picohttpparser/picohttpparser.h"
 
 static void print_usage(int argc, char* argv[]) {
     GB_ASSERT(argc > 0);

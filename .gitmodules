@@ -1,9 +1,6 @@
 [submodule "vendor/gb"]
 	path = vendor/gb
 	url = https://github.com/gaultier/gb.git
-[submodule "http-server/vendor/picohttpparser"]
-	path = http-server/vendor/picohttpparser
-	url = https://github.com/h2o/picohttpparser
 [submodule "clone-gitlab-api/vendor/jsmn"]
 	path = clone-gitlab-api/vendor/jsmn
 	url = https://github.com/zserge/jsmn.git
@@ -22,3 +19,6 @@
 [submodule "vendor/greatest"]
 	path = vendor/greatest
 	url = https://github.com/silentbicycle/greatest.git
+[submodule "vendor/picohttpparser"]
+	path = vendor/picohttpparser
+	url = https://github.com/h2o/picohttpparser
