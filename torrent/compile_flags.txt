@@ -1,6 +1,6 @@
 -std=c99
 -Weverything
 -Wno-used-but-marked-unused
+-isystem/usr/local/include
 -Wno-declaration-after-statement
--isystem /usr/local/include/
-
+-Wno-gnu-zero-variadic-macro-arguments

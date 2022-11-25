@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
 #include <arpa/inet.h>
 #include <inttypes.h>
 #include <math.h>
