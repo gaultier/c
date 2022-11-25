@@ -1,3 +1,5 @@
+#include <_types/_uint32_t.h>
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -9,6 +11,7 @@
 #include <sys/event.h>
 #include <sys/fcntl.h>
 #include <sys/param.h>
+#include <sys/proc.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -35,10 +38,12 @@ static const char pg_colors[2][COL_COUNT][14] = {
 static struct timeval start;
 
 struct process_t {
+  struct process_t *next;
   pg_string_t path_with_namespace;
-  int stderr_fd;
+  // int stderr_fd;
   pid_t pid;
-  pg_string_t err;
+  PG_PAD(4);
+  // pg_string_t err;
 };
 typedef struct process_t process_t;
 
@@ -68,8 +73,8 @@ typedef struct {
 
 static uint64_t atomic_children_spawned_count = 0;
 static bool atomic_child_spawner_finished = false;
-
-static pg_array_t(process_t) processes = {0};
+static process_t *child_processes = NULL;
+static pthread_mutex_t child_processes_mtx = {0};
 
 static void print_usage(int argc, char *argv[]) {
   (void)argc;
@@ -145,24 +150,6 @@ static bool is_directory(const char *path) {
     return false;
   }
   return S_ISDIR(s.st_mode);
-}
-
-static uint64_t str_to_u64(const char *s, uint64_t s_len) {
-  assert(s != NULL);
-
-  uint64_t res = 0;
-  for (uint64_t i = 0; i < s_len; i++) {
-    const char c = s[i];
-    if (pg_char_is_space(c))
-      continue;
-    if (pg_char_is_digit(c)) {
-      const uint8_t v = (uint8_t)(c - '0');
-      res *= 10;
-      res += v;
-    } else
-      return 0;
-  }
-  return res;
 }
 
 static uint64_t on_http_response_body_chunk(void *contents, uint64_t size,
@@ -570,25 +557,37 @@ static void *watch_workers(void *varg) {
 
     children_waited_count += 1;
 
-    const int exit_status = WEXITSTATUS(stat_loc);
+    process_t *child_processes_it = NULL;
+    pthread_mutex_lock(&child_processes_mtx);
+    child_processes_it = child_processes;
+    pthread_mutex_unlock(&child_processes_mtx);
 
+    while (child_processes_it != NULL) {
+      if (child_processes_it->pid == child_pid)
+        break;
+
+      child_processes_it = child_processes_it->next;
+    }
+    assert(child_processes_it != NULL && child_processes_it->pid == child_pid);
+
+    const int exit_status = WEXITSTATUS(stat_loc);
     __atomic_load(&atomic_children_spawned_count, &children_spawned_count,
                   __ATOMIC_SEQ_CST);
     if (exit_status == 0) {
       printf("%s[%" PRIu64 "/%" PRIu64 "] ✓ "
              "%s%s\n",
              pg_colors[is_tty][COL_GREEN], children_waited_count,
-             children_spawned_count,
-             /*process->path_with_namespace*/ "FIXME",
+             children_spawned_count, child_processes_it->path_with_namespace,
              pg_colors[is_tty][COL_RESET]);
     } else {
       printf("%s[%" PRIu64 "/%" PRIu64 "] ❌ "
              "%s (%d): %s%s\n",
              pg_colors[is_tty][COL_RED], children_waited_count,
-             children_spawned_count,
-             /* process->path_with_namespace */ "FIXME", exit_status,
+             children_spawned_count, child_processes_it->path_with_namespace,
+             exit_status,
              /*process->err */ "FIXME", pg_colors[is_tty][COL_RESET]);
     }
+    // TODO: rm process in list
     //    pg_string_free(process->path_with_namespace);
     //   pg_string_free(process->err);
     //  close(process->stderr_fd);
@@ -703,11 +702,15 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
   } else {
     __atomic_fetch_add(&atomic_children_spawned_count, 1, __ATOMIC_SEQ_CST);
     //   close(fds[1]); // Parent does not write
-    process_t process = {.pid = pid,
-                         //                      .stderr_fd = fds[0],
-                         .path_with_namespace = path,
-                         .err = pg_string_make_reserve(pg_heap_allocator(), 0)};
-    pg_array_append(processes, process);
+    process_t *process = malloc(sizeof(process_t)); // FIXME: custom allocator
+    process->pid = pid;
+    //                      .stderr_fd = fds[0],
+    process->path_with_namespace = path;
+    //.err = pg_string_make_reserve(pg_heap_allocator(), 0)
+    pthread_mutex_lock(&child_processes_mtx);
+    process->next = child_processes;
+    child_processes = process;
+    pthread_mutex_unlock(&child_processes_mtx);
   }
   return 0;
 }
@@ -736,8 +739,6 @@ int main(int argc, char *argv[]) {
   gettimeofday(&start, NULL);
   options_t options = {0};
   options_parse_from_cli(argc, argv, &options);
-
-  pg_array_init_reserve(processes, 10000, pg_heap_allocator());
 
   int res = 0;
 
