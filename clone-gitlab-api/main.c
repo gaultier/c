@@ -229,7 +229,9 @@ static void api_init(api_t *api, options_t *options) {
   assert(options != NULL);
   assert(options->gitlab_domain != NULL);
 
-  api->response_body = pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
+  api->response_body = pg_string_make_reserve(
+      pg_heap_allocator(),
+      /* Empirically observed response size is ~86KiB */ 100 * 1000);
 
   pg_array_init_reserve(api->tokens, 8 * 1000, pg_heap_allocator());
 
@@ -386,13 +388,8 @@ static int api_query_projects(api_t *api) {
   assert(api != NULL);
   assert(api->url != NULL);
 
-  {
-    assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) ==
-           CURLE_OK);
-  }
+  assert(curl_easy_setopt(api->http_handle, CURLOPT_URL, api->url) == CURLE_OK);
 
-  api->response_body =
-      pg_string_make_space_for(api->response_body, MAX_URL_LEN);
   CURLcode res = 0;
   if ((res = curl_easy_perform(api->http_handle)) != 0) {
     int error;
