@@ -16,7 +16,7 @@
 #include "../pg/pg.h"
 #define JSMN_STATIC
 #include "../vendor/sds/sds.c"
-#include "vendor/jsmn/jsmn.h"
+#include "../vendor/jsmn/jsmn.h"
 
 #define MAX_URL_LEN 4096
 

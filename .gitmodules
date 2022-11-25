@@ -19,3 +19,6 @@
 [submodule "vendor/picohttpparser"]
 	path = vendor/picohttpparser
 	url = https://github.com/h2o/picohttpparser
+[submodule "vendor/jsmn"]
+	path = vendor/jsmn
+	url = https://github.com/zserge/jsmn.git
