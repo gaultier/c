@@ -4,7 +4,7 @@
 #include "peer.h"
 #include "tracker.h"
 #include "uv.h"
-#include "vendor/greatest/greatest.h"
+#include "../vendor/greatest/greatest.h"
 
 static uint8_t info_hash[20] = {0};
 static const uint8_t handshake_header[] = {

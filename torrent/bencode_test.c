@@ -1,6 +1,6 @@
 #include "bencode.h"
 
-#include "vendor/greatest/greatest.h"
+#include "../vendor/greatest/greatest.h"
 
 TEST test_bc_parse_number(void) {
   {
