@@ -351,6 +351,16 @@ static int api_fetch_projects(api_t *api) {
 static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
                           const options_t *options);
 
+static void sanitize_and_flatten_path(pg_span_t path, char replacement) {
+  for (uint64_t i = 0; i < path.len; i++) {
+    const char c = path.data[i];
+    if (pg_char_is_alphanumeric(c) || c == '-' || c == '_')
+      continue;
+
+    path.data[i] = replacement;
+  }
+}
+
 static int api_parse_and_upsert_projects(api_t *api, const options_t *options) {
   assert(api != NULL);
 
@@ -417,15 +427,12 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options) {
       path_with_namespace =
           pg_string_make_length(pg_heap_allocator(), value.data, value.len);
 
+      sanitize_and_flatten_path(value, '.');
       // `execvp(2)` expects null terminated strings
       // This is safe to do because we override the terminating double
       // quote which no one cares about
       fs_path = value.data;
       fs_path[value.len] = 0;
-      for (uint64_t j = 0; j < value.len; j++) {
-        if (fs_path[j] == '/')
-          fs_path[j] = '.';
-      }
 
       i++;
       continue;
