@@ -1,3 +1,4 @@
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -62,6 +63,7 @@ typedef struct {
   pg_string_t url;
   pg_array_t(jsmntok_t) tokens;
   struct curl_slist *curl_headers;
+  pg_span_t gitlab_domain;
   bool finished;
   PG_PAD(7);
 } api_t;
@@ -110,28 +112,6 @@ static void print_usage(int argc, char *argv[]) {
       argv[0]);
 }
 
-
-static bool str_iequal(const char *a, uint64_t a_len, const char *b,
-                       uint64_t b_len) {
-  assert(a != NULL);
-  assert(b != NULL);
-
-  if (a_len != b_len)
-    return false;
-  for (uint64_t i = 0; i < a_len; i++) {
-    if (pg_char_to_lower(a[i]) != pg_char_to_lower(b[i]))
-      return false;
-  }
-  return true;
-}
-
-static bool str_iequal_c(const char *a, uint64_t a_len, const char *b0) {
-  assert(a != NULL);
-  assert(b0 != NULL);
-
-  return str_iequal(a, a_len, b0, strlen(b0));
-}
-
 static uint64_t on_http_response_body_chunk(void *contents, uint64_t size,
                                             uint64_t nmemb, void *userp) {
   assert(contents != NULL);
@@ -150,56 +130,43 @@ static uint64_t on_http_response_body_chunk(void *contents, uint64_t size,
   return real_size;
 }
 
+static void api_set_url(api_t *api, pg_span_t page) {
+  pg_string_clear(api->url);
+
+  api->url = pg_string_append_length(api->url, api->gitlab_domain.data,
+                                     api->gitlab_domain.len);
+  api->url = pg_string_appendc(
+      api->url, "/api/v4/"
+                "projects?statistics=false&top_level=&with_custom_"
+                "attributes=false&simple=true&per_page=100&all_available="
+                "true&order_by=id&sort=asc&page=");
+  api->url = pg_string_append_length(api->url, page.data, page.len);
+}
+
 static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
                           void *userdata) {
   assert(buffer != NULL);
   assert(userdata != NULL);
   api_t *const api = userdata;
 
-  const uint64_t real_size = nitems * size;
-  const char *val = memchr(buffer, ':', real_size);
-  if (val == NULL)
-    return real_size; // Could be HTTP/1.1 OK, skip
+  pg_span_t headers = {.data = buffer, .len = nitems * size};
 
-  assert(val > buffer);
-  assert(val < buffer + real_size);
-  const uint64_t key_len = (uint64_t)(val - buffer);
-  val++; // Skip `:`
-  uint64_t val_len = (uint64_t)(buffer + real_size - val);
+  pg_span_t header_key = {0}, header_value = {0};
+  const pg_span_t header_next_page = pg_span_make_c("X-Next-Page");
+  pg_span_split_at_first(headers, ':', &header_key, &header_value);
+  if (header_value.len == 0)
+    return 0; // Should not happen? Invalid response from API!
 
-  if (str_iequal_c(buffer, key_len, "Link")) {
-    const char needle[] = ">; rel=\"next\"";
-    const uint64_t needle_len = sizeof(needle) - 1;
-    char *end = pg_memmem(val, val_len, needle, needle_len);
-    if (end == NULL) {
-      // Finished - no more pages
-      api->finished = true;
-      return real_size;
+  if (pg_span_eq(header_key, header_next_page)) {
+    bool valid = false;
+    const uint64_t next_page = pg_span_parse_u64_decimal(header_value, &valid);
+    if (!valid || next_page <= 1) // TODO
+    {
     }
 
-    char *start_header = end;
-    while (start_header > val && *start_header != '<')
-      start_header--;
-    if (start_header == val) {
-      fprintf(stderr, "Failed to parse HTTP header Link: %.*s\n", (int)val_len,
-              val);
-      return 0;
-    }
-
-    start_header++; // Skip `<`
-    val_len = (uint64_t)(end - start_header);
-    val = start_header;
-
-    if (val_len > MAX_URL_LEN) {
-      fprintf(stderr, "Failed to parse HTTP header Link, too long: %.*s\n",
-              (int)val_len, val);
-      return 0;
-    }
-
-    assert(api->url != NULL);
-    pg_string_clear(api->url);
-    api->url = pg_string_append_length(api->url, val, val_len);
+    api_set_url(api, header_value);
   }
+
   return nitems * size;
 }
 
@@ -220,6 +187,7 @@ static void api_init(api_t *api, options_t *options) {
   assert(options != NULL);
   assert(options->gitlab_domain != NULL);
 
+  api->gitlab_domain = pg_span_make(options->gitlab_domain);
   api->response_body = pg_string_make_reserve(
       pg_heap_allocator(),
       /* Empirically observed response size is ~86KiB at most */ 100 * 1000);
@@ -229,12 +197,8 @@ static void api_init(api_t *api, options_t *options) {
   api->http_handle = curl_easy_init();
   assert(api->http_handle != NULL);
 
-  api->url = pg_string_duplicate(pg_heap_allocator(), options->gitlab_domain);
-  api->url = pg_string_appendc(
-      api->url, "/api/v4/"
-                "projects?statistics=false&top_level=&with_custom_"
-                "attributes=false&simple=true&per_page=100&all_available="
-                "true&order_by=id&sort=asc");
+    api_set_url(api, pg_span_make_c("1"));
+
   assert(curl_easy_setopt(api->http_handle, CURLOPT_SOCKOPTFUNCTION,
                           on_curl_socktopt) == CURLE_OK);
   assert(curl_easy_setopt(api->http_handle, CURLOPT_VERBOSE, verbose) ==

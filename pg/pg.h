@@ -875,6 +875,32 @@ __attribute__((unused)) static int64_t pg_span_parse_i64_decimal(pg_span_t span,
   return sign * res;
 }
 
+__attribute__((unused)) static uint64_t pg_span_parse_u64_decimal(pg_span_t span,
+                                                                 bool *valid) {
+  pg_span_trim(&span);
+
+  uint64_t res = 0;
+
+  if (pg_span_peek_left(span, NULL) == '-') {
+    *valid=false;
+    return 0;
+  } else if (pg_span_peek_left(span, NULL) == '+') {
+    pg_span_consume_left(&span, 1);
+  }
+
+  for (uint64_t i = 0; i < span.len; i++) {
+    if (!pg_char_is_digit(span.data[i])) {
+      *valid = false;
+      return 0;
+    }
+
+    res *= 10;
+    res += (uint8_t)span.data[i] - '0';
+  }
+  *valid = true;
+  return  res;
+}
+
 // -------------------------- Log
 
 typedef enum {
