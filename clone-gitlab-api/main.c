@@ -116,7 +116,8 @@ static uint64_t on_http_response_body_chunk(void *contents, uint64_t size,
 
   pg_string_t *response_body = userp;
   if (pg_string_len(*response_body) >= 1 * 1024 * 1024) {
-    fprintf(stderr, "Received too big of a response, limit is 1MiB: %llu\n",
+    fprintf(stderr,
+            "Received too big of a response, limit is 1MiB: %" PRIu64 "\n",
             pg_string_len(*response_body));
     return 0;
   }
