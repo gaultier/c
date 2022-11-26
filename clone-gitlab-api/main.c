@@ -277,17 +277,6 @@ static void api_init(api_t *api, options_t *options) {
   }
 }
 
-static void api_destroy(api_t *api) {
-  assert(api != NULL);
-
-  pg_string_free(api->url);
-  pg_string_free(api->response_body);
-  pg_array_free(api->tokens);
-
-  curl_slist_free_all(api->curl_headers);
-  curl_easy_cleanup(api->http_handle);
-}
-
 static void options_parse_from_cli(int argc, char *argv[], options_t *options) {
   assert(argv != NULL);
   assert(options != NULL);
@@ -735,10 +724,11 @@ static int api_fetch_projects(api_t *api, const options_t *options,
   pg_string_clear(api->response_body);
 
   int res = 0;
-  if ((res = api_query_projects(api)) != 0) return res;
+  if ((res = api_query_projects(api)) != 0)
+    return res;
 
-
-  return api_parse_and_upsert_projects(api, options, projects_handled);}
+  return api_parse_and_upsert_projects(api, options, projects_handled);
+}
 
 int main(int argc, char *argv[]) {
   gettimeofday(&start, NULL);
@@ -746,8 +736,6 @@ int main(int argc, char *argv[]) {
   options_parse_from_cli(argc, argv, &options);
 
   pg_array_init_reserve(concurrent_child_processes, 200, pg_heap_allocator());
-
-  int res = 0;
 
   api_t api = {0};
   api_init(&api, &options);
@@ -758,20 +746,17 @@ int main(int argc, char *argv[]) {
     return errno;
   }
 
+  int res = 0;
   if ((res = change_directory(options.root_directory)) != 0)
     return res;
 
   printf("Changed directory to: %s\n", options.root_directory);
 
-  // Start process exit watcher thread, only after we know from the first API
-  // query how many items there are
   pthread_t process_exit_watcher = {0};
-  {
-    if (pthread_create(&process_exit_watcher, NULL, watch_workers, NULL) != 0) {
-      fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
-              strerror(errno));
-      goto end;
-    }
+  if (pthread_create(&process_exit_watcher, NULL, watch_workers, NULL) != 0) {
+    fprintf(stderr, "Failed to watch projects cloning: err=%s\n",
+            strerror(errno));
+    goto end;
   }
 
   uint64_t projects_handled = 0;
@@ -785,7 +770,6 @@ int main(int argc, char *argv[]) {
 end:
   if ((res = change_directory(cwd)) != 0)
     return res;
-  api_destroy(&api);
 
   pthread_join(process_exit_watcher, NULL);
 }
