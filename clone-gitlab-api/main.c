@@ -139,24 +139,15 @@ static bool str_iequal_c(const char *a, uint64_t a_len, const char *b0) {
   return str_iequal(a, a_len, b0, strlen(b0));
 }
 
-static bool is_directory(const char *path) {
-  assert(path != NULL);
-
-  struct stat s = {0};
-  if (stat(path, &s) == -1) {
-    return false;
-  }
-  return S_ISDIR(s.st_mode);
-}
-
 static uint64_t on_http_response_body_chunk(void *contents, uint64_t size,
                                             uint64_t nmemb, void *userp) {
   assert(contents != NULL);
   assert(userp != NULL);
 
   pg_string_t *response_body = userp;
-  if (pg_string_len(*response_body) >= 1*1024*1024) {
-    fprintf(stderr, "Received too big of a response, limit is 1MiB: %llu\n", pg_string_len(*response_body));
+  if (pg_string_len(*response_body) >= 1 * 1024 * 1024) {
+    fprintf(stderr, "Received too big of a response, limit is 1MiB: %llu\n",
+            pg_string_len(*response_body));
     return 0;
   }
 
@@ -695,7 +686,7 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
     }
     close(stderr_pipe[1]); // Not needed anymore
 
-    if (is_directory(fs_path)) {
+    if (pg_path_is_directory(fs_path)) {
       worker_update_project(fs_path, git_url, options);
     } else {
       worker_clone_project(fs_path, git_url, options);

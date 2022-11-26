@@ -1358,3 +1358,14 @@ end:
 
   return true;
 }
+// --------------------- Path
+
+__attribute__((unused)) static bool pg_path_is_directory(const char *path) {
+  assert(path != NULL);
+
+  struct stat s = {0};
+  if (stat(path, &s) == -1) {
+    return false;
+  }
+  return S_ISDIR(s.st_mode);
+}
