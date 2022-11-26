@@ -392,8 +392,7 @@ static int api_query_projects(api_t *api) {
 static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
                           const options_t *options);
 
-static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
-                                         uint64_t *projects_handled) {
+static int api_parse_and_upsert_projects(api_t *api, const options_t *options) {
   assert(api != NULL);
 
   jsmn_parser p;
@@ -494,8 +493,6 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options,
                                   options)) != 0)
           return res;
         git_url = NULL;
-
-        *projects_handled += 1;
       }
 
       i++;
@@ -716,8 +713,7 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
   return 0;
 }
 
-static int api_fetch_projects(api_t *api, const options_t *options,
-                              uint64_t *projects_handled) {
+static int api_fetch_projects(api_t *api, const options_t *options) {
   assert(api != NULL);
   assert(options != NULL);
 
@@ -727,7 +723,7 @@ static int api_fetch_projects(api_t *api, const options_t *options,
   if ((res = api_query_projects(api)) != 0)
     return res;
 
-  return api_parse_and_upsert_projects(api, options, projects_handled);
+  return api_parse_and_upsert_projects(api, options);
 }
 
 int main(int argc, char *argv[]) {
@@ -759,9 +755,7 @@ int main(int argc, char *argv[]) {
     goto end;
   }
 
-  uint64_t projects_handled = 0;
-  while (!api.finished &&
-         (res = api_fetch_projects(&api, &options, &projects_handled)) == 0) {
+  while (!api.finished && (res = api_fetch_projects(&api, &options)) == 0) {
   }
 
   bool btrue = true;
