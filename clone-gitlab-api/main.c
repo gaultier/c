@@ -617,8 +617,7 @@ static int worker_update_project(const char *fs_path, const pg_string_t git_url,
             argv[0], git_url, strerror(errno));
     exit(errno);
   }
-  assert(0 && "Unreachable");
-  return 0;
+  __builtin_unreachable();
 }
 
 static int worker_clone_project(char *fs_path, const pg_string_t git_url,
@@ -636,8 +635,7 @@ static int worker_clone_project(char *fs_path, const pg_string_t git_url,
             argv[0], git_url, strerror(errno));
     exit(errno);
   }
-  assert(0 && "Unreachable");
-  return 0;
+  __builtin_unreachable();
 }
 
 static int change_directory(const char *path) {
@@ -757,7 +755,8 @@ int main(int argc, char *argv[]) {
     goto end;
   }
 
-  while (!api.finished && (res = api_fetch_and_upsert_projects(&api, &options)) == 0) {
+  while (!api.finished &&
+         (res = api_fetch_and_upsert_projects(&api, &options)) == 0) {
   }
 
   bool btrue = true;
