@@ -1,4 +1,3 @@
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -49,8 +48,8 @@ typedef enum {
 } git_clone_method_t;
 
 typedef struct {
-  pg_string_t root_directory;
-  pg_string_t api_token;
+  pg_span_t root_directory;
+  pg_span_t api_token;
   pg_string_t gitlab_domain;
   git_clone_method_t clone_method;
   PG_PAD(4);
@@ -164,7 +163,7 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
     return real_size;
 
   pg_span_consume_left(&header_value, 1); // Consume leading `:`
-  pg_span_trim(&header_value); // Remove '\r\n' and other space
+  pg_span_trim(&header_value);            // Remove '\r\n' and other space
 
   bool valid = false;
   const uint64_t next_page = pg_span_parse_u64_decimal(header_value, &valid);
@@ -227,10 +226,10 @@ static void api_init(api_t *api, options_t *options) {
   assert(curl_easy_setopt(api->http_handle, CURLOPT_HEADERDATA, api) ==
          CURLE_OK);
 
-  if (options->api_token != NULL) {
+  if (options->api_token.len > 0) {
     static char token_header[150] = "";
     snprintf(token_header, sizeof(token_header) - 1, "PRIVATE-TOKEN: %s",
-             options->api_token);
+             options->api_token.data);
 
     api->curl_headers = curl_slist_append(NULL, token_header);
     assert(api->curl_headers != NULL);
@@ -277,7 +276,7 @@ static void options_parse_from_cli(int argc, char *argv[], options_t *options) {
       break;
     }
     case 'd': {
-      options->root_directory = pg_string_make(pg_heap_allocator(), optarg);
+      options->root_directory = pg_span_make_c(optarg);
       break;
     }
     case 't': {
@@ -290,7 +289,7 @@ static void options_parse_from_cli(int argc, char *argv[], options_t *options) {
         fprintf(stderr, "Token is too long: maximum 128 characters\n");
         exit(EINVAL);
       }
-      options->api_token = pg_string_make(pg_heap_allocator(), optarg);
+      options->api_token = pg_span_make_c(optarg);
       break;
     }
     case 'u': {
@@ -321,7 +320,7 @@ static void options_parse_from_cli(int argc, char *argv[], options_t *options) {
     }
   }
 
-  if (options->root_directory == NULL) {
+  if (options->root_directory.len == 0) {
     fprintf(stderr, "Missing required --root-directory CLI argument.\n");
     exit(EINVAL);
   }
@@ -698,10 +697,10 @@ int main(int argc, char *argv[]) {
   }
 
   int res = 0;
-  if ((res = change_directory(options.root_directory)) != 0)
+  if ((res = change_directory(options.root_directory.data)) != 0)
     return res;
 
-  printf("Changed directory to: %s\n", options.root_directory);
+  printf("Changed directory to: %s\n", options.root_directory.data);
 
   pthread_t process_exit_watcher = {0};
   if (pthread_create(&process_exit_watcher, NULL, watch_workers, NULL) != 0) {
