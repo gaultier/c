@@ -1,4 +1,3 @@
-#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
