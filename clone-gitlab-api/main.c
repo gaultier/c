@@ -154,8 +154,13 @@ static uint64_t on_http_response_body_chunk(void *contents, uint64_t size,
   assert(contents != NULL);
   assert(userp != NULL);
 
-  const uint64_t real_size = size * nmemb;
   pg_string_t *response_body = userp;
+  if (pg_string_len(*response_body) >= 1*1024*1024) {
+    fprintf(stderr, "Received too big of a response, limit is 1MiB: %llu\n", pg_string_len(*response_body));
+    return 0;
+  }
+
+  const uint64_t real_size = size * nmemb;
   *response_body = pg_string_append_length(*response_body, contents, real_size);
 
   return real_size;
@@ -214,6 +219,7 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
   return nitems * size;
 }
 
+// Nice to have: child process cannot access curl sockets
 static int on_curl_socktopt(void *clientp, curl_socket_t curlfd,
                             curlsocktype purpose) {
   (void)clientp;
@@ -395,7 +401,7 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
 static int api_parse_and_upsert_projects(api_t *api, const options_t *options) {
   assert(api != NULL);
 
-  jsmn_parser p;
+  jsmn_parser p = {0};
 
   pg_array_clear(api->tokens);
   int res = 0;
@@ -520,7 +526,7 @@ static void *watch_workers(void *varg) {
         __atomic_load(&atomic_child_spawner_finished,
                       &children_spawner_finished, __ATOMIC_SEQ_CST);
 
-        if (children_spawner_finished)
+        if (children_spawner_finished) // Done
           break;
         else {
           // Might happen temporarily. Could use pthread_cond_wait instead but
