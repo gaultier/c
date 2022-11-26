@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -747,6 +748,19 @@ __attribute__((unused)) static bool pg_span_eq(pg_span_t a, pg_span_t b) {
   return a.len == b.len && memcmp(a.data, b.data, a.len) == 0;
 }
 
+__attribute__((unused)) static bool pg_span_ieq(pg_span_t a, pg_span_t b) {
+  if (a.len != b.len)
+    return false;
+
+  for (uint64_t i = 0; i < a.len; i++) {
+    char a_c = pg_char_to_lower(a.data[i]);
+    char b_c = pg_char_to_lower(b.data[i]);
+    if (a_c != b_c)
+      return false;
+  }
+  return true;
+}
+
 __attribute__((unused)) static int64_t pg_span_parse_i64_hex(pg_span_t span,
                                                              bool *valid) {
   pg_span_trim(&span);
@@ -875,14 +889,14 @@ __attribute__((unused)) static int64_t pg_span_parse_i64_decimal(pg_span_t span,
   return sign * res;
 }
 
-__attribute__((unused)) static uint64_t pg_span_parse_u64_decimal(pg_span_t span,
-                                                                 bool *valid) {
+__attribute__((unused)) static uint64_t
+pg_span_parse_u64_decimal(pg_span_t span, bool *valid) {
   pg_span_trim(&span);
 
   uint64_t res = 0;
 
   if (pg_span_peek_left(span, NULL) == '-') {
-    *valid=false;
+    *valid = false;
     return 0;
   } else if (pg_span_peek_left(span, NULL) == '+') {
     pg_span_consume_left(&span, 1);
@@ -898,7 +912,7 @@ __attribute__((unused)) static uint64_t pg_span_parse_u64_decimal(pg_span_t span
     res += (uint8_t)span.data[i] - '0';
   }
   *valid = true;
-  return  res;
+  return res;
 }
 
 // -------------------------- Log

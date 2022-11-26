@@ -1,3 +1,4 @@
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <curl/curl.h>
 #include <errno.h>
@@ -151,20 +152,23 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
   pg_span_t headers = {.data = buffer, .len = nitems * size};
 
   pg_span_t header_key = {0}, header_value = {0};
-  const pg_span_t header_next_page = pg_span_make_c("X-Next-Page");
+  const pg_span_t header_next_page = pg_span_make_c("x-next-page");
+  const uint64_t real_size = nitems * size;
+
   pg_span_split_at_first(headers, ':', &header_key, &header_value);
   if (header_value.len == 0)
-    return 0; // Should not happen? Invalid response from API!
+    return real_size; // Could happen on `HTTP/1.1 200 OK`
 
-  if (pg_span_eq(header_key, header_next_page)) {
-    bool valid = false;
-    const uint64_t next_page = pg_span_parse_u64_decimal(header_value, &valid);
+  if (!(pg_span_ieq(header_key, header_next_page))) // HTTP headers are case-insensitive
+    return real_size;
 
-    if (!valid || next_page <= 1)
-      api->finished = true; // No more pages
-    else
-      api_set_url(api, header_value);
-  }
+  bool valid = false;
+  const uint64_t next_page = pg_span_parse_u64_decimal(header_value, &valid);
+
+  if (!valid || next_page <= 1)
+    api->finished = true; // No more pages
+  else
+    api_set_url(api, header_value);
 
   return nitems * size;
 }
