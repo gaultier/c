@@ -34,13 +34,11 @@ static const char pg_colors[2][COL_COUNT][14] = {
 
 static struct timeval start;
 
-struct process_t {
-  struct process_t *next;
+typedef struct {
   pg_string_t path_with_namespace;
   int stderr_fd;
   pid_t pid;
-};
-typedef struct process_t process_t;
+} process_t;
 
 typedef enum {
   GCM_SSH = 0,
