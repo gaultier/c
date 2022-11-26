@@ -641,7 +641,7 @@ static int worker_clone_project(char *fs_path, pg_string_t git_url,
   return 0;
 }
 
-static int change_directory(char *path) {
+static int change_directory(const char *path) {
   assert(path != NULL);
 
   if (chdir(path) == -1) {
@@ -740,8 +740,8 @@ int main(int argc, char *argv[]) {
   api_t api = {0};
   api_init(&api, &options);
 
-  static char cwd[4096] = "";
-  if (getcwd(cwd, sizeof(cwd)) == NULL) {
+  const char *const cwd = getcwd(NULL, 0);
+  if (cwd == NULL) {
     fprintf(stderr, "Failed to getcwd(2): err=%s\n", strerror(errno));
     return errno;
   }
