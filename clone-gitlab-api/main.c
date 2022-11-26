@@ -579,7 +579,7 @@ static void *watch_workers(void *varg) {
              "%s (%d): %s%s\n",
              pg_colors[is_tty][COL_RED], children_waited_count,
              children_spawned_count, process.path_with_namespace, exit_status,
-             stderr_read > 0 ? child_proc_stderr : "(unknownn)",
+             stderr_read > 0 ? child_proc_stderr : "(unknown)",
              pg_colors[is_tty][COL_RESET]);
     }
 
