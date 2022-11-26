@@ -110,13 +110,6 @@ static void print_usage(int argc, char *argv[]) {
       argv[0]);
 }
 
-static bool str_equal(const char *a, uint64_t a_len, const char *b,
-                      uint64_t b_len) {
-  assert(a != NULL);
-  assert(b != NULL);
-
-  return a_len == b_len && memcmp(a, b, a_len) == 0;
-}
 
 static bool str_iequal(const char *a, uint64_t a_len, const char *b,
                        uint64_t b_len) {
@@ -429,15 +422,11 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options) {
     return EINVAL;
   }
 
-  const char key_path_with_namespace[] = "path_with_namespace";
-  const uint64_t key_path_with_namespace_len =
-      sizeof("path_with_namespace") - 1;
-  const char clone_method_fields[][20] = {
-      [GCM_SSH] = "ssh_url_to_repo",
-      [GCM_HTTPS] = "http_url_to_repo",
-  };
-  const char *key_git_url = clone_method_fields[options->clone_method];
-  const uint64_t key_git_url_len = strlen(key_git_url);
+  const pg_span_t key_path_with_namespace =
+      pg_span_make_c("path_with_namespace");
+  const pg_span_t key_git_url =
+      pg_span_make_c(options->clone_method == GCM_SSH ? "ssh_url_to_repo"
+                                                      : "http_url_to_repo");
 
   char *fs_path = NULL;
   pg_string_t path_with_namespace = NULL;
@@ -450,37 +439,34 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options) {
     if (!(cur->type == JSMN_STRING && next->type == JSMN_STRING))
       continue;
 
-    char *const cur_s = &api->response_body[cur->start];
-    const uint64_t cur_s_len = (uint64_t)(cur->end - cur->start);
-    char *const next_s = &api->response_body[next->start];
-    const uint64_t next_s_len = (uint64_t)(next->end - next->start);
-
-    if (str_equal(cur_s, cur_s_len, key_path_with_namespace,
-                  key_path_with_namespace_len)) {
+    pg_span_t key = {.data = api->response_body + cur->start,
+                     .len = (uint64_t)(cur->end - cur->start)};
+    pg_span_t value = {.data = api->response_body + next->start,
+                       .len = (uint64_t)(next->end - next->start)};
+    if (pg_span_eq(key, key_path_with_namespace)) {
       field_count++;
       path_with_namespace =
-          pg_string_make_length(pg_heap_allocator(), next_s, next_s_len);
+          pg_string_make_length(pg_heap_allocator(), value.data, value.len);
 
       // `execvp(2)` expects null terminated strings
       // This is safe to do because we override the terminating double
       // quote which no one cares about
-      fs_path = next_s;
-      fs_path[next_s_len] = 0;
-      for (uint64_t j = 0; j < next_s_len; j++) {
+      fs_path = value.data;
+      fs_path[value.len] = 0;
+      for (uint64_t j = 0; j < value.len; j++) {
         if (fs_path[j] == '/')
           fs_path[j] = '.';
       }
 
       i++;
       continue;
-    }
-    if (str_equal(cur_s, cur_s_len, key_git_url, key_git_url_len)) {
+    } else if (pg_span_eq(key, key_git_url)) {
       field_count++;
-      git_url = next_s;
+      git_url = value.data;
       // `execvp(2)` expects null terminated strings
       // This is safe to do because we override the terminating double
       // quote which no one cares about
-      git_url[next_s_len] = 0;
+      git_url[value.len] = 0;
 
       if (field_count > 0 && field_count % 2 == 0) {
         assert(fs_path != NULL);
