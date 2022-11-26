@@ -159,8 +159,12 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
   if (header_value.len == 0)
     return real_size; // Could happen on `HTTP/1.1 200 OK`
 
-  if (!(pg_span_ieq(header_key, header_next_page))) // HTTP headers are case-insensitive
+  if (!(pg_span_ieq(header_key,
+                    header_next_page))) // HTTP headers are case-insensitive
     return real_size;
+
+  pg_span_consume_left(&header_value, 1); // Consume leading `:`
+  pg_span_trim(&header_value); // Remove '\r\n' and other space
 
   bool valid = false;
   const uint64_t next_page = pg_span_parse_u64_decimal(header_value, &valid);
