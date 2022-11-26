@@ -689,7 +689,7 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
     return errno;
   }
 
-  pid_t pid = fork();
+  const pid_t pid = fork();
   if (pid == -1) {
     fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
     return errno;
@@ -712,7 +712,7 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
   } else {
     close(stderr_pipe[1]); // Parent does not write
 
-    process_t process = {
+    const process_t process = {
         .pid = pid,
         .stderr_fd = stderr_pipe[0],
         .path_with_namespace = path,
@@ -732,20 +732,13 @@ static int api_fetch_projects(api_t *api, const options_t *options,
   assert(api != NULL);
   assert(options != NULL);
 
-  int res = 0;
   pg_string_clear(api->response_body);
 
-  if ((res = api_query_projects(api)) != 0) {
-    return res;
-  }
+  int res = 0;
+  if ((res = api_query_projects(api)) != 0) return res;
 
-  if ((res = api_parse_and_upsert_projects(api, options, projects_handled)) !=
-      0) {
-    return res;
-  }
 
-  return 0;
-}
+  return api_parse_and_upsert_projects(api, options, projects_handled);}
 
 int main(int argc, char *argv[]) {
   gettimeofday(&start, NULL);
