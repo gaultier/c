@@ -369,7 +369,7 @@ static void options_parse_from_cli(int argc, char *argv[], options_t *options) {
   }
 }
 
-static int api_query_projects(api_t *api) {
+static int api_fetch_projects(api_t *api) {
   assert(api != NULL);
   assert(api->url != NULL);
 
@@ -597,7 +597,7 @@ static void *watch_workers(void *varg) {
   return NULL;
 }
 
-static int worker_update_project(char *fs_path, pg_string_t git_url,
+static int worker_update_project(const char *fs_path, const pg_string_t git_url,
                                  const options_t *options) {
   assert(fs_path != NULL);
   assert(git_url != NULL);
@@ -612,15 +612,16 @@ static int worker_update_project(char *fs_path, pg_string_t git_url,
   char *const argv[] = {"git", "pull", "--quiet", "--no-tags", 0};
 
   if (execvp("git", argv) == -1) {
-    fprintf(stderr, "Failed to pull: git_url=%s err=%s\n", git_url,
-            strerror(errno));
+    fprintf(stderr,
+            "Failed to spawn %s as child process to pull: git_url=%s err=%s\n",
+            argv[0], git_url, strerror(errno));
     exit(errno);
   }
   assert(0 && "Unreachable");
   return 0;
 }
 
-static int worker_clone_project(char *fs_path, pg_string_t git_url,
+static int worker_clone_project(char *fs_path, const pg_string_t git_url,
                                 const options_t *options) {
   assert(fs_path != NULL);
   assert(git_url != NULL);
@@ -630,8 +631,9 @@ static int worker_clone_project(char *fs_path, pg_string_t git_url,
                         git_url, fs_path, 0};
 
   if (execvp("git", argv) == -1) {
-    fprintf(stderr, "Failed to clone: git_url=%s err=%s\n", git_url,
-            strerror(errno));
+    fprintf(stderr,
+            "Failed to spawn %s as child process to clone: git_url=%s err=%s\n",
+            argv[0], git_url, strerror(errno));
     exit(errno);
   }
   assert(0 && "Unreachable");
@@ -694,7 +696,7 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
     } else {
       worker_clone_project(fs_path, git_url, options);
     }
-    assert(0 && "Unreachable");
+    __builtin_unreachable();
   } else {
     close(stderr_pipe[1]); // Parent does not write
 
@@ -713,14 +715,14 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
   return 0;
 }
 
-static int api_fetch_projects(api_t *api, const options_t *options) {
+static int api_fetch_and_upsert_projects(api_t *api, const options_t *options) {
   assert(api != NULL);
   assert(options != NULL);
 
   pg_string_clear(api->response_body);
 
   int res = 0;
-  if ((res = api_query_projects(api)) != 0)
+  if ((res = api_fetch_projects(api)) != 0)
     return res;
 
   return api_parse_and_upsert_projects(api, options);
@@ -755,7 +757,7 @@ int main(int argc, char *argv[]) {
     goto end;
   }
 
-  while (!api.finished && (res = api_fetch_projects(&api, &options)) == 0) {
+  while (!api.finished && (res = api_fetch_and_upsert_projects(&api, &options)) == 0) {
   }
 
   bool btrue = true;
