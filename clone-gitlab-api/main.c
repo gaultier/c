@@ -67,7 +67,7 @@ typedef struct {
 } api_t;
 
 static bool atomic_child_spawner_finished = false;
-static pthread_mutex_t child_processes_mtx = {0};
+static pthread_mutex_t child_processes_mtx = PTHREAD_MUTEX_INITIALIZER;
 // Use child_processes_mtx to access
 static pg_array_t(process_t) concurrent_child_processes = {0};
 // Use child_processes_mtx to access
@@ -753,7 +753,6 @@ int main(int argc, char *argv[]) {
   options_parse_from_cli(argc, argv, &options);
 
   pg_array_init_reserve(concurrent_child_processes, 200, pg_heap_allocator());
-  pthread_mutex_init(&child_processes_mtx, NULL);
 
   int res = 0;
 
