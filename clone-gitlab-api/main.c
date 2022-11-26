@@ -66,10 +66,13 @@ typedef struct {
   PG_PAD(7);
 } api_t;
 
-static uint64_t atomic_children_spawned_count = 0;
 static bool atomic_child_spawner_finished = false;
-static process_t *child_processes = NULL;
 static pthread_mutex_t child_processes_mtx = {0};
+// Use child_processes_mtx to access
+static pg_array_t(process_t) concurrent_child_processes = {0};
+  // Use child_processes_mtx to access
+static uint64_t concurrent_children_spawned_count =
+    0; 
 
 static void print_usage(int argc, char *argv[]) {
   (void)argc;
@@ -548,32 +551,39 @@ static void *watch_workers(void *varg) {
 
     children_waited_count += 1;
 
-    pthread_mutex_lock(&child_processes_mtx);
-    process_t **child_proc_next = &child_processes;
-    pthread_mutex_unlock(&child_processes_mtx);
+    process_t process = {0};
+    {
+      pthread_mutex_lock(&child_processes_mtx);
+      for (uint64_t i = 0; i < pg_array_len(concurrent_child_processes); i++) {
+        if (concurrent_child_processes[i].pid == child_pid) {
+          process = concurrent_child_processes[i];
+          concurrent_child_processes[i] = concurrent_child_processes
+              [pg_array_len(concurrent_child_processes) - 1];
+          pg_array_resize(concurrent_child_processes,
+                          pg_array_len(concurrent_child_processes) - 1);
 
-    assert(child_proc_next != NULL);
+          break;
+        }
+      }
 
-    while ((*child_proc_next)->pid != child_pid) {
-      child_proc_next = &(*child_proc_next)->next;
+      children_spawned_count = concurrent_children_spawned_count;
+      pthread_mutex_unlock(&child_processes_mtx);
     }
-    assert(child_proc_next != NULL && (*child_proc_next)->pid == child_pid);
-    process_t *process = *child_proc_next;
+
+    assert(process.pid == child_pid);
 
     const int exit_status = WEXITSTATUS(stat_loc);
-    __atomic_load(&atomic_children_spawned_count, &children_spawned_count,
-                  __ATOMIC_SEQ_CST);
     if (exit_status == 0) {
       printf("%s[%" PRIu64 "/%" PRIu64 "] ✓ "
              "%s%s\n",
              pg_colors[is_tty][COL_GREEN], children_waited_count,
-             children_spawned_count, process->path_with_namespace,
+             children_spawned_count, process.path_with_namespace,
              pg_colors[is_tty][COL_RESET]);
     } else {
       // Best effort to get the stderr from the child
       ssize_t stderr_read = 0;
       {
-        stderr_read = read(process->stderr_fd, child_proc_stderr,
+        stderr_read = read(process.stderr_fd, child_proc_stderr,
                            sizeof(child_proc_stderr) - 1);
         if (stderr_read > 0) {
           child_proc_stderr[stderr_read] = 0;
@@ -583,21 +593,15 @@ static void *watch_workers(void *varg) {
       printf("%s[%" PRIu64 "/%" PRIu64 "] ❌ "
              "%s (%d): %s%s\n",
              pg_colors[is_tty][COL_RED], children_waited_count,
-             children_spawned_count, process->path_with_namespace, exit_status,
+             children_spawned_count, process.path_with_namespace, exit_status,
              stderr_read > 0 ? child_proc_stderr : "(unknownn)",
              pg_colors[is_tty][COL_RESET]);
     }
 
     // Rm
     {
-      pg_string_free(process->path_with_namespace);
-      close(process->stderr_fd);
-
-      pthread_mutex_lock(&child_processes_mtx);
-      *child_proc_next = process->next;
-      pthread_mutex_unlock(&child_processes_mtx);
-
-      free(process);
+      pg_string_free(process.path_with_namespace);
+      close(process.stderr_fd);
     }
   }
 
@@ -707,18 +711,19 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
     }
     assert(0 && "Unreachable");
   } else {
-    __atomic_fetch_add(&atomic_children_spawned_count, 1, __ATOMIC_SEQ_CST);
     close(stderr_pipe[1]); // Parent does not write
 
-    process_t *process = malloc(sizeof(process_t)); // FIXME: custom allocator
-    process->pid = pid;
-    process->stderr_fd = stderr_pipe[0];
-    process->path_with_namespace = path;
-    pthread_mutex_lock(&child_processes_mtx);
-    // Append to the front of the list
-    process->next = child_processes;
-    child_processes = process;
-    pthread_mutex_unlock(&child_processes_mtx);
+    process_t process = {
+        .pid = pid,
+        .stderr_fd = stderr_pipe[0],
+        .path_with_namespace = path,
+    };
+    {
+      pthread_mutex_lock(&child_processes_mtx);
+      pg_array_append(concurrent_child_processes, process);
+      concurrent_children_spawned_count += 1;
+      pthread_mutex_unlock(&child_processes_mtx);
+    }
   }
   return 0;
 }
@@ -747,6 +752,8 @@ int main(int argc, char *argv[]) {
   gettimeofday(&start, NULL);
   options_t options = {0};
   options_parse_from_cli(argc, argv, &options);
+
+  pg_array_init_reserve(concurrent_child_processes, 200, pg_heap_allocator());
 
   int res = 0;
 
