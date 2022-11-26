@@ -4,7 +4,6 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <pthread.h>
-#include <signal.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -180,10 +179,10 @@ static int on_curl_socktopt(void *clientp, curl_socket_t curlfd,
                             curlsocktype purpose) {
   (void)clientp;
   (void)purpose;
-  if (fcntl(curlfd, F_SETFD, FD_CLOEXEC) == -1) {
+  if (fcntl(curlfd, F_SETFD, FD_CLOEXEC) == -1)
     fprintf(stderr, "Failed to fcntl(2) with FD_CLOEXEC: err=%s\n",
             strerror(errno));
-  }
+
   return CURL_SOCKOPT_OK;
 }
 
@@ -203,7 +202,7 @@ static void api_init(api_t *api, options_t *options) {
   assert(api->http_handle != NULL);
 
   api->url = pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
-  api_set_url(api, pg_span_make_c("1"));
+  api_set_url(api, pg_span_make_c("1")); // Page 1
 
   assert(curl_easy_setopt(api->http_handle, CURLOPT_SOCKOPTFUNCTION,
                           on_curl_socktopt) == CURLE_OK);
@@ -473,7 +472,7 @@ static void *watch_workers(void *varg) {
 
   while (1) {
     int stat_loc = 0;
-    pid_t child_pid = wait(&stat_loc);
+    const pid_t child_pid = wait(&stat_loc);
     if (child_pid < 0) {
       if (errno == ECHILD) {
         bool children_spawner_finished = false;
