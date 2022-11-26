@@ -159,7 +159,7 @@ static uint64_t on_header(char *buffer, uint64_t size, uint64_t nitems,
   if (pg_span_eq(header_key, header_next_page)) {
     bool valid = false;
     const uint64_t next_page = pg_span_parse_u64_decimal(header_value, &valid);
-    
+
     if (!valid || next_page <= 1)
       api->finished = true; // No more pages
     else
@@ -196,6 +196,7 @@ static void api_init(api_t *api, options_t *options) {
   api->http_handle = curl_easy_init();
   assert(api->http_handle != NULL);
 
+  api->url = pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
   api_set_url(api, pg_span_make_c("1"));
 
   assert(curl_easy_setopt(api->http_handle, CURLOPT_SOCKOPTFUNCTION,
