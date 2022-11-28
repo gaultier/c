@@ -1979,13 +1979,10 @@ __attribute__((unused)) static void stacktrace_print(void) {
              exe_name, exe_name);
     pg_array_t(uint8_t) contents = {0};
     if (!pg_read_file(allocator, path, &contents)) {
-      fprintf(stderr, "Failed to read file: %s %s\n", path, strerror(errno));
-      exit(errno);
+      pg_log_fatal(&logger, errno, "Failed to read file: %s %s\n", path, strerror(errno));
     }
     read_macho_dsym(allocator, contents, pg_array_len(contents), &dd);
   }
-
-  read_source_code(allocator, &dd);
 
   uintptr_t *rbp = __builtin_frame_address(0);
   while (rbp != 0 && *rbp != 0) {

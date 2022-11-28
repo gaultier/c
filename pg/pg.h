@@ -1274,7 +1274,7 @@ __attribute__((unused)) static bool pg_string_read_file_fd(int fd,
 
 __attribute__((unused)) static bool
 pg_read_file(pg_allocator_t allocator, char *path, pg_array_t(uint8_t) * buf) {
-  int fd = open(path, O_RDONLY);
+  const int fd = open(path, O_RDONLY);
   if (fd == -1) {
     return errno;
   }
