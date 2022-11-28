@@ -1970,8 +1970,8 @@ __attribute__((unused)) static void stacktrace_print(void) {
   is_tty = isatty(2);
 
   static debug_data dd = {0};
-  pg_allocator_t allocator = pg_heap_allocator();
-  if (dd.debug_str_strings == NULL) { // Not yet parse the debug information?
+  if (dd.debug_str_strings == NULL) { // Not yet parsed the debug information?
+    pg_allocator_t allocator = pg_heap_allocator();
     char path[PATH_MAX + 1] = "";
     const char *exe_path = get_exe_path_for_process();
     const char *exe_name = pg_path_base_name(exe_path);
@@ -1979,7 +1979,8 @@ __attribute__((unused)) static void stacktrace_print(void) {
              exe_name, exe_name);
     pg_array_t(uint8_t) contents = {0};
     if (!pg_read_file(allocator, path, &contents)) {
-      pg_log_fatal(&logger, errno, "Failed to read file: %s %s\n", path, strerror(errno));
+      pg_log_fatal(&logger, errno, "Failed to read file: %s %s\n", path,
+                   strerror(errno));
     }
     read_macho_dsym(allocator, contents, pg_array_len(contents), &dd);
   }
