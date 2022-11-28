@@ -1,10 +1,8 @@
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/_types/_int64_t.h>
 #include <sys/errno.h>
 #include <unistd.h>
 
@@ -152,6 +150,7 @@ typedef enum {
 } dw_tag;
 
 typedef enum : uint16_t {
+  DW_AT_none = 0,
   DW_AT_sibling = 0x01,
   DW_AT_location = 0x02,
   DW_AT_name = 0x03,
@@ -355,6 +354,7 @@ typedef enum : uint16_t {
 } dw_attribute;
 
 typedef enum : uint8_t {
+  DW_FORM_none = 0,
   DW_FORM_addr = 0x01,
   DW_FORM_block2 = 0x03,
   DW_FORM_block4 = 0x04,
@@ -383,6 +383,7 @@ typedef enum : uint8_t {
 } dw_form;
 
 typedef enum : uint8_t {
+  DW_LNE_none = 0,
   DW_LNE_end_sequence = 1,
   DW_LNE_set_address,
   DW_LNE_define_file,
@@ -1216,6 +1217,8 @@ static void read_dwarf_ext_op(uint8_t *data, uint64_t size, uint64_t *offset,
   pg_log_debug(&logger, "DW_EXT_OP=%d\n", extended_opcode);
 
   switch (extended_opcode) {
+  case DW_LNE_none:
+    assert(0);
   case DW_LNE_end_sequence: {
     pg_log_debug(&logger, "DW_LNE_end_sequence");
 
@@ -1230,14 +1233,11 @@ static void read_dwarf_ext_op(uint8_t *data, uint64_t size, uint64_t *offset,
 
     break;
   }
-  case DW_LNE_define_file: {
+  case DW_LNE_define_file:
     break;
-  }
-  case DW_LNE_set_discriminator: {
+
+  case DW_LNE_set_discriminator:
     break;
-  }
-  default:
-    assert(0 && "UNREACHABLE");
   }
   while (*offset - start_offset < ext_op_size)
     *offset += 1; // Skip rest
