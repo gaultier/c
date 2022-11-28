@@ -54,3 +54,4 @@ Should work on BSDs but has not been tested yet.
 - Trace files can become huge (maybe compression would help? Need to look into that!)
 - Dtrace adds some overhead
 - Dtrace reports stack offsets for code locations, not the source code line. We could parse the debug symbols to match those offset to the source code lines.
+- Tracing for a long time with lots of allocations could result in a sluggish chart browsing experience. Sampling data points or having a custom time window would help.
