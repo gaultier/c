@@ -1,4 +1,4 @@
-#include <_types/_uint8_t.h>
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
@@ -9,8 +9,8 @@
 
 #include "../pg/pg.h"
 
-static void read_data(uint8_t *data, int64_t data_size, uint64_t *offset,
-                      void *res, int64_t res_size) {
+static void read_data(uint8_t *data, uint64_t data_size, uint64_t *offset,
+                      void *res, uint64_t res_size) {
   assert(data != NULL);
   assert(offset != NULL);
   assert(res != NULL);
@@ -1330,7 +1330,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
 
     const dw_abbrev_entry *entry = NULL;
     // TODO: pre-sort the entries to avoid the linear look-up each time?
-    for (int i = 0; i < pg_array_len(abbrev->entries); i++) {
+    for (uint64_t i = 0; i < pg_array_len(abbrev->entries); i++) {
       if (abbrev->entries[i].type == type) {
         entry = &abbrev->entries[i];
         break;
@@ -1350,7 +1350,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
     if (entry->tag == DW_TAG_compile_unit) {
     }
 
-    for (int i = 0; i < pg_array_len(entry->attr_forms); i++) {
+    for (uint64_t i = 0; i < pg_array_len(entry->attr_forms); i++) {
       const dw_attr_form af = entry->attr_forms[i];
       LOG(".debug_info: attr=%#x %s form=%#x %s\n", af.attr,
           dw_attribute_to_str(af.attr), af.form, dw_form_str[af.form]);
@@ -1362,7 +1362,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
         LOG("DW_FORM_strp: %#x ", str_offset);
 
         char *s = NULL;
-        for (int j = 0; j < pg_array_len(dd->debug_str_strings); j++) {
+        for (uint64_t j = 0; j < pg_array_len(dd->debug_str_strings); j++) {
           if (dd->debug_str_strings[j].offset == str_offset) {
             s = dd->debug_str_strings[j].s;
             break;
@@ -1482,7 +1482,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
 }
 
 static void read_dwarf_section_debug_str(pg_allocator_t allocator,
-                                         uint8_t *data, int64_t size,
+                                         uint8_t *data, uint64_t size,
                                          const struct section_64 *sec,
                                          debug_data *dd) {
   assert(data != NULL);
@@ -1534,7 +1534,7 @@ static bool dw_line_entry_should_add_new_entry(const dw_line_section_fsm *fsm,
 }
 
 static void read_dwarf_section_debug_line(pg_allocator_t allocator,
-                                          uint8_t *data, int64_t size,
+                                          uint8_t *data, uint64_t size,
                                           const struct section_64 *sec,
                                           debug_data *dd) {
   assert(data != NULL);
@@ -1715,7 +1715,7 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
 
 static void stacktrace_find_entry(const debug_data *dd, uint64_t pc,
                                   stacktrace_entry *se) {
-  for (int i = 0; i < pg_array_len(dd->fn_decls); i++) {
+  for (uint64_t i = 0; i < pg_array_len(dd->fn_decls); i++) {
     const dw_fn_decl *fd = &dd->fn_decls[i];
     if (fd->low_pc <= pc && pc <= fd->low_pc + fd->high_pc) {
       se->directory = fd->directory;
@@ -1731,7 +1731,7 @@ static void stacktrace_find_entry(const debug_data *dd, uint64_t pc,
 
   const dw_line_entry *cur_le = NULL;
   const dw_line_entry *prev_le = NULL;
-  for (int i = 0; i < pg_array_len(dd->line_entries) - 1; i++) {
+  for (uint64_t i = 0; i < pg_array_len(dd->line_entries) - 1; i++) {
     prev_le = &dd->line_entries[i];
     cur_le = &dd->line_entries[i + 1];
     if (prev_le->file == cur_le->file) {
@@ -1752,7 +1752,7 @@ static void read_source_code(pg_allocator_t allocator, debug_data *dd) {
   static char path[PATH_MAX + 1] = "";
 
   pg_array_init_reserve(dd->sources, 100, allocator);
-  for (int i = 0; i < pg_array_len(dd->fn_decls); i++) {
+  for (uint64_t i = 0; i < pg_array_len(dd->fn_decls); i++) {
     dw_fn_decl *fd = &(dd->fn_decls)[i];
     if (fd->directory == NULL || fd->file == NULL)
       continue;
@@ -1765,7 +1765,7 @@ static void read_source_code(pg_allocator_t allocator, debug_data *dd) {
     pg_array_init_reserve(source.newline_offsets, 500, allocator);
 
     pg_array_append(source.newline_offsets, 0);
-    for (int j = 0; j < contents.size; j++) {
+    for (uint64_t j = 0; j < contents.size; j++) {
       char *c = &contents.data[j];
       if (*c == '\n')
         pg_array_append(source.newline_offsets, j);
@@ -1782,8 +1782,8 @@ __asm__(".globl _get_main_address\n\t"
         "lea _main(%rip), %rax\n\t"
         "ret\n\t");
 
-static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data, int64_t size,
-                            debug_data *dd) {
+static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
+                            uint64_t size, debug_data *dd) {
   uint64_t offset = 0;
   struct mach_header_64 h = {0};
   read_data(data, size, &offset, &h, sizeof(h));
@@ -1802,7 +1802,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data, int64_t siz
   struct section_64 sec_str = {0};
   struct section_64 sec_line = {0};
 
-  for (int cmd_count = 0; cmd_count < h.ncmds; cmd_count++) {
+  for (uint64_t cmd_count = 0; cmd_count < h.ncmds; cmd_count++) {
     struct load_command c = {0};
     read_data(data, size, &offset, &c, sizeof(c));
     LOG("command: cmd=%d cmdsize=%d\n", c.cmd, c.cmdsize);
@@ -1853,7 +1853,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data, int64_t siz
           sc.segname, sc.vmaddr, sc.vmsize, sc.fileoff, sc.filesize, sc.maxprot,
           sc.initprot, sc.nsects, sc.flags);
 
-      for (int sec_count = 0; sec_count < sc.nsects; sec_count++) {
+      for (uint64_t sec_count = 0; sec_count < sc.nsects; sec_count++) {
         struct section_64 sec = {0};
         read_data(data, size, &offset, &sec, sizeof(sec));
         LOG("SECTION sectname=%s segname=%s addr=%#llx "
@@ -1894,7 +1894,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data, int64_t siz
 
   read_source_code(allocator, dd);
 
-  for (int i = 0; i < pg_array_len(dd->fn_decls); i++) {
+  for (uint64_t i = 0; i < pg_array_len(dd->fn_decls); i++) {
     dw_fn_decl *fd = &(dd->fn_decls)[i];
     LOG("dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
         "file=%s/%s\n",
@@ -1906,7 +1906,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data, int64_t siz
     }
   }
 
-  for (int i = 0; i < pg_array_len(dd->line_entries); i++) {
+  for (uint64_t i = 0; i < pg_array_len(dd->line_entries); i++) {
     dw_line_entry *le = &(dd->line_entries)[i];
     LOG("dw_line_entry[%d]: line=%d pc=%#llx file=%d %s\n", i, le->line, le->pc,
         le->file, dd->debug_line_files[le->file - 1]);
@@ -1944,7 +1944,7 @@ static const char pg_colors[2][COL_COUNT][14] = {
               [COL_RED] = "\x1b[31m",
               [COL_GREEN] = "\x1b[32m"}};
 
-void stacktrace_print() {
+__attribute__((unused)) static void stacktrace_print(void) {
   static bool is_tty = false;
   is_tty = isatty(2);
 
@@ -1953,7 +1953,7 @@ void stacktrace_print() {
   if (dd.debug_str_strings == NULL) { // Not yet parse the debug information?
     char path[PATH_MAX + 1] = "";
     const char *exe_path = get_exe_path_for_process();
-    const char *exe_name = gb_path_base_name(exe_path);
+    const char *exe_name = pg_path_base_name(exe_path);
     snprintf(path, sizeof(path), "%s.dSYM/Contents/Resources/DWARF/%s",
              exe_name, exe_name);
     pg_array_t(uint8_t) contents = {0};
@@ -1981,7 +1981,7 @@ void stacktrace_print() {
              pg_colors[is_tty][COL_RESET]);
 
       source_file *f = NULL;
-      for (int i = 0; i < pg_array_len(dd.sources); i++) {
+      for (uint64_t i = 0; i < pg_array_len(dd.sources); i++) {
         source_file *sf = &dd.sources[i];
         if (strcmp(sf->directory, se.directory) == 0 &&
             strcmp(sf->file, se.file) == 0) {
