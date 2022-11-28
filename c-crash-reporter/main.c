@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "macho.c"
+#include "macho.h"
 
 #define STR(s) #s
 

@@ -1,3 +1,5 @@
+#pragma once
+
 #include <assert.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
