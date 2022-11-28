@@ -87,7 +87,7 @@ static pg_string_t get_current_git_commit(void) {
 }
 
 static pg_string_t get_git_origin_remote_url(void) {
-  const char *const  cmd = "git remote get-url origin";
+  const char *const cmd = "git remote get-url origin";
   printf("Running: %s\n", cmd);
 
   char *argv[] = {"git", "remote", "get-url", "origin", 0};
@@ -132,12 +132,16 @@ get_project_path_from_remote_git_url(const pg_string_t git_repository_url) {
   pg_span_t s = pg_span_make_c(git_repository_url);
   if (pg_span_starts_with(s, ssh_url_start)) {
     pg_span_consume_left(&s, ssh_url_start.len);
-    return pg_string_make_length(pg_heap_allocator(), s.data, s.len);
+
   } else if (pg_span_starts_with(s, http_url_start)) {
     pg_span_consume_left(&s, http_url_start.len);
-    return pg_string_make_length(pg_heap_allocator(), s.data, s.len);
-  }
-  assert(0);
+  } else
+    assert(0);
+
+  const pg_span_t git = pg_span_make_c(".git");
+  if (pg_span_ends_with(s, git)) pg_span_consume_right(&s, git.len);
+
+  return pg_string_make_length(pg_heap_allocator(), s.data, s.len);
 }
 
 static void print_usage(char *argv0) {
