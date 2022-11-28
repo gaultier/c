@@ -69,7 +69,7 @@ typedef struct __attribute__((packed)) {
   uint8_t line_range;
   uint8_t opcode_base;
   uint8_t std_opcode_lengths[12];
-} dwarf_debug_line_header;
+} dwarf_debug_line_header_t;
 
 typedef enum : uint8_t {
   DW_LNS_extended_op = 0,
@@ -85,7 +85,7 @@ typedef enum : uint8_t {
   DW_LNS_set_prologue_end,
   DW_LNS_set_epilogue_begin,
   DW_LNS_set_isa,
-} DW_LNS;
+} dw_lns_t;
 
 typedef enum {
   DW_TAG_null = 0x0000,
@@ -149,7 +149,7 @@ typedef enum {
   DW_TAG_type_unit = 0x0041,
   DW_TAG_rvalue_reference_type = 0x0042,
   DW_TAG_template_alias = 0x0043,
-} dw_tag;
+} dw_tag_t;
 
 typedef enum : uint16_t {
   DW_AT_none = 0,
@@ -353,7 +353,7 @@ typedef enum : uint16_t {
   DW_AT_APPLE_property = 0x3fed,
   DW_AT_APPLE_objc_direct = 0x3fee,
   DW_AT_APPLE_sdk = 0x3fef,
-} dw_attribute;
+} dw_attribute_t;
 
 typedef enum : uint8_t {
   DW_FORM_none = 0,
@@ -382,7 +382,7 @@ typedef enum : uint8_t {
   DW_FORM_exprloc = 0x18,
   DW_FORM_flag_present = 0x19,
   DW_FORM_ref_sig8 = 0x20,
-} dw_form;
+} dw_form_t;
 
 typedef enum : uint8_t {
   DW_LNE_none = 0,
@@ -390,30 +390,30 @@ typedef enum : uint8_t {
   DW_LNE_set_address,
   DW_LNE_define_file,
   DW_LNE_set_discriminator,
-} DW_LNE;
+} dw_lne_t;
 
 typedef struct {
-  dw_attribute attr;
-  dw_form form;
+  dw_attribute_t attr;
+  dw_form_t form;
   PG_PAD(1);
-} dw_attr_form;
+} dw_attr_form_t;
 
 typedef struct {
-  pg_array_t(dw_attr_form) attr_forms;
+  pg_array_t(dw_attr_form_t) attr_forms;
   uint8_t type;
   uint8_t tag;
   PG_PAD(6);
-} dw_abbrev_entry;
+} dw_abbrev_entry_t;
 
 typedef struct {
-  pg_array_t(dw_abbrev_entry) entries;
-} dw_abbrev;
+  pg_array_t(dw_abbrev_entry_t) entries;
+} dw_abbrev_t;
 
 typedef struct {
   char *s;
   uint32_t offset;
   PG_PAD(4);
-} dw_string;
+} dw_string_t;
 
 typedef struct {
   uint64_t low_pc;
@@ -423,14 +423,14 @@ typedef struct {
   uint16_t high_pc;
   uint16_t line;
   PG_PAD(4);
-} dw_fn_decl;
+} dw_fn_decl_t;
 
 typedef struct {
   uint64_t pc;
   uint64_t file;
   uint16_t line;
   PG_PAD(6);
-} dw_line_entry;
+} dw_line_entry_t;
 
 typedef struct {
   uint64_t address;
@@ -439,30 +439,30 @@ typedef struct {
   bool is_stmt;
   PG_PAD(5);
   // TODO: track column?
-} dw_line_section_fsm;
+} dw_line_section_fsm_t;
 
 typedef struct {
   char *directory;
   char *file;
   char *fn_name;
   uint64_t line;
-} stacktrace_entry;
+} stacktrace_entry_t;
 
 typedef struct {
   pg_array_t(uint8_t) contents;
   char *directory;
   char *file;
   pg_array_t(uint16_t) newline_offsets;
-} source_file;
+} source_file_t;
 
 typedef struct {
   uint64_t pie_displacement;
-  pg_array_t(dw_fn_decl) fn_decls;
-  pg_array_t(dw_line_entry) line_entries;
-  pg_array_t(dw_string) debug_str_strings;
+  pg_array_t(dw_fn_decl_t) fn_decls;
+  pg_array_t(dw_line_entry_t) line_entries;
+  pg_array_t(dw_string_t) debug_str_strings;
   pg_array_t(char *) debug_line_files;
-  pg_array_t(source_file) sources;
-} debug_data;
+  pg_array_t(source_file_t) sources;
+} debug_data_t;
 
 static const char dw_tag_str[][40] = {
     [DW_TAG_null] = "DW_TAG_null",
@@ -528,7 +528,7 @@ static const char dw_tag_str[][40] = {
     [DW_TAG_template_alias] = "DW_TAG_template_alias",
 };
 
-static char *dw_attribute_to_str(dw_attribute attr) {
+static char *dw_attribute_to_str(dw_attribute_t attr) {
   switch (attr) {
   case DW_AT_sibling:
     return "DW_AT_sibling";
@@ -965,8 +965,8 @@ static const char dw_form_str[][30] = {
 };
 
 static void read_dwarf_ext_op(uint8_t *data, uint64_t size, uint64_t *offset,
-                              dw_line_section_fsm *fsm,
-                              pg_array_t(dw_line_entry) * line_entries,
+                              dw_line_section_fsm_t *fsm,
+                              pg_array_t(dw_line_entry_t) * line_entries,
                               uint64_t ext_op_size) {
   assert(data != NULL);
   assert(offset != NULL);
@@ -974,7 +974,7 @@ static void read_dwarf_ext_op(uint8_t *data, uint64_t size, uint64_t *offset,
   assert(line_entries != NULL);
 
   const uint64_t start_offset = *offset;
-  DW_LNE extended_opcode = 0;
+  dw_lne_t extended_opcode = 0;
   read_data(data, size, offset, &extended_opcode, sizeof(extended_opcode));
   pg_log_debug(&logger, "DW_EXT_OP=%d\n", extended_opcode);
 
@@ -984,7 +984,7 @@ static void read_dwarf_ext_op(uint8_t *data, uint64_t size, uint64_t *offset,
   case DW_LNE_end_sequence: {
     pg_log_debug(&logger, "DW_LNE_end_sequence");
 
-    *fsm = (dw_line_section_fsm){.line = 1, .file = 1};
+    *fsm = (dw_line_section_fsm_t){.line = 1, .file = 1};
     break;
   }
   case DW_LNE_set_address: {
@@ -1008,7 +1008,7 @@ static void read_dwarf_ext_op(uint8_t *data, uint64_t size, uint64_t *offset,
 static void read_dwarf_section_debug_abbrev(pg_allocator_t allocator,
                                             uint8_t *data, uint64_t size,
                                             const struct section_64 *sec,
-                                            dw_abbrev *abbrev) {
+                                            dw_abbrev_t *abbrev) {
   assert(data != NULL);
   assert(sec != NULL);
   assert(abbrev != NULL);
@@ -1017,7 +1017,7 @@ static void read_dwarf_section_debug_abbrev(pg_allocator_t allocator,
 
   int tag_count = 0;
   while (offset < sec->offset + sec->size) {
-    dw_abbrev_entry entry = {0};
+    dw_abbrev_entry_t entry = {0};
     read_data(data, size, &offset, &entry.type, sizeof(entry.type));
     if (entry.type == 0)
       break;
@@ -1032,10 +1032,10 @@ static void read_dwarf_section_debug_abbrev(pg_allocator_t allocator,
 
     pg_array_init_reserve(entry.attr_forms, 20, allocator);
     while (offset < sec->offset + sec->size) {
-      dw_attr_form attr_form = {0};
+      dw_attr_form_t attr_form = {0};
       // TODO: check overflow
-      attr_form.attr = (dw_attribute)(read_leb128_u64(data, size, &offset));
-      attr_form.form = (dw_form)(read_leb128_u64(data, size, &offset));
+      attr_form.attr = (dw_attribute_t)(read_leb128_u64(data, size, &offset));
+      attr_form.form = (dw_form_t)(read_leb128_u64(data, size, &offset));
       if (attr_form.attr == 0 && attr_form.form == 0)
         break;
 
@@ -1052,8 +1052,8 @@ static void read_dwarf_section_debug_abbrev(pg_allocator_t allocator,
 static void read_dwarf_section_debug_info(pg_allocator_t allocator,
                                           uint8_t *data, uint64_t size,
                                           const struct section_64 *sec,
-                                          const dw_abbrev *abbrev,
-                                          debug_data *dd) {
+                                          const dw_abbrev_t *abbrev,
+                                          debug_data_t *dd) {
   assert(data != NULL);
   assert(sec != NULL);
   assert(abbrev != NULL);
@@ -1090,7 +1090,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
       continue; // skip
     }
 
-    const dw_abbrev_entry *entry = NULL;
+    const dw_abbrev_entry_t *entry = NULL;
     // TODO: pre-sort the entries to avoid the linear look-up each time?
     for (uint64_t i = 0; i < pg_array_len(abbrev->entries); i++) {
       if (abbrev->entries[i].type == type) {
@@ -1103,9 +1103,9 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
     pg_log_debug(&logger, ".debug_info type=%#x tag=%#x %s\n", type, entry->tag,
                  dw_tag_str[entry->tag]);
 
-    dw_fn_decl *se = NULL;
+    dw_fn_decl_t *se = NULL;
     if (entry->tag == DW_TAG_subprogram) {
-      pg_array_append(dd->fn_decls, ((dw_fn_decl){.directory = directory}));
+      pg_array_append(dd->fn_decls, ((dw_fn_decl_t){.directory = directory}));
       const uint64_t se_count = pg_array_len(dd->fn_decls);
       se = &(dd->fn_decls)[se_count - 1];
     }
@@ -1113,7 +1113,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
     }
 
     for (uint64_t i = 0; i < pg_array_len(entry->attr_forms); i++) {
-      const dw_attr_form af = entry->attr_forms[i];
+      const dw_attr_form_t af = entry->attr_forms[i];
       pg_log_debug(&logger, ".debug_info: attr=%#x %s form=%#x %s\n", af.attr,
                    dw_attribute_to_str(af.attr), af.form, dw_form_str[af.form]);
 
@@ -1246,7 +1246,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
 static void read_dwarf_section_debug_str(pg_allocator_t allocator,
                                          uint8_t *data, uint64_t size,
                                          const struct section_64 *sec,
-                                         debug_data *dd) {
+                                         debug_data_t *dd) {
   assert(data != NULL);
   assert(sec != NULL);
   assert(dd != NULL);
@@ -1267,15 +1267,15 @@ static void read_dwarf_section_debug_str(pg_allocator_t allocator,
     char *end = memchr(&data[offset], 0, sec->offset + sec->size);
     assert(end != NULL);
     pg_log_debug(&logger, "- [%llu] %s\n", i, s);
-    dw_string str = {.s = s, .offset = (uint32_t)(offset - sec->offset)};
+    dw_string_t str = {.s = s, .offset = (uint32_t)(offset - sec->offset)};
     pg_array_append(dd->debug_str_strings, str);
     offset += (uint64_t)(end - s);
     i++;
   }
 }
 
-static bool dw_line_entry_should_add_new_entry(const dw_line_section_fsm *fsm,
-                                               const debug_data *dd) {
+static bool dw_line_entry_should_add_new_entry(const dw_line_section_fsm_t *fsm,
+                                               const debug_data_t *dd) {
   assert(fsm != NULL);
   assert(dd != NULL);
 
@@ -1285,7 +1285,7 @@ static bool dw_line_entry_should_add_new_entry(const dw_line_section_fsm *fsm,
   if (count == 0)
     return true;
 
-  const dw_line_entry *last = &dd->line_entries[count - 1];
+  const dw_line_entry_t *last = &dd->line_entries[count - 1];
   if (last->pc == fsm->address)
     return false;
 
@@ -1298,14 +1298,14 @@ static bool dw_line_entry_should_add_new_entry(const dw_line_section_fsm *fsm,
 static void read_dwarf_section_debug_line(pg_allocator_t allocator,
                                           uint8_t *data, uint64_t size,
                                           const struct section_64 *sec,
-                                          debug_data *dd) {
+                                          debug_data_t *dd) {
   assert(data != NULL);
   assert(sec != NULL);
   assert(dd != NULL);
   pg_array_init_reserve(dd->line_entries, 15000, allocator);
 
   uint64_t offset = sec->offset;
-  dwarf_debug_line_header ddlh = {0};
+  dwarf_debug_line_header_t ddlh = {0};
   read_data(data, size, &offset, &ddlh, sizeof(ddlh));
   pg_log_debug(&logger,
                ".debug_line: length=%#x version=%#x header_length=%#x "
@@ -1385,10 +1385,10 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
   }
   pg_log_debug(&logger, "");
 
-  dw_line_section_fsm fsm = {.line = 1, .file = 1};
+  dw_line_section_fsm_t fsm = {.line = 1, .file = 1};
 
   while (offset < sec->offset + sec->size) {
-    DW_LNS opcode = 0;
+    dw_lns_t opcode = 0;
     read_data(data, size, &offset, &opcode, sizeof(opcode));
     pg_log_debug(&logger,
                  "DW_OP=%#x offset=%#llx rel_offset=%#llx fsm.address=%#llx "
@@ -1420,7 +1420,7 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
       pg_log_debug(&logger, "DW_LNS_advance_line line=%lld fsm.line=%hu\n", l,
                    fsm.line);
       if (dw_line_entry_should_add_new_entry(&fsm, dd)) {
-        dw_line_entry e = {
+        dw_line_entry_t e = {
             .pc = fsm.address, .line = fsm.line, .file = fsm.file};
         pg_log_debug(&logger,
                      "new dw_line_entry: pc=%#llx line=%d file=%llu %s\n", e.pc,
@@ -1468,7 +1468,7 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
 
       fsm.line += ddlh.line_base + op % ddlh.line_range;
       if (dw_line_entry_should_add_new_entry(&fsm, dd)) {
-        dw_line_entry e = {
+        dw_line_entry_t e = {
             .pc = fsm.address, .line = fsm.line, .file = fsm.file};
         pg_log_debug(&logger,
                      "new dw_line_entry: pc=%#llx line=%d file=%llu %s\n", e.pc,
@@ -1483,10 +1483,10 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
   }
 }
 
-static void stacktrace_find_entry(const debug_data *dd, uint64_t pc,
-                                  stacktrace_entry *se) {
+static void stacktrace_find_entry(const debug_data_t *dd, uint64_t pc,
+                                  stacktrace_entry_t *se) {
   for (uint64_t i = 0; i < pg_array_len(dd->fn_decls); i++) {
-    const dw_fn_decl *fd = &dd->fn_decls[i];
+    const dw_fn_decl_t *fd = &dd->fn_decls[i];
     if (fd->low_pc <= pc && pc <= fd->low_pc + fd->high_pc) {
       se->directory = fd->directory;
       se->file = fd->file;
@@ -1499,8 +1499,8 @@ static void stacktrace_find_entry(const debug_data *dd, uint64_t pc,
   assert(se->file != NULL);
   assert(se->fn_name != NULL);
 
-  const dw_line_entry *cur_le = NULL;
-  const dw_line_entry *prev_le = NULL;
+  const dw_line_entry_t *cur_le = NULL;
+  const dw_line_entry_t *prev_le = NULL;
   for (uint64_t i = 0; i < pg_array_len(dd->line_entries) - 1; i++) {
     prev_le = &dd->line_entries[i];
     cur_le = &dd->line_entries[i + 1];
@@ -1517,13 +1517,13 @@ static void stacktrace_find_entry(const debug_data *dd, uint64_t pc,
   }
 }
 
-static void read_source_code(pg_allocator_t allocator, debug_data *dd) {
+static void read_source_code(pg_allocator_t allocator, debug_data_t *dd) {
   assert(dd != NULL);
   static char path[PATH_MAX + 1] = "";
 
   pg_array_init_reserve(dd->sources, 100, allocator);
   for (uint64_t i = 0; i < pg_array_len(dd->fn_decls); i++) {
-    dw_fn_decl *fd = &(dd->fn_decls)[i];
+    dw_fn_decl_t *fd = &(dd->fn_decls)[i];
     if (fd->directory == NULL || fd->file == NULL)
       continue;
 
@@ -1534,7 +1534,7 @@ static void read_source_code(pg_allocator_t allocator, debug_data *dd) {
       exit(errno);
     }
 
-    source_file source = {
+    source_file_t source = {
         .contents = contents, .directory = fd->directory, .file = fd->file};
     pg_array_init_reserve(source.newline_offsets, 500, allocator);
 
@@ -1558,7 +1558,7 @@ __asm__(".globl _get_main_address\n\t"
         "ret\n\t");
 
 static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
-                            uint64_t size, debug_data *dd) {
+                            uint64_t size, debug_data_t *dd) {
   uint64_t offset = 0;
   struct mach_header_64 h = {0};
   read_data(data, size, &offset, &h, sizeof(h));
@@ -1667,7 +1667,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
   assert(sec_line.sectname[0] != 0);
 
   read_dwarf_section_debug_str(allocator, data, size, &sec_str, dd);
-  dw_abbrev abbrev = {0};
+  dw_abbrev_t abbrev = {0};
   read_dwarf_section_debug_line(allocator, data, size, &sec_line, dd);
   read_dwarf_section_debug_abbrev(allocator, data, size, &sec_abbrev, &abbrev);
 
@@ -1676,7 +1676,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
   read_source_code(allocator, dd);
 
   for (uint64_t i = 0; i < pg_array_len(dd->fn_decls); i++) {
-    dw_fn_decl *fd = &(dd->fn_decls)[i];
+    dw_fn_decl_t *fd = &(dd->fn_decls)[i];
     pg_log_debug(&logger,
                  "dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
                  "file=%s/%s\n",
@@ -1689,7 +1689,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
   }
 
   for (uint64_t i = 0; i < pg_array_len(dd->line_entries); i++) {
-    dw_line_entry *le = &(dd->line_entries)[i];
+    dw_line_entry_t *le = &(dd->line_entries)[i];
     pg_log_debug(
         &logger, "dw_line_entry[%llu]: line=%d pc=%#llx file=%llu %s\n", i,
         le->line, le->pc, le->file, dd->debug_line_files[le->file - 1]);
@@ -1718,7 +1718,7 @@ typedef enum {
   COL_RED,
   COL_GREEN,
   COL_COUNT,
-} pg_color;
+} pg_color_t;
 
 static const char pg_colors[2][COL_COUNT][14] = {
     // is_tty == true
@@ -1731,7 +1731,7 @@ __attribute__((unused)) static void stacktrace_print(void) {
   static bool is_tty = false;
   is_tty = isatty(2);
 
-  static debug_data dd = {0};
+  static debug_data_t dd = {0};
   if (dd.debug_str_strings == NULL) { // Not yet parsed the debug information?
     pg_allocator_t allocator = pg_heap_allocator();
     char path[PATH_MAX + 1] = "";
@@ -1754,7 +1754,7 @@ __attribute__((unused)) static void stacktrace_print(void) {
                  *(rbp + 2));
     rbp = (uintptr_t *)*rbp;
 
-    stacktrace_entry se = {0};
+    stacktrace_entry_t se = {0};
     stacktrace_find_entry(
         &dd, rip - /* `call` instruction size */ 5 - dd.pie_displacement, &se);
     if (se.directory != NULL) {
@@ -1762,9 +1762,9 @@ __attribute__((unused)) static void stacktrace_print(void) {
              se.directory, se.file, se.fn_name, se.line,
              pg_colors[is_tty][COL_RESET]);
 
-      source_file *f = NULL;
+      source_file_t *f = NULL;
       for (uint64_t i = 0; i < pg_array_len(dd.sources); i++) {
-        source_file *sf = &dd.sources[i];
+        source_file_t *sf = &dd.sources[i];
         if (strcmp(sf->directory, se.directory) == 0 &&
             strcmp(sf->file, se.file) == 0) {
           f = sf;
