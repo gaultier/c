@@ -1,5 +1,4 @@
-#include <_types/_uint16_t.h>
-#include <_types/_uint8_t.h>
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
@@ -1345,7 +1344,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
     dw_fn_decl *se = NULL;
     if (entry->tag == DW_TAG_subprogram) {
       pg_array_append(dd->fn_decls, ((dw_fn_decl){.directory = directory}));
-      const int64_t se_count = pg_array_len(dd->fn_decls);
+      const uint64_t se_count = pg_array_len(dd->fn_decls);
       se = &(dd->fn_decls)[se_count - 1];
     }
     if (entry->tag == DW_TAG_compile_unit) {
@@ -1401,7 +1400,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
         read_data(data, size, &offset, &val, sizeof(val));
         pg_log_debug(&logger, "DW_FORM_data4: %#x\n", val);
         if (af.attr == DW_AT_high_pc && se != NULL) {
-          se->high_pc = val;
+          se->high_pc = (uint16_t)val;
         }
         break;
       }
@@ -1506,9 +1505,9 @@ static void read_dwarf_section_debug_str(pg_allocator_t allocator,
     char *end = memchr(&data[offset], 0, sec->offset + sec->size);
     assert(end != NULL);
     pg_log_debug(&logger, "- [%llu] %s\n", i, s);
-    dw_string str = {.s = s, .offset = offset - sec->offset};
+    dw_string str = {.s = s, .offset = (uint32_t)(offset - sec->offset)};
     pg_array_append(dd->debug_str_strings, str);
-    offset += end - s;
+    offset += (uint64_t)(end - s);
     i++;
   }
 }
@@ -1520,7 +1519,7 @@ static bool dw_line_entry_should_add_new_entry(const dw_line_section_fsm *fsm,
 
   if (fsm->line == 0)
     return false;
-  const int64_t count = pg_array_len(dd->line_entries);
+  const uint64_t count = pg_array_len(dd->line_entries);
   if (count == 0)
     return true;
 
@@ -1591,7 +1590,7 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
     }
     pg_log_debug(&logger, "- %s (%ld)\n", s, end - s);
 
-    offset += end - s;
+    offset += (uint64_t)(end - s);
     if (*(end + 1) == 0) {
       offset += 2;
       break;
@@ -1610,7 +1609,7 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
     char *end = memchr(&data[offset], 0, sec->offset + sec->size);
     assert(end != NULL);
 
-    offset += end - s + 1;
+    offset += (uint64_t)(end - s) + 1;
     const uint64_t dir_index = read_leb128_u64(data, size, &offset);
     const uint64_t modtime = read_leb128_u64(data, size, &offset);
 
@@ -1662,7 +1661,7 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
         dw_line_entry e = {
             .pc = fsm.address, .line = fsm.line, .file = fsm.file};
         pg_log_debug(&logger,
-                     "new dw_line_entry: pc=%#llx line=%d file=%d %s\n", e.pc,
+                     "new dw_line_entry: pc=%#llx line=%d file=%llu %s\n", e.pc,
                      e.line, e.file, dd->debug_line_files[e.file - 1]);
         pg_array_append(dd->line_entries, e);
       }
@@ -1929,13 +1928,13 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
 
   for (uint64_t i = 0; i < pg_array_len(dd->line_entries); i++) {
     dw_line_entry *le = &(dd->line_entries)[i];
-    pg_log_debug(&logger, "dw_line_entry[%llu]: line=%d pc=%#llx file=%d %s\n",
-                 i, le->line, le->pc, le->file,
-                 dd->debug_line_files[le->file - 1]);
+    pg_log_debug(
+        &logger, "dw_line_entry[%llu]: line=%d pc=%#llx file=%llu %s\n", i,
+        le->line, le->pc, le->file, dd->debug_line_files[le->file - 1]);
   }
 }
 
-static char *get_exe_path_for_process() {
+static char *get_exe_path_for_process(void) {
   static char pathbuf[PROC_PIDPATHINFO_MAXSIZE] = "";
   if (pathbuf[0] != 0)
     return pathbuf;
