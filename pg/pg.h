@@ -1,6 +1,5 @@
 #pragma once
 
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -1228,7 +1227,7 @@ __attribute__((unused)) static void pg_bitarray_resize(pg_bitarray_t *bitarr,
 // ------------- File utils
 
 __attribute__((unused)) static bool
-pg_array_read_file_fd(pg_allocator_t allocator, int fd,
+pg_array_read_file_fd( int fd,
                       pg_array_t(uint8_t) * buf) {
   struct stat st = {0};
   if (fstat(fd, &st) == -1) {
@@ -1273,13 +1272,13 @@ __attribute__((unused)) static bool pg_string_read_file_fd(int fd,
   return true;
 }
 
-__attribute__((unused)) static bool
-pg_read_file(pg_allocator_t allocator, char *path, pg_array_t(uint8_t) * buf) {
+__attribute__((unused)) static bool pg_read_file(char *path,
+                                                 pg_array_t(uint8_t) * buf) {
   const int fd = open(path, O_RDONLY);
   if (fd == -1) {
     return errno;
   }
-  const bool ok = pg_array_read_file_fd(allocator, fd, buf);
+  const bool ok = pg_array_read_file_fd(fd, buf);
   close(fd);
   return ok;
 }

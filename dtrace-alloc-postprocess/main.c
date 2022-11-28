@@ -500,7 +500,7 @@ static void print_html(const pg_array_t(event_t) events,
 int main(int argc, char *argv[]) {
   pg_logger_t logger = {.level = PG_LOG_INFO};
   pg_array_t(uint8_t) file_data = {0};
-    pg_array_init_reserve(file_data, 0, pg_heap_allocator());
+  pg_array_init_reserve(file_data, 0, pg_heap_allocator());
   if (argc == 1) {
     // int fd = STDIN_FILENO;
     pg_log_fatal(&logger, EINVAL, "TODO read from stdin");
@@ -510,7 +510,7 @@ int main(int argc, char *argv[]) {
       pg_log_fatal(&logger, errno, "Failed to open file %s: %s", argv[1],
                    strerror(errno));
     }
-    if ((!pg_read_file(pg_heap_allocator(), argv[1], &file_data)) != 0) {
+    if ((!pg_read_file( argv[1], &file_data)) != 0) {
       pg_log_fatal(&logger, errno, "Failed to read file %s: %s", argv[1],
                    strerror(errno));
     }
