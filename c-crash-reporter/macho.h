@@ -529,646 +529,407 @@ static const char dw_tag_str[][40] = {
 };
 
 static char *dw_attribute_to_str(dw_attribute attr) {
-  static char s[50] = "";
-  bzero(s, 50);
-
   switch (attr) {
   case DW_AT_sibling:
-    memcpy(s, "DW_AT_sibling", sizeof("DW_AT_sibling"));
-    break;
+    return "DW_AT_sibling";
   case DW_AT_location:
-    memcpy(s, "DW_AT_location", sizeof("DW_AT_location"));
-    break;
+    return "DW_AT_location";
   case DW_AT_name:
-    memcpy(s, "DW_AT_name", sizeof("DW_AT_name"));
-    break;
+    return "DW_AT_name";
   case DW_AT_ordering:
-    memcpy(s, "DW_AT_ordering", sizeof("DW_AT_ordering"));
-    break;
+    return "DW_AT_ordering";
   case DW_AT_byte_size:
-    memcpy(s, "DW_AT_byte_size", sizeof("DW_AT_byte_size"));
-    break;
+    return "DW_AT_byte_size";
   case DW_AT_bit_offset:
-    memcpy(s, "DW_AT_bit_offset", sizeof("DW_AT_bit_offset"));
-    break;
+    return "DW_AT_bit_offset";
   case DW_AT_bit_size:
-    memcpy(s, "DW_AT_bit_size", sizeof("DW_AT_bit_size"));
-    break;
+    return "DW_AT_bit_size";
   case DW_AT_stmt_list:
-    memcpy(s, "DW_AT_stmt_list", sizeof("DW_AT_stmt_list"));
-    break;
+    return "DW_AT_stmt_list";
   case DW_AT_low_pc:
-    memcpy(s, "DW_AT_low_pc", sizeof("DW_AT_low_pc"));
-    break;
+    return "DW_AT_low_pc";
   case DW_AT_high_pc:
-    memcpy(s, "DW_AT_high_pc", sizeof("DW_AT_high_pc"));
-    break;
+    return "DW_AT_high_pc";
   case DW_AT_language:
-    memcpy(s, "DW_AT_language", sizeof("DW_AT_language"));
-    break;
+    return "DW_AT_language";
   case DW_AT_discr:
-    memcpy(s, "DW_AT_discr", sizeof("DW_AT_discr"));
-    break;
+    return "DW_AT_discr";
   case DW_AT_discr_value:
-    memcpy(s, "DW_AT_discr_value", sizeof("DW_AT_discr_value"));
-    break;
+    return "DW_AT_discr_value";
   case DW_AT_visibility:
-    memcpy(s, "DW_AT_visibility", sizeof("DW_AT_visibility"));
-    break;
+    return "DW_AT_visibility";
   case DW_AT_import:
-    memcpy(s, "DW_AT_import", sizeof("DW_AT_import"));
-    break;
+    return "DW_AT_import";
   case DW_AT_string_length:
-    memcpy(s, "DW_AT_string_length", sizeof("DW_AT_string_length"));
-    break;
+    return "DW_AT_string_length";
   case DW_AT_common_reference:
-    memcpy(s, "DW_AT_common_reference", sizeof("DW_AT_common_reference"));
-    break;
+    return "DW_AT_common_reference";
   case DW_AT_comp_dir:
-    memcpy(s, "DW_AT_comp_dir", sizeof("DW_AT_comp_dir"));
-    break;
+    return "DW_AT_comp_dir";
   case DW_AT_const_value:
-    memcpy(s, "DW_AT_const_value", sizeof("DW_AT_const_value"));
-    break;
+    return "DW_AT_const_value";
   case DW_AT_containing_type:
-    memcpy(s, "DW_AT_containing_type", sizeof("DW_AT_containing_type"));
-    break;
+    return "DW_AT_containing_type";
   case DW_AT_default_value:
-    memcpy(s, "DW_AT_default_value", sizeof("DW_AT_default_value"));
-    break;
+    return "DW_AT_default_value";
   case DW_AT_inline:
-    memcpy(s, "DW_AT_inline", sizeof("DW_AT_inline"));
-    break;
+    return "DW_AT_inline";
   case DW_AT_is_optional:
-    memcpy(s, "DW_AT_is_optional", sizeof("DW_AT_is_optional"));
-    break;
+    return "DW_AT_is_optional";
   case DW_AT_lower_bound:
-    memcpy(s, "DW_AT_lower_bound", sizeof("DW_AT_lower_bound"));
-    break;
+    return "DW_AT_lower_bound";
   case DW_AT_producer:
-    memcpy(s, "DW_AT_producer", sizeof("DW_AT_producer"));
-    break;
+    return "DW_AT_producer";
   case DW_AT_prototyped:
-    memcpy(s, "DW_AT_prototyped", sizeof("DW_AT_prototyped"));
-    break;
+    return "DW_AT_prototyped";
   case DW_AT_return_addr:
-    memcpy(s, "DW_AT_return_addr", sizeof("DW_AT_return_addr"));
-    break;
+    return "DW_AT_return_addr";
   case DW_AT_start_scope:
-    memcpy(s, "DW_AT_start_scope", sizeof("DW_AT_start_scope"));
-    break;
+    return "DW_AT_start_scope";
   case DW_AT_bit_stride:
-    memcpy(s, "DW_AT_bit_stride", sizeof("DW_AT_bit_stride"));
-    break;
+    return "DW_AT_bit_stride";
   case DW_AT_upper_bound:
-    memcpy(s, "DW_AT_upper_bound", sizeof("DW_AT_upper_bound"));
-    break;
+    return "DW_AT_upper_bound";
   case DW_AT_abstract_origin:
-    memcpy(s, "DW_AT_abstract_origin", sizeof("DW_AT_abstract_origin"));
-    break;
+    return "DW_AT_abstract_origin";
   case DW_AT_accessibility:
-    memcpy(s, "DW_AT_accessibility", sizeof("DW_AT_accessibility"));
-    break;
+    return "DW_AT_accessibility";
   case DW_AT_address_class:
-    memcpy(s, "DW_AT_address_class", sizeof("DW_AT_address_class"));
-    break;
+    return "DW_AT_address_class";
   case DW_AT_artificial:
-    memcpy(s, "DW_AT_artificial", sizeof("DW_AT_artificial"));
-    break;
+    return "DW_AT_artificial";
   case DW_AT_base_types:
-    memcpy(s, "DW_AT_base_types", sizeof("DW_AT_base_types"));
-    break;
+    return "DW_AT_base_types";
   case DW_AT_calling_convention:
-    memcpy(s, "DW_AT_calling_convention", sizeof("DW_AT_calling_convention"));
-    break;
+    return "DW_AT_calling_convention";
   case DW_AT_count:
-    memcpy(s, "DW_AT_count", sizeof("DW_AT_count"));
-    break;
+    return "DW_AT_count";
   case DW_AT_data_member_location:
-    memcpy(s, "DW_AT_data_member_location",
-           sizeof("DW_AT_data_member_location"));
-    break;
+    return "DW_AT_data_member_location";
   case DW_AT_decl_column:
-    memcpy(s, "DW_AT_decl_column", sizeof("DW_AT_decl_column"));
-    break;
+    return "DW_AT_decl_column";
   case DW_AT_decl_file:
-    memcpy(s, "DW_AT_decl_file", sizeof("DW_AT_decl_file"));
-    break;
+    return "DW_AT_decl_file";
   case DW_AT_decl_line:
-    memcpy(s, "DW_AT_decl_line", sizeof("DW_AT_decl_line"));
-    break;
+    return "DW_AT_decl_line";
   case DW_AT_declaration:
-    memcpy(s, "DW_AT_declaration", sizeof("DW_AT_declaration"));
-    break;
+    return "DW_AT_declaration";
   case DW_AT_discr_list:
-    memcpy(s, "DW_AT_discr_list", sizeof("DW_AT_discr_list"));
-    break;
+    return "DW_AT_discr_list";
   case DW_AT_encoding:
-    memcpy(s, "DW_AT_encoding", sizeof("DW_AT_encoding"));
-    break;
+    return "DW_AT_encoding";
   case DW_AT_external:
-    memcpy(s, "DW_AT_external", sizeof("DW_AT_external"));
-    break;
+    return "DW_AT_external";
   case DW_AT_frame_base:
-    memcpy(s, "DW_AT_frame_base", sizeof("DW_AT_frame_base"));
-    break;
+    return "DW_AT_frame_base";
   case DW_AT_friend:
-    memcpy(s, "DW_AT_friend", sizeof("DW_AT_friend"));
-    break;
+    return "DW_AT_friend";
   case DW_AT_identifier_case:
-    memcpy(s, "DW_AT_identifier_case", sizeof("DW_AT_identifier_case"));
-    break;
+    return "DW_AT_identifier_case";
   case DW_AT_macro_info:
-    memcpy(s, "DW_AT_macro_info", sizeof("DW_AT_macro_info"));
-    break;
+    return "DW_AT_macro_info";
   case DW_AT_namelist_item:
-    memcpy(s, "DW_AT_namelist_item", sizeof("DW_AT_namelist_item"));
-    break;
+    return "DW_AT_namelist_item";
   case DW_AT_priority:
-    memcpy(s, "DW_AT_priority", sizeof("DW_AT_priority"));
-    break;
+    return "DW_AT_priority";
   case DW_AT_segment:
-    memcpy(s, "DW_AT_segment", sizeof("DW_AT_segment"));
-    break;
+    return "DW_AT_segment";
   case DW_AT_specification:
-    memcpy(s, "DW_AT_specification", sizeof("DW_AT_specification"));
-    break;
+    return "DW_AT_specification";
   case DW_AT_static_link:
-    memcpy(s, "DW_AT_static_link", sizeof("DW_AT_static_link"));
-    break;
+    return "DW_AT_static_link";
   case DW_AT_type:
-    memcpy(s, "DW_AT_type", sizeof("DW_AT_type"));
-    break;
+    return "DW_AT_type";
   case DW_AT_use_location:
-    memcpy(s, "DW_AT_use_location", sizeof("DW_AT_use_location"));
-    break;
+    return "DW_AT_use_location";
   case DW_AT_variable_parameter:
-    memcpy(s, "DW_AT_variable_parameter", sizeof("DW_AT_variable_parameter"));
-    break;
+    return "DW_AT_variable_parameter";
   case DW_AT_virtuality:
-    memcpy(s, "DW_AT_virtuality", sizeof("DW_AT_virtuality"));
-    break;
+    return "DW_AT_virtuality";
   case DW_AT_vtable_elem_location:
-    memcpy(s, "DW_AT_vtable_elem_location",
-           sizeof("DW_AT_vtable_elem_location"));
-    break;
+    return "DW_AT_vtable_elem_location";
   case DW_AT_allocated:
-    memcpy(s, "DW_AT_allocated", sizeof("DW_AT_allocated"));
-    break;
+    return "DW_AT_allocated";
   case DW_AT_associated:
-    memcpy(s, "DW_AT_associated", sizeof("DW_AT_associated"));
-    break;
+    return "DW_AT_associated";
   case DW_AT_data_location:
-    memcpy(s, "DW_AT_data_location", sizeof("DW_AT_data_location"));
-    break;
+    return "DW_AT_data_location";
   case DW_AT_byte_stride:
-    memcpy(s, "DW_AT_byte_stride", sizeof("DW_AT_byte_stride"));
-    break;
+    return "DW_AT_byte_stride";
   case DW_AT_entry_pc:
-    memcpy(s, "DW_AT_entry_pc", sizeof("DW_AT_entry_pc"));
-    break;
+    return "DW_AT_entry_pc";
   case DW_AT_use_UTF8:
-    memcpy(s, "DW_AT_use_UTF8", sizeof("DW_AT_use_UTF8"));
-    break;
+    return "DW_AT_use_UTF8";
   case DW_AT_extension:
-    memcpy(s, "DW_AT_extension", sizeof("DW_AT_extension"));
-    break;
+    return "DW_AT_extension";
   case DW_AT_ranges:
-    memcpy(s, "DW_AT_ranges", sizeof("DW_AT_ranges"));
-    break;
+    return "DW_AT_ranges";
   case DW_AT_trampoline:
-    memcpy(s, "DW_AT_trampoline", sizeof("DW_AT_trampoline"));
-    break;
+    return "DW_AT_trampoline";
   case DW_AT_call_column:
-    memcpy(s, "DW_AT_call_column", sizeof("DW_AT_call_column"));
-    break;
+    return "DW_AT_call_column";
   case DW_AT_call_file:
-    memcpy(s, "DW_AT_call_file", sizeof("DW_AT_call_file"));
-    break;
+    return "DW_AT_call_file";
   case DW_AT_call_line:
-    memcpy(s, "DW_AT_call_line", sizeof("DW_AT_call_line"));
-    break;
+    return "DW_AT_call_line";
   case DW_AT_description:
-    memcpy(s, "DW_AT_description", sizeof("DW_AT_description"));
-    break;
+    return "DW_AT_description";
   case DW_AT_binary_scale:
-    memcpy(s, "DW_AT_binary_scale", sizeof("DW_AT_binary_scale"));
-    break;
+    return "DW_AT_binary_scale";
   case DW_AT_decimal_scale:
-    memcpy(s, "DW_AT_decimal_scale", sizeof("DW_AT_decimal_scale"));
-    break;
+    return "DW_AT_decimal_scale";
   case DW_AT_small:
-    memcpy(s, "DW_AT_small", sizeof("DW_AT_small"));
-    break;
+    return "DW_AT_small";
   case DW_AT_decimal_sign:
-    memcpy(s, "DW_AT_decimal_sign", sizeof("DW_AT_decimal_sign"));
-    break;
+    return "DW_AT_decimal_sign";
   case DW_AT_digit_count:
-    memcpy(s, "DW_AT_digit_count", sizeof("DW_AT_digit_count"));
-    break;
+    return "DW_AT_digit_count";
   case DW_AT_picture_string:
-    memcpy(s, "DW_AT_picture_string", sizeof("DW_AT_picture_string"));
-    break;
+    return "DW_AT_picture_string";
   case DW_AT_mutable:
-    memcpy(s, "DW_AT_mutable", sizeof("DW_AT_mutable"));
-    break;
+    return "DW_AT_mutable";
   case DW_AT_threads_scaled:
-    memcpy(s, "DW_AT_threads_scaled", sizeof("DW_AT_threads_scaled"));
-    break;
+    return "DW_AT_threads_scaled";
   case DW_AT_explicit:
-    memcpy(s, "DW_AT_explicit", sizeof("DW_AT_explicit"));
-    break;
+    return "DW_AT_explicit";
   case DW_AT_object_pointer:
-    memcpy(s, "DW_AT_object_pointer", sizeof("DW_AT_object_pointer"));
-    break;
+    return "DW_AT_object_pointer";
   case DW_AT_endianity:
-    memcpy(s, "DW_AT_endianity", sizeof("DW_AT_endianity"));
-    break;
+    return "DW_AT_endianity";
   case DW_AT_elemental:
-    memcpy(s, "DW_AT_elemental", sizeof("DW_AT_elemental"));
-    break;
+    return "DW_AT_elemental";
   case DW_AT_pure:
-    memcpy(s, "DW_AT_pure", sizeof("DW_AT_pure"));
-    break;
+    return "DW_AT_pure";
   case DW_AT_recursive:
-    memcpy(s, "DW_AT_recursive", sizeof("DW_AT_recursive"));
-    break;
+    return "DW_AT_recursive";
   case DW_AT_signature:
-    memcpy(s, "DW_AT_signature", sizeof("DW_AT_signature"));
-    break;
+    return "DW_AT_signature";
   case DW_AT_main_subprogram:
-    memcpy(s, "DW_AT_main_subprogram", sizeof("DW_AT_main_subprogram"));
-    break;
+    return "DW_AT_main_subprogram";
   case DW_AT_data_bit_offset:
-    memcpy(s, "DW_AT_data_bit_offset", sizeof("DW_AT_data_bit_offset"));
-    break;
+    return "DW_AT_data_bit_offset";
   case DW_AT_const_expr:
-    memcpy(s, "DW_AT_const_expr", sizeof("DW_AT_const_expr"));
-    break;
+    return "DW_AT_const_expr";
   case DW_AT_enum_class:
-    memcpy(s, "DW_AT_enum_class", sizeof("DW_AT_enum_class"));
-    break;
+    return "DW_AT_enum_class";
   case DW_AT_linkage_name:
-    memcpy(s, "DW_AT_linkage_name", sizeof("DW_AT_linkage_name"));
-    break;
+    return "DW_AT_linkage_name";
   case DW_AT_string_length_bit_size:
-    memcpy(s, "DW_AT_string_length_bit_size",
-           sizeof("DW_AT_string_length_bit_size"));
-    break;
+    return "DW_AT_string_length_bit_size";
   case DW_AT_string_length_byte_size:
-    memcpy(s, "DW_AT_string_length_byte_size",
-           sizeof("DW_AT_string_length_byte_size"));
-    break;
+    return "DW_AT_string_length_byte_size";
   case DW_AT_rank:
-    memcpy(s, "DW_AT_rank", sizeof("DW_AT_rank"));
-    break;
+    return "DW_AT_rank";
   case DW_AT_str_offsets_base:
-    memcpy(s, "DW_AT_str_offsets_base", sizeof("DW_AT_str_offsets_base"));
-    break;
+    return "DW_AT_str_offsets_base";
   case DW_AT_addr_base:
-    memcpy(s, "DW_AT_addr_base", sizeof("DW_AT_addr_base"));
-    break;
+    return "DW_AT_addr_base";
   case DW_AT_rnglists_base:
-    memcpy(s, "DW_AT_rnglists_base", sizeof("DW_AT_rnglists_base"));
-    break;
+    return "DW_AT_rnglists_base";
   case DW_AT_dwo_id:
-    memcpy(s, "DW_AT_dwo_id", sizeof("DW_AT_dwo_id"));
-    break;
+    return "DW_AT_dwo_id";
   case DW_AT_dwo_name:
-    memcpy(s, "DW_AT_dwo_name", sizeof("DW_AT_dwo_name"));
-    break;
+    return "DW_AT_dwo_name";
   case DW_AT_reference:
-    memcpy(s, "DW_AT_reference", sizeof("DW_AT_reference"));
-    break;
+    return "DW_AT_reference";
   case DW_AT_rvalue_reference:
-    memcpy(s, "DW_AT_rvalue_reference", sizeof("DW_AT_rvalue_reference"));
-    break;
+    return "DW_AT_rvalue_reference";
   case DW_AT_macros:
-    memcpy(s, "DW_AT_macros", sizeof("DW_AT_macros"));
-    break;
+    return "DW_AT_macros";
   case DW_AT_call_all_calls:
-    memcpy(s, "DW_AT_call_all_calls", sizeof("DW_AT_call_all_calls"));
-    break;
+    return "DW_AT_call_all_calls";
   case DW_AT_call_all_source_calls:
-    memcpy(s, "DW_AT_call_all_source_calls",
-           sizeof("DW_AT_call_all_source_calls"));
-    break;
+    return "DW_AT_call_all_source_calls";
   case DW_AT_call_all_tail_calls:
-    memcpy(s, "DW_AT_call_all_tail_calls", sizeof("DW_AT_call_all_tail_calls"));
-    break;
+    return "DW_AT_call_all_tail_calls";
   case DW_AT_call_return_pc:
-    memcpy(s, "DW_AT_call_return_pc", sizeof("DW_AT_call_return_pc"));
-    break;
+    return "DW_AT_call_return_pc";
   case DW_AT_call_value:
-    memcpy(s, "DW_AT_call_value", sizeof("DW_AT_call_value"));
-    break;
+    return "DW_AT_call_value";
   case DW_AT_call_origin:
-    memcpy(s, "DW_AT_call_origin", sizeof("DW_AT_call_origin"));
-    break;
+    return "DW_AT_call_origin";
   case DW_AT_call_parameter:
-    memcpy(s, "DW_AT_call_parameter", sizeof("DW_AT_call_parameter"));
-    break;
+    return "DW_AT_call_parameter";
   case DW_AT_call_pc:
-    memcpy(s, "DW_AT_call_pc", sizeof("DW_AT_call_pc"));
-    break;
+    return "DW_AT_call_pc";
   case DW_AT_call_tail_call:
-    memcpy(s, "DW_AT_call_tail_call", sizeof("DW_AT_call_tail_call"));
-    break;
+    return "DW_AT_call_tail_call";
   case DW_AT_call_target:
-    memcpy(s, "DW_AT_call_target", sizeof("DW_AT_call_target"));
-    break;
+    return "DW_AT_call_target";
   case DW_AT_call_target_clobbered:
-    memcpy(s, "DW_AT_call_target_clobbered",
-           sizeof("DW_AT_call_target_clobbered"));
-    break;
+    return "DW_AT_call_target_clobbered";
   case DW_AT_call_data_location:
-    memcpy(s, "DW_AT_call_data_location", sizeof("DW_AT_call_data_location"));
-    break;
+    return "DW_AT_call_data_location";
   case DW_AT_call_data_value:
-    memcpy(s, "DW_AT_call_data_value", sizeof("DW_AT_call_data_value"));
-    break;
+    return "DW_AT_call_data_value";
   case DW_AT_noreturn:
-    memcpy(s, "DW_AT_noreturn", sizeof("DW_AT_noreturn"));
-    break;
+    return "DW_AT_noreturn";
   case DW_AT_alignment:
-    memcpy(s, "DW_AT_alignment", sizeof("DW_AT_alignment"));
-    break;
+    return "DW_AT_alignment";
   case DW_AT_export_symbols:
-    memcpy(s, "DW_AT_export_symbols", sizeof("DW_AT_export_symbols"));
-    break;
+    return "DW_AT_export_symbols";
   case DW_AT_deleted:
-    memcpy(s, "DW_AT_deleted", sizeof("DW_AT_deleted"));
-    break;
+    return "DW_AT_deleted";
   case DW_AT_defaulted:
-    memcpy(s, "DW_AT_defaulted", sizeof("DW_AT_defaulted"));
-    break;
+    return "DW_AT_defaulted";
   case DW_AT_loclists_base:
-    memcpy(s, "DW_AT_loclists_base", sizeof("DW_AT_loclists_base"));
-    break;
+    return "DW_AT_loclists_base";
   case DW_AT_MIPS_loop_begin:
-    memcpy(s, "DW_AT_MIPS_loop_begin", sizeof("DW_AT_MIPS_loop_begin"));
-    break;
+    return "DW_AT_MIPS_loop_begin";
   case DW_AT_MIPS_tail_loop_begin:
-    memcpy(s, "DW_AT_MIPS_tail_loop_begin",
-           sizeof("DW_AT_MIPS_tail_loop_begin"));
-    break;
+    return "DW_AT_MIPS_tail_loop_begin";
   case DW_AT_MIPS_epilog_begin:
-    memcpy(s, "DW_AT_MIPS_epilog_begin", sizeof("DW_AT_MIPS_epilog_begin"));
-    break;
+    return "DW_AT_MIPS_epilog_begin";
   case DW_AT_MIPS_loop_unroll_factor:
-    memcpy(s, "DW_AT_MIPS_loop_unroll_factor",
-           sizeof("DW_AT_MIPS_loop_unroll_factor"));
-    break;
+    return "DW_AT_MIPS_loop_unroll_factor";
   case DW_AT_MIPS_software_pipeline_depth:
-    memcpy(s, "DW_AT_MIPS_software_pipeline_depth",
-           sizeof("DW_AT_MIPS_software_pipeline_depth"));
-    break;
+    return "DW_AT_MIPS_software_pipeline_depth";
   case DW_AT_MIPS_linkage_name:
-    memcpy(s, "DW_AT_MIPS_linkage_name", sizeof("DW_AT_MIPS_linkage_name"));
-    break;
+    return "DW_AT_MIPS_linkage_name";
   case DW_AT_MIPS_stride:
-    memcpy(s, "DW_AT_MIPS_stride", sizeof("DW_AT_MIPS_stride"));
-    break;
+    return "DW_AT_MIPS_stride";
   case DW_AT_MIPS_abstract_name:
-    memcpy(s, "DW_AT_MIPS_abstract_name", sizeof("DW_AT_MIPS_abstract_name"));
-    break;
+    return "DW_AT_MIPS_abstract_name";
   case DW_AT_MIPS_clone_origin:
-    memcpy(s, "DW_AT_MIPS_clone_origin", sizeof("DW_AT_MIPS_clone_origin"));
-    break;
+    return "DW_AT_MIPS_clone_origin";
   case DW_AT_MIPS_has_inlines:
-    memcpy(s, "DW_AT_MIPS_has_inlines", sizeof("DW_AT_MIPS_has_inlines"));
-    break;
+    return "DW_AT_MIPS_has_inlines";
   case DW_AT_MIPS_stride_byte:
-    memcpy(s, "DW_AT_MIPS_stride_byte", sizeof("DW_AT_MIPS_stride_byte"));
-    break;
+    return "DW_AT_MIPS_stride_byte";
   case DW_AT_MIPS_stride_elem:
-    memcpy(s, "DW_AT_MIPS_stride_elem", sizeof("DW_AT_MIPS_stride_elem"));
-    break;
+    return "DW_AT_MIPS_stride_elem";
   case DW_AT_MIPS_ptr_dopetype:
-    memcpy(s, "DW_AT_MIPS_ptr_dopetype", sizeof("DW_AT_MIPS_ptr_dopetype"));
-    break;
+    return "DW_AT_MIPS_ptr_dopetype";
   case DW_AT_MIPS_allocatable_dopetype:
-    memcpy(s, "DW_AT_MIPS_allocatable_dopetype",
-           sizeof("DW_AT_MIPS_allocatable_dopetype"));
-    break;
+    return "DW_AT_MIPS_allocatable_dopetype";
   case DW_AT_MIPS_assumed_shape_dopetype:
-    memcpy(s, "DW_AT_MIPS_assumed_shape_dopetype",
-           sizeof("DW_AT_MIPS_assumed_shape_dopetype"));
-    break;
+    return "DW_AT_MIPS_assumed_shape_dopetype";
   case DW_AT_MIPS_assumed_size:
-    memcpy(s, "DW_AT_MIPS_assumed_size", sizeof("DW_AT_MIPS_assumed_size"));
-    break;
+    return "DW_AT_MIPS_assumed_size";
   case DW_AT_sf_names:
-    memcpy(s, "DW_AT_sf_names", sizeof("DW_AT_sf_names"));
-    break;
+    return "DW_AT_sf_names";
   case DW_AT_src_info:
-    memcpy(s, "DW_AT_src_info", sizeof("DW_AT_src_info"));
-    break;
+    return "DW_AT_src_info";
   case DW_AT_mac_info:
-    memcpy(s, "DW_AT_mac_info", sizeof("DW_AT_mac_info"));
-    break;
+    return "DW_AT_mac_info";
   case DW_AT_src_coords:
-    memcpy(s, "DW_AT_src_coords", sizeof("DW_AT_src_coords"));
-    break;
+    return "DW_AT_src_coords";
   case DW_AT_body_begin:
-    memcpy(s, "DW_AT_body_begin", sizeof("DW_AT_body_begin"));
-    break;
+    return "DW_AT_body_begin";
   case DW_AT_body_end:
-    memcpy(s, "DW_AT_body_end", sizeof("DW_AT_body_end"));
-    break;
+    return "DW_AT_body_end";
   case DW_AT_GNU_vector:
-    memcpy(s, "DW_AT_GNU_vector", sizeof("DW_AT_GNU_vector"));
-    break;
+    return "DW_AT_GNU_vector";
   case DW_AT_GNU_template_name:
-    memcpy(s, "DW_AT_GNU_template_name", sizeof("DW_AT_GNU_template_name"));
-    break;
+    return "DW_AT_GNU_template_name";
   case DW_AT_GNU_odr_signature:
-    memcpy(s, "DW_AT_GNU_odr_signature", sizeof("DW_AT_GNU_odr_signature"));
-    break;
+    return "DW_AT_GNU_odr_signature";
   case DW_AT_GNU_call_site_value:
-    memcpy(s, "DW_AT_GNU_call_site_value", sizeof("DW_AT_GNU_call_site_value"));
-    break;
+    return "DW_AT_GNU_call_site_value";
   case DW_AT_GNU_call_site_data_value:
-    memcpy(s, "DW_AT_GNU_call_site_data_value",
-           sizeof("DW_AT_GNU_call_site_data_value"));
-    break;
+    return "DW_AT_GNU_call_site_data_value";
   case DW_AT_GNU_call_site_target:
-    memcpy(s, "DW_AT_GNU_call_site_target",
-           sizeof("DW_AT_GNU_call_site_target"));
-    break;
+    return "DW_AT_GNU_call_site_target";
   case DW_AT_GNU_call_site_target_clobbered:
-    memcpy(s, "DW_AT_GNU_call_site_target_clobbered",
-           sizeof("DW_AT_GNU_call_site_target_clobbered"));
-    break;
+    return "DW_AT_GNU_call_site_target_clobbered";
   case DW_AT_GNU_tail_call:
-    memcpy(s, "DW_AT_GNU_tail_call", sizeof("DW_AT_GNU_tail_call"));
-    break;
+    return "DW_AT_GNU_tail_call";
   case DW_AT_GNU_all_tail_call_sites:
-    memcpy(s, "DW_AT_GNU_all_tail_call_sites",
-           sizeof("DW_AT_GNU_all_tail_call_sites"));
-    break;
+    return "DW_AT_GNU_all_tail_call_sites";
   case DW_AT_GNU_all_call_sites:
-    memcpy(s, "DW_AT_GNU_all_call_sites", sizeof("DW_AT_GNU_all_call_sites"));
-    break;
+    return "DW_AT_GNU_all_call_sites";
   case DW_AT_GNU_all_source_call_sites:
-    memcpy(s, "DW_AT_GNU_all_source_call_sites",
-           sizeof("DW_AT_GNU_all_source_call_sites"));
-    break;
+    return "DW_AT_GNU_all_source_call_sites";
   case DW_AT_GNU_macros:
-    memcpy(s, "DW_AT_GNU_macros", sizeof("DW_AT_GNU_macros"));
-    break;
+    return "DW_AT_GNU_macros";
   case DW_AT_GNU_dwo_name:
-    memcpy(s, "DW_AT_GNU_dwo_name", sizeof("DW_AT_GNU_dwo_name"));
-    break;
+    return "DW_AT_GNU_dwo_name";
   case DW_AT_GNU_dwo_id:
-    memcpy(s, "DW_AT_GNU_dwo_id", sizeof("DW_AT_GNU_dwo_id"));
-    break;
+    return "DW_AT_GNU_dwo_id";
   case DW_AT_GNU_ranges_base:
-    memcpy(s, "DW_AT_GNU_ranges_base", sizeof("DW_AT_GNU_ranges_base"));
-    break;
+    return "DW_AT_GNU_ranges_base";
   case DW_AT_GNU_addr_base:
-    memcpy(s, "DW_AT_GNU_addr_base", sizeof("DW_AT_GNU_addr_base"));
-    break;
+    return "DW_AT_GNU_addr_base";
   case DW_AT_GNU_pubnames:
-    memcpy(s, "DW_AT_GNU_pubnames", sizeof("DW_AT_GNU_pubnames"));
-    break;
+    return "DW_AT_GNU_pubnames";
   case DW_AT_GNU_pubtypes:
-    memcpy(s, "DW_AT_GNU_pubtypes", sizeof("DW_AT_GNU_pubtypes"));
-    break;
+    return "DW_AT_GNU_pubtypes";
   case DW_AT_GNU_discriminator:
-    memcpy(s, "DW_AT_GNU_discriminator", sizeof("DW_AT_GNU_discriminator"));
-    break;
+    return "DW_AT_GNU_discriminator";
   case DW_AT_BORLAND_property_read:
-    memcpy(s, "DW_AT_BORLAND_property_read",
-           sizeof("DW_AT_BORLAND_property_read"));
-    break;
+    return "DW_AT_BORLAND_property_read";
   case DW_AT_BORLAND_property_write:
-    memcpy(s, "DW_AT_BORLAND_property_write",
-           sizeof("DW_AT_BORLAND_property_write"));
-    break;
+    return "DW_AT_BORLAND_property_write";
   case DW_AT_BORLAND_property_implements:
-    memcpy(s, "DW_AT_BORLAND_property_implements",
-           sizeof("DW_AT_BORLAND_property_implements"));
-    break;
+    return "DW_AT_BORLAND_property_implements";
   case DW_AT_BORLAND_property_index:
-    memcpy(s, "DW_AT_BORLAND_property_index",
-           sizeof("DW_AT_BORLAND_property_index"));
-    break;
+    return "DW_AT_BORLAND_property_index";
   case DW_AT_BORLAND_property_default:
-    memcpy(s, "DW_AT_BORLAND_property_default",
-           sizeof("DW_AT_BORLAND_property_default"));
-    break;
+    return "DW_AT_BORLAND_property_default";
   case DW_AT_BORLAND_Delphi_unit:
-    memcpy(s, "DW_AT_BORLAND_Delphi_unit", sizeof("DW_AT_BORLAND_Delphi_unit"));
-    break;
+    return "DW_AT_BORLAND_Delphi_unit";
   case DW_AT_BORLAND_Delphi_class:
-    memcpy(s, "DW_AT_BORLAND_Delphi_class",
-           sizeof("DW_AT_BORLAND_Delphi_class"));
-    break;
+    return "DW_AT_BORLAND_Delphi_class";
   case DW_AT_BORLAND_Delphi_record:
-    memcpy(s, "DW_AT_BORLAND_Delphi_record",
-           sizeof("DW_AT_BORLAND_Delphi_record"));
-    break;
+    return "DW_AT_BORLAND_Delphi_record";
   case DW_AT_BORLAND_Delphi_metaclass:
-    memcpy(s, "DW_AT_BORLAND_Delphi_metaclass",
-           sizeof("DW_AT_BORLAND_Delphi_metaclass"));
-    break;
+    return "DW_AT_BORLAND_Delphi_metaclass";
   case DW_AT_BORLAND_Delphi_constructor:
-    memcpy(s, "DW_AT_BORLAND_Delphi_constructor",
-           sizeof("DW_AT_BORLAND_Delphi_constructor"));
-    break;
+    return "DW_AT_BORLAND_Delphi_constructor";
   case DW_AT_BORLAND_Delphi_destructor:
-    memcpy(s, "DW_AT_BORLAND_Delphi_destructor",
-           sizeof("DW_AT_BORLAND_Delphi_destructor"));
-    break;
+    return "DW_AT_BORLAND_Delphi_destructor";
   case DW_AT_BORLAND_Delphi_anonymous_method:
-    memcpy(s, "DW_AT_BORLAND_Delphi_anonymous_method",
-           sizeof("DW_AT_BORLAND_Delphi_anonymous_method"));
-    break;
+    return "DW_AT_BORLAND_Delphi_anonymous_method";
   case DW_AT_BORLAND_Delphi_interface:
-    memcpy(s, "DW_AT_BORLAND_Delphi_interface",
-           sizeof("DW_AT_BORLAND_Delphi_interface"));
-    break;
+    return "DW_AT_BORLAND_Delphi_interface";
   case DW_AT_BORLAND_Delphi_ABI:
-    memcpy(s, "DW_AT_BORLAND_Delphi_ABI", sizeof("DW_AT_BORLAND_Delphi_ABI"));
-    break;
+    return "DW_AT_BORLAND_Delphi_ABI";
   case DW_AT_BORLAND_Delphi_return:
-    memcpy(s, "DW_AT_BORLAND_Delphi_return",
-           sizeof("DW_AT_BORLAND_Delphi_return"));
-    break;
+    return "DW_AT_BORLAND_Delphi_return";
   case DW_AT_BORLAND_Delphi_frameptr:
-    memcpy(s, "DW_AT_BORLAND_Delphi_frameptr",
-           sizeof("DW_AT_BORLAND_Delphi_frameptr"));
-    break;
+    return "DW_AT_BORLAND_Delphi_frameptr";
   case DW_AT_BORLAND_closure:
-    memcpy(s, "DW_AT_BORLAND_closure", sizeof("DW_AT_BORLAND_closure"));
-    break;
+    return "DW_AT_BORLAND_closure";
   case DW_AT_LLVM_include_path:
-    memcpy(s, "DW_AT_LLVM_include_path", sizeof("DW_AT_LLVM_include_path"));
-    break;
+    return "DW_AT_LLVM_include_path";
   case DW_AT_LLVM_config_macros:
-    memcpy(s, "DW_AT_LLVM_config_macros", sizeof("DW_AT_LLVM_config_macros"));
-    break;
+    return "DW_AT_LLVM_config_macros";
   case DW_AT_LLVM_sysroot:
-    memcpy(s, "DW_AT_LLVM_sysroot", sizeof("DW_AT_LLVM_sysroot"));
-    break;
+    return "DW_AT_LLVM_sysroot";
   case DW_AT_LLVM_tag_offset:
-    memcpy(s, "DW_AT_LLVM_tag_offset", sizeof("DW_AT_LLVM_tag_offset"));
-    break;
+    return "DW_AT_LLVM_tag_offset";
   case DW_AT_LLVM_apinotes:
-    memcpy(s, "DW_AT_LLVM_apinotes", sizeof("DW_AT_LLVM_apinotes"));
-    break;
+    return "DW_AT_LLVM_apinotes";
   case DW_AT_APPLE_optimized:
-    memcpy(s, "DW_AT_APPLE_optimized", sizeof("DW_AT_APPLE_optimized"));
-    break;
+    return "DW_AT_APPLE_optimized";
   case DW_AT_APPLE_flags:
-    memcpy(s, "DW_AT_APPLE_flags", sizeof("DW_AT_APPLE_flags"));
-    break;
+    return "DW_AT_APPLE_flags";
   case DW_AT_APPLE_isa:
-    memcpy(s, "DW_AT_APPLE_isa", sizeof("DW_AT_APPLE_isa"));
-    break;
+    return "DW_AT_APPLE_isa";
   case DW_AT_APPLE_block:
-    memcpy(s, "DW_AT_APPLE_block", sizeof("DW_AT_APPLE_block"));
-    break;
+    return "DW_AT_APPLE_block";
   case DW_AT_APPLE_major_runtime_vers:
-    memcpy(s, "DW_AT_APPLE_major_runtime_vers",
-           sizeof("DW_AT_APPLE_major_runtime_vers"));
-    break;
+    return "DW_AT_APPLE_major_runtime_vers";
   case DW_AT_APPLE_runtime_class:
-    memcpy(s, "DW_AT_APPLE_runtime_class", sizeof("DW_AT_APPLE_runtime_class"));
-    break;
+    return "DW_AT_APPLE_runtime_class";
   case DW_AT_APPLE_omit_frame_ptr:
-    memcpy(s, "DW_AT_APPLE_omit_frame_ptr",
-           sizeof("DW_AT_APPLE_omit_frame_ptr"));
-    break;
+    return "DW_AT_APPLE_omit_frame_ptr";
   case DW_AT_APPLE_property_name:
-    memcpy(s, "DW_AT_APPLE_property_name", sizeof("DW_AT_APPLE_property_name"));
-    break;
+    return "DW_AT_APPLE_property_name";
   case DW_AT_APPLE_property_getter:
-    memcpy(s, "DW_AT_APPLE_property_getter",
-           sizeof("DW_AT_APPLE_property_getter"));
-    break;
+    return "DW_AT_APPLE_property_getter";
   case DW_AT_APPLE_property_setter:
-    memcpy(s, "DW_AT_APPLE_property_setter",
-           sizeof("DW_AT_APPLE_property_setter"));
-    break;
+    return "DW_AT_APPLE_property_setter";
   case DW_AT_APPLE_property_attribute:
-    memcpy(s, "DW_AT_APPLE_property_attribute",
-           sizeof("DW_AT_APPLE_property_attribute"));
-    break;
+    return "DW_AT_APPLE_property_attribute";
   case DW_AT_APPLE_objc_complete_type:
-    memcpy(s, "DW_AT_APPLE_objc_complete_type",
-           sizeof("DW_AT_APPLE_objc_complete_type"));
-    break;
+    return "DW_AT_APPLE_objc_complete_type";
   case DW_AT_APPLE_property:
-    memcpy(s, "DW_AT_APPLE_property", sizeof("DW_AT_APPLE_property"));
-    break;
+    return "DW_AT_APPLE_property";
   case DW_AT_APPLE_objc_direct:
-    memcpy(s, "DW_AT_APPLE_objc_direct", sizeof("DW_AT_APPLE_objc_direct"));
-    break;
+    return "DW_AT_APPLE_objc_direct";
   case DW_AT_APPLE_sdk:
-    memcpy(s, "DW_AT_APPLE_sdk", sizeof("DW_AT_APPLE_sdk"));
-    break;
+    return "DW_AT_APPLE_sdk";
   default:
     pg_log_debug(&logger, "attr=%#x\n", attr);
     assert(0 && "UNREACHABLE");
