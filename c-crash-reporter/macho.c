@@ -1,4 +1,5 @@
-#include <_types/_uint64_t.h>
+#include <_types/_uint16_t.h>
+#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
@@ -1246,7 +1247,7 @@ static void read_dwarf_ext_op(uint8_t *data, int64_t size, uint64_t *offset,
 }
 
 static void read_dwarf_section_debug_abbrev(pg_allocator_t allocator,
-                                            uint8_t *data, int64_t size,
+                                            uint8_t *data, uint64_t size,
                                             const struct section_64 *sec,
                                             dw_abbrev *abbrev) {
   assert(data != NULL);
@@ -1288,7 +1289,7 @@ static void read_dwarf_section_debug_abbrev(pg_allocator_t allocator,
 }
 
 static void read_dwarf_section_debug_info(pg_allocator_t allocator,
-                                          uint8_t *data, int64_t size,
+                                          uint8_t *data, uint64_t size,
                                           const struct section_64 *sec,
                                           const dw_abbrev *abbrev,
                                           debug_data *dd) {
@@ -1758,19 +1759,23 @@ static void read_source_code(pg_allocator_t allocator, debug_data *dd) {
       continue;
 
     snprintf(path, sizeof(path), "%s/%s", fd->directory, fd->file);
-    gbFileContents contents = gb_file_read_contents(allocator, true, path);
+    pg_array_t(uint8_t) contents = {0};
+    if (!pg_read_file(allocator, path, &contents)) {
+      fprintf(stderr, "Failed to read file: %s %s\n", path, strerror(errno));
+      exit(errno);
+    }
 
     source_file source = {
         .contents = contents, .directory = fd->directory, .file = fd->file};
     pg_array_init_reserve(source.newline_offsets, 500, allocator);
 
     pg_array_append(source.newline_offsets, 0);
-    for (uint64_t j = 0; j < contents.size; j++) {
-      char *c = &contents.data[j];
+    for (uint64_t j = 0; j < pg_array_len(contents); j++) {
+      uint8_t *c = &contents[j];
       if (*c == '\n')
-        pg_array_append(source.newline_offsets, j);
+        pg_array_append(source.newline_offsets, (uint16_t)j);
     }
-    pg_array_append(source.newline_offsets, source.contents.size);
+    pg_array_append(source.newline_offsets, pg_array_len(source.contents));
 
     pg_array_append(dd->sources, source);
   }
