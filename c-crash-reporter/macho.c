@@ -1,5 +1,3 @@
-#include <_types/_uint16_t.h>
-#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
@@ -9,6 +7,8 @@
 #include <unistd.h>
 
 #include "../pg/pg.h"
+
+static pg_logger_t logger = {.level = PG_LOG_INFO};
 
 static void read_data(uint8_t *data, uint64_t data_size, uint64_t *offset,
                       void *res, uint64_t res_size) {
@@ -450,12 +450,6 @@ typedef struct {
   pg_array_t(char *) debug_line_files;
   pg_array_t(source_file) sources;
 } debug_data;
-
-#ifdef PG_WITH_LOG
-#define LOG(fmt, ...)                                                          \
-  do {                                                                         \
-    fprintf(stderr, fmt, ##__VA_ARGS__);                                       \
-  } while (0)
 
 static const char dw_tag_str[][40] = {
     [DW_TAG_null] = "DW_TAG_null",
@@ -1163,7 +1157,7 @@ static char *dw_attribute_to_str(dw_attribute attr) {
     memcpy(s, "DW_AT_APPLE_sdk", sizeof("DW_AT_APPLE_sdk"));
     break;
   default:
-    LOG("attr=%#x\n", attr);
+    pg_log_debug(&logger, "attr=%#x\n", attr);
     assert(0 && "UNREACHABLE");
   }
   return s;
@@ -1197,13 +1191,6 @@ static const char dw_form_str[][30] = {
     [DW_FORM_ref_sig8] = "DW_FORM_ref_sig8",
 };
 
-#else
-#define LOG(fmt, ...)                                                          \
-  do {                                                                         \
-  } while (0)
-
-#endif
-
 static void read_dwarf_ext_op(uint8_t *data, int64_t size, uint64_t *offset,
                               dw_line_section_fsm *fsm,
                               pg_array_t(dw_line_entry) * line_entries,
@@ -1216,11 +1203,11 @@ static void read_dwarf_ext_op(uint8_t *data, int64_t size, uint64_t *offset,
   const uint64_t start_offset = *offset;
   DW_LNE extended_opcode = 0;
   read_data(data, size, offset, &extended_opcode, sizeof(extended_opcode));
-  LOG("DW_EXT_OP=%d\n", extended_opcode);
+  pg_log_debug(&logger, "DW_EXT_OP=%d\n", extended_opcode);
 
   switch (extended_opcode) {
   case DW_LNE_end_sequence: {
-    LOG("DW_LNE_end_sequence");
+    pg_log_debug(&logger, "DW_LNE_end_sequence");
 
     *fsm = (dw_line_section_fsm){.line = 1, .file = 1};
     break;
@@ -1228,7 +1215,7 @@ static void read_dwarf_ext_op(uint8_t *data, int64_t size, uint64_t *offset,
   case DW_LNE_set_address: {
     uint64_t a = 0;
     read_data(data, size, offset, &a, sizeof(a));
-    LOG("DW_LNE_set_address addr=%#llx\n", a);
+    pg_log_debug(&logger, "DW_LNE_set_address addr=%#llx\n", a);
     fsm->address = a;
 
     break;
@@ -1267,7 +1254,7 @@ static void read_dwarf_section_debug_abbrev(pg_allocator_t allocator,
     bool has_children = false;
     read_data(data, size, &offset, &has_children, sizeof(has_children));
     tag_count += 1;
-    LOG("[%d] .debug_abbrev: type_num=%d tag=%#x %s has_children=%d\n",
+    pg_log_debug(&logger, "[%d] .debug_abbrev: type_num=%d tag=%#x %s has_children=%d\n",
         tag_count, entry.type, entry.tag, dw_tag_str[entry.tag], has_children);
 
     pg_array_init_reserve(entry.attr_forms, 20, allocator);
@@ -1278,7 +1265,7 @@ static void read_dwarf_section_debug_abbrev(pg_allocator_t allocator,
       if (attr_form.attr == 0 && attr_form.form == 0)
         break;
 
-      LOG(".debug_abbrev: attr=%#x %s form=%#x %s\n", attr_form.attr,
+      pg_log_debug(&logger, ".debug_abbrev: attr=%#x %s form=%#x %s\n", attr_form.attr,
           dw_attribute_to_str(attr_form.attr), attr_form.form,
           dw_form_str[attr_form.form]);
 
@@ -1305,20 +1292,20 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
   // TODO: multiple compile units (CU)
   uint32_t di_size = 0;
   read_data(data, size, &offset, &di_size, sizeof(di_size));
-  LOG(".debug_info size=%#x\n", di_size);
+  pg_log_debug(&logger, ".debug_info size=%#x\n", di_size);
 
   uint16_t version = 0;
   read_data(data, size, &offset, &version, sizeof(version));
-  LOG(".debug_info version=%u\n", version);
+  pg_log_debug(&logger, ".debug_info version=%u\n", version);
   assert(version == 4);
 
   uint32_t abbr_offset = 0;
   read_data(data, size, &offset, &abbr_offset, sizeof(abbr_offset));
-  LOG(".debug_info abbr_offset=%#x\n", abbr_offset);
+  pg_log_debug(&logger, ".debug_info abbr_offset=%#x\n", abbr_offset);
 
   uint8_t addr_size = 0;
   read_data(data, size, &offset, &addr_size, sizeof(addr_size));
-  LOG(".debug_info abbr_size=%#x\n", addr_size);
+  pg_log_debug(&logger, ".debug_info abbr_size=%#x\n", addr_size);
 
   char *directory = NULL;
   while (offset < sec->offset + sec->size) {
@@ -1339,7 +1326,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
     }
     assert(entry != NULL);
     assert(entry->type == type);
-    LOG(".debug_info type=%#x tag=%#x %s\n", type, entry->tag,
+    pg_log_debug(&logger, ".debug_info type=%#x tag=%#x %s\n", type, entry->tag,
         dw_tag_str[entry->tag]);
 
     dw_fn_decl *se = NULL;
@@ -1353,14 +1340,14 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
 
     for (uint64_t i = 0; i < pg_array_len(entry->attr_forms); i++) {
       const dw_attr_form af = entry->attr_forms[i];
-      LOG(".debug_info: attr=%#x %s form=%#x %s\n", af.attr,
+      pg_log_debug(&logger, ".debug_info: attr=%#x %s form=%#x %s\n", af.attr,
           dw_attribute_to_str(af.attr), af.form, dw_form_str[af.form]);
 
       switch (af.form) {
       case DW_FORM_strp: {
         uint32_t str_offset = 0;
         read_data(data, size, &offset, &str_offset, sizeof(str_offset));
-        LOG("DW_FORM_strp: %#x ", str_offset);
+        pg_log_debug(&logger, "DW_FORM_strp: %#x ", str_offset);
 
         char *s = NULL;
         for (uint64_t j = 0; j < pg_array_len(dd->debug_str_strings); j++) {
@@ -1370,7 +1357,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
           }
         }
         assert(s != NULL);
-        LOG("%s\n", s);
+        pg_log_debug(&logger, "%s\n", s);
         if (af.attr == DW_AT_name && se != NULL) {
           se->fn_name = s;
         }
@@ -1382,7 +1369,7 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
       case DW_FORM_data1: {
         uint8_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
-        LOG("DW_FORM_data1: %#x\n", val);
+        pg_log_debug(&logger, "DW_FORM_data1: %#x\n", val);
         if (af.attr == DW_AT_decl_file && se != NULL && se->file == NULL) {
           assert(dd->debug_line_files != NULL);
           assert(val <= pg_array_len(dd->debug_line_files));
@@ -1393,13 +1380,13 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
       case DW_FORM_data2: {
         uint16_t lang = 0;
         read_data(data, size, &offset, &lang, sizeof(lang));
-        LOG("DW_FORM_data2: %#x\n", lang);
+        pg_log_debug(&logger, "DW_FORM_data2: %#x\n", lang);
         break;
       }
       case DW_FORM_data4: {
         uint32_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
-        LOG("DW_FORM_data4: %#x\n", val);
+        pg_log_debug(&logger, "DW_FORM_data4: %#x\n", val);
         if (af.attr == DW_AT_high_pc && se != NULL) {
           se->high_pc = val;
         }
@@ -1408,43 +1395,43 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
       case DW_FORM_data8: {
         uint64_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
-        LOG("DW_FORM_data8: %#llx\n", val);
+        pg_log_debug(&logger, "DW_FORM_data8: %#llx\n", val);
         break;
       }
       case DW_FORM_ref1: {
         uint8_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
-        LOG("DW_FORM_ref1: %#x\n", val);
+        pg_log_debug(&logger, "DW_FORM_ref1: %#x\n", val);
         break;
       }
       case DW_FORM_ref2: {
         uint16_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
-        LOG("DW_FORM_ref2: %#x\n", val);
+        pg_log_debug(&logger, "DW_FORM_ref2: %#x\n", val);
         break;
       }
       case DW_FORM_ref4: {
         uint32_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
-        LOG("DW_FORM_ref4: %#x\n", val);
+        pg_log_debug(&logger, "DW_FORM_ref4: %#x\n", val);
         break;
       }
       case DW_FORM_ref8: {
         uint64_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
-        LOG("DW_FORM_ref8: %#llx\n", val);
+        pg_log_debug(&logger, "DW_FORM_ref8: %#llx\n", val);
         break;
       }
       case DW_FORM_sec_offset: {
         uint32_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
-        LOG("DW_FORM_sec_offset: %#x\n", val);
+        pg_log_debug(&logger, "DW_FORM_sec_offset: %#x\n", val);
         break;
       }
       case DW_FORM_addr: {
         uint64_t addr = 0;
         read_data(data, size, &offset, &addr, sizeof(addr));
-        LOG("DW_FORM_addr: %#llx\n", addr);
+        pg_log_debug(&logger, "DW_FORM_addr: %#llx\n", addr);
 
         if (af.attr == DW_AT_low_pc && se != NULL) {
           se->low_pc = addr;
@@ -1452,25 +1439,25 @@ static void read_dwarf_section_debug_info(pg_allocator_t allocator,
         break;
       }
       case DW_FORM_flag_present: {
-        LOG("DW_FORM_flag_present (true)");
+        pg_log_debug(&logger, "DW_FORM_flag_present (true)");
         break;
       }
       case DW_FORM_exprloc: {
         const uint64_t length = read_leb128_u64(data, size, &offset);
         offset += length;
-        LOG("DW_FORM_exprloc: length=%lld\n", length);
+        pg_log_debug(&logger, "DW_FORM_exprloc: length=%lld\n", length);
 
         break;
       }
       case DW_FORM_udata: {
         const uint64_t val = read_leb128_u64(data, size, &offset);
-        LOG("DW_FORM_udata: length=%lld\n", val);
+        pg_log_debug(&logger, "DW_FORM_udata: length=%lld\n", val);
 
         break;
       }
       case DW_FORM_sdata: {
         const i64 val = read_leb128_i64(data, size, &offset);
-        LOG("DW_FORM_sdata: length=%lld\n", val);
+        pg_log_debug(&logger, "DW_FORM_sdata: length=%lld\n", val);
 
         break;
       }
@@ -1505,7 +1492,7 @@ static void read_dwarf_section_debug_str(pg_allocator_t allocator,
     assert(offset < size);
     char *end = memchr(&data[offset], 0, sec->offset + sec->size);
     assert(end != NULL);
-    LOG("- [%llu] %s\n", i, s);
+    pg_log_debug(&logger, "- [%llu] %s\n", i, s);
     dw_string str = {.s = s, .offset = offset - sec->offset};
     pg_array_append(dd->debug_str_strings, str);
     offset += end - s;
@@ -1546,7 +1533,7 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
   uint64_t offset = sec->offset;
   dwarf_debug_line_header ddlh = {0};
   read_data(data, size, &offset, &ddlh, sizeof(ddlh));
-  LOG(".debug_line: length=%#x version=%#x header_length=%#x "
+  pg_log_debug(&logger, ".debug_line: length=%#x version=%#x header_length=%#x "
       "min_instruction_length=%#x max_ops_per_inst=%d "
       "default_is_stmt=%#x "
       "line_base=%d "
@@ -1576,7 +1563,7 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
   assert(ddlh.line_range * ddlh.min_instruction_length != 0);
 
   assert(ddlh.version == 4);
-  LOG("Directories:");
+  pg_log_debug(&logger, "Directories:");
   while (offset < sec->offset + sec->size) {
     assert(offset < size);
     char *s = (char *)&data[offset];
@@ -1587,7 +1574,7 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
       offset += 1;
       continue;
     }
-    LOG("- %s (%ld)\n", s, end - s);
+    pg_log_debug(&logger, "- %s (%ld)\n", s, end - s);
 
     offset += end - s;
     if (*(end + 1) == 0) {
@@ -1595,7 +1582,7 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
       break;
     }
   }
-  LOG("Files:");
+  pg_log_debug(&logger, "Files:");
   pg_array_init_reserve(dd->debug_line_files, 10, allocator);
   while (offset < sec->offset + sec->size) {
     assert(offset < size);
@@ -1615,18 +1602,18 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
     const uint64_t length = read_leb128_u64(data, size, &offset);
 
     pg_array_append(dd->debug_line_files, s);
-    LOG("- %s dir_index=%llu modtime=%llu "
+    pg_log_debug(&logger, "- %s dir_index=%llu modtime=%llu "
         "length=%llu\n",
         s, dir_index, modtime, length);
   }
-  LOG("");
+  pg_log_debug(&logger, "");
 
   dw_line_section_fsm fsm = {.line = 1, .file = 1};
 
   while (offset < sec->offset + sec->size) {
     DW_LNS opcode = 0;
     read_data(data, size, &offset, &opcode, sizeof(opcode));
-    LOG("DW_OP=%#x offset=%#llx rel_offset=%#llx fsm.address=%#llx "
+    pg_log_debug(&logger, "DW_OP=%#x offset=%#llx rel_offset=%#llx fsm.address=%#llx "
         "fsm.line=%d "
         "fsm.file=%d\n",
         opcode, offset, offset - sec->offset - 1, fsm.address, fsm.line,
@@ -1634,29 +1621,29 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
     switch (opcode) {
     case DW_LNS_extended_op: {
       const uint64_t ext_op_size = read_leb128_u64(data, size, &offset);
-      LOG("DW_LNS_extended_op size=%#llx\n", ext_op_size);
+      pg_log_debug(&logger, "DW_LNS_extended_op size=%#llx\n", ext_op_size);
 
       read_dwarf_ext_op(data, size, &offset, &fsm, &dd->line_entries,
                         ext_op_size);
       break;
     }
     case DW_LNS_copy:
-      LOG("DW_LNS_copy");
+      pg_log_debug(&logger, "DW_LNS_copy");
       break;
     case DW_LNS_advance_pc: {
       const uint64_t decoded = read_leb128_u64(data, size, &offset);
-      LOG("DW_LNS_advance_pc leb128=%#llx\n", decoded);
+      pg_log_debug(&logger, "DW_LNS_advance_pc leb128=%#llx\n", decoded);
       fsm.address += decoded;
       break;
     }
     case DW_LNS_advance_line: {
       const i64 l = read_leb128_i64(data, size, &offset);
       fsm.line += l;
-      LOG("DW_LNS_advance_line line=%lld fsm.line=%hu\n", l, fsm.line);
+      pg_log_debug(&logger, "DW_LNS_advance_line line=%lld fsm.line=%hu\n", l, fsm.line);
       if (dw_line_entry_should_add_new_entry(&fsm, dd)) {
         dw_line_entry e = {
             .pc = fsm.address, .line = fsm.line, .file = fsm.file};
-        LOG("new dw_line_entry: pc=%#llx line=%d file=%d %s\n", e.pc, e.line,
+        pg_log_debug(&logger, "new dw_line_entry: pc=%#llx line=%d file=%d %s\n", e.pc, e.line,
             e.file, dd->debug_line_files[e.file - 1]);
         pg_array_append(dd->line_entries, e);
       }
@@ -1664,15 +1651,15 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
     }
     case DW_LNS_set_file:
       fsm.file = read_leb128_u64(data, size, &offset);
-      LOG("DW_LNS_set_file file=%d\n", fsm.file);
+      pg_log_debug(&logger, "DW_LNS_set_file file=%d\n", fsm.file);
       break;
     case DW_LNS_set_column: {
       const uint64_t column = read_leb128_u64(data, size, &offset);
-      LOG("DW_LNS_set_column column=%llu\n", column);
+      pg_log_debug(&logger, "DW_LNS_set_column column=%llu\n", column);
       break;
     }
     case DW_LNS_negate_stmt:
-      LOG("DW_LNS_negate_stmt");
+      pg_log_debug(&logger, "DW_LNS_negate_stmt");
       fsm.is_stmt = !fsm.is_stmt;
       break;
     case DW_LNS_set_basic_block:
@@ -1681,14 +1668,14 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
       const uint8_t op = 255 - ddlh.opcode_base;
       fsm.address += op / ddlh.line_range * ddlh.min_instruction_length;
       // TODO: op_index
-      LOG("address+=%#x -> address=%#llx\n",
+      pg_log_debug(&logger, "address+=%#x -> address=%#llx\n",
           op / ddlh.line_range * ddlh.min_instruction_length, fsm.address);
       break;
     }
     case DW_LNS_fixed_advance_pc:
       break;
     case DW_LNS_set_prologue_end:
-      LOG("DW_LNS_set_prologue_end");
+      pg_log_debug(&logger, "DW_LNS_set_prologue_end");
       break;
     case DW_LNS_set_epilogue_begin:
       break;
@@ -1702,11 +1689,11 @@ static void read_dwarf_section_debug_line(pg_allocator_t allocator,
       if (dw_line_entry_should_add_new_entry(&fsm, dd)) {
         dw_line_entry e = {
             .pc = fsm.address, .line = fsm.line, .file = fsm.file};
-        LOG("new dw_line_entry: pc=%#llx line=%d file=%d %s\n", e.pc, e.line,
+        pg_log_debug(&logger, "new dw_line_entry: pc=%#llx line=%d file=%d %s\n", e.pc, e.line,
             e.file, dd->debug_line_files[e.file - 1]);
         pg_array_append(dd->line_entries, e);
       }
-      LOG("address+=%d line+=%d\n",
+      pg_log_debug(&logger, "address+=%d line+=%d\n",
           op / ddlh.line_range * ddlh.min_instruction_length,
           ddlh.line_base + op % ddlh.line_range);
     }
@@ -1737,7 +1724,7 @@ static void stacktrace_find_entry(const debug_data *dd, uint64_t pc,
     cur_le = &dd->line_entries[i + 1];
     if (prev_le->file == cur_le->file) {
       if (!(prev_le->pc < cur_le->pc)) {
-        LOG("[D009] i=%d\n", i);
+        pg_log_debug(&logger, "[D009] i=%d\n", i);
       }
       assert(prev_le->pc < cur_le->pc); // Shoud be sorted
     }
@@ -1794,7 +1781,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
   read_data(data, size, &offset, &h, sizeof(h));
   assert(h.filetype == MH_DSYM);
 
-  LOG("magic=%d\ncputype=%d\ncpusubtype=%d\nfiletype=%d\nncmds=%"
+  pg_log_debug(&logger, "magic=%d\ncputype=%d\ncpusubtype=%d\nfiletype=%d\nncmds=%"
       "d\nsizeofcmds=%d\nflags=%d\n",
       h.magic, h.cputype, h.cpusubtype, h.filetype, h.ncmds, h.sizeofcmds,
       h.flags);
@@ -1810,14 +1797,14 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
   for (uint64_t cmd_count = 0; cmd_count < h.ncmds; cmd_count++) {
     struct load_command c = {0};
     read_data(data, size, &offset, &c, sizeof(c));
-    LOG("command: cmd=%d cmdsize=%d\n", c.cmd, c.cmdsize);
+    pg_log_debug(&logger, "command: cmd=%d cmdsize=%d\n", c.cmd, c.cmdsize);
     offset -= sizeof(c);
 
     switch (c.cmd) {
     case LC_UUID: {
       struct uuid_command uc = {0};
       read_data(data, size, &offset, &uc, sizeof(uc));
-      LOG("LC_UUID uuid=%#x %#x %#x %#x %#x %#x %#x %#x %#x %#x "
+      pg_log_debug(&logger, "LC_UUID uuid=%#x %#x %#x %#x %#x %#x %#x %#x %#x %#x "
           "%#x "
           "%#x %#x "
           "%#x "
@@ -1832,7 +1819,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
     case LC_BUILD_VERSION: {
       struct build_version_command vc = {0};
       read_data(data, size, &offset, &vc, sizeof(vc));
-      LOG("LC_BUILD_VERSION platform=%#x minos=%#x sdk=%#x "
+      pg_log_debug(&logger, "LC_BUILD_VERSION platform=%#x minos=%#x sdk=%#x "
           "ntools=%d\n",
           vc.platform, vc.minos, vc.sdk, vc.ntools);
 
@@ -1843,7 +1830,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
       struct symtab_command sc = {0};
       read_data(data, size, &offset, &sc, sizeof(sc));
 
-      LOG("LC_SYMTAB symoff=%#x nsyms=%d stroff=%#x strsize=%d\n", sc.symoff,
+      pg_log_debug(&logger, "LC_SYMTAB symoff=%#x nsyms=%d stroff=%#x strsize=%d\n", sc.symoff,
           sc.nsyms, sc.stroff, sc.strsize);
 
       break;
@@ -1852,7 +1839,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
       struct segment_command_64 sc = {0};
       read_data(data, size, &offset, &sc, sizeof(sc));
 
-      LOG("LC_SEGMENT_64 segname=%s vmaddr=%#llx vmsize=%#llx "
+      pg_log_debug(&logger, "LC_SEGMENT_64 segname=%s vmaddr=%#llx vmsize=%#llx "
           "fileoff=%#llx filesize=%#llx maxprot=%#x initprot=%#x "
           "nsects=%d flags=%d\n",
           sc.segname, sc.vmaddr, sc.vmsize, sc.fileoff, sc.filesize, sc.maxprot,
@@ -1861,7 +1848,7 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
       for (uint64_t sec_count = 0; sec_count < sc.nsects; sec_count++) {
         struct section_64 sec = {0};
         read_data(data, size, &offset, &sec, sizeof(sec));
-        LOG("SECTION sectname=%s segname=%s addr=%#llx "
+        pg_log_debug(&logger, "SECTION sectname=%s segname=%s addr=%#llx "
             "size=%#llx "
             "offset=%#x align=%#x reloff=%#x nreloc=%d "
             "flags=%#x\n",
@@ -1901,19 +1888,19 @@ static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data,
 
   for (uint64_t i = 0; i < pg_array_len(dd->fn_decls); i++) {
     dw_fn_decl *fd = &(dd->fn_decls)[i];
-    LOG("dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
+    pg_log_debug(&logger, "dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
         "file=%s/%s\n",
         fd->low_pc, fd->high_pc, fd->fn_name, fd->directory, fd->file);
 
     if (fd->fn_name != NULL && strcmp(fd->fn_name, "main") == 0) {
       dd->pie_displacement = get_main_address() - fd->low_pc;
-      LOG("pie_displacement=%#llx\n", dd->pie_displacement);
+      pg_log_debug(&logger, "pie_displacement=%#llx\n", dd->pie_displacement);
     }
   }
 
   for (uint64_t i = 0; i < pg_array_len(dd->line_entries); i++) {
     dw_line_entry *le = &(dd->line_entries)[i];
-    LOG("dw_line_entry[%d]: line=%d pc=%#llx file=%d %s\n", i, le->line, le->pc,
+    pg_log_debug(&logger, "dw_line_entry[%d]: line=%d pc=%#llx file=%d %s\n", i, le->line, le->pc,
         le->file, dd->debug_line_files[le->file - 1]);
   }
 }
@@ -1974,7 +1961,7 @@ __attribute__((unused)) static void stacktrace_print(void) {
   uintptr_t *rbp = __builtin_frame_address(0);
   while (rbp != 0 && *rbp != 0) {
     uintptr_t rip = *(rbp + 1);
-    LOG("rbp=%p rip=%#lx rsp=%#lx\n", rbp, rip, *(rbp + 2));
+    pg_log_debug(&logger, "rbp=%p rip=%#lx rsp=%#lx\n", rbp, rip, *(rbp + 2));
     rbp = (uintptr_t *)*rbp;
 
     stacktrace_entry se = {0};
@@ -2007,7 +1994,7 @@ __attribute__((unused)) static void stacktrace_print(void) {
       char *source_line = &f->contents.data[offset_start];
       uint32_t source_line_len = offset_end - offset_start;
 
-      LOG("se.line=%d offset_start=%d offset_end=%d len=%d\n", se.line,
+      pg_log_debug(&logger, "se.line=%d offset_start=%d offset_end=%d len=%d\n", se.line,
           offset_start, offset_end, source_line_len);
 
       // Trim left
