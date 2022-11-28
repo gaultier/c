@@ -39,3 +39,18 @@ $ make
 
 
 Should work on BSDs but has not been tested yet.
+
+
+## Why?
+
+- Simple, fast, no setup
+- The built-in memory profiler from macOS did not work for my code
+- Third-party code is usually not amenable to custom allocators to trace their allocations
+- I have used this tool to great effect to improve the allocation pattern of my code, or to find leaks
+
+
+## Limits
+
+- Trace files can become huge (maybe compression would help? Need to look into that!)
+- Dtrace adds some overhead
+- Dtrace reports stack offsets for code locations, not the source code line. We could parse the debug symbols to match those offset to the source code lines.
