@@ -19,6 +19,7 @@ int main(int argc, char *argv[]) {
   pg_logger_t logger = {.level = PG_LOG_INFO};
 
   pg_array_t(uint8_t) torrent_file_data = {0};
+    pg_array_init_reserve(torrent_file_data, 0, pg_heap_allocator());
   if (!pg_read_file(pg_heap_allocator(), argv[1], &torrent_file_data)) {
     pg_log_fatal(&logger, errno, "Failed to read file %s: %s", argv[1],
                  strerror(errno));

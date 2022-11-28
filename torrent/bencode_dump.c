@@ -9,6 +9,7 @@
 
 int main(int argc, char *argv[]) {
   pg_array_t(uint8_t) buf = {0};
+    pg_array_init_reserve(buf, 0, pg_heap_allocator());
   int64_t ret = 0;
   if (argc == 2) {
     if ((ret = pg_read_file(pg_heap_allocator(), argv[1], &buf)) != 0) {

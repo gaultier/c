@@ -1529,6 +1529,7 @@ static void read_source_code(pg_allocator_t allocator, debug_data_t *dd) {
 
     snprintf(path, sizeof(path), "%s/%s", fd->directory, fd->file);
     pg_array_t(uint8_t) contents = {0};
+    pg_array_init_reserve(contents, 0, pg_heap_allocator());
     if (!pg_read_file(allocator, path, &contents)) {
       fprintf(stderr, "Failed to read file: %s %s\n", path, strerror(errno));
       exit(errno);
@@ -1740,6 +1741,7 @@ __attribute__((unused)) static void stacktrace_print(void) {
     snprintf(path, sizeof(path), "%s.dSYM/Contents/Resources/DWARF/%s",
              exe_name, exe_name);
     pg_array_t(uint8_t) contents = {0};
+    pg_array_init_reserve(contents, 0, pg_heap_allocator());
     if (!pg_read_file(allocator, path, &contents)) {
       pg_log_fatal(&logger, errno, "Failed to read file: %s %s\n", path,
                    strerror(errno));

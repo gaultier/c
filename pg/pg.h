@@ -1,5 +1,6 @@
 #pragma once
 
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -1235,7 +1236,7 @@ pg_array_read_file_fd(pg_allocator_t allocator, int fd,
   }
   const uint64_t read_buffer_size =
       MIN((uint64_t)UINT32_MAX, (uint64_t)st.st_size);
-  pg_array_init_reserve(*buf, st.st_size, allocator);
+  pg_array_grow(*buf, (uint64_t)st.st_size);
   while (pg_array_len(*buf) < (uint64_t)st.st_size) {
     int64_t ret = read(fd, *buf + pg_array_len(*buf), read_buffer_size);
     if (ret == -1) {
