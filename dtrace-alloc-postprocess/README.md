@@ -6,6 +6,10 @@ A simple way to trace all memory (de-)allocations, without any code change requi
 - No dependencies. 
 - Can attach to a running application or start one. 
 - Works with any programming language using libc, and can also be easily extended to support those that don't.
+- See the stacktrace of a (de-)allocation
+- Match an allocation with its deallocation:
+
+    <img src="screenshot-pair.png"></img> 
 
 
 ## Quick start
