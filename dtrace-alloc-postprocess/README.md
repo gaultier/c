@@ -1,0 +1,37 @@
+# A simple memory profiler for macOS and BSDs
+
+<img src="screenshot.png"></img>
+
+A simple way to trace all memory (de-)allocations, without any code change required. 
+- No dependencies. 
+- Can attach to a running application or start one. 
+- Works with any programming language using libc, and can also be easily extended to support those that don't.
+
+
+## Quick start
+
+*Let's trace git!*
+
+```sh
+$ sudo ./alloc.d -c "git status" -o /tmp/git-status.dtrace
+$ ./dtrace-alloc-postprocess /tmp/git-status.dtrace > /tmp/mem.html
+$ open /tmp/mem.html
+```
+
+## Requirements
+
+- Administrator access for dtrace 
+- On macOS, System Integrity Protection (SIP) disabled (required to run dtrace on recent versions of macOS, unfortunately)
+- A browser to see the chart
+
+
+## Build
+
+**Requires a C99 compiler and make**
+
+```sh
+$ make
+```
+
+
+Should work on BSDs but has not been tested yet.
