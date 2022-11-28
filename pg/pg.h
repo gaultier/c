@@ -76,7 +76,7 @@ __attribute__((unused)) static void *pg_memmem(const void *big,
   if (!s)
     return NULL;
 
-  uint64_t rem_len = (uint64_t)(s - sbig);
+  uint64_t rem_len = big_len + (uint64_t)(s - sbig);
   if (rem_len < little_len)
     return NULL;
 
@@ -490,7 +490,7 @@ pg_string_append_length(pg_string_t str, void const *other,
       return NULL;
     }
 
-    memcpy(str + curr_len, other, other_len);
+    memmove(str + curr_len, other, other_len);
     str[curr_len + other_len] = '\0';
     pg__set_string_len(str, curr_len + other_len);
   }

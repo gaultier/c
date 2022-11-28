@@ -87,7 +87,7 @@ static pg_string_t get_current_git_commit(void) {
 }
 
 static pg_string_t get_git_origin_remote_url(void) {
-  const char *const cmd = "git remote get-url origin";
+  const char *const  cmd = "git remote get-url origin";
   printf("Running: %s\n", cmd);
 
   char *argv[] = {"git", "remote", "get-url", "origin", 0};
@@ -115,7 +115,7 @@ static pg_string_t get_git_origin_remote_url(void) {
   return cmd_stdio;
 }
 
-static pg_string_t path_get_directory(pg_string_t path) {
+static pg_string_t path_get_directory(const pg_string_t path) {
   const char *sep = pg_char_last_occurence(path, '/');
   assert(sep != NULL);
   pg_string_t dir =
@@ -125,20 +125,19 @@ static pg_string_t path_get_directory(pg_string_t path) {
 }
 
 static pg_string_t
-get_project_path_from_remote_git_url(pg_string_t git_repository_url) {
-  const char *remote_path_start =
-      pg_char_first_occurence(git_repository_url, ':');
-  assert(remote_path_start != NULL);
-  remote_path_start += 1;
-
-  assert(pg_str_has_suffix(remote_path_start, ".git"));
-
-  const uint64_t len = pg_string_len(git_repository_url) -
-                       (sizeof(".git") - 1) -
-                       (uint64_t)(remote_path_start - git_repository_url);
-  pg_string_t project_path =
-      pg_string_make_length(pg_heap_allocator(), remote_path_start, len);
-  return project_path;
+get_project_path_from_remote_git_url(const pg_string_t git_repository_url) {
+  const pg_span_t ssh_url_start = pg_span_make_c("ssh://git@gitlab.ppro.com/");
+  const pg_span_t http_url_start =
+      pg_span_make_c("https://git@gitlab.ppro.com:");
+  pg_span_t s = pg_span_make_c(git_repository_url);
+  if (pg_span_starts_with(s, ssh_url_start)) {
+    pg_span_consume_left(&s, ssh_url_start.len);
+    return pg_string_make_length(pg_heap_allocator(), s.data, s.len);
+  } else if (pg_span_starts_with(s, http_url_start)) {
+    pg_span_consume_left(&s, http_url_start.len);
+    return pg_string_make_length(pg_heap_allocator(), s.data, s.len);
+  }
+  assert(0);
 }
 
 static void print_usage(char *argv0) {
@@ -154,8 +153,8 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  pg_string_t file_path = pg_string_make(pg_heap_allocator(), argv[1]);
-  pg_string_t dir = path_get_directory(file_path);
+  const pg_string_t file_path = pg_string_make(pg_heap_allocator(), argv[1]);
+  const pg_string_t dir = path_get_directory(file_path);
 
   int ret = 0;
   if ((ret = chdir(dir)) != 0) {
@@ -165,14 +164,15 @@ int main(int argc, char *argv[]) {
   }
   printf("Changed directory to: %s\n", dir);
 
-  pg_string_t git_repository_url = get_git_origin_remote_url();
+  const pg_string_t git_repository_url = get_git_origin_remote_url();
   printf("git_repository_url=%s\n", git_repository_url);
 
-  pg_string_t project_path =
+  const pg_string_t project_path =
       get_project_path_from_remote_git_url(git_repository_url);
+  printf("project_path=%s\n", project_path);
 
-  pg_string_t path_from_git_root = get_path_from_git_root();
-  pg_string_t commit = get_current_git_commit();
+  const pg_string_t path_from_git_root = get_path_from_git_root();
+  const pg_string_t commit = get_current_git_commit();
   const uint64_t line_start = strtoull(argv[2], NULL, 10);
 
   const uint64_t line_end =
