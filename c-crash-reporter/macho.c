@@ -1,16 +1,16 @@
+#include <_types/_uint8_t.h>
 #include <assert.h>
 #include <libproc.h>
 #include <mach-o/loader.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/errno.h>
 #include <unistd.h>
 
-#define GB_IMPLEMENTATION
-#define GB_STATIC
-#include "../vendor/gb/gb.h"
+#include "../pg/pg.h"
 
-static void read_data(u8 *data, isize data_size, u64 *offset, void *res,
-                      isize res_size) {
+static void read_data(uint8_t *data, int64_t data_size, uint64_t *offset,
+                      void *res, int64_t res_size) {
   assert(data != NULL);
   assert(offset != NULL);
   assert(res != NULL);
@@ -19,11 +19,11 @@ static void read_data(u8 *data, isize data_size, u64 *offset, void *res,
   *offset += res_size;
 }
 
-static u64 read_leb128_u64(u8 *data, isize size, u64 *offset) {
-  u64 result = 0;
-  u64 shift = 0;
+static uint64_t read_leb128_u64(uint8_t *data, int64_t size, uint64_t *offset) {
+  uint64_t result = 0;
+  uint64_t shift = 0;
   while (true) {
-    u8 byte = 0;
+    uint8_t byte = 0;
     read_data(data, size, offset, &byte, sizeof(byte));
     result |= (byte & 0x7f) << shift;
     if ((byte & 0x80) == 0)
@@ -33,11 +33,11 @@ static u64 read_leb128_u64(u8 *data, isize size, u64 *offset) {
   return result;
 }
 
-static i64 read_leb128_i64(u8 *data, isize size, u64 *offset) {
+static i64 read_leb128_i64(uint8_t *data, int64_t size, uint64_t *offset) {
   i64 result = 0;
-  u64 shift = 0;
-  const u64 bit_count = sizeof(i64) * 8;
-  u8 byte = 0;
+  uint64_t shift = 0;
+  const uint64_t bit_count = sizeof(i64) * 8;
+  uint8_t byte = 0;
   do {
     read_data(data, size, offset, &byte, sizeof(byte));
     result |= (byte & 0x7f) << shift;
@@ -390,38 +390,38 @@ typedef struct {
 } dw_attr_form;
 
 typedef struct {
-  u8 type;
-  u8 tag;
-  gbArray(dw_attr_form) attr_forms;
+  uint8_t type;
+  uint8_t tag;
+  pg_array_t(dw_attr_form) attr_forms;
 } dw_abbrev_entry;
 
 typedef struct {
-  gbArray(dw_abbrev_entry) entries;
+  pg_array_t(dw_abbrev_entry) entries;
 } dw_abbrev;
 
 typedef struct {
   char *s;
-  u32 offset;
+  uint32_t offset;
 } dw_string;
 
 typedef struct {
-  u64 low_pc;
+  uint64_t low_pc;
   char *fn_name;
   char *directory;
   char *file;
-  u16 high_pc;
-  u16 line;
+  uint16_t high_pc;
+  uint16_t line;
 } dw_fn_decl;
 
 typedef struct {
-  u64 pc;
-  u16 line;
-  u16 file;
+  uint64_t pc;
+  uint16_t line;
+  uint16_t file;
 } dw_line_entry;
 
 typedef struct {
-  u64 address;
-  u16 line;
+  uint64_t address;
+  uint16_t line;
   // TODO: track column?
   int file;
   bool is_stmt;
@@ -431,23 +431,23 @@ typedef struct {
   char *directory;
   char *file;
   char *fn_name;
-  u16 line;
+  uint16_t line;
 } stacktrace_entry;
 
 typedef struct {
   gbFileContents contents;
   char *directory;
   char *file;
-  gbArray(u16) newline_offsets;
+  pg_array_t(uint16_t) newline_offsets;
 } source_file;
 
 typedef struct {
-  u64 pie_displacement;
-  gbArray(dw_fn_decl) fn_decls;
-  gbArray(dw_line_entry) line_entries;
-  gbArray(dw_string) debug_str_strings;
-  gbArray(char *) debug_line_files;
-  gbArray(source_file) sources;
+  uint64_t pie_displacement;
+  pg_array_t(dw_fn_decl) fn_decls;
+  pg_array_t(dw_line_entry) line_entries;
+  pg_array_t(dw_string) debug_str_strings;
+  pg_array_t(char *) debug_line_files;
+  pg_array_t(source_file) sources;
 } debug_data;
 
 #ifdef PG_WITH_LOG
@@ -1203,16 +1203,16 @@ static const char dw_form_str[][30] = {
 
 #endif
 
-static void read_dwarf_ext_op(u8 *data, isize size, u64 *offset,
+static void read_dwarf_ext_op(uint8_t *data, int64_t size, uint64_t *offset,
                               dw_line_section_fsm *fsm,
-                              gbArray(dw_line_entry) * line_entries,
-                              u64 ext_op_size) {
+                              pg_array_t(dw_line_entry) * line_entries,
+                              uint64_t ext_op_size) {
   assert(data != NULL);
   assert(offset != NULL);
   assert(fsm != NULL);
   assert(line_entries != NULL);
 
-  const u64 start_offset = *offset;
+  const uint64_t start_offset = *offset;
   DW_LNE extended_opcode = 0;
   read_data(data, size, offset, &extended_opcode, sizeof(extended_opcode));
   LOG("DW_EXT_OP=%d\n", extended_opcode);
@@ -1225,7 +1225,7 @@ static void read_dwarf_ext_op(u8 *data, isize size, u64 *offset,
     break;
   }
   case DW_LNE_set_address: {
-    u64 a = 0;
+    uint64_t a = 0;
     read_data(data, size, offset, &a, sizeof(a));
     LOG("DW_LNE_set_address addr=%#llx\n", a);
     fsm->address = a;
@@ -1245,15 +1245,15 @@ static void read_dwarf_ext_op(u8 *data, isize size, u64 *offset,
     *offset += 1; // Skip rest
 }
 
-static void read_dwarf_section_debug_abbrev(gbAllocator allocator, u8 *data,
-                                            isize size,
+static void read_dwarf_section_debug_abbrev(pg_allocator_t allocator,
+                                            uint8_t *data, int64_t size,
                                             const struct section_64 *sec,
                                             dw_abbrev *abbrev) {
   assert(data != NULL);
   assert(sec != NULL);
   assert(abbrev != NULL);
-  u64 offset = sec->offset;
-  gb_array_init_reserve(abbrev->entries, allocator, 100);
+  uint64_t offset = sec->offset;
+  pg_array_init_reserve(abbrev->entries, 100, allocator);
 
   int tag_count = 0;
   while (offset < sec->offset + sec->size) {
@@ -1269,7 +1269,7 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, u8 *data,
     LOG("[%d] .debug_abbrev: type_num=%d tag=%#x %s has_children=%d\n",
         tag_count, entry.type, entry.tag, dw_tag_str[entry.tag], has_children);
 
-    gb_array_init_reserve(entry.attr_forms, allocator, 20);
+    pg_array_init_reserve(entry.attr_forms, 20, allocator);
     while (offset < sec->offset + sec->size) {
       dw_attr_form attr_form = {0};
       attr_form.attr = read_leb128_u64(data, size, &offset);
@@ -1281,14 +1281,14 @@ static void read_dwarf_section_debug_abbrev(gbAllocator allocator, u8 *data,
           dw_attribute_to_str(attr_form.attr), attr_form.form,
           dw_form_str[attr_form.form]);
 
-      gb_array_append(entry.attr_forms, attr_form);
+      pg_array_append(entry.attr_forms, attr_form);
     }
-    gb_array_append(abbrev->entries, entry);
+    pg_array_append(abbrev->entries, entry);
   }
 }
 
-static void read_dwarf_section_debug_info(gbAllocator allocator, u8 *data,
-                                          isize size,
+static void read_dwarf_section_debug_info(pg_allocator_t allocator,
+                                          uint8_t *data, int64_t size,
                                           const struct section_64 *sec,
                                           const dw_abbrev *abbrev,
                                           debug_data *dd) {
@@ -1297,40 +1297,40 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, u8 *data,
   assert(abbrev != NULL);
   assert(dd != NULL);
 
-  u64 offset = sec->offset;
+  uint64_t offset = sec->offset;
 
-  gb_array_init_reserve(dd->fn_decls, allocator, 100);
+  pg_array_init_reserve(dd->fn_decls, 100, allocator);
 
   // TODO: multiple compile units (CU)
-  u32 di_size = 0;
+  uint32_t di_size = 0;
   read_data(data, size, &offset, &di_size, sizeof(di_size));
   LOG(".debug_info size=%#x\n", di_size);
 
-  u16 version = 0;
+  uint16_t version = 0;
   read_data(data, size, &offset, &version, sizeof(version));
   LOG(".debug_info version=%u\n", version);
   assert(version == 4);
 
-  u32 abbr_offset = 0;
+  uint32_t abbr_offset = 0;
   read_data(data, size, &offset, &abbr_offset, sizeof(abbr_offset));
   LOG(".debug_info abbr_offset=%#x\n", abbr_offset);
 
-  u8 addr_size = 0;
+  uint8_t addr_size = 0;
   read_data(data, size, &offset, &addr_size, sizeof(addr_size));
   LOG(".debug_info abbr_size=%#x\n", addr_size);
 
   char *directory = NULL;
   while (offset < sec->offset + sec->size) {
-    u8 type = 0;
+    uint8_t type = 0;
     read_data(data, size, &offset, &type, sizeof(type));
-    assert(type <= gb_array_count(abbrev->entries));
+    assert(type <= pg_array_len(abbrev->entries));
     if (type == 0) {
       continue; // skip
     }
 
     const dw_abbrev_entry *entry = NULL;
     // TODO: pre-sort the entries to avoid the linear look-up each time?
-    for (int i = 0; i < gb_array_count(abbrev->entries); i++) {
+    for (int i = 0; i < pg_array_len(abbrev->entries); i++) {
       if (abbrev->entries[i].type == type) {
         entry = &abbrev->entries[i];
         break;
@@ -1343,26 +1343,26 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, u8 *data,
 
     dw_fn_decl *se = NULL;
     if (entry->tag == DW_TAG_subprogram) {
-      gb_array_append(dd->fn_decls, ((dw_fn_decl){.directory = directory}));
-      const isize se_count = gb_array_count(dd->fn_decls);
+      pg_array_append(dd->fn_decls, ((dw_fn_decl){.directory = directory}));
+      const int64_t se_count = pg_array_len(dd->fn_decls);
       se = &(dd->fn_decls)[se_count - 1];
     }
     if (entry->tag == DW_TAG_compile_unit) {
     }
 
-    for (int i = 0; i < gb_array_count(entry->attr_forms); i++) {
+    for (int i = 0; i < pg_array_len(entry->attr_forms); i++) {
       const dw_attr_form af = entry->attr_forms[i];
       LOG(".debug_info: attr=%#x %s form=%#x %s\n", af.attr,
           dw_attribute_to_str(af.attr), af.form, dw_form_str[af.form]);
 
       switch (af.form) {
       case DW_FORM_strp: {
-        u32 str_offset = 0;
+        uint32_t str_offset = 0;
         read_data(data, size, &offset, &str_offset, sizeof(str_offset));
         LOG("DW_FORM_strp: %#x ", str_offset);
 
         char *s = NULL;
-        for (int j = 0; j < gb_array_count(dd->debug_str_strings); j++) {
+        for (int j = 0; j < pg_array_len(dd->debug_str_strings); j++) {
           if (dd->debug_str_strings[j].offset == str_offset) {
             s = dd->debug_str_strings[j].s;
             break;
@@ -1379,24 +1379,24 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, u8 *data,
         break;
       }
       case DW_FORM_data1: {
-        u8 val = 0;
+        uint8_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
         LOG("DW_FORM_data1: %#x\n", val);
         if (af.attr == DW_AT_decl_file && se != NULL && se->file == NULL) {
           assert(dd->debug_line_files != NULL);
-          assert(val <= gb_array_count(dd->debug_line_files));
+          assert(val <= pg_array_len(dd->debug_line_files));
           se->file = dd->debug_line_files[val - 1];
         }
         break;
       }
       case DW_FORM_data2: {
-        u16 lang = 0;
+        uint16_t lang = 0;
         read_data(data, size, &offset, &lang, sizeof(lang));
         LOG("DW_FORM_data2: %#x\n", lang);
         break;
       }
       case DW_FORM_data4: {
-        u32 val = 0;
+        uint32_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
         LOG("DW_FORM_data4: %#x\n", val);
         if (af.attr == DW_AT_high_pc && se != NULL) {
@@ -1405,43 +1405,43 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, u8 *data,
         break;
       }
       case DW_FORM_data8: {
-        u64 val = 0;
+        uint64_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
         LOG("DW_FORM_data8: %#llx\n", val);
         break;
       }
       case DW_FORM_ref1: {
-        u8 val = 0;
+        uint8_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
         LOG("DW_FORM_ref1: %#x\n", val);
         break;
       }
       case DW_FORM_ref2: {
-        u16 val = 0;
+        uint16_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
         LOG("DW_FORM_ref2: %#x\n", val);
         break;
       }
       case DW_FORM_ref4: {
-        u32 val = 0;
+        uint32_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
         LOG("DW_FORM_ref4: %#x\n", val);
         break;
       }
       case DW_FORM_ref8: {
-        u64 val = 0;
+        uint64_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
         LOG("DW_FORM_ref8: %#llx\n", val);
         break;
       }
       case DW_FORM_sec_offset: {
-        u32 val = 0;
+        uint32_t val = 0;
         read_data(data, size, &offset, &val, sizeof(val));
         LOG("DW_FORM_sec_offset: %#x\n", val);
         break;
       }
       case DW_FORM_addr: {
-        u64 addr = 0;
+        uint64_t addr = 0;
         read_data(data, size, &offset, &addr, sizeof(addr));
         LOG("DW_FORM_addr: %#llx\n", addr);
 
@@ -1455,14 +1455,14 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, u8 *data,
         break;
       }
       case DW_FORM_exprloc: {
-        const u64 length = read_leb128_u64(data, size, &offset);
+        const uint64_t length = read_leb128_u64(data, size, &offset);
         offset += length;
         LOG("DW_FORM_exprloc: length=%lld\n", length);
 
         break;
       }
       case DW_FORM_udata: {
-        const u64 val = read_leb128_u64(data, size, &offset);
+        const uint64_t val = read_leb128_u64(data, size, &offset);
         LOG("DW_FORM_udata: length=%lld\n", val);
 
         break;
@@ -1481,18 +1481,18 @@ static void read_dwarf_section_debug_info(gbAllocator allocator, u8 *data,
   }
 }
 
-static void read_dwarf_section_debug_str(gbAllocator allocator, u8 *data,
-                                         isize size,
+static void read_dwarf_section_debug_str(pg_allocator_t allocator,
+                                         uint8_t *data, int64_t size,
                                          const struct section_64 *sec,
                                          debug_data *dd) {
   assert(data != NULL);
   assert(sec != NULL);
   assert(dd != NULL);
 
-  u64 offset = sec->offset;
-  u64 i = 0;
+  uint64_t offset = sec->offset;
+  uint64_t i = 0;
 
-  gb_array_init_reserve(dd->debug_str_strings, allocator, 100);
+  pg_array_init_reserve(dd->debug_str_strings, 100, allocator);
   while (offset < sec->offset + sec->size) {
     assert(offset < size);
     char *s = (char *)&data[offset];
@@ -1506,7 +1506,7 @@ static void read_dwarf_section_debug_str(gbAllocator allocator, u8 *data,
     assert(end != NULL);
     LOG("- [%llu] %s\n", i, s);
     dw_string str = {.s = s, .offset = offset - sec->offset};
-    gb_array_append(dd->debug_str_strings, str);
+    pg_array_append(dd->debug_str_strings, str);
     offset += end - s;
     i++;
   }
@@ -1519,7 +1519,7 @@ static bool dw_line_entry_should_add_new_entry(const dw_line_section_fsm *fsm,
 
   if (fsm->line == 0)
     return false;
-  const isize count = gb_array_count(dd->line_entries);
+  const int64_t count = pg_array_len(dd->line_entries);
   if (count == 0)
     return true;
 
@@ -1533,16 +1533,16 @@ static bool dw_line_entry_should_add_new_entry(const dw_line_section_fsm *fsm,
   return false;
 }
 
-static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
-                                          isize size,
+static void read_dwarf_section_debug_line(pg_allocator_t allocator,
+                                          uint8_t *data, int64_t size,
                                           const struct section_64 *sec,
                                           debug_data *dd) {
   assert(data != NULL);
   assert(sec != NULL);
   assert(dd != NULL);
-  gb_array_init_reserve(dd->line_entries, allocator, 15000);
+  pg_array_init_reserve(dd->line_entries, 15000, allocator);
 
-  u64 offset = sec->offset;
+  uint64_t offset = sec->offset;
   dwarf_debug_line_header ddlh = {0};
   read_data(data, size, &offset, &ddlh, sizeof(ddlh));
   LOG(".debug_line: length=%#x version=%#x header_length=%#x "
@@ -1595,7 +1595,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
     }
   }
   LOG("Files:");
-  gb_array_init_reserve(dd->debug_line_files, allocator, 10);
+  pg_array_init_reserve(dd->debug_line_files, 10, allocator);
   while (offset < sec->offset + sec->size) {
     assert(offset < size);
     char *s = (char *)&data[offset];
@@ -1608,12 +1608,12 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
     assert(end != NULL);
 
     offset += end - s + 1;
-    const u64 dir_index = read_leb128_u64(data, size, &offset);
-    const u64 modtime = read_leb128_u64(data, size, &offset);
+    const uint64_t dir_index = read_leb128_u64(data, size, &offset);
+    const uint64_t modtime = read_leb128_u64(data, size, &offset);
 
-    const u64 length = read_leb128_u64(data, size, &offset);
+    const uint64_t length = read_leb128_u64(data, size, &offset);
 
-    gb_array_append(dd->debug_line_files, s);
+    pg_array_append(dd->debug_line_files, s);
     LOG("- %s dir_index=%llu modtime=%llu "
         "length=%llu\n",
         s, dir_index, modtime, length);
@@ -1632,7 +1632,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
         fsm.file);
     switch (opcode) {
     case DW_LNS_extended_op: {
-      const u64 ext_op_size = read_leb128_u64(data, size, &offset);
+      const uint64_t ext_op_size = read_leb128_u64(data, size, &offset);
       LOG("DW_LNS_extended_op size=%#llx\n", ext_op_size);
 
       read_dwarf_ext_op(data, size, &offset, &fsm, &dd->line_entries,
@@ -1643,7 +1643,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
       LOG("DW_LNS_copy");
       break;
     case DW_LNS_advance_pc: {
-      const u64 decoded = read_leb128_u64(data, size, &offset);
+      const uint64_t decoded = read_leb128_u64(data, size, &offset);
       LOG("DW_LNS_advance_pc leb128=%#llx\n", decoded);
       fsm.address += decoded;
       break;
@@ -1657,7 +1657,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
             .pc = fsm.address, .line = fsm.line, .file = fsm.file};
         LOG("new dw_line_entry: pc=%#llx line=%d file=%d %s\n", e.pc, e.line,
             e.file, dd->debug_line_files[e.file - 1]);
-        gb_array_append(dd->line_entries, e);
+        pg_array_append(dd->line_entries, e);
       }
       break;
     }
@@ -1666,7 +1666,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
       LOG("DW_LNS_set_file file=%d\n", fsm.file);
       break;
     case DW_LNS_set_column: {
-      const u64 column = read_leb128_u64(data, size, &offset);
+      const uint64_t column = read_leb128_u64(data, size, &offset);
       LOG("DW_LNS_set_column column=%llu\n", column);
       break;
     }
@@ -1677,7 +1677,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
     case DW_LNS_set_basic_block:
       break;
     case DW_LNS_const_add_pc: {
-      const u8 op = 255 - ddlh.opcode_base;
+      const uint8_t op = 255 - ddlh.opcode_base;
       fsm.address += op / ddlh.line_range * ddlh.min_instruction_length;
       // TODO: op_index
       LOG("address+=%#x -> address=%#llx\n",
@@ -1694,7 +1694,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
     case DW_LNS_set_isa:
       break;
     default: {
-      const u8 op = opcode - ddlh.opcode_base;
+      const uint8_t op = opcode - ddlh.opcode_base;
       fsm.address += op / ddlh.line_range * ddlh.min_instruction_length;
 
       fsm.line += ddlh.line_base + op % ddlh.line_range;
@@ -1703,7 +1703,7 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
             .pc = fsm.address, .line = fsm.line, .file = fsm.file};
         LOG("new dw_line_entry: pc=%#llx line=%d file=%d %s\n", e.pc, e.line,
             e.file, dd->debug_line_files[e.file - 1]);
-        gb_array_append(dd->line_entries, e);
+        pg_array_append(dd->line_entries, e);
       }
       LOG("address+=%d line+=%d\n",
           op / ddlh.line_range * ddlh.min_instruction_length,
@@ -1713,9 +1713,9 @@ static void read_dwarf_section_debug_line(gbAllocator allocator, u8 *data,
   }
 }
 
-static void stacktrace_find_entry(const debug_data *dd, u64 pc,
+static void stacktrace_find_entry(const debug_data *dd, uint64_t pc,
                                   stacktrace_entry *se) {
-  for (int i = 0; i < gb_array_count(dd->fn_decls); i++) {
+  for (int i = 0; i < pg_array_len(dd->fn_decls); i++) {
     const dw_fn_decl *fd = &dd->fn_decls[i];
     if (fd->low_pc <= pc && pc <= fd->low_pc + fd->high_pc) {
       se->directory = fd->directory;
@@ -1731,7 +1731,7 @@ static void stacktrace_find_entry(const debug_data *dd, u64 pc,
 
   const dw_line_entry *cur_le = NULL;
   const dw_line_entry *prev_le = NULL;
-  for (int i = 0; i < gb_array_count(dd->line_entries) - 1; i++) {
+  for (int i = 0; i < pg_array_len(dd->line_entries) - 1; i++) {
     prev_le = &dd->line_entries[i];
     cur_le = &dd->line_entries[i + 1];
     if (prev_le->file == cur_le->file) {
@@ -1747,12 +1747,12 @@ static void stacktrace_find_entry(const debug_data *dd, u64 pc,
   }
 }
 
-static void read_source_code(gbAllocator allocator, debug_data *dd) {
+static void read_source_code(pg_allocator_t allocator, debug_data *dd) {
   assert(dd != NULL);
   static char path[PATH_MAX + 1] = "";
 
-  gb_array_init_reserve(dd->sources, allocator, 100);
-  for (int i = 0; i < gb_array_count(dd->fn_decls); i++) {
+  pg_array_init_reserve(dd->sources, 100, allocator);
+  for (int i = 0; i < pg_array_len(dd->fn_decls); i++) {
     dw_fn_decl *fd = &(dd->fn_decls)[i];
     if (fd->directory == NULL || fd->file == NULL)
       continue;
@@ -1762,17 +1762,17 @@ static void read_source_code(gbAllocator allocator, debug_data *dd) {
 
     source_file source = {
         .contents = contents, .directory = fd->directory, .file = fd->file};
-    gb_array_init_reserve(source.newline_offsets, allocator, 500);
+    pg_array_init_reserve(source.newline_offsets, 500, allocator);
 
-    gb_array_append(source.newline_offsets, 0);
+    pg_array_append(source.newline_offsets, 0);
     for (int j = 0; j < contents.size; j++) {
       char *c = &contents.data[j];
       if (*c == '\n')
-        gb_array_append(source.newline_offsets, j);
+        pg_array_append(source.newline_offsets, j);
     }
-    gb_array_append(source.newline_offsets, source.contents.size);
+    pg_array_append(source.newline_offsets, source.contents.size);
 
-    gb_array_append(dd->sources, source);
+    pg_array_append(dd->sources, source);
   }
 }
 
@@ -1782,9 +1782,9 @@ __asm__(".globl _get_main_address\n\t"
         "lea _main(%rip), %rax\n\t"
         "ret\n\t");
 
-static void read_macho_dsym(gbAllocator allocator, u8 *data, isize size,
+static void read_macho_dsym(pg_allocator_t allocator, uint8_t *data, int64_t size,
                             debug_data *dd) {
-  u64 offset = 0;
+  uint64_t offset = 0;
   struct mach_header_64 h = {0};
   read_data(data, size, &offset, &h, sizeof(h));
   assert(h.filetype == MH_DSYM);
@@ -1894,7 +1894,7 @@ static void read_macho_dsym(gbAllocator allocator, u8 *data, isize size,
 
   read_source_code(allocator, dd);
 
-  for (int i = 0; i < gb_array_count(dd->fn_decls); i++) {
+  for (int i = 0; i < pg_array_len(dd->fn_decls); i++) {
     dw_fn_decl *fd = &(dd->fn_decls)[i];
     LOG("dw_fn_decl: low_pc=%#llx high_pc=%#hx fn_name=%s "
         "file=%s/%s\n",
@@ -1906,7 +1906,7 @@ static void read_macho_dsym(gbAllocator allocator, u8 *data, isize size,
     }
   }
 
-  for (int i = 0; i < gb_array_count(dd->line_entries); i++) {
+  for (int i = 0; i < pg_array_len(dd->line_entries); i++) {
     dw_line_entry *le = &(dd->line_entries)[i];
     LOG("dw_line_entry[%d]: line=%d pc=%#llx file=%d %s\n", i, le->line, le->pc,
         le->file, dd->debug_line_files[le->file - 1]);
@@ -1949,15 +1949,19 @@ void stacktrace_print() {
   is_tty = isatty(2);
 
   static debug_data dd = {0};
-  gbAllocator allocator = gb_heap_allocator();
+  pg_allocator_t allocator = pg_heap_allocator();
   if (dd.debug_str_strings == NULL) { // Not yet parse the debug information?
     char path[PATH_MAX + 1] = "";
     const char *exe_path = get_exe_path_for_process();
     const char *exe_name = gb_path_base_name(exe_path);
     snprintf(path, sizeof(path), "%s.dSYM/Contents/Resources/DWARF/%s",
              exe_name, exe_name);
-    gbFileContents contents = gb_file_read_contents(allocator, true, path);
-    read_macho_dsym(allocator, contents.data, contents.size, &dd);
+    pg_array_t(uint8_t) contents = {0};
+    if (!pg_read_file(allocator, path, &contents)) {
+      fprintf(stderr, "Failed to read file: %s %s\n", path, strerror(errno));
+      exit(errno);
+    }
+    read_macho_dsym(allocator, contents, pg_array_len(contents), &dd);
   }
 
   read_source_code(allocator, &dd);
@@ -1977,7 +1981,7 @@ void stacktrace_print() {
              pg_colors[is_tty][COL_RESET]);
 
       source_file *f = NULL;
-      for (int i = 0; i < gb_array_count(dd.sources); i++) {
+      for (int i = 0; i < pg_array_len(dd.sources); i++) {
         source_file *sf = &dd.sources[i];
         if (strcmp(sf->directory, se.directory) == 0 &&
             strcmp(sf->file, se.file) == 0) {
@@ -1987,22 +1991,22 @@ void stacktrace_print() {
       }
 
       assert(se.line >= 1);
-      assert(se.line - 1 < gb_array_count(f->newline_offsets));
-      u32 offset_start = f->newline_offsets[se.line - 1] + 1;
+      assert(se.line - 1 < pg_array_len(f->newline_offsets));
+      uint32_t offset_start = f->newline_offsets[se.line - 1] + 1;
 
-      assert(se.line < gb_array_count(f->newline_offsets));
-      u32 offset_end = f->newline_offsets[se.line];
+      assert(se.line < pg_array_len(f->newline_offsets));
+      uint32_t offset_end = f->newline_offsets[se.line];
 
       assert(offset_start < f->contents.size);
       assert(offset_end < f->contents.size);
       char *source_line = &f->contents.data[offset_start];
-      u32 source_line_len = offset_end - offset_start;
+      uint32_t source_line_len = offset_end - offset_start;
 
       LOG("se.line=%d offset_start=%d offset_end=%d len=%d\n", se.line,
           offset_start, offset_end, source_line_len);
 
       // Trim left
-      while (*source_line != 0 && gb_char_is_space(*source_line)) {
+      while (*source_line != 0 && pg_char_is_space(*source_line)) {
         source_line++;
         source_line_len--;
       }

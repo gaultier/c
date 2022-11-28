@@ -1,59 +1,74 @@
-#include <libunwind.h>
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
 
-void show_backtrace(void) {
-  unw_cursor_t cursor;
-  unw_context_t uc;
-  unw_word_t ip, sp;
+#include "macho.c"
 
-  unw_getcontext(&uc);
-  unw_init_local(&cursor, &uc);
-  while (unw_step(&cursor) > 0) {
-    unw_get_reg(&cursor, UNW_REG_IP, &ip);
-    unw_get_reg(&cursor, UNW_REG_SP, &sp);
-    char fn_name[256] = {};
-    unw_word_t offp = 0;
-    unw_get_proc_name(&cursor, fn_name, sizeof(fn_name), &offp);
-    printf("name=%s ip = %lx, sp = %lx\n", fn_name, (long)ip, (long)sp);
+#define STR(s) #s
+
+#define my_assert(condition)                                                   \
+  do {                                                                         \
+    if (!(condition)) {                                                        \
+      fprintf(stderr, "Assert failed: %s\n", STR(condition));                  \
+      stacktrace_print();                                                      \
+      abort();                                                                 \
+    }                                                                          \
+  } while (0)
+
+static int __attribute__((noinline)) baz(int n) {
+  my_assert(n > 0);
+
+  stacktrace_print();
+  return n;
+}
+
+static int __attribute__((noinline)) bar(int n) {
+  int a = 1;
+  (void)a;
+  int b = 10;
+  (void)b;
+  baz(n);
+  return n;
+}
+
+static int __attribute__((noinline)) foo(int n) {
+  // foo
+  bar(n);
+  return n;
+}
+
+int main(int argc, char *argv[]) {
+  assert(argc == 2);
+  const int n = atoi(argv[1]);
+  switch (n) {
+  case 0:
+    foo(n);
+    break;
+  case 1:
+    foo(bar(baz(n)));
+    break;
+  case 2:
+    foo(baz(bar(n)));
+    break;
+  case 3:
+    bar(foo(baz(n)));
+    break;
+  case 4:
+    bar(baz(foo(n)));
+    break;
+  case 5:
+    baz(foo(bar(n)));
+    break;
+  case 6:
+    baz(bar(foo(n)));
+    break;
+  case 7:
+    foo(n);
+    break;
+  case 8:
+    bar(n);
+    break;
+  case 9:
+    baz(n);
+    break;
   }
-}
-
-void baz() {
-  int *p = 0;
-  *p += 1;
-}
-
-void bar() { baz(); }
-
-void foo() {
-  printf("[foo] %p\n", *(uint64_t *)__builtin_frame_address(1));
-  bar();
-}
-
-void on_sigsegv(int sig) {
-  printf("sig=%d\n", sig);
-
-  show_backtrace();
-  abort();
-}
-
-int main() {
-  /* int res = fork(); */
-  /* if (res < 0) { */
-  /*     fprintf(stderr, "fork Failed"); */
-  /*     return 1; */
-  /* } */
-  /* if (res == 0) {  // Child */
-  signal(SIGSEGV, on_sigsegv);
-  printf("MAIN=%p\n", main);
-  foo();
-  /* } else {  // Parent */
-  /*     int stat_loc = 0; */
-  /*     wait(&stat_loc);  // Wait for child's message */
-  /*     printf("Child says: stat_loc=%d WTERMSIG=%d\n", stat_loc, */
-  /*            WTERMSIG(stat_loc)); */
-  /* } */
 }

@@ -2,3 +2,4 @@ test
 macho
 test
 *.dSYM
+crash-reporter
