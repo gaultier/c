@@ -36,7 +36,7 @@ static void copy_to_clipboard(pg_string_t s) {
   pg_string_free(cmd);
 }
 
-static pg_string_t get_path_from_git_root() {
+static pg_string_t get_path_from_git_root(void) {
   char *argv[] = {"git", "rev-parse", "--show-prefix", 0};
   pg_string_t cmd_stdio =
       pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
@@ -60,7 +60,7 @@ static pg_string_t get_path_from_git_root() {
   return cmd_stdio;
 }
 
-static pg_string_t get_current_git_commit() {
+static pg_string_t get_current_git_commit(void) {
   char *argv[] = {"git", "rev-parse", "HEAD", 0};
   pg_string_t cmd_stdio =
       pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
@@ -86,7 +86,7 @@ static pg_string_t get_current_git_commit() {
   return cmd_stdio;
 }
 
-static pg_string_t get_git_origin_remote_url() {
+static pg_string_t get_git_origin_remote_url(void) {
   const char *const cmd = "git remote get-url origin";
   printf("Running: %s\n", cmd);
 
