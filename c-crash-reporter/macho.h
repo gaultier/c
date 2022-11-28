@@ -934,7 +934,6 @@ static char *dw_attribute_to_str(dw_attribute attr) {
     pg_log_debug(&logger, "attr=%#x\n", attr);
     assert(0 && "UNREACHABLE");
   }
-  return s;
 }
 
 static const char dw_form_str[][30] = {
