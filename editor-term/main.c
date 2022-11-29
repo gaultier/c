@@ -13,6 +13,8 @@
 
 static struct termios original_termios;
 
+static pg_logger_t logger = {.level = PG_LOG_ERROR};
+
 typedef enum {
   K_NONE = 0,
   K_TAB = 9,
@@ -45,7 +47,7 @@ static pg_key_t term_read_key(void) {
 }
 
 static uint8_t editor_get_line_column_width(editor_t *e) {
-  char tmp[25] = "";
+  char tmp[27] = "";
   return (uint8_t)snprintf(tmp, sizeof(tmp), "%llu", pg_array_len(e->lines)) +
          /* border */ 1;
 }
@@ -240,7 +242,7 @@ static void editor_draw_line(editor_t *e, uint64_t line_i) {
   rem_space_on_line -= 1; // trailing newline
 
   const uint64_t line_draw_count =
-      MIN(span.len, e->cols - /* line num col */ 1);
+      MIN(span.len, rem_space_on_line);
   e->draw = pg_string_append_length(e->draw, span.data, line_draw_count);
   // TODO: line overflow
 
@@ -319,7 +321,7 @@ static editor_t editor_make(uint64_t rows, uint64_t cols) {
       .ui = pg_string_make_reserve(allocator, cols * rows),
       .text = pg_string_make_reserve(pg_heap_allocator(), 0),
   };
-  pg_array_init(e.lines, pg_heap_allocator());
+  pg_array_init_reserve(e.lines, 100, pg_heap_allocator());
 
   return e;
 }
@@ -329,21 +331,23 @@ static void editor_ingest_text(editor_t *e, const char *text, uint64_t len) {
   editor_parse_text(e);
 }
 
-int main(void) {
+int main(int argc, char *argv[]) {
   term_enable_raw_mode();
   uint64_t cols = 0, rows = 0;
   term_get_window_size(&cols, &rows);
   editor_t e = editor_make(rows, cols);
 
-  const char text[] =
-      "hello my darling \nhello my duck \nI don't know what I'm doing please "
-      "help! \n"
-      "Some more text that I'm typing \nuntil it reaches the end, "
-      "\n hopefully "
-      "that "
-      "will trigger some\n interesting behaviour...";
+  pg_array_t(uint8_t) text = {0};
+  pg_array_init_reserve(text, 0, pg_heap_allocator());
+  if (argc == 2) {
+    if (!pg_read_file(argv[1], &text)) {
+      pg_log_fatal(&logger, errno, "Failed to read file: %s %s", argv[1],
+                   strerror(errno));
+    }
+  } else
+    exit(EINVAL); // TODO
 
-  editor_ingest_text(&e, text, sizeof(text) - 1);
+  editor_ingest_text(&e, (char *)text, pg_array_len(text));
 
   while (1) {
     editor_draw(&e);
