@@ -1,3 +1,4 @@
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -218,31 +219,36 @@ __attribute__((unused)) static void editor_draw_rgb_color_fg(editor_t *e,
   e->draw = pg_string_appendc(e->draw, tmp);
 }
 
-static void editor_draw_line_number(editor_t *e, uint64_t line_i) {
+static uint64_t editor_draw_line_number(editor_t *e, uint64_t line_i) {
   char tmp[27] = "";
-  snprintf(tmp, sizeof(tmp) - 1, "%llu ", line_i + 1);
+  const uint64_t width =
+      (uint64_t)snprintf(tmp, sizeof(tmp) - 1, "%llu ", line_i + 1);
   e->draw = pg_string_appendc(e->draw, tmp);
-}
-
-static void editor_draw_line_trailing_padding(editor_t *e, uint64_t line_i) {
-  const pg_span_t span = e->lines[line_i];
-  for (uint64_t i = 0;
-       i < e->cols - e->line_column_width - span.len - /* trailing newline */ 1;
-       i++) {
-    e->draw = pg_string_append_length(e->draw, " ", 1);
-  }
-  e->draw = pg_string_append_length(e->draw, "\n", 1);
+  return width;
 }
 
 static void editor_draw_line(editor_t *e, uint64_t line_i) {
   const pg_span_t span = e->lines[line_i];
 
   e->draw = pg_string_append_length(e->draw, "\x1b[0K", 4);
-  editor_draw_line_number(e, line_i);
 
-  e->draw = pg_string_append_length(e->draw, span.data, span.len);
+  uint64_t rem_space_on_line = e->cols;
+  const uint64_t line_number_col_width = editor_draw_line_number(e, line_i);
+  // Viewport with a width too small unsupported. Avoid overflowing!
+  assert(rem_space_on_line > line_number_col_width);
 
-  editor_draw_line_trailing_padding(e, line_i);
+  rem_space_on_line -= line_number_col_width;
+  rem_space_on_line -= 1; // trailing newline
+
+  const uint64_t line_draw_count =
+      MIN(span.len, e->cols - /* line num col */ 1);
+  e->draw = pg_string_append_length(e->draw, span.data, line_draw_count);
+  // TODO: line overflow
+
+  for (uint64_t i = line_draw_count; i < rem_space_on_line; i++)
+    e->draw = pg_string_appendc(e->draw, " ");
+
+  e->draw = pg_string_appendc(e->draw, "\r\n");
 }
 
 static void editor_draw_lines(editor_t *e) {
