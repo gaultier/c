@@ -5,7 +5,6 @@
 #include <sys/time.h>
 
 #include "../pg/pg.h"
-#include "../vendor/picohttpparser/picohttpparser.h"
 
 static void print_usage(int argc, char *argv[]) {
   assert(argc > 0);
