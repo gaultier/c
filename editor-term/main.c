@@ -1,3 +1,4 @@
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -235,15 +236,17 @@ static void editor_draw_line(editor_t *e, uint64_t line_i) {
 
   uint64_t rem_space_on_line = e->cols;
   const uint64_t line_number_col_width = editor_draw_line_number(e, line_i);
-  // Viewport with a width too small unsupported. Avoid overflowing!
+  // Viewport with a width too small unsupported. Avoid number overflowing!
   assert(rem_space_on_line > line_number_col_width);
 
   rem_space_on_line -= line_number_col_width;
   rem_space_on_line -= 1; // trailing newline
 
-  const uint64_t line_draw_count =
-      MIN(span.len, rem_space_on_line);
-  e->draw = pg_string_append_length(e->draw, span.data, line_draw_count);
+  assert(e->cx < span.len);
+  const uint64_t cx_offset = e->cx<e->cols+e->line_column_width ? 0 : span.len-e->cx;
+  const uint64_t line_draw_count = MIN(span.len - cx_offset, rem_space_on_line);
+  e->draw =
+      pg_string_append_length(e->draw, span.data + cx_offset, line_draw_count);
   // TODO: line overflow
 
   for (uint64_t i = line_draw_count; i < rem_space_on_line; i++)
