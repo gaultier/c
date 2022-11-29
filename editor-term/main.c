@@ -9,14 +9,9 @@
 #include <termios.h>
 #include <unistd.h>
 
-#define GB_IMPLEMENTATION
-#include "../vendor/gb/gb.h"
+#include "../pg/pg.h"
 
 static struct termios original_termios;
-
-#ifndef MIN
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
 
 typedef enum {
   K_NONE = 0,
@@ -26,20 +21,16 @@ typedef enum {
 } pg_key_t;
 
 typedef struct {
-  uint64_t start, len;
-} span_t;
-
-typedef struct {
-  gbAllocator allocator;
+  pg_allocator_t allocator;
   // Screen dimensions
   uint64_t rows, cols;
   // Cursor
   uint64_t cx, cy, coffset;
 
-  gbString ui;
-  gbString draw;
-  gbString text;
-  gbArray(span_t) lines;
+  pg_string_t ui;
+  pg_string_t draw;
+  pg_string_t text;
+  pg_array_t(pg_span_t) lines;
 
   uint64_t line_column_width;
 } editor_t;
@@ -55,47 +46,37 @@ static pg_key_t term_read_key(void) {
 
 static uint8_t editor_get_line_column_width(editor_t *e) {
   char tmp[25] = "";
-  return (uint8_t)snprintf(tmp, sizeof(tmp), "%td", gb_array_count(e->lines)) +
+  return (uint8_t)snprintf(tmp, sizeof(tmp), "%llu", pg_array_len(e->lines)) +
          /* border */ 1;
 }
 
 static void editor_parse_text(editor_t *e) {
-  gb_array_clear(e->lines);
+  pg_array_clear(e->lines);
 
-  uint64_t i = 0;
-  while (i < (uint64_t)gb_string_length(e->text)) {
-    char *nl = memchr(e->text + i, '\n', gb_string_length(e->text) - i);
-    if (nl == NULL) {
-      span_t span = {.start = i, .len = gb_string_length(e->text) - i};
-      gb_array_append(e->lines, span);
+  pg_span_t text = pg_span_make(e->text);
+  while (true) {
+    pg_span_t left = {0}, right = {0};
+    if (!pg_span_split_at_first(text, '\n', &left, &right))
       break;
-    }
 
-    const char *const start = e->text + i;
-    uint64_t len = 0;
-    if (nl > start) {
-      len = nl - (e->text + i) - 1;
-    }
-    assert(len < (uint64_t)gb_string_length(e->text));
-    span_t span = {.start = i, .len = len};
-    gb_array_append(e->lines, span);
-    i += len + 1;
+    pg_array_append(e->lines, left);
+    pg_span_consume_left(&right, 1); // `\n`
+    text = right;
   }
 
   e->line_column_width = editor_get_line_column_width(e);
 }
 
 static void editor_del_char(editor_t *e, uint64_t pos) {
-  span_t line = e->lines[e->cy];
+  pg_span_t line = e->lines[e->cy];
   if (line.len == 0)
     return;
 
-  assert(pos < (uint64_t)gb_string_length(e->text));
+  assert(pos < (uint64_t)pg_string_len(e->text));
 
-  memmove(e->text + pos, e->text + pos + 1,
-          gb_string_length(e->text) - pos - 1);
-  e->text[gb_string_length(e->text) - 1] = '?'; // For debuggability
-  gb__set_string_length(e->text, gb_string_length(e->text) - 1);
+  memmove(e->text + pos, e->text + pos + 1, pg_string_len(e->text) - pos - 1);
+  e->text[pg_string_len(e->text) - 1] = '?'; // For debuggability
+  pg__set_string_len(e->text, pg_string_len(e->text) - 1);
 
   editor_parse_text(e);
 }
@@ -104,7 +85,6 @@ static void editor_handle_key(editor_t *e, pg_key_t key) {
   switch ((int)key) {
   case K_ESC:
     exit(0);
-    break;
   case 'x':
     editor_del_char(e, e->coffset);
     break;
@@ -115,8 +95,8 @@ static void editor_handle_key(editor_t *e, pg_key_t key) {
     }
     break;
   case 'j': {
-    if (e->cy < (uint64_t)gb_array_count(e->lines) - 1) {
-      span_t prev_line = e->lines[e->cy];
+    if (e->cy < pg_array_len(e->lines) - 1) {
+      pg_span_t prev_line = e->lines[e->cy];
       e->cy++;
 
       e->coffset += prev_line.len;
@@ -126,7 +106,7 @@ static void editor_handle_key(editor_t *e, pg_key_t key) {
   case 'k': {
     if (e->cy > 0) {
       e->cy--;
-      span_t cur_line = e->lines[e->cy];
+      pg_span_t cur_line = e->lines[e->cy];
 
       assert(e->coffset >= cur_line.len);
       e->coffset -= cur_line.len;
@@ -134,7 +114,7 @@ static void editor_handle_key(editor_t *e, pg_key_t key) {
     break;
   }
   case 'l': {
-    const span_t line = e->lines[e->cy];
+    const pg_span_t line = e->lines[e->cy];
     if (e->cx < line.len) {
       e->cx++;
       e->coffset++;
@@ -142,7 +122,7 @@ static void editor_handle_key(editor_t *e, pg_key_t key) {
     break;
   }
   case '$': {
-    const span_t line = e->lines[e->cy];
+    const pg_span_t line = e->lines[e->cy];
     const uint64_t prev_cx = e->cx;
     e->cx = line.len - 1;
     e->coffset += e->cx - prev_cx;
@@ -153,11 +133,11 @@ static void editor_handle_key(editor_t *e, pg_key_t key) {
     e->cx = 0;
     break;
   case '_': {
-    const span_t line = e->lines[e->cy];
+    const pg_span_t line = e->lines[e->cy];
 
     for (uint64_t i = 0; i < line.len; i++) {
-      const uint64_t offset = line.start + i;
-      if (gb_char_is_space(e->text[offset]))
+      const uint64_t offset = (uint64_t)(line.data - e->text) + i;
+      if (pg_char_is_space(e->text[offset]))
         continue;
 
       e->cx = i;
@@ -186,14 +166,14 @@ static void term_enable_raw_mode(void) {
   struct termios raw = original_termios;
   /* input modes: no break, no CR to NL, no parity check, no strip char,
    * no start/stop output control. */
-  raw.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+  raw.c_iflag &= ~((uint64_t)BRKINT | ICRNL | INPCK | ISTRIP | IXON);
   /* output modes - disable post processing */
-  raw.c_oflag &= ~(OPOST);
+  raw.c_oflag &= ~((uint64_t)OPOST);
   /* control modes - set 8 bit chars */
   raw.c_cflag |= (CS8);
   /* local modes - choing off, canonical off, no extended functions,
    * no signal chars (^Z,^C) */
-  raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
+  raw.c_lflag &= ~((uint64_t)ECHO | ICANON | IEXTEN | ISIG);
   /* control chars - set return condition: min number of bytes and timer. */
   raw.c_cc[VMIN] = 0;  /* Return each byte, or zero for timeout. */
   raw.c_cc[VTIME] = 1; /* 100 ms timeout (unit is tens of second). */
@@ -220,7 +200,10 @@ __attribute__((unused)) static void editor_draw_rgb_color_bg(editor_t *e,
   uint8_t r = (rgb & 0xff0000) >> 16;
   uint8_t g = (rgb & 0x00ff00) >> 8;
   uint8_t b = (rgb & 0x0000ff);
-  e->draw = gb_string_append_fmt(e->draw, "\x1b[48;2;%d;%d;%dm", r, g, b);
+  e->draw = pg_string_appendc(e->draw, "\x1b[48;2;");
+  char tmp[15] = "";
+  snprintf(tmp, sizeof(tmp) - 1, "%d;%d;%dm", r, g, b);
+  e->draw = pg_string_appendc(e->draw, tmp);
 }
 
 __attribute__((unused)) static void editor_draw_rgb_color_fg(editor_t *e,
@@ -228,84 +211,90 @@ __attribute__((unused)) static void editor_draw_rgb_color_fg(editor_t *e,
   uint8_t r = (rgb & 0xff0000) >> 16;
   uint8_t g = (rgb & 0x00ff00) >> 8;
   uint8_t b = (rgb & 0x0000ff);
-  e->draw = gb_string_append_fmt(e->draw, "\x1b[38;2;%d;%d;%dm", r, g, b);
+
+  e->draw = pg_string_appendc(e->draw, "\x1b[38;2;");
+  char tmp[15] = "";
+  snprintf(tmp, sizeof(tmp) - 1, "%d;%d;%dm", r, g, b);
+  e->draw = pg_string_appendc(e->draw, tmp);
 }
 
 static void editor_draw_line_number(editor_t *e, uint64_t line_i) {
-  e->draw = gb_string_append_fmt(e->draw, "%d ", line_i + 1);
+  char tmp[27] = "";
+  snprintf(tmp, sizeof(tmp) - 1, "%llu ", line_i + 1);
+  e->draw = pg_string_appendc(e->draw, tmp);
 }
 
 static void editor_draw_line_trailing_padding(editor_t *e, uint64_t line_i) {
-  const span_t span = e->lines[line_i];
+  const pg_span_t span = e->lines[line_i];
   for (uint64_t i = 0;
        i < e->cols - e->line_column_width - span.len - /* trailing newline */ 1;
        i++) {
-    e->draw = gb_string_append_length(e->draw, " ", 1);
+    e->draw = pg_string_append_length(e->draw, " ", 1);
   }
-  e->draw = gb_string_append_length(e->draw, "\n", 1);
+  e->draw = pg_string_append_length(e->draw, "\n", 1);
 }
 
 static void editor_draw_line(editor_t *e, uint64_t line_i) {
-  const span_t span = e->lines[line_i];
-  const char *const line = e->text + span.start;
+  const pg_span_t span = e->lines[line_i];
 
-  e->draw = gb_string_append_length(e->draw, "\x1b[0K", 4);
+  e->draw = pg_string_append_length(e->draw, "\x1b[0K", 4);
   editor_draw_line_number(e, line_i);
 
-  e->draw = gb_string_append_length(e->draw, line, span.len);
+  e->draw = pg_string_append_length(e->draw, span.data, span.len);
 
   editor_draw_line_trailing_padding(e, line_i);
 }
 
 static void editor_draw_lines(editor_t *e) {
-  for (uint64_t i = 0; i < MIN((uint64_t)gb_array_count(e->lines),
-                               e->rows - /* debug line */ 1);
-       i++) {
+  for (uint64_t i = 0;
+       i < MIN(pg_array_len(e->lines), e->rows - /* debug line */ 1); i++) {
     editor_draw_line(e, i);
   }
 }
 
 static void editor_draw_debug_ui(editor_t *e) {
-  const uint64_t mem_len = 0; // FIXME
-  e->ui = gb_string_append_fmt(
-      e->ui, "cols=%d | rows=%d | cx=%d | cy=%d | coffset=%d | mem=%td",
-      e->cols, e->rows, e->cx, e->cy, e->coffset, mem_len);
-  e->draw = gb_string_append(e->draw, e->ui);
+  char tmp[150] = "";
+  snprintf(tmp, sizeof(tmp) - 1,
+           "cols=%llu | rows=%llu | cx=%llu | cy=%llu | coffset=%llu ", e->cols,
+           e->rows, e->cx, e->cy, e->coffset);
+  e->ui = pg_string_appendc(e->ui, tmp);
+  e->draw = pg_string_append(e->draw, e->ui);
 }
 
 static void editor_draw_vert_padding(editor_t *e) {
-  if ((uint64_t)gb_array_count(e->lines) >= e->rows - /* debug line */ 1)
+  if (pg_array_len(e->lines) >= e->rows - /* debug line */ 1)
     return; // nothing to do
 
   const uint64_t vert_padding_rows =
-      e->rows - (uint64_t)gb_array_count(e->lines) - /* debug line */ 1;
+      e->rows - pg_array_len(e->lines) - /* debug line */ 1;
   for (uint64_t i = 0; i < vert_padding_rows; i++) {
-    e->draw = gb_string_append_length(e->draw, "\r\n", 2);
+    e->draw = pg_string_append_length(e->draw, "\r\n", 2);
   }
 }
 
 static void editor_draw_cursor(editor_t *e) {
-  e->draw =
-      gb_string_append_fmt(e->draw, "\x1b[%d;%dH", e->cy + 1,
-                           e->line_column_width + e->cx + 1); // Go to (cx, cy)
-  e->draw = gb_string_append_length(e->draw, "\x1b[?25h", 6); // Show cursor
+  char tmp[100] = "";
+  snprintf(tmp, sizeof(tmp) - 1, "\x1b[%llu;%lluH", e->cy + 1,
+           e->line_column_width + e->cx + 1); // Go to (cx, cy)
+  e->draw = pg_string_appendc(e->draw, tmp);
+  e->draw = pg_string_append_length(e->draw, "\x1b[?25h", 6); // Show cursor
 }
 
 static void editor_draw(editor_t *e) {
   assert(e->rows > 0);
   assert(e->cols > 0);
 
-  e->draw = gb_string_append_length(e->draw, "\x1b[J", 3); // Clear screen
-  e->draw = gb_string_append_length(e->draw, "\x1b[H", 3); // Go home
+  e->draw = pg_string_append_length(e->draw, "\x1b[J", 3); // Clear screen
+  e->draw = pg_string_append_length(e->draw, "\x1b[H", 3); // Go home
 
   editor_draw_lines(e);
   editor_draw_vert_padding(e);
   editor_draw_debug_ui(e);
   editor_draw_cursor(e);
 
-  write(STDOUT_FILENO, e->draw, gb_string_length(e->draw));
-  gb_string_clear(e->draw);
-  gb_string_clear(e->ui);
+  write(STDOUT_FILENO, e->draw, pg_string_len(e->draw));
+  pg_string_clear(e->draw);
+  pg_string_clear(e->ui);
 }
 
 static editor_t editor_make(uint64_t rows, uint64_t cols) {
@@ -316,26 +305,26 @@ static editor_t editor_make(uint64_t rows, uint64_t cols) {
   if (rows == 0)
     rows = 100;
 
-  gbAllocator allocator = gb_heap_allocator();
+  pg_allocator_t allocator = pg_heap_allocator();
   editor_t e = {
       .allocator = allocator,
-      .draw = gb_string_make_reserve(allocator, cols * rows),
+      .draw = pg_string_make_reserve(allocator, cols * rows),
       .cols = cols,
       .rows = rows,
-      .ui = gb_string_make_reserve(allocator, cols * rows),
-      .text = gb_string_make_reserve(gb_heap_allocator(), 0),
+      .ui = pg_string_make_reserve(allocator, cols * rows),
+      .text = pg_string_make_reserve(pg_heap_allocator(), 0),
   };
-  gb_array_init(e.lines, gb_heap_allocator());
+  pg_array_init(e.lines, pg_heap_allocator());
 
   return e;
 }
 
 static void editor_ingest_text(editor_t *e, const char *text, uint64_t len) {
-  e->text = gb_string_append_length(e->text, text, len);
+  e->text = pg_string_append_length(e->text, text, len);
   editor_parse_text(e);
 }
 
-int main() {
+int main(void) {
   term_enable_raw_mode();
   uint64_t cols = 0, rows = 0;
   term_get_window_size(&cols, &rows);
