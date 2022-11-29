@@ -7,15 +7,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/errno.h>
 #include <sys/signal.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define GB_IMPLEMENTATION
-#define GB_STATIC
 #include "../pg/pg.h"
-#include "../vendor/gb/gb.h"
 #include "../vendor/picohttpparser/picohttpparser.h"
 
 static const uint64_t KiB = 1024;
@@ -30,7 +26,7 @@ static bool verbose = true;
   } while (0)
 
 static void print_usage(int argc, char *argv[]) {
-  GB_ASSERT(argc > 0);
+  assert(argc > 0);
   printf("%s <port>\n", argv[0]);
 }
 
@@ -47,59 +43,27 @@ typedef enum {
 } http_method;
 
 typedef struct {
-  const char *path;
-  http_method method;
-  u16 path_len;
-  u16 content_len;
-  u8 headers_len;
+  pg_span_t path;
+  uint64_t content_len;
+  uint64_t headers_len;
   struct phr_header headers[50];
+  http_method method;
+  PG_PAD(4);
 } http_req_t;
 
-static bool str_eq(const char *a, u64 a_len, const char *b, u64 b_len) {
-  return a_len == b_len && memcmp(a, b, a_len) == 0;
-}
-
-static bool str_eq0(const char *a, u64 a_len, const char *b0) {
-  const u64 b_len = strlen(b0);
-  return str_eq(a, a_len, b0, b_len);
-}
-
-static bool str_starts_with0(const char *a, u64 a_len, const char *b0) {
-  const u64 b_len = strlen(b0);
-  return a_len >= b_len && str_eq(a, b_len, b0, b_len);
-}
-
-static u64 str_to_u64(const char *s, u64 s_len) {
-  assert(s != NULL);
-
-  u64 res = 0;
-  for (u64 i = 0; i < s_len; i++) {
-    const char c = s[i];
-    if (pg_char_is_space(c))
-      continue;
-    if (pg_char_is_digit(c)) {
-      const int v = c - '0';
-      res *= 10;
-      res += v;
-    } else
-      return 0;
-  }
-  return res;
-}
-
-static int http_parse_request(http_req_t *req, gbString buf, u64 prev_buf_len) {
+static int http_parse_request(http_req_t *req, pg_string_t buf,
+                              uint64_t prev_buf_len) {
   assert(req != NULL);
 
-  const char *method = NULL;
-  const char *path = NULL;
-  usize method_len = 0;
-  usize path_len = 0;
+  pg_span_t method = {0};
+  pg_span_t path = {0};
   int minor_version = 0;
-  usize headers_len = sizeof(req->headers) / sizeof(req->headers[0]);
+  uint64_t headers_len = sizeof(req->headers) / sizeof(req->headers[0]);
 
-  int res = phr_parse_request(buf, gb_string_length(buf), &method, &method_len,
-                              &path, &path_len, &minor_version, req->headers,
-                              &headers_len, prev_buf_len);
+  int res = phr_parse_request(
+      buf, pg_string_len(buf), (const char **)&method.data,
+      (size_t *)&method.len, (const char **)&path.data, (size_t *)&path.len,
+      &minor_version, req->headers, (size_t *)&headers_len, prev_buf_len);
 
   LOG("phr_parse_request: res=%d\n", res);
   if (res == -1) {
@@ -110,40 +74,39 @@ static int http_parse_request(http_req_t *req, gbString buf, u64 prev_buf_len) {
     // Partial http parse, need more data
     return res;
   }
-  if (method_len >= sizeof("CONNECT") - 1) { // Longest method
-    LOG("Invalid method, too long: method_len=%zu method=%.*s", method_len,
-        (int)method_len, method);
+  if (method.len >= sizeof("CONNECT") - 1) { // Longest method
+    LOG("Invalid method, too long: method_len=%llu method=%.*s", method.len,
+        (int)method.len, method.data);
     return EINVAL;
   }
-  if (str_eq0(method, method_len, "GET"))
+  if (pg_span_eq(method, pg_span_make_c("GET")))
     req->method = HM_GET;
-  else if (str_eq0(method, method_len, "HEAD"))
+  else if (pg_span_eq(method, pg_span_make_c("HEAD")))
     req->method = HM_HEAD;
-  else if (str_eq0(method, method_len, "POST"))
+  else if (pg_span_eq(method, pg_span_make_c("POST")))
     req->method = HM_POST;
-  else if (str_eq0(method, method_len, "PUT"))
+  else if (pg_span_eq(method, pg_span_make_c("PUT")))
     req->method = HM_PUT;
-  else if (str_eq0(method, method_len, "DELETE"))
+  else if (pg_span_eq(method, pg_span_make_c("DELETE")))
     req->method = HM_DELETE;
-  else if (str_eq0(method, method_len, "CONNECT"))
+  else if (pg_span_eq(method, pg_span_make_c("CONNECT")))
     req->method = HM_CONNECT;
-  else if (str_eq0(method, method_len, "OPTIONS"))
+  else if (pg_span_eq(method, pg_span_make_c("OPTIONS")))
     req->method = HM_OPTIONS;
-  else if (str_eq0(method, method_len, "TRACE"))
+  else if (pg_span_eq(method, pg_span_make_c("TRACE")))
     req->method = HM_TRACE;
-  else if (str_eq0(method, method_len, "PATCH"))
+  else if (pg_span_eq(method, pg_span_make_c("PATCH")))
     req->method = HM_PATCH;
   else {
-    LOG("Unknown method: method=%.*s", (int)method_len, method);
+    LOG("Unknown method: method=%.*s", (int)method.len, method.data);
     return EINVAL;
   }
 
-  if (path_len >= 4096) {
-    LOG("Invalid path, too long: path=%s", path);
+  if (path.len >= 4096) {
+    LOG("Invalid path, too long: path=%.*s", (int)path.len, path.data);
     return EINVAL;
   }
   req->path = path;
-  req->path_len = path_len;
 
   if (req->headers_len >= UINT8_MAX ||
       req->headers_len >= sizeof(req->headers) / sizeof(req->headers[0])) {
@@ -152,28 +115,34 @@ static int http_parse_request(http_req_t *req, gbString buf, u64 prev_buf_len) {
   }
   req->headers_len = headers_len;
 
-  for (u64 i = 0; i < headers_len; i++) {
+  for (uint64_t i = 0; i < headers_len; i++) {
     const struct phr_header *const header = &req->headers[i];
 
-    if (str_eq0(header->name, header->name_len, "Content-Length")) {
-      const u64 content_len = str_to_u64(header->value, header->value_len);
-      if (content_len > UINT16_MAX)
+    const pg_span_t header_name = {.data = (char *)header->name,
+                                   .len = header->name_len};
+    const pg_span_t header_value = {.data = (char *)header->value,
+                                    .len = header->value_len};
+    if (pg_span_eq(header_name, pg_span_make_c("Content-Length"))) {
+      bool content_length_valid = false;
+      const uint64_t content_len =
+          pg_span_parse_u64_decimal(header_value, &content_length_valid);
+      if (!content_length_valid || content_len > UINT16_MAX)
         return EINVAL;
       req->content_len = content_len;
     }
   }
 
-  LOG("method=%d path=%.*s\n", req->method, req->path_len, req->path);
+  LOG("method=%d path=%.*s\n", req->method, (int)req->path.len, req->path.data);
   return 0;
 }
 
-static gbString app_handle(const http_req_t *http_req, char *req_body,
-                           u64 req_body_len) {
+static pg_string_t app_handle(const http_req_t *http_req, const char *req_body,
+                              uint64_t req_body_len) {
   (void)http_req;
   (void)req_body;
   (void)req_body_len;
 
-  return gb_string_make(gb_heap_allocator(),
+  return pg_string_make(pg_heap_allocator(),
                         "HTTP/1.1 200 OK\r\n"
                         "Content-Type: text/plain; charset=utf8\r\n"
                         "Content-Length: 0\r\n"
@@ -192,15 +161,15 @@ static void handle_connection(int conn_fd) {
   pthread_t timeout_background_worker = {0};
   pthread_create(&timeout_background_worker, NULL,
                  timeout_background_worker_run, NULL);
-  gbString req =
-      gb_string_make_reserve(gb_heap_allocator(), max_payload_length);
+  pg_string_t req =
+      pg_string_make_reserve(pg_heap_allocator(), max_payload_length);
   int err = 0;
   http_req_t http_req = {0};
 
-  u64 prev_len = 0;
+  uint64_t prev_len = 0;
   while (1) {
-    ssize_t received = recv(conn_fd, &req[gb_string_length(req)],
-                            gb_string_available_space(req), 0);
+    const ssize_t received = recv(conn_fd, &req[pg_string_len(req)],
+                                  pg_string_available_space(req), 0);
     if (received == -1) {
       fprintf(stderr, "Failed to recv(2): err=%s\n", strerror(errno));
       return;
@@ -208,10 +177,10 @@ static void handle_connection(int conn_fd) {
     if (received == 0) { // Client closed connection
       return;
     }
-    prev_len = gb_string_length(req);
-    gb__set_string_length(req, gb_string_length(req) + received);
-    LOG("Request length: %td\n", gb_string_length(req));
-    if (gb_string_available_space(req) == 0) {
+    prev_len = pg_string_len(req);
+    pg__set_string_len(req, pg_string_len(req) + (uint64_t)received);
+    LOG("Request length: %llu\n", pg_string_len(req));
+    if (pg_string_available_space(req) == 0) {
       fprintf(stderr, "Request too big\n");
       return;
     }
@@ -224,17 +193,17 @@ static void handle_connection(int conn_fd) {
     if (err == -1) {
       fprintf(stderr,
               "Failed to parse http request: res=%d "
-              "received=%zd\n",
-              err, gb_array_count(req));
+              "received=%llu\n",
+              err, pg_string_len(req));
       return;
     }
     break;
   }
-  LOG("Content-Length: %d\n", http_req.content_len);
+  LOG("Content-Length: %llu\n", http_req.content_len);
   // Perhaps we do not have the full body yet and we need to get the
   // Content-Length and read that amount
-  char *req_body = memmem(req, gb_string_length(req), "\r\n\r\n", 4);
-  u64 req_body_len = req + gb_string_length(req) - req_body;
+  const char *req_body = pg_memmem(req, pg_string_len(req), "\r\n\r\n", 4);
+  uint64_t req_body_len = (uint64_t)(req + pg_string_len(req) - req_body);
   if (req_body != NULL) {
     req_body += 4;
     req_body_len -= 4;
@@ -243,13 +212,13 @@ static void handle_connection(int conn_fd) {
     req_body_len = 0;
   }
 
-  gbString res = app_handle(&http_req, req_body, req_body_len);
+  pg_string_t res = app_handle(&http_req, req_body, req_body_len);
   LOG("res=%s\n", res);
 
-  u64 written = 0;
-  const u64 total = gb_string_length(res);
+  uint64_t written = 0;
+  const uint64_t total = pg_string_len(res);
   while (written < total) {
-    int sent = send(conn_fd, &res[written], total - written, 0);
+    const ssize_t sent = send(conn_fd, &res[written], total - written, 0);
     if (sent == -1) {
       fprintf(stderr, "Failed to send(2): err=%s\n", strerror(errno));
       return;
@@ -265,8 +234,10 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  const u64 port = gb_str_to_u64(argv[1], NULL, 10);
-  if (port > UINT16_MAX) {
+  bool port_valid = false;
+  const uint64_t port =
+      pg_span_parse_u64_decimal(pg_span_make_c(argv[1]), &port_valid);
+  if (!port_valid || port > UINT16_MAX) {
     fprintf(stderr, "Invalid port number: %llu\n", port);
     return 1;
   }
@@ -278,7 +249,7 @@ int main(int argc, char *argv[]) {
     return errno;
   }
 
-  int sock_fd = socket(PF_INET, SOCK_STREAM, 0);
+  const int sock_fd = socket(PF_INET, SOCK_STREAM, 0);
   if (sock_fd == -1) {
     fprintf(stderr, "Failed to socket(2): %s\n", strerror(errno));
     return errno;
@@ -291,10 +262,10 @@ int main(int argc, char *argv[]) {
     return errno;
   }
 
-  const u8 ip[4] = {127, 0, 0, 1};
+  const uint8_t ip[4] = {127, 0, 0, 1};
   const struct sockaddr_in addr = {
       .sin_family = AF_INET,
-      .sin_addr = {.s_addr = *(u32 *)ip},
+      .sin_addr = {.s_addr = *(const uint32_t *)(const void *)ip},
       .sin_port = htons(12345),
   };
 
@@ -310,13 +281,13 @@ int main(int argc, char *argv[]) {
   }
 
   while (1) {
-    int conn_fd = accept(sock_fd, NULL, 0);
+    const int conn_fd = accept(sock_fd, NULL, 0);
     if (conn_fd == -1) {
       fprintf(stderr, "Failed to accept(2): %s\n", strerror(errno));
       return errno;
     }
 
-    pid_t pid = fork();
+    const pid_t pid = fork();
     if (pid == -1) {
       fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
       close(conn_fd);
