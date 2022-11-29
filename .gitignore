@@ -2,3 +2,4 @@ a.out*
 *.dSYM
 *.o
 *.gch
+.DS_Store
