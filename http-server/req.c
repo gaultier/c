@@ -4,67 +4,69 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 
-#define GB_IMPLEMENTATION
-#define GB_STATIC
-#include "../vendor/gb/gb.h"
+#include "../pg/pg.h"
 #include "../vendor/picohttpparser/picohttpparser.h"
 
 static void print_usage(int argc, char *argv[]) {
-  GB_ASSERT(argc > 0);
+  assert(argc > 0);
   printf("%s <port> <delay_ms> <batch_size_max>\nGot:", argv[0]);
   for (int i = 0; i < argc; i++)
     printf("%s ", argv[i]);
   puts("");
 }
 
-static u64 clamp_u64(u64 val, u64 limit) { return val > limit ? limit : val; }
+static uint64_t clamp_u64(uint64_t val, uint64_t limit) {
+  return val > limit ? limit : val;
+}
 
-static int request_send(int fd, u64 delay_ms, u64 batch_size_max,
-                        u64 payload_len) {
+static int request_send(int fd, uint32_t delay_ms, uint64_t batch_size_max,
+                        uint64_t payload_len) {
   static char msg[1000000] = "POST /index.html HTTP/1.1\r\n"
                              "Host: localhost:12347\r\n"
                              "\r\n";
   assert(payload_len < sizeof(msg));
-  u64 msg_len = strlen(msg);
+  uint64_t msg_len = strlen(msg);
   for (uint64_t i = 0; i < payload_len; i++)
     msg[msg_len++] = 'A';
 
-  i64 sent = 0;
-  u64 total_sent = 0;
+  uint64_t total_sent = 0;
 
   struct timeval send_start = {0};
   gettimeofday(&send_start, NULL);
   while (total_sent < msg_len) {
-    const u64 batch_size = clamp_u64(msg_len - total_sent, batch_size_max);
+    const uint64_t batch_size = clamp_u64(msg_len - total_sent, batch_size_max);
     fprintf(stderr, "[D001] batch_size=%llu\n", batch_size);
-    sent = send(fd, &msg[total_sent], batch_size, 0);
+    const ssize_t sent = send(fd, &msg[total_sent], batch_size, 0);
     if (sent == -1) {
       fprintf(stderr, "Failed to send(2): %s\n", strerror(errno));
       return errno;
+    } else if (sent == 0) {
+      fprintf(stderr, "Failed to send(2): other side closed\n");
+      return errno;
     }
-    total_sent += sent;
+    total_sent += (uint64_t)sent;
 
-    fprintf(stderr, "Sent: sent=%llu total_sent=%llu\n", sent, total_sent);
+    fprintf(stderr, "Sent: sent=%llu total_sent=%llu\n", (uint64_t)sent,
+            total_sent);
     if (delay_ms > 0)
       usleep(delay_ms * 1000);
   }
   struct timeval send_end = {0};
   gettimeofday(&send_end, NULL);
-  const float send_duration_ms =
-      (send_end.tv_sec * 1000.0 + send_end.tv_usec / 1000.0) -
-      (send_start.tv_sec * 1000.0 + send_start.tv_usec / 1000.0);
+  const double send_duration_ms =
+      ((double)send_end.tv_sec * 1000 + (double)send_end.tv_usec / 1000) -
+      ((double)send_start.tv_sec * 1000 + (double)send_start.tv_usec / 1000);
 
   fprintf(stderr, "Request sent: %02fms\n", send_duration_ms);
 
   return 0;
 }
 
-static int response_receive(int fd, u64 batch_size_max) {
-  i64 received = 0;
-  u64 total_received = 0;
+static int response_receive(int fd, uint64_t batch_size_max) {
+  uint64_t total_received = 0;
   char buf[4096] = "";
   while (total_received <= sizeof(buf)) {
-    received = recv(fd, &buf[total_received], batch_size_max, 0);
+    const ssize_t received = recv(fd, &buf[total_received], batch_size_max, 0);
     if (received == -1) {
       fprintf(stderr, "Failed to recv(2): %s\n", strerror(errno));
       return errno;
@@ -72,8 +74,8 @@ static int response_receive(int fd, u64 batch_size_max) {
     if (received == 0) {
       break;
     }
-    printf("Partial received: %llu\n", received);
-    total_received += received;
+    printf("Partial received: %llu\n", (uint64_t)received);
+    total_received += (uint64_t)received;
   }
 
   fprintf(stderr, "Received: total_received=%llu `%.*s`\n", total_received,
@@ -87,15 +89,32 @@ int main(int argc, char *argv[]) {
     return 0;
   }
 
-  const u64 port = gb_str_to_u64(argv[1], NULL, 10);
-  if (port > UINT16_MAX) {
+  bool valid = false;
+  const uint64_t port =
+      pg_span_parse_u64_decimal(pg_span_make_c(argv[1]), &valid);
+  if (!valid || port > UINT16_MAX) {
     fprintf(stderr, "Invalid port number: %llu\n", port);
     return EINVAL;
   }
 
-  const u64 delay_ms = gb_str_to_u64(argv[2], NULL, 10);
-  const u64 batch_size_max = gb_str_to_u64(argv[3], NULL, 10);
-  const u64 payload_len = gb_str_to_u64(argv[4], NULL, 10);
+  const uint64_t delay_ms =
+      pg_span_parse_u64_decimal(pg_span_make_c(argv[2]), &valid);
+  if (!valid || delay_ms > UINT32_MAX) {
+    fprintf(stderr, "Invalid delay: %llu\n", delay_ms);
+    return EINVAL;
+  }
+  const uint64_t batch_size_max =
+      pg_span_parse_u64_decimal(pg_span_make_c(argv[3]), &valid);
+  if (!valid) {
+    fprintf(stderr, "Invalid batch_size_max: %llu\n", delay_ms);
+    return EINVAL;
+  }
+  const uint64_t payload_len =
+      pg_span_parse_u64_decimal(pg_span_make_c(argv[4]), &valid);
+  if (!valid) {
+    fprintf(stderr, "Invalid payload_len: %llu\n", delay_ms);
+    return EINVAL;
+  }
 
   int fd = socket(PF_INET, SOCK_STREAM, 0);
   if (fd == -1) {
@@ -107,13 +126,14 @@ int main(int argc, char *argv[]) {
       .sin_port = htons(port),
   };
 
-  if (connect(fd, (void *)&addr, sizeof(addr)) == -1) {
+  if (connect(fd, (const struct sockaddr *)&addr, sizeof(addr)) == -1) {
     fprintf(stderr, "Failed to connect(2): %s\n", strerror(errno));
     return errno;
   }
 
   int res = 0;
-  if ((res = request_send(fd, delay_ms, batch_size_max, payload_len)) != 0) {
+  if ((res = request_send(fd, (uint32_t)delay_ms, batch_size_max,
+                          payload_len)) != 0) {
     return res;
   }
   if ((res = response_receive(fd, batch_size_max)) != 0) {

@@ -10,3 +10,4 @@ deps.a: ../vendor/picohttpparser/picohttpparser.c
 
 
 req: req.c
+	$(CC) $(CFLAGS_COMMON) $(CFLAGS) $(LDFLAGS) $^ -o $@
