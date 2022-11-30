@@ -4,3 +4,4 @@ a.out*
 *.gch
 .DS_Store
 *.svg
+result
