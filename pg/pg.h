@@ -1238,7 +1238,7 @@ pg_array_read_file_fd(int fd, pg_array_t(uint8_t) * buf) {
     return false;
   }
   const uint64_t read_buffer_size =
-      MIN((uint64_t)UINT32_MAX, (uint64_t)st.st_size);
+      MIN((uint64_t)INT32_MAX, (uint64_t)st.st_size);
   pg_array_grow(*buf, (uint64_t)st.st_size);
   while (pg_array_len(*buf) < (uint64_t)st.st_size) {
     int64_t ret = read(fd, *buf + pg_array_len(*buf), read_buffer_size);
@@ -1259,7 +1259,7 @@ __attribute__((unused)) static bool pg_string_read_file_fd(int fd,
     return false;
   }
   const uint64_t read_buffer_size =
-      MIN((uint64_t)UINT32_MAX, (uint64_t)st.st_size);
+      MIN((uint64_t)INT32_MAX, (uint64_t)st.st_size);
   *str = pg_string_make_space_for(*str, (uint64_t)st.st_size);
 
   while (pg_string_len(*str) < (uint64_t)st.st_size) {
