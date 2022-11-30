@@ -1,7 +1,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <sys/_types/_int64_t.h>
 #include <sys/types.h>
 #include <unistd.h>
 
@@ -520,13 +519,12 @@ int main(int argc, char *argv[]) {
   pg_span_t input = {.data = (char *)file_data, .len = pg_array_len(file_data)};
 
   pg_array_t(event_t) events = {0};
-  pg_array_init_reserve(events, 20000, pg_heap_allocator());
+  pg_array_init_reserve(events, input.len/400, pg_heap_allocator());
 
   pg_array_t(pg_span_t) fn_names = {0};
-  pg_array_init_reserve(fn_names, 500, pg_heap_allocator());
+  pg_array_init_reserve(fn_names, pg_array_capacity(events)/10, pg_heap_allocator());
 
   parse_input(&logger, input, &events, &fn_names);
-
 
   print_html(events, fn_names);
   return 0;
