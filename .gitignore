@@ -3,3 +3,4 @@ a.out*
 *.o
 *.gch
 .DS_Store
+*.svg
