@@ -229,22 +229,6 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
 
     pg_span_trim_left(&input);
 
-    // malloc/realloc/calloc/free:entry
-    pg_span_trim_left(&input);
-    pg_span_t fn_leaf = input;
-    pg_span_split_at_first(input, ' ', &fn_leaf, &input);
-    pg_span_trim_left(&input);
-    if (pg_span_contains(fn_leaf, malloc_span) ||
-        pg_span_contains(fn_leaf, calloc_span))
-      event.kind = EK_ALLOC;
-    else if (pg_span_contains(fn_leaf, realloc_span))
-      event.kind = EK_REALLOC;
-    else if (pg_span_contains(fn_leaf, free_span))
-      event.kind = EK_FREE;
-    else
-      pg_log_fatal(&logger, EINVAL, "Unkown event kind: %.*s", (int)fn_leaf.len,
-                   fn_leaf.data);
-
     // timestamp
     pg_span_t timestamp_span = {0};
     pg_span_split_at_first(input, ' ', &timestamp_span, &input);
@@ -261,10 +245,7 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
     pg_span_split_at_first(input, ' ', &arg0_span, &input);
     pg_span_trim_left(&input);
     bool arg0_valid = false;
-    const int64_t arg0 =
-        event.kind == EK_FREE
-            ? pg_span_parse_i64_hex(arg0_span, &arg0_valid)
-            : (pg_span_parse_i64_decimal(arg0_span, &arg0_valid));
+    const int64_t arg0 = pg_span_parse_i64_decimal(arg0_span, &arg0_valid);
     if (!arg0_valid || arg0 < 0)
       pg_log_fatal(&logger, EINVAL, "Invalid arg0: %.*s", (int)arg0_span.len,
                    arg0_span.data);
@@ -274,31 +255,27 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
     uint64_t arg1 = 0;
     pg_span_split_at_first(input, ' ', &arg1_span, &input);
     pg_span_trim_left(&input);
-    if (event.kind != EK_FREE) {
-      if (arg1_span.len != 0) {
-        bool arg1_valid = false;
-        arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
-        if (!arg1_valid)
-          pg_log_fatal(&logger, EINVAL,
-                       "Invalid arg1: arg1_span=%.*s arg1=%lld valid=%d",
-                       (int)arg1_span.len, arg1_span.data, arg1, arg1_valid);
-      }
+    if (arg1_span.len != 0) {
+      bool arg1_valid = false;
+      arg1 = pg_span_parse_u64_decimal(arg1_span, &arg1_valid);
+      if (!arg1_valid)
+        pg_log_fatal(&logger, EINVAL,
+                     "Invalid arg1: arg1_span=%.*s arg1=%lld valid=%d",
+                     (int)arg1_span.len, arg1_span.data, arg1, arg1_valid);
     }
 
     // arg2
     pg_span_t arg2_span = {0};
     uint64_t arg2 = 0;
-    if (event.kind != EK_FREE) {
-      pg_span_split_at_first(input, '\n', &arg2_span, &input);
-      pg_span_trim_left(&input);
-      if (arg2_span.len != 0) {
-        bool arg2_valid = false;
-        arg2 = pg_span_parse_u64_hex(arg1_span, &arg2_valid);
-        if (!arg2_valid)
-          pg_log_fatal(&logger, EINVAL,
-                       "Invalid arg2: arg2_span=%.*s arg2=%lld valid=%d",
-                       (int)arg2_span.len, arg2_span.data, arg2, arg2_valid);
-      }
+    pg_span_split_at_first(input, '\n', &arg2_span, &input);
+    pg_span_trim_left(&input);
+    if (arg2_span.len != 0) {
+      bool arg2_valid = false;
+      arg2 = pg_span_parse_u64_decimal(arg1_span, &arg2_valid);
+      if (!arg2_valid)
+        pg_log_fatal(&logger, EINVAL,
+                     "Invalid arg2: arg2_span=%.*s arg2=%lld valid=%d",
+                     (int)arg2_span.len, arg2_span.data, arg2, arg2_valid);
     }
 
     // Rest of stacktrace
@@ -306,6 +283,21 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
       bool more_chars = false;
       char c = pg_span_peek_left(input, &more_chars);
       if (!more_chars || pg_char_is_digit(c)) { // The End / New frame
+
+        assert(pg_array_len(event.stacktrace) > 0);
+        const uint64_t fn_leaf_i = event.stacktrace[0].fn_i;
+        pg_span_t fn_leaf = (*fn_names)[fn_leaf_i];
+        if (pg_span_ends_with(fn_leaf, malloc_span) ||
+            pg_span_ends_with(fn_leaf, calloc_span))
+          event.kind = EK_ALLOC;
+        else if (pg_span_ends_with(fn_leaf, realloc_span))
+          event.kind = EK_REALLOC;
+        else if (pg_span_ends_with(fn_leaf, free_span))
+          event.kind = EK_FREE;
+        else
+          pg_log_fatal(&logger, EINVAL, "Unkown event kind: %.*s",
+                       (int)fn_leaf.len, fn_leaf.data);
+
         if (event.kind == EK_ALLOC) {
           event.size = (uint64_t)arg0;
           event.v.alloc.ptr = (uint64_t)arg1;
