@@ -6,7 +6,7 @@
 
 #include "../pg/pg.h"
 
-static   pg_logger_t logger = {.level = PG_LOG_INFO};
+static pg_logger_t logger = {.level = PG_LOG_INFO};
 
 typedef enum {
   EK_NONE,
@@ -84,8 +84,7 @@ static uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
 // foo`bar
 // foo`+[objc_weirdness]+0xab
 static stacktrace_entry_t
-fn_name_to_stacktrace_entry(pg_logger_t *logger,
-                            pg_array_t(pg_span_t) * fn_names, pg_span_t name) {
+fn_name_to_stacktrace_entry(pg_array_t(pg_span_t) * fn_names, pg_span_t name) {
   pg_span_t left = {0}, right = {0};
   int64_t offset = 0;
   if (pg_span_split_at_last(name, '+', &left,
@@ -94,7 +93,7 @@ fn_name_to_stacktrace_entry(pg_logger_t *logger,
     bool valid = false;
     offset = pg_span_parse_i64_hex(right, &valid);
     if (!valid || offset < 0)
-      pg_log_fatal(logger, EINVAL, "Invalid offset: name=%.*s offset=%.*s",
+      pg_log_fatal(&logger, EINVAL, "Invalid offset: name=%.*s offset=%.*s",
                    (int)name.len, name.data, (int)right.len, right.data);
   }
 
@@ -108,8 +107,7 @@ fn_name_to_stacktrace_entry(pg_logger_t *logger,
   return (stacktrace_entry_t){.fn_i = fn_i, .offset = (uint64_t)offset};
 }
 
-static void parse_input(pg_logger_t *logger, pg_span_t input,
-                        pg_array_t(event_t) * events,
+static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
                         pg_array_t(pg_span_t) * fn_names) {
 
   // Skip empty lines at the start
@@ -156,7 +154,7 @@ static void parse_input(pg_logger_t *logger, pg_span_t input,
     else if (pg_span_contains(fn_leaf, free_span))
       event.kind = EK_FREE;
     else
-      pg_log_fatal(logger, EINVAL, "Unkown event kind: %.*s", (int)fn_leaf.len,
+      pg_log_fatal(&logger, EINVAL, "Unkown event kind: %.*s", (int)fn_leaf.len,
                    fn_leaf.data);
 
     // timestamp
@@ -167,7 +165,7 @@ static void parse_input(pg_logger_t *logger, pg_span_t input,
     event.timestamp =
         (uint64_t)(pg_span_parse_i64_decimal(timestamp_span, &timestamp_valid));
     if (!timestamp_valid)
-      pg_log_fatal(logger, EINVAL, "Invalid timestamp: %.*s",
+      pg_log_fatal(&logger, EINVAL, "Invalid timestamp: %.*s",
                    (int)timestamp_span.len, timestamp_span.data);
 
     // arg0
@@ -180,7 +178,7 @@ static void parse_input(pg_logger_t *logger, pg_span_t input,
             ? pg_span_parse_i64_hex(arg0_span, &arg0_valid)
             : (pg_span_parse_i64_decimal(arg0_span, &arg0_valid));
     if (!arg0_valid || arg0 < 0)
-      pg_log_fatal(logger, EINVAL, "Invalid arg0: %.*s", (int)arg0_span.len,
+      pg_log_fatal(&logger, EINVAL, "Invalid arg0: %.*s", (int)arg0_span.len,
                    arg0_span.data);
 
     // arg1
@@ -193,7 +191,7 @@ static void parse_input(pg_logger_t *logger, pg_span_t input,
         bool arg1_valid = false;
         arg1 = pg_span_parse_u64_hex(arg1_span, &arg1_valid);
         if (!arg1_valid)
-          pg_log_fatal(logger, EINVAL,
+          pg_log_fatal(&logger, EINVAL,
                        "Invalid arg1: arg1_span=%.*s arg1=%lld valid=%d",
                        (int)arg1_span.len, arg1_span.data, arg1, arg1_valid);
       }
@@ -209,7 +207,7 @@ static void parse_input(pg_logger_t *logger, pg_span_t input,
         bool arg2_valid = false;
         arg2 = pg_span_parse_u64_hex(arg1_span, &arg2_valid);
         if (!arg2_valid)
-          pg_log_fatal(logger, EINVAL,
+          pg_log_fatal(&logger, EINVAL,
                        "Invalid arg2: arg2_span=%.*s arg2=%lld valid=%d",
                        (int)arg2_span.len, arg2_span.data, arg2, arg2_valid);
       }
@@ -232,7 +230,7 @@ static void parse_input(pg_logger_t *logger, pg_span_t input,
         } else if (event.kind == EK_FREE) {
           const uint64_t ptr = (uint64_t)arg0;
           if (ptr == 0)
-            pg_log_fatal(logger, EINVAL, "Invalid arg0 in free: arg0=%llu",
+            pg_log_fatal(&logger, EINVAL, "Invalid arg0 in free: arg0=%llu",
                          (uint64_t)arg0);
 
           pg_array_append(*events, event);
@@ -266,7 +264,7 @@ static void parse_input(pg_logger_t *logger, pg_span_t input,
       pg_span_trim(&fn);
 
       const stacktrace_entry_t stacktrace_entry =
-          fn_name_to_stacktrace_entry(logger, fn_names, fn);
+          fn_name_to_stacktrace_entry(fn_names, fn);
       pg_array_append(event.stacktrace, stacktrace_entry);
     }
   }
@@ -525,7 +523,7 @@ int main(int argc, char *argv[]) {
   pg_array_init_reserve(fn_names, pg_array_capacity(events) / 10,
                         pg_heap_allocator());
 
-  parse_input(&logger, input, &events, &fn_names);
+  parse_input(input, &events, &fn_names);
 
   print_html(events, fn_names);
   return 0;
