@@ -218,7 +218,7 @@ static void find_allocation_event_by_allocation_ptr(
 static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
                         pg_array_t(pg_span_t) * fn_names) {
   hashtable_u64_u64_t last_allocation_by_ptr = {0};
-  pg_hashtable_init(&last_allocation_by_ptr, pg_array_capacity(events) / 2,
+  pg_hashtable_init(&last_allocation_by_ptr,  pg_array_capacity(*events) / 2,
                     pg_heap_allocator());
 
   // Skip empty lines at the start
