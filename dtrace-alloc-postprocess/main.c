@@ -6,6 +6,8 @@
 
 #include "../pg/pg.h"
 
+static   pg_logger_t logger = {.level = PG_LOG_INFO};
+
 typedef enum {
   EK_NONE,
   EK_ALLOC,
@@ -495,11 +497,9 @@ static void print_html(const pg_array_t(event_t) events,
 }
 
 int main(int argc, char *argv[]) {
-  pg_logger_t logger = {.level = PG_LOG_INFO};
   pg_array_t(uint8_t) file_data = {0};
   pg_array_init_reserve(file_data, 0, pg_heap_allocator());
   if (argc == 1) {
-    // int fd = STDIN_FILENO;
     pg_log_fatal(&logger, EINVAL, "TODO read from stdin");
   } else if (argc == 2) {
     int fd = open(argv[1], O_RDONLY);
@@ -519,10 +519,11 @@ int main(int argc, char *argv[]) {
   pg_span_t input = {.data = (char *)file_data, .len = pg_array_len(file_data)};
 
   pg_array_t(event_t) events = {0};
-  pg_array_init_reserve(events, input.len/400, pg_heap_allocator());
+  pg_array_init_reserve(events, input.len / 400, pg_heap_allocator());
 
   pg_array_t(pg_span_t) fn_names = {0};
-  pg_array_init_reserve(fn_names, pg_array_capacity(events)/10, pg_heap_allocator());
+  pg_array_init_reserve(fn_names, pg_array_capacity(events) / 10,
+                        pg_heap_allocator());
 
   parse_input(&logger, input, &events, &fn_names);
 
