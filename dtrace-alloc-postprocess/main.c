@@ -1,7 +1,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include "../pg/pg.h"
@@ -41,9 +40,7 @@ struct event_t {
   } v;
 };
 
-typedef struct {
-  uint64_t ptr, size, start_i, end_i;
-} lifetime_t;
+PG_HASHTABLE(uint64_t, uint64_t, last_allocation_by_ptr);
 
 static char *power_of_two_string(uint64_t n) {
   static char res[50];
@@ -107,28 +104,36 @@ fn_name_to_stacktrace_entry(pg_array_t(pg_span_t) * fn_names, pg_span_t name) {
   return (stacktrace_entry_t){.fn_i = fn_i, .offset = (uint64_t)offset};
 }
 
-static void find_allocation_event_by_allocation_ptr(pg_array_t(event_t) events,
-                                                    uint64_t i, uint64_t ptr) {
+static void find_allocation_event_by_allocation_ptr(
+    pg_array_t(event_t) events,
+    last_allocation_by_ptr_t *last_allocation_by_ptr, uint64_t i,
+    uint64_t ptr) {
+
+  bool found = false;
+  uint64_t found_index = -1ULL;
+  pg_hashtable_find(*last_allocation_by_ptr, ptr, sizeof(uint64_t), found,
+                    found_index);
+  if (!found)
+    return;
+
+  const uint64_t other_index =
+      pg_hashtable_at(*last_allocation_by_ptr, found_index);
+  assert(i < pg_array_len(events));
+  assert(other_index < pg_array_len(events));
+
   event_t *const me = &events[i];
   me->related_event = -1;
-
-  for (int64_t j = (int64_t)i - 1; j >= 0; j--) {
-    event_t *const other = &events[j];
-
-    if (other->kind == EK_FREE)
-      continue;
-    if ((other->kind == EK_ALLOC && other->v.alloc.ptr == ptr) ||
-        (other->kind == EK_REALLOC && other->v.realloc.new_ptr == ptr)) {
-      me->related_event = j;
-      me->size = other->size;
-      other->related_event = (int64_t)i;
-      break;
-    }
-  }
+  me->related_event = (int64_t)other_index;
+  event_t *const other = &events[other_index];
+  me->size = other->size;
+  other->related_event = (int64_t)i;
 }
 
 static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
                         pg_array_t(pg_span_t) * fn_names) {
+  last_allocation_by_ptr_t last_allocation_by_ptr = {0};
+  pg_hashtable_init(last_allocation_by_ptr, pg_array_capacity(events) / 2,
+                    pg_heap_allocator());
 
   // Skip empty lines at the start
   while (pg_span_starts_with(input, pg_span_make_c("\n")))
@@ -242,11 +247,16 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
           event.size = (uint64_t)arg0;
           event.v.alloc.ptr = (uint64_t)arg1;
           pg_array_append(*events, event);
+          pg_hashtable_upsert(last_allocation_by_ptr, event.v.alloc.ptr,
+                              sizeof(uint64_t), pg_array_len(*events) - 1);
         } else if (event.kind == EK_REALLOC) {
           event.size = (uint64_t)arg0;
           event.v.realloc.new_ptr = (uint64_t)arg1;
           event.v.realloc.old_ptr = (uint64_t)arg2;
           pg_array_append(*events, event);
+
+          pg_hashtable_upsert(last_allocation_by_ptr, event.v.realloc.new_ptr,
+                              sizeof(uint64_t), pg_array_len(*events) - 1);
         } else if (event.kind == EK_FREE) {
           const uint64_t ptr = (uint64_t)arg0;
           if (ptr == 0)
@@ -256,7 +266,7 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
           pg_array_append(*events, event);
 
           find_allocation_event_by_allocation_ptr(
-              *events, pg_array_len(*events) - 1, ptr);
+              *events, &last_allocation_by_ptr, pg_array_len(*events) - 1, ptr);
         } else {
           __builtin_unreachable();
         }
