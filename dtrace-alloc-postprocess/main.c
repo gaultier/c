@@ -40,7 +40,97 @@ struct event_t {
   } v;
 };
 
-PG_HASHTABLE(uint64_t, uint64_t, last_allocation_by_ptr);
+typedef struct {
+  pg_array_t(uint64_t) keys;
+  pg_array_t(uint64_t) values;
+  pg_array_t(uint32_t) hashes;
+} hashtable_u64_u64_t;
+
+#define PG_HASHTABLE_LOAD_FACTOR 0.75
+
+static void pg_hashtable_init(hashtable_u64_u64_t *hashtable, uint64_t cap,
+                              pg_allocator_t allocator) {
+  pg_array_init_reserve(hashtable->keys, cap, allocator);
+  pg_array_init_reserve(hashtable->values, cap, allocator);
+  pg_array_init_reserve(hashtable->hashes, cap, allocator);
+}
+
+static bool pg_hashtable_find(hashtable_u64_u64_t *hashtable, uint64_t key,
+                              uint64_t *index) {
+
+  assert(pg_array_capacity(hashtable->keys) ==
+         pg_array_capacity(hashtable->values));
+  assert(pg_array_capacity(hashtable->keys) ==
+         pg_array_capacity(hashtable->hashes));
+  assert(pg_array_len(hashtable->keys) == pg_array_len(hashtable->values));
+  assert(pg_array_len(hashtable->keys) == pg_array_len(hashtable->hashes));
+
+  const uint32_t hash = pg_hash((uint8_t *)&key, sizeof(uint64_t));
+  *index = hash % pg_array_capacity(hashtable->keys);
+
+  for (;;) {
+    const uint32_t index_hash = hashtable->hashes[*index];
+    if (index_hash == 0)
+      return false; /* Not found but suitable empty slot */
+    if (index_hash == hash &&
+        memcmp(&key, &hashtable->keys[*index], sizeof(uint64_t)) == 0) {
+      /* Found after checking for collision */
+
+      return true;
+    }
+    /* Keep going to find either an empty slot or a matching hash */
+    *index = (*index + 1) % pg_array_capacity(hashtable->keys);
+  }
+
+  __builtin_unreachable();
+}
+
+static void pg_hashtable_upsert(hashtable_u64_u64_t *hashtable, uint64_t key,
+                                uint64_t val) {
+  assert(pg_array_capacity(hashtable->keys) ==
+         pg_array_capacity(hashtable->values));
+  assert(pg_array_capacity(hashtable->keys) ==
+         pg_array_capacity(hashtable->hashes));
+  assert(pg_array_len(hashtable->keys) == pg_array_len(hashtable->values));
+  assert(pg_array_len(hashtable->keys) == pg_array_len(hashtable->hashes));
+
+  const uint64_t cap = pg_array_capacity(hashtable->keys);
+  assert(cap > 0);
+  const uint64_t len = pg_array_len(hashtable->keys);
+  if (((double)len / (double)cap) >= PG_HASHTABLE_LOAD_FACTOR) {
+    const uint64_t new_cap = (uint64_t)(1.5 * (double)cap + 8);
+    pg_array_grow(hashtable->keys, new_cap);
+    pg_array_grow(hashtable->values, new_cap);
+    pg_array_grow(hashtable->hashes, new_cap);
+    assert(pg_array_capacity(hashtable->keys) ==
+           pg_array_capacity(hashtable->values));
+    assert(pg_array_capacity(hashtable->keys) ==
+           pg_array_capacity(hashtable->hashes));
+    assert(pg_array_capacity(hashtable->keys) > cap);
+    assert(pg_array_capacity(hashtable->values) > cap);
+    assert(pg_array_capacity(hashtable->hashes) > cap);
+  }
+  uint64_t index = -1ULL;
+  if (pg_hashtable_find((hashtable), key, &index)) {
+    /* Update */
+    hashtable->values[index] = val;
+    hashtable->hashes[index] = pg_hash((uint8_t *)&key, sizeof(uint64_t));
+  } else {
+    hashtable->keys[index] = key;
+    hashtable->hashes[index] = pg_hash((uint8_t *)&key, sizeof(uint64_t));
+    hashtable->values[index] = val;
+    const uint64_t new_len = pg_array_len((hashtable)->keys) + 1;
+    pg_array_resize(hashtable->keys, new_len);
+    pg_array_resize(hashtable->values, new_len);
+    pg_array_resize(hashtable->hashes, new_len);
+  }
+}
+
+static uint64_t pg_hashtable_at(const hashtable_u64_u64_t *hashtable,
+                                uint64_t index) {
+  assert(index < pg_array_capacity(hashtable->values));
+  return hashtable->values[index];
+}
 
 static char *power_of_two_string(uint64_t n) {
   static char res[50];
@@ -105,19 +195,15 @@ fn_name_to_stacktrace_entry(pg_array_t(pg_span_t) * fn_names, pg_span_t name) {
 }
 
 static void find_allocation_event_by_allocation_ptr(
-    pg_array_t(event_t) events,
-    last_allocation_by_ptr_t *last_allocation_by_ptr, uint64_t i,
-    uint64_t ptr) {
+    pg_array_t(event_t) events, hashtable_u64_u64_t *last_allocation_by_ptr,
+    uint64_t i, uint64_t ptr) {
 
-  bool found = false;
   uint64_t found_index = -1ULL;
-  pg_hashtable_find(*last_allocation_by_ptr, ptr, sizeof(uint64_t), found,
-                    found_index);
-  if (!found)
+  if (!pg_hashtable_find(last_allocation_by_ptr, ptr, &found_index))
     return;
 
   const uint64_t other_index =
-      pg_hashtable_at(*last_allocation_by_ptr, found_index);
+      pg_hashtable_at(last_allocation_by_ptr, found_index);
   assert(i < pg_array_len(events));
   assert(other_index < pg_array_len(events));
 
@@ -131,8 +217,8 @@ static void find_allocation_event_by_allocation_ptr(
 
 static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
                         pg_array_t(pg_span_t) * fn_names) {
-  last_allocation_by_ptr_t last_allocation_by_ptr = {0};
-  pg_hashtable_init(last_allocation_by_ptr, pg_array_capacity(events) / 2,
+  hashtable_u64_u64_t last_allocation_by_ptr = {0};
+  pg_hashtable_init(&last_allocation_by_ptr, pg_array_capacity(events) / 2,
                     pg_heap_allocator());
 
   // Skip empty lines at the start
@@ -247,16 +333,16 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
           event.size = (uint64_t)arg0;
           event.v.alloc.ptr = (uint64_t)arg1;
           pg_array_append(*events, event);
-          pg_hashtable_upsert(last_allocation_by_ptr, event.v.alloc.ptr,
-                              sizeof(uint64_t), pg_array_len(*events) - 1);
+          pg_hashtable_upsert(&last_allocation_by_ptr, event.v.alloc.ptr,
+                              pg_array_len(*events) - 1);
         } else if (event.kind == EK_REALLOC) {
           event.size = (uint64_t)arg0;
           event.v.realloc.new_ptr = (uint64_t)arg1;
           event.v.realloc.old_ptr = (uint64_t)arg2;
           pg_array_append(*events, event);
 
-          pg_hashtable_upsert(last_allocation_by_ptr, event.v.realloc.new_ptr,
-                              sizeof(uint64_t), pg_array_len(*events) - 1);
+          pg_hashtable_upsert(&last_allocation_by_ptr, event.v.realloc.new_ptr,
+                              pg_array_len(*events) - 1);
         } else if (event.kind == EK_FREE) {
           const uint64_t ptr = (uint64_t)arg0;
           if (ptr == 0)
