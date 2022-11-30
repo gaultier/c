@@ -228,6 +228,18 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
     pg_array_init_reserve(event.stacktrace, 20, pg_heap_allocator());
 
     pg_span_trim_left(&input);
+    {
+      bool more_chars = false;
+      char c = pg_span_peek_left(input, &more_chars);
+      if (!more_chars)
+        break; // Done
+      if (c != '|')
+        pg_log_fatal(
+            &logger, EINVAL,
+            "Expected event frame to start with '|' but it did not: %c %d", c,
+            (int)c);
+    }
+    pg_span_consume_left(&input, 1); // `|`
 
     // timestamp
     pg_span_t timestamp_span = {0};
@@ -282,7 +294,7 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
     while (true) {
       bool more_chars = false;
       char c = pg_span_peek_left(input, &more_chars);
-      if (!more_chars || pg_char_is_digit(c)) { // The End / New frame
+      if (!more_chars || c == '|') { // The End / New frame
 
         assert(pg_array_len(event.stacktrace) > 0);
         const uint64_t fn_leaf_i = event.stacktrace[0].fn_i;
