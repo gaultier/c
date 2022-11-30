@@ -134,23 +134,20 @@ static uint64_t pg_hashtable_at(const hashtable_u64_u64_t *hashtable,
 
 static char *power_of_two_string(uint64_t n) {
   static char res[50];
-  if (n < 1024) {
+  if (n < 1 * Ki) {
     snprintf(res, sizeof(res) - 1, "%llu", n);
     return res;
-  } else if (n < 1024ULL * 1024) {
-    snprintf(res, sizeof(res) - 1, "%llu Ki", n / 1024ULL);
+  } else if (n < 1 * Mi) {
+    snprintf(res, sizeof(res) - 1, "%llu Ki", n / (1 * Ki));
     return res;
-  } else if (n < 1024ULL * 1024 * 1024) {
-    snprintf(res, sizeof(res) - 1, "%llu Mi", n / 1024ULL / 1024);
+  } else if (n < 1 * Gi) {
+    snprintf(res, sizeof(res) - 1, "%llu Mi", n / (1 * Mi));
     return res;
-  } else if (n < 1024ULL * 1024 * 1024) {
-    snprintf(res, sizeof(res) - 1, "%llu Gi", n / 1024ULL / 1024);
-    return res;
-  } else if (n < 1024ULL * 1024 * 1024 * 1024) {
-    snprintf(res, sizeof(res) - 1, "%llu Ti", n / 1024ULL / 1024 / 1024);
+  } else if (n < 1 * Ti) {
+    snprintf(res, sizeof(res) - 1, "%llu Gi", n / (1 * Gi));
     return res;
   } else {
-    snprintf(res, sizeof(res) - 1, "%llu", n);
+    snprintf(res, sizeof(res) - 1, "%llu Ti", n / (1 * Ti));
     return res;
   }
 }
@@ -221,7 +218,6 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
   pg_hashtable_init(&last_allocation_by_ptr, pg_array_capacity(*events) / 2,
                     pg_heap_allocator());
 
-
   const pg_span_t malloc_span = pg_span_make_c("malloc");
   const pg_span_t realloc_span = pg_span_make_c("realloc");
   const pg_span_t calloc_span = pg_span_make_c("calloc");
@@ -232,7 +228,6 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
     pg_array_init_reserve(event.stacktrace, 20, pg_heap_allocator());
 
     pg_span_trim_left(&input);
-
 
     // malloc/realloc/calloc/free:entry
     pg_span_trim_left(&input);

@@ -24,6 +24,11 @@
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 #endif
 
+#define Ki (1024ULL)
+#define Mi (1024ULL * Ki)
+#define Gi (1024ULL * Mi)
+#define Ti (1024ULL * Gi)
+
 // Check that __COUNTER__ is defined and that __COUNTER__ increases by 1
 // every time it is expanded. X + 1 == X + 0 is used in case X is defined to be
 // empty. If X is empty the expression becomes (+1 == +0).
