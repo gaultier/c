@@ -110,7 +110,7 @@ fn_name_to_stacktrace_entry(pg_logger_t *logger,
 static void parse_input(pg_logger_t *logger, pg_span_t input,
                         pg_array_t(event_t) * events,
                         pg_array_t(pg_span_t) * fn_names) {
-  
+
   // Skip empty lines at the start
   while (pg_span_starts_with(input, pg_span_make_c("\n")))
     pg_span_skip_left_until_inclusive(&input, '\n');
@@ -286,10 +286,6 @@ static uint64_t event_ptr(const pg_array_t(event_t) events,
 
 static void print_html(const pg_array_t(event_t) events,
                        pg_array_t(pg_span_t) fn_names) {
-  // const uint64_t rect_w = 5;
-  // const uint64_t rect_h = 7;
-  // const uint64_t rect_margin_top = 1;
-  // const uint64_t rect_margin_right = 3;
 
   const uint64_t monitoring_start = events[0].timestamp;
   const uint64_t monitoring_end = events[pg_array_len(events) - 1].timestamp;
@@ -299,13 +295,10 @@ static void print_html(const pg_array_t(event_t) events,
   const uint64_t chart_h = 800;
   const uint64_t chart_margin_left = 60;
   const uint64_t chart_margin_bottom = 20;
-  //  const uint64_t chart_padding_w = 10;
   const uint64_t chart_padding_top = 10;
-  // const uint64_t chart_grid_gap = 100;
   const uint64_t font_size = 10;
 
   double max_log_size = 0;
-  //  double min_arg0 = 0;
   for (uint64_t i = 0; i < pg_array_len(events); i++) {
     const event_t event = events[i];
     max_log_size = MAX(max_log_size, log((double)event.size));
@@ -515,7 +508,7 @@ int main(int argc, char *argv[]) {
       pg_log_fatal(&logger, errno, "Failed to open file %s: %s", argv[1],
                    strerror(errno));
     }
-    if ((!pg_read_file( argv[1], &file_data)) != 0) {
+    if ((!pg_read_file(argv[1], &file_data)) != 0) {
       pg_log_fatal(&logger, errno, "Failed to read file %s: %s", argv[1],
                    strerror(errno));
     }
@@ -534,45 +527,6 @@ int main(int argc, char *argv[]) {
 
   parse_input(&logger, input, &events, &fn_names);
 
-#if 0
-  pg_array_t(lifetime_t) lifetimes = {0};
-  pg_array_init_reserve(lifetimes, pg_array_len(events.kinds),
-                        pg_heap_allocator());
-  for (uint64_t i = 0; i < pg_array_len(events.kinds); i++) {
-    const event_kind_t kind = events.kinds[i];
-    if (kind == EK_ALLOC) {
-      pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
-                                               .start_i = i,
-                                               .size = events.arg0s[i]}));
-    } else if (kind == EK_FREE) {
-      const uint64_t ptr = events.arg0s[i];
-      for (int64_t j = pg_array_len(lifetimes) - 1; j >= 0; j--) {
-        if (lifetimes[j].ptr == ptr && lifetimes[j].end_i == 0) {
-          lifetimes[j].end_i = i;
-          break;
-        }
-      }
-    } else if (kind == EK_REALLOC) {
-      const uint64_t old_ptr = events.arg2s[i];
-      if (old_ptr == 0) {  // Same as malloc
-        pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
-                                                 .start_i = i,
-                                                 .size = events.arg0s[i]}));
-      } else {  // Same as free + malloc
-        for (int64_t j = pg_array_len(lifetimes) - 1; j >= 0; j--) {
-          if (lifetimes[j].ptr == old_ptr && lifetimes[j].end_i == 0) {
-            lifetimes[j].end_i = i;
-            break;
-          }
-        }
-        pg_array_append(lifetimes, ((lifetime_t){.ptr = events.arg1s[i],
-                                                 .start_i = i,
-                                                 .size = events.arg0s[i]}));
-      }
-    } else
-      __builtin_unreachable();
-  }
-#endif
 
   print_html(events, fn_names);
   return 0;
