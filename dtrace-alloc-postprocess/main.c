@@ -110,6 +110,11 @@ fn_name_to_stacktrace_entry(pg_logger_t *logger,
 static void parse_input(pg_logger_t *logger, pg_span_t input,
                         pg_array_t(event_t) * events,
                         pg_array_t(pg_span_t) * fn_names) {
+  
+  // Skip empty lines at the start
+  while (pg_span_starts_with(input, pg_span_make_c("\n")))
+    pg_span_skip_left_until_inclusive(&input, '\n');
+
   // Skip header, unneeded
   if (pg_span_starts_with(input, pg_span_make_c("CPU")))
     pg_span_skip_left_until_inclusive(&input, '\n');
