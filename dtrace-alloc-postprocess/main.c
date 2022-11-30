@@ -218,16 +218,9 @@ static void find_allocation_event_by_allocation_ptr(
 static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
                         pg_array_t(pg_span_t) * fn_names) {
   hashtable_u64_u64_t last_allocation_by_ptr = {0};
-  pg_hashtable_init(&last_allocation_by_ptr,  pg_array_capacity(*events) / 2,
+  pg_hashtable_init(&last_allocation_by_ptr, pg_array_capacity(*events) / 2,
                     pg_heap_allocator());
 
-  // Skip empty lines at the start
-  while (pg_span_starts_with(input, pg_span_make_c("\n")))
-    pg_span_skip_left_until_inclusive(&input, '\n');
-
-  // Skip header, unneeded
-  if (pg_span_starts_with(input, pg_span_make_c("CPU")))
-    pg_span_skip_left_until_inclusive(&input, '\n');
 
   const pg_span_t malloc_span = pg_span_make_c("malloc");
   const pg_span_t realloc_span = pg_span_make_c("realloc");
@@ -240,17 +233,6 @@ static void parse_input(pg_span_t input, pg_array_t(event_t) * events,
 
     pg_span_trim_left(&input);
 
-    // Skip CPU id column
-    {
-      pg_span_trim_left(&input);
-      pg_span_skip_left_until_inclusive(&input, ' ');
-    }
-
-    // Skip ID column
-    {
-      pg_span_trim_left(&input);
-      pg_span_skip_left_until_inclusive(&input, ' ');
-    }
 
     // malloc/realloc/calloc/free:entry
     pg_span_trim_left(&input);

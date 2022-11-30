@@ -1,4 +1,4 @@
-#!/usr/sbin/dtrace -s
+#!/usr/sbin/dtrace -s -q
 
 pid$target::malloc:entry{ self->mem_size = arg0; }
 pid$target::realloc:entry { self->old_ptr = arg0; self->mem_size = arg1; }
