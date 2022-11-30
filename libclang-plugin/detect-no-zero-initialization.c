@@ -2,8 +2,8 @@
 #include <clang-c/Index.h>
 #include <stdio.h>
 
-enum CXChildVisitResult visitor(CXCursor cursor, CXCursor unused_cursor,
-                                CXClientData unused_data) {
+static enum CXChildVisitResult visitor(CXCursor cursor, CXCursor unused_cursor,
+                                       CXClientData unused_data) {
   (void)unused_cursor;
   (void)unused_data;
 
