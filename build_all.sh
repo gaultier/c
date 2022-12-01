@@ -1,4 +1,4 @@
-#/bin/sh
+#!/bin/sh
 set -xe
 
-fd Makefile --exclude 'vendor' -x make -C {//} -B
+find . -name Makefile -type f -not -path './vendor/*' -execdir make -B CC=clang  \;
