@@ -13,3 +13,6 @@
 [submodule "vendor/jsmn"]
 	path = vendor/jsmn
 	url = https://github.com/zserge/jsmn.git
+[submodule "vendor/curl"]
+	path = vendor/curl
+	url = https://github.com/curl/curl.git
