@@ -49,7 +49,7 @@ $ make install
 
 Or use the vendored dependencies to use a fully statically linked executable:
 ```sh
-$ "$(git rev-parse --show-toplevel)"/build-vendors.sh
+$ "$(git rev-parse --show-toplevel)"/build_vendors.sh
 # On macOS
 $ make -B LDLIBS='../vendor/curl/lib/.libs/libcurl.a ../vendor/bearssl/build/install/lib/libbearssl.a' LDFLAGS='-framework CoreFoundation -framework SystemConfiguration'
 # On other *nix
