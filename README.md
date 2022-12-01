@@ -6,7 +6,7 @@ A diverse collection of useful (to me!) software written in C. Memory profiling,
 
 ## Quick start
 
-**Make sure you have the git submodules locally: git submodule update --init --recursive**
+*Make sure you have the git submodules locally: git submodule update --init --recursive*
 
 Requirements: make, a C99 compiler.
 
