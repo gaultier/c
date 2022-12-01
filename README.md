@@ -19,7 +19,9 @@ $ ./build_all.sh
 
 Each subdirectory is a separate project. A project only depends on the common utility header `./pg/pg.h` and perhaps some vendored libraries under `vendor/`.
 
-Third party libraries are added as a git submodule under `vendor/` so: `git submodule add https://github.com/curl/curl.git vendor/curl`.
+Third party libraries are added as a git submodule at the root under `vendor/` so: `git submodule add https://github.com/curl/curl.git vendor/curl`.
+
+Recursive submodules or submodules under subdirectories are avoided.
 
 They are then built from source in `./build_vendors.sh` to control exactly the build flags and feature flags.
 
