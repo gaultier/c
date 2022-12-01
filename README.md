@@ -23,7 +23,7 @@ Third party libraries are added as a git submodule at the root under `vendor/` s
 
 Recursive submodules or submodules under subdirectories are avoided.
 
-Submodules are then built from source in `./build_vendors.sh` to control exactly the build flags and feature flags.
+Submodules are then built from source in `./build_vendors.sh` to control exactly the build flags and feature flags. E.g. libcurl is statically built without most features with a custom SSL backend.
 
 Static linking, C99, posix tools and not depending on what's installed in the current environment or OS specific APIs are highly preferred (but there are exceptions).
 
