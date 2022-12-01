@@ -1,3 +1,5 @@
+.PHONY: all
+
 CFLAGS_COMMON := -g -Weverything -Wno-used-but-marked-unused -Wno-declaration-after-statement -Wno-gnu-zero-variadic-macro-arguments -Wno-disabled-macro-expansion -isystem /usr/local/opt/llvm/include -isystem .. -std=c99
 CFLAGS := -march=native -O2
 
@@ -11,3 +13,5 @@ test: test.cpp
 
 simple: simple.cpp
 	$(CXX) $(CXXFLAGS) -g -std=c++11 -Wall -Wextra $^ -o $@ $(LDFLAGS)
+
+all: detect-no-zero-initialization test simple

@@ -10,16 +10,15 @@
 int main(int argc, char *argv[]) {
   pg_array_t(uint8_t) buf = {0};
   pg_array_init_reserve(buf, 0, pg_heap_allocator());
-  int64_t ret = 0;
   if (argc == 2) {
-    if ((ret = pg_read_file( argv[1], &buf)) != 0) {
-      fprintf(stderr, "Failed to read file: %s\n", strerror(ret));
-      exit(ret);
+    if (!pg_read_file(argv[1], &buf)) {
+      fprintf(stderr, "Failed to read file: %s\n", strerror(errno));
+      exit(errno);
     }
   } else if (argc == 1) {
-    if ((ret = pg_array_read_file_fd(pg_heap_allocator(), 0, &buf)) != 0) {
-      fprintf(stderr, "Failed to read from stdin: %s\n", strerror(ret));
-      exit(ret);
+    if (!pg_array_read_file_fd(STDIN_FILENO, &buf)) {
+      fprintf(stderr, "Failed to read from stdin: %s\n", strerror(errno));
+      exit(errno);
     }
   }
   if (pg_array_len(buf) > UINT32_MAX) {
@@ -34,7 +33,8 @@ int main(int argc, char *argv[]) {
   bc_parser_init(pg_heap_allocator(), &parser, 100);
   bc_parse_error_t err = bc_parse(&parser, &input);
   if (err != BC_PE_NONE) {
-    fprintf(stderr, "Failed to parse: %s\n", bc_parse_error_to_string(err));
+    fprintf(stderr, "Failed to parse: %s\n",
+            bc_parse_error_to_string((int)err));
     exit(EINVAL);
   }
   bc_dump_values(&parser, stdout, 0);
@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
       bc_parser_init_metainfo(&parser, &metainfo, &info_span);
   if (err_metainfo != BC_ME_NONE) {
     fprintf(stderr, "Failed to bc_parser_init_metainfo: %s\n",
-            bc_metainfo_error_to_string(err_metainfo));
+            bc_metainfo_error_to_string((int)err_metainfo));
     exit(EINVAL);
   }
   printf("Metainfo:\n"

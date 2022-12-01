@@ -1,4 +1,4 @@
-.PHONY: install
+.PHONY: install all
 
 CFLAGS_COMMON := -g -Weverything -Wno-used-but-marked-unused -Wno-declaration-after-statement -Wno-gnu-zero-variadic-macro-arguments -Wno-disabled-macro-expansion -isystem /usr/local/include/ -isystem .. -std=c99
 CFLAGS := -march=native -O2
@@ -13,3 +13,5 @@ clone-gitlab-api: main.c
 install: clone-gitlab-api
 	mkdir -p $(PREFIX)/bin
 	cp -f $< $(PREFIX)/bin/
+
+all: clone-gitlab-api
