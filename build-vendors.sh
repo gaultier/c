@@ -9,6 +9,9 @@ elif [ -z "$PG_PROCS" ]; then
   PG_PROCS="$(sysctl -n hw.logicalcpu)"
 fi
 
+ORIGINAL_DIR="$PWD"
+cd "$(git rev-parse --show-toplevel)"
+
 # BearSSL
 cd vendor/bearssl/
 make -j "$PG_PROCS"
@@ -82,3 +85,5 @@ make -j"$(PG_PROCS)"
 cd ../..
 
 test -f ./vendor/curl/lib/.libs/libcurl.a
+
+cd "$ORIGINAL_DIR"

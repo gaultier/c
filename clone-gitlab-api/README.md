@@ -45,6 +45,12 @@ Install (make sure first that git submodules have been pulled with e.g. `git sub
 ```sh
 $ brew install curl git
 $ make install
+# Or use the vendored dependencies to use a fully statically linked executable
+$ "$(git rev-parse --show-toplevel)"/build-vendors.sh
+# On macOS
+$ make -B LDLIBS='../vendor/curl/lib/.libs/libcurl.a ../vendor/bearssl/build/install/lib/libbearssl.a' LDFLAGS='-framework CoreFoundation -framework SystemConfiguration'
+# On other *nix
+$ make -B LDLIBS='../vendor/curl/lib/.libs/libcurl.a ../vendor/bearssl/build/install/lib/libbearssl.a'
 ```
 
 Example (the exact output will be different for you):
