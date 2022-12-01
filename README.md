@@ -2,7 +2,7 @@
 
 A diverse collection of useful (to me!) software written in C. Memory profiling, http server, editor, crash reporter, clang plugin, torrent client, etc.
 
-*This is experimental code. Probably don't use it!*
+*This is experimental code. Probably don't use it in production!*
 
 ## Quick start
 
