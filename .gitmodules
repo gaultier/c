@@ -16,3 +16,6 @@
 [submodule "vendor/curl"]
 	path = vendor/curl
 	url = https://github.com/curl/curl.git
+[submodule "vendor/bearssl"]
+	path = vendor/bearssl
+	url = https://www.bearssl.org/git/BearSSL
