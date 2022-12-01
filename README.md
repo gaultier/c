@@ -23,7 +23,7 @@ Third party libraries are added as a git submodule under `vendor/` so: `git subm
 
 They are then built from source in `./build_vendors.sh` to control exactly the build flags and feature flags.
 
-Static linking, C99, posix tools and not depending on what's installed in the current environment are highly preferred (but there are exceptions).
+Static linking, C99, posix tools and not depending on what's installed in the current environment or OS specific APIs are highly preferred (but there are exceptions).
 
 ## LICENSE 
 
