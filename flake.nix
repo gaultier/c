@@ -1,26 +1,39 @@
 {
   description = "clone-gitlab-api";
 
-  inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/21.05";
-    utils.url = "github:numtide/flake-utils";
-    utils.inputs.nixpkgs.follows = "nixpkgs";
-  };
+  inputs.nixpkgs.url = "nixpkgs/nixos-21.11";
+  inputs.utils.url = "github:numtide/flake-utils";
 
-  outputs = { self, nixpkgs, ... }@inputs: inputs.utils.lib.eachSystem [
-    "x86_64-linux" "i686-linux" "aarch64-linux" "x86_64-darwin"
-  ] (system: let pkgs = import nixpkgs {
-                   inherit system;
-                 };
-             in {
-               devShell = pkgs.mkShell rec {
-                 name = "my-c-project";
+  outputs = { self, nixpkgs, utils }:
+   utils.lib.eachDefaultSystem (system:
+    let 
+      pkgs = import nixpkgs { inherit system; };
+      in 
+      {
 
-                 packages = with pkgs; [
-                   # Development Tools
-                   clang
-                   gnumake
-                 ];
-               };
-             });
+        # Provide some binary packages for selected system types.
+        packages = forAllSystems (system:
+          let
+            pkgs = nixpkgsFor.${system};
+            clone-gitlab-api = (with pkgs; stdenv.mkDerivation {
+              name = "clone-gitlab-api";
+              nativeBuildInputs = [ clang gnumake ];
+              buildInputs = [ curl ];
+              src = ./.;
+              buildPhase = "make -C clone-gitlab-api";
+              installPhase = "make -C clone-gitlab-api install PREFIX=$out";
+            });
+          in rec {
+            defaultApp = utils.lib.mkApp {
+              drv = defaultPackage;
+            };
+            defaultPackage = clone-gitlab-api;
+            devShell = pkgs.mkShell {
+              buildInputs = [
+                clone-gitlab-api
+              ];
+            };
+          }
+        );
+      };
 }
