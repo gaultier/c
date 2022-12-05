@@ -137,19 +137,18 @@ static char *power_of_two_string(uint64_t n) {
   if (n < 1 * Ki) {
     snprintf(res, sizeof(res) - 1, "%llu", n);
     return res;
-  } else if (n < 1 * Mi) {
+  } if (n < 1 * Mi) {
     snprintf(res, sizeof(res) - 1, "%llu Ki", n / (1 * Ki));
     return res;
-  } else if (n < 1 * Gi) {
+  } if (n < 1 * Gi) {
     snprintf(res, sizeof(res) - 1, "%llu Mi", n / (1 * Mi));
     return res;
-  } else if (n < 1 * Ti) {
+  } if (n < 1 * Ti) {
     snprintf(res, sizeof(res) - 1, "%llu Gi", n / (1 * Gi));
     return res;
-  } else {
+  } 
     snprintf(res, sizeof(res) - 1, "%llu Ti", n / (1 * Ti));
     return res;
-  }
 }
 
 static uint64_t fn_name_find(pg_array_t(pg_span_t) fn_names, pg_span_t name,
