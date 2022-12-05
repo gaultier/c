@@ -318,7 +318,7 @@ __attribute__((unused)) static bool pg_char_is_alphanumeric(char c) {
 
 // ------------------ Strings
 
-typedef char *pg_string_t;
+#define pg_string_t char *
 
 // NOTE(bill): If you only need a small string, just use a standard c
 // string or change the size from uint64_t to u16, etc.

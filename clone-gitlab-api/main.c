@@ -436,7 +436,7 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options) {
 
       i++;
       continue;
-    } 
+    }
 
     if (pg_span_eq(key, key_git_url)) {
       field_count++;
@@ -580,7 +580,7 @@ static int worker_update_project(const char *fs_path, const pg_string_t git_url,
   __builtin_unreachable();
 }
 
-static int worker_clone_project(char *fs_path, const pg_string_t git_url,
+static int worker_clone_project(char *fs_path,  pg_string_t git_url,
                                 const options_t *options) {
   assert(fs_path != NULL);
   assert(git_url != NULL);

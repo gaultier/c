@@ -130,7 +130,7 @@ get_project_path_from_remote_git_url(const pg_string_t git_repository_url) {
   const pg_span_t git_url_start = pg_span_make_c("git@gitlab.ppro.com:");
   const pg_span_t http_url_start =
       pg_span_make_c("https://git@gitlab.ppro.com:");
-  pg_span_t s = pg_span_make_c(git_repository_url);
+  pg_span_t s = pg_span_make_c((char *)git_repository_url);
   if (pg_span_starts_with(s, ssh_url_start)) {
     pg_span_consume_left(&s, ssh_url_start.len);
   } else if (pg_span_starts_with(s, http_url_start)) {
@@ -138,7 +138,7 @@ get_project_path_from_remote_git_url(const pg_string_t git_repository_url) {
   } else if (pg_span_starts_with(s, git_url_start)) {
     pg_span_consume_left(&s, git_url_start.len);
   } else
-  assert(0);
+    assert(0);
 
   const pg_span_t git = pg_span_make_c(".git");
   if (pg_span_ends_with(s, git))
