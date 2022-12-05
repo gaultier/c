@@ -717,6 +717,9 @@ int main(int argc, char *argv[]) {
   while (!api.finished &&
          (res = api_fetch_and_upsert_projects(&api, &options)) == 0) {
   }
+  if (res != 0) {
+    fprintf(stderr, "Failed to handle all projects: err=%s\n", strerror(errno));
+  }
 
   bool btrue = true;
   __atomic_store(&atomic_child_spawner_finished, &btrue, __ATOMIC_SEQ_CST);
