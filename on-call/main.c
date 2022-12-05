@@ -138,7 +138,7 @@ static void bill_shifts(datetime_range_t *shifts, uint64_t shifts_len) {
     }
 
     printf("├──────────┴────────────┴────────┴────────────────┴────────────┴─────────────┼─────────────────┼───────────────┤\n"); 
-    printf("│ Sum                                                                        │      %5llu      │   %7.02f     │\n", total_money, (double)total_money*(1-tax_rate));
+    printf("│ Sum                                                                        │      %5llu      │   %7.02f    │\n", total_money, (double)total_money*(1-tax_rate));
     printf("└────────────────────────────────────────────────────────────────────────────┴─────────────────┴───────────────┘\n");
   // clang-format on
 }
@@ -166,6 +166,9 @@ int main(void) {
       {DATE_TIME(2022, 10, 24, 18), DATE_TIME(2022, 10, 28, 9)},
       {DATE_TIME(2022, 11, 4, 18), DATE_TIME(2022, 11, 7, 9)},
       {DATE_TIME(2022, 11, 21, 18), DATE_TIME(2022, 11, 23, 9)},
+      {DATE_TIME(2022, 12, 7, 18), DATE_TIME(2022, 12, 8, 9)},
+      {DATE_TIME(2022, 12, 10, 0), DATE_TIME(2022, 12, 12, 9)},
+      {DATE_TIME(2022, 12, 23, 18), DATE_TIME(2022, 12, 27, 9)},
   };
   bill_shifts(shifts, sizeof(shifts) / sizeof(shifts[0]));
 }
