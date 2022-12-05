@@ -121,13 +121,12 @@ int main(int argc, char *argv[], char *envp[]) {
     if (WIFEXITED(status)) {
       if (WEXITSTATUS(status) == 0)
         return 0;
-      else {
-        usleep(1000 * (options.wait_milliseconds > 0 ? options.wait_milliseconds
-                                                     : sleep_milliseconds));
-        sleep_milliseconds =
-            (uint32_t)(sleep_milliseconds * 1.5); // TODO: jitter, random
-        continue;
-      }
+
+      usleep(1000 * (options.wait_milliseconds > 0 ? options.wait_milliseconds
+                                                   : sleep_milliseconds));
+      sleep_milliseconds =
+          (uint32_t)(sleep_milliseconds * 1.5); // TODO: jitter, random
+      continue;
     }
     // TODO
   }

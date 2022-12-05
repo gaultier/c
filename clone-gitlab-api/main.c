@@ -436,7 +436,9 @@ static int api_parse_and_upsert_projects(api_t *api, const options_t *options) {
 
       i++;
       continue;
-    } else if (pg_span_eq(key, key_git_url)) {
+    } 
+
+    if (pg_span_eq(key, key_git_url)) {
       field_count++;
       git_url = value.data;
       // `execvp(2)` expects null terminated strings
@@ -481,12 +483,11 @@ static void *watch_workers(void *varg) {
 
         if (children_spawner_finished) // Done
           break;
-        else {
-          // Might happen temporarily. Could use pthread_cond_wait instead but
-          // that should be fine, only reporting would be delayed
-          sleep(1);
-          continue;
-        }
+
+        // Might happen temporarily. Could use pthread_cond_wait instead but
+        // that should be fine, only reporting would be delayed
+        sleep(1);
+        continue;
       }
 
       fprintf(stderr, "Failed to wait(): %s\n", strerror(errno));
@@ -638,7 +639,9 @@ static int upsert_project(pg_string_t path, char *git_url, char *fs_path,
   if (pid == -1) {
     fprintf(stderr, "Failed to fork(2): err=%s\n", strerror(errno));
     return errno;
-  } else if (pid == 0) {
+  }
+
+  if (pid == 0) {
     close(stderr_pipe[0]); // Child does not read
     close(0);              // Close stdin
     close(1);              // Close stdout
