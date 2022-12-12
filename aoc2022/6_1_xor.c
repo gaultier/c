@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 
 static const char input[] =
@@ -60,13 +61,20 @@ static const char input[] =
 
 int main() {
   const char *s = input;
+
   while (*s != 0) {
     const char a = s[0];
     const char b = s[1];
     const char c = s[2];
     const char d = s[3];
 
-    if (a == b || a == c | a == d | b == c | b == d | c == d) {
+    const uint64_t mask_a = 1 << (a - 'a');
+    const uint64_t mask_b = 1 << (b - 'a');
+    const uint64_t mask_c = 1 << (c - 'a');
+    const uint64_t mask_d = 1 << (d - 'a');
+
+    const uint64_t combined = mask_a ^ mask_b ^ mask_c ^ mask_d;
+    if (__builtin_popcount(combined) != 4) {
       s += 4;
       continue;
     }
