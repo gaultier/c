@@ -141,6 +141,7 @@ static uint8_t input[] =
 static bool visible[HEIGHT][WIDTH];
 
 int main(void) {
+  // Raytrace each row from the left
   for (uint64_t y = 0; y < HEIGHT; y++) {
     uint8_t max_row = 0;
     for (uint64_t x = 0; x < WIDTH; x++) {
@@ -151,6 +152,7 @@ int main(void) {
       }
     }
   }
+  // Raytrace each row from the right
   for (uint64_t y = 0; y < HEIGHT; y++) {
     uint8_t max_row = 0;
     for (uint64_t j = 0; j < WIDTH; j++) {
@@ -162,6 +164,7 @@ int main(void) {
       }
     }
   }
+  // Raytrace each column from the top
   for (uint64_t x = 0; x < WIDTH; x++) {
     uint8_t max_col = 0;
     for (uint64_t y = 0; y < HEIGHT; y++) {
@@ -172,6 +175,7 @@ int main(void) {
       }
     }
   }
+  // Raytrace each column from the bottom
   for (uint64_t x = 0; x < WIDTH; x++) {
     uint8_t max_row = 0;
     for (uint64_t j = 0; j < HEIGHT; j++) {
