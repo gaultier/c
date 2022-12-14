@@ -399,34 +399,43 @@ int main(void) {
   uint64_t visited_count = 0;
 
   draw(rope);
-  for (uint64_t i = 0; i < sizeof(moves) / sizeof(moves[0]); i++) {
-    const move_t move = moves[i];
+  for (uint64_t move_it = 0; move_it < sizeof(moves) / sizeof(moves[0]); move_it++) {
+    const move_t move = moves[move_it];
     const coord_t head_delta = direction_to_vector[move.direction];
 
     for (uint64_t step = 0; step < move.distance; step++) {
       coord_t prev_knot_front = rope[0];
 
-      rope[0].x += head_delta.x;
-      rope[0].y += head_delta.y;
-      assert(rope[0].x > -GRID_SIDE_SIZE / 2);
-      assert(rope[0].y > -GRID_SIDE_SIZE / 2);
-      assert(rope[0].x < GRID_SIDE_SIZE / 2);
-      assert(rope[0].y < GRID_SIDE_SIZE / 2);
-
-      for (uint64_t knot = 1; knot < ROPE_LEN; knot++) {
-        const coord_t new_knot =
-            move_rope_knot_step(rope[knot - 1], prev_knot_front, rope[knot]);
-        prev_knot_front = rope[knot];
-        rope[knot] = new_knot;
+      // Move head, trivial
+      {
+        rope[0].x += head_delta.x;
+        rope[0].y += head_delta.y;
+        assert(rope[0].x > -GRID_SIDE_SIZE / 2);
+        assert(rope[0].y > -GRID_SIDE_SIZE / 2);
+        assert(rope[0].x < GRID_SIDE_SIZE / 2);
+        assert(rope[0].y < GRID_SIDE_SIZE / 2);
       }
 
-      const coord_t tail = rope[ROPE_LEN - 1];
-      visited_count += !visited_cells[GRID_SIDE_SIZE / 2 + tail.y]
-                                     [GRID_SIDE_SIZE / 2 + tail.x];
-      visited_cells[GRID_SIDE_SIZE / 2 + tail.y][GRID_SIDE_SIZE / 2 + tail.x] =
-          true;
+      // Move each knot of the body
+      {
+        for (uint64_t knot = 1; knot < ROPE_LEN; knot++) {
+          const coord_t new_knot =
+              move_rope_knot_step(rope[knot - 1], prev_knot_front, rope[knot]);
+          prev_knot_front = rope[knot];
+          rope[knot] = new_knot;
+        }
+      }
 
-      printf("[i=%llu j=%llu]\n", i, step);
+      // Track what cell tail visited
+      {
+        const coord_t tail = rope[ROPE_LEN - 1];
+        visited_count += !visited_cells[GRID_SIDE_SIZE / 2 + tail.y]
+                                       [GRID_SIDE_SIZE / 2 + tail.x];
+        visited_cells[GRID_SIDE_SIZE / 2 + tail.y]
+                     [GRID_SIDE_SIZE / 2 + tail.x] = true;
+      }
+
+      printf("[i=%llu j=%llu]\n", move_it, step);
       draw(rope);
     }
   }
