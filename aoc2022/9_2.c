@@ -1,9 +1,11 @@
+#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/_types/_int64_t.h>
 
 typedef struct {
   uint8_t direction, distance;
@@ -17,7 +19,7 @@ typedef struct {
 
 static move_t moves[] = {
     {'R', 5},  {'U', 8},  {'L', 8},  {'D', 3},
-    {'R', 17}, {'D', 10}, {'L', 25}, {'R', 20},
+    {'R', 17}, {'D', 10}, {'L', 25}, {'U', 20},
 };
 #if 0
 static move_t moves[] = {
@@ -314,38 +316,44 @@ static int64_t chebychev_dist(coord_t head, coord_t tail) {
   return MAX(imaxabs(head.x - tail.x), imaxabs(head.y - tail.y));
 }
 
+static bool is_same_row(coord_t a, coord_t b) { return a.y == b.y; }
+
+static bool is_same_col(coord_t a, coord_t b) { return a.x == b.x; }
+
+static bool is_diagonal(coord_t a, coord_t b) {
+  return !is_same_row(a, b) && !is_same_col(a, b);
+}
 
 static const coord_t direction_to_vector[] = {
     ['L'] = {.x = -1},
     ['R'] = {.x = 1},
-    ['U'] = {.y = 1},
-    ['D'] = {.y = -1},
+    ['U'] = {.y = -1},
+    ['D'] = {.y = +1},
 };
 
-#define GRID_SIDE_SIZE 30
+#define GRID_SIDE_SIZE 50
 
 static bool visited_cells[GRID_SIDE_SIZE][GRID_SIDE_SIZE] = {0};
 
 static void draw(coord_t rope[10]) {
   for (int64_t y = 0; y < GRID_SIDE_SIZE; y++) {
     for (int64_t x = 0; x < GRID_SIDE_SIZE; x++) {
-      // if (rope[0].x == x && rope[0].y == y)
-      //   printf("H");
-      // else {
-      //   for (uint64_t i = 1; i < 10; i++) {
-      //     if (rope[i].x == x && rope[i].y == y) {
-      //       printf("%llu", i);
-      //       break;
-      //     } else
-      //       printf(".");
-
-      // else {
-      //   const bool visited = visited_cells[rope[k].y][rope[k].x];
-      //   printf("%c", visited ? '#' : '.');
-      // }
-      //   }
+      if (GRID_SIDE_SIZE / 2 + rope[0].x == x &&
+          GRID_SIDE_SIZE / 2 + rope[0].y == y) {
+        printf("H");
+        continue;
+      }
+      for (uint64_t i = 1; i < 10; i++) {
+        if (GRID_SIDE_SIZE / 2 + rope[i].x == x &&
+            GRID_SIDE_SIZE / 2 + rope[i].y == y) {
+          printf("%llu", i);
+          goto end_draw_cell;
+        }
+      }
       const bool visited = visited_cells[y][x];
       printf("%c", visited ? '#' : '.');
+
+    end_draw_cell : {}
     }
     puts("");
   }
@@ -356,15 +364,16 @@ int main(void) {
   coord_t rope[10] = {0};
   uint64_t visited_count = 0;
 
-  // draw(rope);
+  draw(rope);
   for (uint64_t i = 0; i < sizeof(moves) / sizeof(moves[0]); i++) {
     const move_t move = moves[i];
-    coord_t delta = direction_to_vector[move.direction];
+    const coord_t head_delta = direction_to_vector[move.direction];
 
-    coord_t prev_head = rope[0];
     for (uint64_t j = 0; j < move.distance; j++) {
-      rope[0].x += delta.x;
-      rope[0].y += delta.y;
+      coord_t prev_head = rope[0];
+
+      rope[0].x += head_delta.x;
+      rope[0].y += head_delta.y;
       assert(rope[0].x > -GRID_SIDE_SIZE / 2);
       assert(rope[0].y > -GRID_SIDE_SIZE / 2);
       assert(rope[0].x < GRID_SIDE_SIZE / 2);
@@ -374,9 +383,28 @@ int main(void) {
         coord_t head = rope[k - 1], *tail = &rope[k];
 
         if (chebychev_dist(head, *tail) > 1) { // Need to move tail
-          coord_t tmp = prev_head;
-          *tail = prev_head;
-          prev_head = tmp;
+          if (is_diagonal(head, *tail)) {
+            coord_t tail_delta = {.x = head.x - tail->x, .y = head.y - tail->y};
+            const int8_t x_sign =
+                +1 | (tail_delta.x >> (sizeof(int64_t) * 8 - 1));
+            assert(x_sign == -1 || x_sign == 1);
+            tail_delta.x /= tail_delta.x * x_sign;
+
+            const int8_t y_sign =
+                +1 | (tail_delta.y >> (sizeof(int64_t) * 8 - 1));
+            assert(y_sign == -1 || y_sign == 1);
+            tail_delta.y /= tail_delta.y * y_sign;
+
+            assert(tail_delta.x == 1 || tail_delta.x==-1);
+            assert(tail_delta.y == 1 || tail_delta.y==-1);
+
+            tail->x += tail_delta.x;
+            tail->y += tail_delta.y;
+          } else {
+            coord_t tmp = *tail;
+            *tail = prev_head;
+            prev_head = tmp;
+          }
         }
         assert(tail->x > -GRID_SIDE_SIZE / 2);
         assert(tail->y > -GRID_SIDE_SIZE / 2);
@@ -392,11 +420,11 @@ int main(void) {
         //   %lld\n",
         //          k, move.direction, move.distance, visited_count, head->x,
         //          head->y, tail->x, tail->y);
-        printf("[i=%llu j=%llu k=%llu]\n", i, j, k);
-        draw(rope);
       }
+      printf("[i=%llu j=%llu]\n", i, j);
+      draw(rope);
     }
   }
   draw(rope);
-  printf("%llu\n", visited_count);
+  printf("visited_count=%llu\n", visited_count);
 }
