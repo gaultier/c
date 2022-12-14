@@ -389,15 +389,15 @@ int main(void) {
         if (chebychev_dist(head, *tail) > 1) { // Need to move tail
           if (is_diagonal(head, *tail)) {
             coord_t tail_delta = {.x = head.x - tail->x, .y = head.y - tail->y};
-            const int8_t x_sign =
-                +1 | (tail_delta.x >> (sizeof(int64_t) * 8 - 1));
-            assert(x_sign == -1 || x_sign == 1);
-            tail_delta.x /= tail_delta.x * x_sign;
+            if (tail_delta.x > 1)
+              tail_delta.x = 1;
+            else if (tail_delta.x < -1)
+              tail_delta.x = -1;
 
-            const int8_t y_sign =
-                +1 | (tail_delta.y >> (sizeof(int64_t) * 8 - 1));
-            assert(y_sign == -1 || y_sign == 1);
-            tail_delta.y /= tail_delta.y * y_sign;
+            if (tail_delta.y > 1)
+              tail_delta.y = 1;
+            else if (tail_delta.y < -1)
+              tail_delta.y = -1;
 
             assert(tail_delta.x == 1 || tail_delta.x == -1);
             assert(tail_delta.y == 1 || tail_delta.y == -1);
