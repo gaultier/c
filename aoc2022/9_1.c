@@ -308,10 +308,6 @@ static int64_t chebychev_dist(coord_t head, coord_t tail) {
   return MAX(imaxabs(head.x - tail.x), imaxabs(head.y - tail.y));
 }
 
-static bool is_diagonal(coord_t head, coord_t tail) {
-  const coord_t distance = {.x = head.x - tail.x, .y = head.y - tail.y};
-  return (distance.x * distance.x == 1) && (distance.y * distance.y == 1);
-}
 
 static const coord_t direction_to_vector[] = {
     ['L'] = {.x = -1},
@@ -341,12 +337,7 @@ int main(void) {
       assert(head.y < GRID_SIDE_SIZE / 2);
 
       if (chebychev_dist(head, tail) > 1) { // Need to move tail
-        if (is_diagonal(prev_head, tail)) {
-          tail = prev_head;
-        } else {
-          tail.x += delta.x;
-          tail.y += delta.y;
-        }
+        tail = prev_head;
       }
       assert(tail.x > -GRID_SIDE_SIZE / 2);
       assert(tail.y > -GRID_SIDE_SIZE / 2);
