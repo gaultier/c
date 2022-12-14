@@ -21,11 +21,12 @@ static move_t moves[] = {
     {'R', 4}, {'D', 1}, {'L', 5}, {'R', 2},
 };
 #endif
+#if 0
 static move_t moves[] = {
     {'R', 5},  {'U', 8},  {'L', 8},  {'D', 3},
     {'R', 17}, {'D', 10}, {'L', 25}, {'U', 20},
 };
-#if 0
+#endif
 static move_t moves[] = {
     {'R', 1},  {'U', 1},  {'D', 2},  {'L', 2},  {'D', 1},  {'U', 1},  {'R', 2},
     {'D', 2},  {'R', 2},  {'U', 1},  {'L', 1},  {'U', 2},  {'R', 1},  {'L', 1},
@@ -314,7 +315,6 @@ static move_t moves[] = {
     {'D', 4},  {'U', 18}, {'R', 11}, {'U', 7},  {'D', 2},  {'R', 4},  {'L', 13},
     {'U', 11}, {'D', 10}, {'U', 17}, {'D', 3},  {'U', 10},
 };
-#endif
 
 static int64_t chebychev_dist(coord_t head, coord_t tail) {
   return MAX(imaxabs(head.x - tail.x), imaxabs(head.y - tail.y));
@@ -327,7 +327,7 @@ static const coord_t direction_to_vector[] = {
     ['D'] = {.y = +1},
 };
 
-#define GRID_SIDE_SIZE 50
+#define GRID_SIDE_SIZE 600
 
 static bool visited_cells[GRID_SIDE_SIZE][GRID_SIDE_SIZE] = {0};
 
@@ -371,8 +371,8 @@ static coord_t move_rope_knot_step(coord_t knot_front, coord_t knot) {
   else if (tail_delta.y < -1)
     tail_delta.y = -1;
 
-  assert(tail_delta.x == 1 || tail_delta.x == -1 || tail_delta.x==0);
-  assert(tail_delta.y == 1 || tail_delta.y == -1 || tail_delta.y==0);
+  assert(tail_delta.x == 1 || tail_delta.x == -1 || tail_delta.x == 0);
+  assert(tail_delta.y == 1 || tail_delta.y == -1 || tail_delta.y == 0);
 
   const coord_t new_tail =
       (coord_t){.x = knot.x + tail_delta.x, .y = knot.y + tail_delta.y};
@@ -386,7 +386,7 @@ int main(void) {
   coord_t rope[ROPE_LEN] = {0};
   uint64_t visited_count = 0;
 
-  draw(rope);
+  // draw(rope);
   for (uint64_t move_it = 0; move_it < sizeof(moves) / sizeof(moves[0]);
        move_it++) {
     const move_t move = moves[move_it];
@@ -409,7 +409,7 @@ int main(void) {
           rope[knot_it] = move_rope_knot_step(rope[knot_it - 1], rope[knot_it]);
           printf("[move_it=%llu step=%llu knot=%llu]\n", move_it, step,
                  knot_it);
-          draw(rope);
+          // draw(rope);
         }
       }
 
