@@ -320,14 +320,6 @@ static int64_t chebychev_dist(coord_t head, coord_t tail) {
   return MAX(imaxabs(head.x - tail.x), imaxabs(head.y - tail.y));
 }
 
-static bool is_same_row(coord_t a, coord_t b) { return a.y == b.y; }
-
-static bool is_same_col(coord_t a, coord_t b) { return a.x == b.x; }
-
-static bool is_diagonal(coord_t a, coord_t b) {
-  return !is_same_row(a, b) && !is_same_col(a, b);
-}
-
 static const coord_t direction_to_vector[] = {
     ['L'] = {.x = -1},
     ['R'] = {.x = 1},
@@ -364,15 +356,11 @@ static void draw(coord_t rope[10]) {
   puts("");
 }
 
-static coord_t move_rope_knot_step(coord_t head, coord_t prev_head,
-                                   coord_t tail) {
-  if (chebychev_dist(head, tail) <= 1)
-    return tail; // Do not move
-  if (!is_diagonal(head, tail)) {
-    return prev_head;
-  }
+static coord_t move_rope_knot_step(coord_t knot_front, coord_t knot) {
+  if (chebychev_dist(knot_front, knot) <= 1)
+    return knot; // Do not move
 
-  coord_t tail_delta = {.x = head.x - tail.x, .y = head.y - tail.y};
+  coord_t tail_delta = {.x = knot_front.x - knot.x, .y = knot_front.y - knot.y};
   if (tail_delta.x > 1)
     tail_delta.x = 1;
   else if (tail_delta.x < -1)
@@ -383,13 +371,13 @@ static coord_t move_rope_knot_step(coord_t head, coord_t prev_head,
   else if (tail_delta.y < -1)
     tail_delta.y = -1;
 
-  assert(tail_delta.x == 1 || tail_delta.x == -1);
-  assert(tail_delta.y == 1 || tail_delta.y == -1);
+  assert(tail_delta.x == 1 || tail_delta.x == -1 || tail_delta.x==0);
+  assert(tail_delta.y == 1 || tail_delta.y == -1 || tail_delta.y==0);
 
   const coord_t new_tail =
-      (coord_t){.x = tail.x + tail_delta.x, .y = tail.y + tail_delta.y};
-  assert(chebychev_dist(tail, new_tail) == 1);
-  assert(chebychev_dist(head, new_tail) == 1);
+      (coord_t){.x = knot.x + tail_delta.x, .y = knot.y + tail_delta.y};
+  assert(chebychev_dist(knot, new_tail) == 1);
+  assert(chebychev_dist(knot_front, new_tail) == 1);
   return new_tail;
 }
 
@@ -399,13 +387,12 @@ int main(void) {
   uint64_t visited_count = 0;
 
   draw(rope);
-  for (uint64_t move_it = 0; move_it < sizeof(moves) / sizeof(moves[0]); move_it++) {
+  for (uint64_t move_it = 0; move_it < sizeof(moves) / sizeof(moves[0]);
+       move_it++) {
     const move_t move = moves[move_it];
     const coord_t head_delta = direction_to_vector[move.direction];
 
     for (uint64_t step = 0; step < move.distance; step++) {
-      coord_t prev_knot_front = rope[0];
-
       // Move head, trivial
       {
         rope[0].x += head_delta.x;
@@ -418,11 +405,11 @@ int main(void) {
 
       // Move each knot of the body
       {
-        for (uint64_t knot = 1; knot < ROPE_LEN; knot++) {
-          const coord_t new_knot =
-              move_rope_knot_step(rope[knot - 1], prev_knot_front, rope[knot]);
-          prev_knot_front = rope[knot];
-          rope[knot] = new_knot;
+        for (uint64_t knot_it = 1; knot_it < ROPE_LEN; knot_it++) {
+          rope[knot_it] = move_rope_knot_step(rope[knot_it - 1], rope[knot_it]);
+          printf("[move_it=%llu step=%llu knot=%llu]\n", move_it, step,
+                 knot_it);
+          draw(rope);
         }
       }
 
@@ -434,9 +421,6 @@ int main(void) {
         visited_cells[GRID_SIDE_SIZE / 2 + tail.y]
                      [GRID_SIDE_SIZE / 2 + tail.x] = true;
       }
-
-      printf("[i=%llu j=%llu]\n", move_it, step);
-      draw(rope);
     }
   }
   draw(rope);
