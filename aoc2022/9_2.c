@@ -316,8 +316,9 @@ static move_t moves[] = {
     {'U', 11}, {'D', 10}, {'U', 17}, {'D', 3},  {'U', 10},
 };
 
+#define ABS(a) (((a) < 0) ? (-(a)) : (a))
 static int64_t chebychev_dist(coord_t head, coord_t tail) {
-  return MAX(imaxabs(head.x - tail.x), imaxabs(head.y - tail.y));
+  return MAX(ABS(head.x - tail.x), ABS(head.y - tail.y));
 }
 
 static const coord_t direction_to_vector[] = {
