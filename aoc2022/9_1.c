@@ -320,14 +320,12 @@ static const coord_t direction_to_vector[] = {
     ['D'] = {.y = -1},
 };
 
-#define GRID_SIDE_SIZE 300
+#define GRID_SIDE_SIZE 1000
+static bool visited_cells[GRID_SIDE_SIZE][GRID_SIDE_SIZE] = {0};
 
 int main(void) {
   coord_t head = {0}, tail = {0};
-  bool *visited_cells = calloc(GRID_SIDE_SIZE * GRID_SIDE_SIZE, 1);
   uint64_t visited_count = 0;
-
-  // draw(visited_cells, head, tail);
 
   for (uint64_t i = 0; i < sizeof(moves) / sizeof(moves[0]); i++) {
     move_t move = moves[i];
@@ -337,8 +335,10 @@ int main(void) {
       const coord_t prev_head = head;
       head.x += delta.x;
       head.y += delta.y;
-      assert(head.x < GRID_SIDE_SIZE);
-      assert(head.y < GRID_SIDE_SIZE);
+      assert(head.x > -GRID_SIDE_SIZE / 2);
+      assert(head.y > -GRID_SIDE_SIZE / 2);
+      assert(head.x < GRID_SIDE_SIZE / 2);
+      assert(head.y < GRID_SIDE_SIZE / 2);
 
       if (chebychev_dist(head, tail) > 1) { // Need to move tail
         if (is_diagonal(prev_head, tail)) {
@@ -348,10 +348,16 @@ int main(void) {
           tail.y += delta.y;
         }
       }
+      assert(tail.x > -GRID_SIDE_SIZE / 2);
+      assert(tail.y > -GRID_SIDE_SIZE / 2);
+      assert(tail.x < GRID_SIDE_SIZE / 2);
+      assert(tail.y < GRID_SIDE_SIZE / 2);
 
-      visited_count += !visited_cells[tail.y * GRID_SIDE_SIZE + tail.x];
-      visited_cells[tail.y * GRID_SIDE_SIZE + tail.x] = true;
+      visited_count += !visited_cells[GRID_SIDE_SIZE / 2 + tail.y]
+                                     [GRID_SIDE_SIZE / 2 + tail.x];
+      visited_cells[GRID_SIDE_SIZE / 2 + tail.y][GRID_SIDE_SIZE / 2 + tail.x] =
+          true;
     }
   }
-  printf("%llu\n",  visited_count);
+  printf("%llu\n", visited_count);
 }
