@@ -1,11 +1,9 @@
-#include <_types/_uint64_t.h>
 #include <assert.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/_types/_int64_t.h>
 
 typedef struct {
   uint8_t direction, distance;
@@ -17,6 +15,12 @@ typedef struct {
 
 #define MAX(a, b) (((a) > (b)) ? (a) : (b))
 
+#if 0
+static move_t moves[] = {
+    {'R', 4}, {'U', 4}, {'L', 3}, {'D', 1},
+    {'R', 4}, {'D', 1}, {'L', 5}, {'R', 2},
+};
+#endif
 static move_t moves[] = {
     {'R', 5},  {'U', 8},  {'L', 8},  {'D', 3},
     {'R', 17}, {'D', 10}, {'L', 25}, {'U', 20},
@@ -395,8 +399,8 @@ int main(void) {
             assert(y_sign == -1 || y_sign == 1);
             tail_delta.y /= tail_delta.y * y_sign;
 
-            assert(tail_delta.x == 1 || tail_delta.x==-1);
-            assert(tail_delta.y == 1 || tail_delta.y==-1);
+            assert(tail_delta.x == 1 || tail_delta.x == -1);
+            assert(tail_delta.y == 1 || tail_delta.y == -1);
 
             tail->x += tail_delta.x;
             tail->y += tail_delta.y;
@@ -411,10 +415,12 @@ int main(void) {
         assert(tail->x < GRID_SIDE_SIZE / 2);
         assert(tail->y < GRID_SIDE_SIZE / 2);
 
-        visited_count += !visited_cells[GRID_SIDE_SIZE / 2 + tail->y]
-                                       [GRID_SIDE_SIZE / 2 + tail->x];
-        visited_cells[GRID_SIDE_SIZE / 2 + tail->y]
-                     [GRID_SIDE_SIZE / 2 + tail->x] = true;
+        if (k == 9) {
+          visited_count += !visited_cells[GRID_SIDE_SIZE / 2 + tail->y]
+                                         [GRID_SIDE_SIZE / 2 + tail->x];
+          visited_cells[GRID_SIDE_SIZE / 2 + tail->y]
+                       [GRID_SIDE_SIZE / 2 + tail->x] = true;
+        }
 
         //   printf("k=%llu move=%c %hhu count=%llu head=%lld %lld tail=%lld
         //   %lld\n",
