@@ -331,31 +331,6 @@ static const coord_t direction_to_vector[] = {
 
 static bool visited_cells[GRID_SIDE_SIZE][GRID_SIDE_SIZE] = {0};
 
-static void draw(coord_t rope[10]) {
-  for (int64_t y = 0; y < GRID_SIDE_SIZE; y++) {
-    for (int64_t x = 0; x < GRID_SIDE_SIZE; x++) {
-      if (GRID_SIDE_SIZE / 2 + rope[0].x == x &&
-          GRID_SIDE_SIZE / 2 + rope[0].y == y) {
-        printf("H");
-        continue;
-      }
-      for (uint64_t i = 1; i < 10; i++) {
-        if (GRID_SIDE_SIZE / 2 + rope[i].x == x &&
-            GRID_SIDE_SIZE / 2 + rope[i].y == y) {
-          printf("%llu", i);
-          goto end_draw_cell;
-        }
-      }
-      const bool visited = visited_cells[y][x];
-      printf("%c", visited ? '#' : '.');
-
-    end_draw_cell : {}
-    }
-    puts("");
-  }
-  puts("");
-}
-
 static coord_t move_rope_knot_step(coord_t knot_front, coord_t knot) {
   if (chebychev_dist(knot_front, knot) <= 1)
     return knot; // Do not move
@@ -386,7 +361,6 @@ int main(void) {
   coord_t rope[ROPE_LEN] = {0};
   uint64_t visited_count = 0;
 
-  // draw(rope);
   for (uint64_t move_it = 0; move_it < sizeof(moves) / sizeof(moves[0]);
        move_it++) {
     const move_t move = moves[move_it];
@@ -407,9 +381,6 @@ int main(void) {
       {
         for (uint64_t knot_it = 1; knot_it < ROPE_LEN; knot_it++) {
           rope[knot_it] = move_rope_knot_step(rope[knot_it - 1], rope[knot_it]);
-          printf("[move_it=%llu step=%llu knot=%llu]\n", move_it, step,
-                 knot_it);
-          // draw(rope);
         }
       }
 
@@ -423,6 +394,5 @@ int main(void) {
       }
     }
   }
-  draw(rope);
   printf("visited_count=%llu\n", visited_count);
 }
