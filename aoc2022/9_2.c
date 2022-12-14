@@ -364,8 +364,38 @@ static void draw(coord_t rope[10]) {
   puts("");
 }
 
+static coord_t move_rope_knot_step(coord_t head, coord_t prev_head,
+                                   coord_t tail) {
+  if (chebychev_dist(head, tail) <= 1)
+    return tail; // Do not move
+  if (!is_diagonal(head, tail)) {
+    return prev_head;
+  }
+
+  coord_t tail_delta = {.x = head.x - tail.x, .y = head.y - tail.y};
+  if (tail_delta.x > 1)
+    tail_delta.x = 1;
+  else if (tail_delta.x < -1)
+    tail_delta.x = -1;
+
+  if (tail_delta.y > 1)
+    tail_delta.y = 1;
+  else if (tail_delta.y < -1)
+    tail_delta.y = -1;
+
+  assert(tail_delta.x == 1 || tail_delta.x == -1);
+  assert(tail_delta.y == 1 || tail_delta.y == -1);
+
+  const coord_t new_tail =
+      (coord_t){.x = tail.x + tail_delta.x, .y = tail.y + tail_delta.y};
+  assert(chebychev_dist(tail, new_tail) == 1);
+  assert(chebychev_dist(head, new_tail) == 1);
+  return new_tail;
+}
+
+#define ROPE_LEN 10
 int main(void) {
-  coord_t rope[10] = {0};
+  coord_t rope[ROPE_LEN] = {0};
   uint64_t visited_count = 0;
 
   draw(rope);
@@ -373,8 +403,8 @@ int main(void) {
     const move_t move = moves[i];
     const coord_t head_delta = direction_to_vector[move.direction];
 
-    for (uint64_t j = 0; j < move.distance; j++) {
-      coord_t prev_head = rope[0];
+    for (uint64_t step = 0; step < move.distance; step++) {
+      coord_t prev_knot_front = rope[0];
 
       rope[0].x += head_delta.x;
       rope[0].y += head_delta.y;
@@ -383,51 +413,20 @@ int main(void) {
       assert(rope[0].x < GRID_SIDE_SIZE / 2);
       assert(rope[0].y < GRID_SIDE_SIZE / 2);
 
-      for (uint64_t k = 1; k < 10; k++) {
-        coord_t head = rope[k - 1], *tail = &rope[k];
-
-        if (chebychev_dist(head, *tail) > 1) { // Need to move tail
-          if (is_diagonal(head, *tail)) {
-            coord_t tail_delta = {.x = head.x - tail->x, .y = head.y - tail->y};
-            if (tail_delta.x > 1)
-              tail_delta.x = 1;
-            else if (tail_delta.x < -1)
-              tail_delta.x = -1;
-
-            if (tail_delta.y > 1)
-              tail_delta.y = 1;
-            else if (tail_delta.y < -1)
-              tail_delta.y = -1;
-
-            assert(tail_delta.x == 1 || tail_delta.x == -1);
-            assert(tail_delta.y == 1 || tail_delta.y == -1);
-
-            tail->x += tail_delta.x;
-            tail->y += tail_delta.y;
-          } else {
-            coord_t tmp = *tail;
-            *tail = prev_head;
-            prev_head = tmp;
-          }
-        }
-        assert(tail->x > -GRID_SIDE_SIZE / 2);
-        assert(tail->y > -GRID_SIDE_SIZE / 2);
-        assert(tail->x < GRID_SIDE_SIZE / 2);
-        assert(tail->y < GRID_SIDE_SIZE / 2);
-
-        if (k == 9) {
-          visited_count += !visited_cells[GRID_SIDE_SIZE / 2 + tail->y]
-                                         [GRID_SIDE_SIZE / 2 + tail->x];
-          visited_cells[GRID_SIDE_SIZE / 2 + tail->y]
-                       [GRID_SIDE_SIZE / 2 + tail->x] = true;
-        }
-
-        //   printf("k=%llu move=%c %hhu count=%llu head=%lld %lld tail=%lld
-        //   %lld\n",
-        //          k, move.direction, move.distance, visited_count, head->x,
-        //          head->y, tail->x, tail->y);
+      for (uint64_t knot = 1; knot < ROPE_LEN; knot++) {
+        const coord_t new_knot =
+            move_rope_knot_step(rope[knot - 1], prev_knot_front, rope[knot]);
+        prev_knot_front = rope[knot];
+        rope[knot] = new_knot;
       }
-      printf("[i=%llu j=%llu]\n", i, j);
+
+      const coord_t tail = rope[ROPE_LEN - 1];
+      visited_count += !visited_cells[GRID_SIDE_SIZE / 2 + tail.y]
+                                     [GRID_SIDE_SIZE / 2 + tail.x];
+      visited_cells[GRID_SIDE_SIZE / 2 + tail.y][GRID_SIDE_SIZE / 2 + tail.x] =
+          true;
+
+      printf("[i=%llu j=%llu]\n", i, step);
       draw(rope);
     }
   }
