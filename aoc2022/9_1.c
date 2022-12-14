@@ -1,8 +1,5 @@
-#include <_types/_uint64_t.h>
 #include <assert.h>
-#include <complex.h>
 #include <inttypes.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -82,17 +79,16 @@ int main(void) {
           tail.y += delta.y;
         }
       }
-    
 
-    visited_count += !visited_cells[tail.y * WIDTH + tail.x];
-    visited_cells[tail.y * WIDTH + tail.x] = true;
+      visited_count += !visited_cells[tail.y * WIDTH + tail.x];
+      visited_cells[tail.y * WIDTH + tail.x] = true;
 
-    printf("move=%c %hhu count=%llu head=%lld %lld tail=%lld %lld\n",
-           move.direction, move.distance, visited_count, head.x, head.y, tail.x,
-           tail.y);
+      printf("move=%c %hhu count=%llu head=%lld %lld tail=%lld %lld\n",
+             move.direction, move.distance, visited_count, head.x, head.y,
+             tail.x, tail.y);
 
-    draw(visited_cells, head, tail);
+      draw(visited_cells, head, tail);
+    }
   }
-}
-printf("%llu\n", visited_count);
+  printf("%llu\n", visited_count);
 }
