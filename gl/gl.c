@@ -54,4 +54,55 @@ static void init(void) {
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
 }
-int main(void) { init(); }
+
+static void loop(void) {
+  SDL_Event event;
+
+  // SDL_SetRelativeMouseMode(SDL_FALSE);
+
+  const uint64_t fps_desired = 60;
+  uint64_t frame_rate = 1000 / fps_desired;
+
+  uint64_t start = 0, end = 0, delta_time = 1;
+
+  while (true) {
+    start = SDL_GetTicks();
+
+    // Input
+    while (SDL_PollEvent(&event)) {
+      switch (event.type) {
+      case SDL_QUIT:
+        return;
+      case SDL_KEYDOWN:
+        switch (event.key.keysym.scancode) {
+        case SDL_SCANCODE_ESCAPE:
+          return;
+        default:
+          break;
+        }
+        break;
+      default:
+        break;
+      }
+    }
+    //
+    // Rendering
+    //
+    glClearColor(0, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // glUseProgram(program_id);
+
+    SDL_GL_SwapWindow(window);
+
+    end = SDL_GetTicks();
+    delta_time = end - start;
+
+    if (delta_time < frame_rate)
+      SDL_Delay((uint32_t)(frame_rate - delta_time));
+  }
+}
+
+int main(void) {
+  init();
+  loop();
+}
