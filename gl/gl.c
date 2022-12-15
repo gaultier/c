@@ -16,20 +16,14 @@ static void init(void) {
 
   SDL_LogSetAllPriority(SDL_LOG_PRIORITY_VERBOSE);
 
-  // Version
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 4);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,
+                      1); // Max supported on macos
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-
-  // Double Buffer
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-  uint32_t flags = SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
-  _Bool fullscreen = false;
-  if (fullscreen) {
-    flags |= SDL_WINDOW_MAXIMIZED;
-  }
+  const uint32_t flags = SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
 
   const char window_title[] = "hello";
   const uint64_t window_width = 1024;
