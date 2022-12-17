@@ -2269,23 +2269,32 @@ static const char values[] = "11334\n"
                              "6865\n"
                              "1691\n";
 
+#if 0
+static const char values[] =
+    "1000\n2000\n3000\n\n4000\n\n5000\n6000\n\n7000\n8000\n9000\n\n10000";
+#endif
+
 int main(void) {
   uint64_t sum = 0;
   pg_span_t s = pg_span_make_c(values);
   pg_span_t left = {0}, right = {0};
 
+  uint64_t max = 0;
   while (pg_span_split_at_first(s, '\n', &left, &right)) {
     s = right;
     pg_span_consume_left(&s, 1);
 
-    if (s.len > 0 && s.data[0] == '\n') {
-      printf("sum=%llu\n", sum);
-      sum = 0;
-      continue;
-    }
-
     bool valid = false;
     sum += pg_span_parse_u64_decimal(left, &valid);
     assert(valid);
+
+    if (s.len > 0 && s.data[0] == '\n') {
+      if (max < sum)
+        max = sum;
+
+      sum = 0;
+      continue;
+    }
   }
+  printf("max=%llu\n", max);
 }
