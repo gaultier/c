@@ -23,7 +23,8 @@ static void init(void) {
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
 
-  const uint32_t flags = SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
+  const uint32_t flags =
+      SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE;
 
   const char window_title[] = "hello";
   const uint64_t window_width = 1024;
@@ -82,7 +83,7 @@ static void loop(void) {
     //
     // Rendering
     //
-    glClearColor(0, 0, 0, 1);
+    glClearColor(100, 200, 0, 1);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     // glUseProgram(program_id);
 
@@ -94,6 +95,10 @@ static void loop(void) {
     if (delta_time < frame_rate)
       SDL_Delay((uint32_t)(frame_rate - delta_time));
   }
+}
+
+static GLuint initTriangle(void) {
+  
 }
 
 int main(void) {
