@@ -7,10 +7,6 @@
 static const uint64_t hourly_week_end_rate = 15;
 static const uint64_t hourly_week_rate = 10;
 
-#ifndef MIN
-#define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-
 #define DATE_TIME(year, month, day, hour)                                      \
   (struct tm) {                                                                \
     .tm_year = year - 1900, .tm_mon = month - 1, .tm_mday = day,               \
