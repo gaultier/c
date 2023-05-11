@@ -1,3 +1,5 @@
+#include <poll.h>
+
 #define u64 unsigned long int
 #define i64 signed long int
 #define u32 unsigned int
@@ -128,16 +130,6 @@ static i64 sys_fcntl(i32 fd, i32 cmd, i32 val) {
   return syscall3(72, fd, cmd, val);
 }
 
-struct timespec {
-  u64 tv_sec;
-  u64 tv_nsec;
-};
-
-static void sys_nanosleep(u64 seconds, u64 nanoseconds) {
-  struct timespec t = {.tv_sec = seconds, .tv_nsec = nanoseconds};
-  syscall2(35, (i64)&t, 0);
-}
-
 #define X11_OP_REQ_CREATE_WINDOW 0x01
 #define X11_OP_REQ_MAP_WINDOW 0x08
 #define X11_OP_REQ_CREATE_PIX 0x35
@@ -159,6 +151,9 @@ static void sys_nanosleep(u64 seconds, u64 nanoseconds) {
 #define X11_FLAG_WIN_BORDER_IMG 0x00000004
 #define X11_FLAG_WIN_BORDER_COLOR 0x00000008
 #define X11_FLAG_WIN_EVENT 0x00000800
+
+#define X11_EVENT_FLAG_EXPOSURE 0x8000
+#define X11_EVENT_EXPOSURE 0xc
 
 #define MY_COLOR_ARGB 0x00ffffff
 
@@ -294,17 +289,13 @@ static void set_fd_non_blocking(i32 fd) {
   }
 }
 
-static void x11_read_response(i32 fd) {
-  set_fd_non_blocking(fd);
+static u64 x11_read_response(i32 fd, u8 *read_buffer, u64 read_buffer_length) {
 
-  u32 response[32] = {0};
-  const i64 res = sys_read(fd, response, sizeof(response));
-  if (res == -EAGAIN)
-    return;
-
-  if (res > 0) {
+  const i64 res = sys_read(fd, read_buffer, read_buffer_length);
+  if (res <= 0) {
     sys_exit(1);
   }
+  return (u64)res;
 }
 
 static void x11_open_font(i32 fd, u32 font_id) {
@@ -325,8 +316,6 @@ static void x11_open_font(i32 fd, u32 font_id) {
   if (res != sizeof(packet)) {
     sys_exit(1);
   }
-
-  x11_read_response(fd);
 
 #undef PADDING
 #undef OPEN_FONT_PACKET_U32_COUNT
@@ -355,7 +344,6 @@ static void x11_draw_text(i32 fd, u32 window_id, u32 gc_id, const u8 *text,
   if (res != packet_u32_count * 4) {
     sys_exit(1);
   }
-  x11_read_response(fd);
 }
 
 static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
@@ -434,15 +422,15 @@ static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id, u32 font_id) {
     sys_exit(1);
   }
 
-  x11_read_response(fd);
 #undef CREATE_GC_PACKET_U32_COUNT
 }
 
 static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
                               u16 w, u16 h, u32 root_visual_id) {
 
-  const u32 flags = X11_FLAG_WIN_BG_COLOR;
-#define CREATE_WINDOW_PACKET_U32_COUNT (8 + 1)
+  const u32 flags = X11_FLAG_WIN_BG_COLOR | X11_FLAG_WIN_EVENT;
+#define CREATE_WINDOW_FLAG_COUNT 2
+#define CREATE_WINDOW_PACKET_U32_COUNT (8 + CREATE_WINDOW_FLAG_COUNT)
 
   const u16 border = 1, group = 1;
 
@@ -455,15 +443,16 @@ static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
       [5] = group | (border << 16),
       [6] = root_visual_id,
       [7] = flags,
-      [8] = MY_COLOR_ARGB,
+      [8] = 0,
+      [9] = X11_EVENT_FLAG_EXPOSURE,
   };
 
   const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
   if (res != sizeof(packet)) {
     sys_exit((i32)-res);
   }
-  x11_read_response(fd);
 
+#undef CREATE_WINDOW_FLAG_COUNT
 #undef CREATE_WINDOW_PACKET_U32_COUNT
 }
 
@@ -475,7 +464,6 @@ static void x11_map_window(i32 fd, u32 window_id) {
   if (res != sizeof(packet)) {
     sys_exit((i32)-res);
   }
-  x11_read_response(fd);
 }
 
 int main() {
@@ -519,9 +507,25 @@ int main() {
 
   x11_map_window(fd, window_id);
 
-  x11_draw_text(fd, window_id, gc_id, (const u8 *)"hello", 5, 50, 50, &arena);
+  set_fd_non_blocking(fd);
+  struct pollfd fds = {.fd = fd, .events = POLLIN};
+  for (;;) {
+    const int changed = poll(&fds, 1, -1);
+    if (changed == -1) {
+      sys_exit(1);
+    }
+    assert(changed == 1);
+    if ((fds.revents & POLLERR) || (fds.revents & POLLHUP)) {
+      sys_exit(1);
+    }
+    assert(fds.revents & POLLIN);
 
-  sys_nanosleep(100, 0);
+    u8 buf[32] = {0};
+    const u64 read_byte_count = x11_read_response(fd, buf, sizeof(buf));
+    assert(read_byte_count == 32);
 
-  sys_exit(0);
+    assert(buf[0] == X11_EVENT_EXPOSURE);
+
+    x11_draw_text(fd, window_id, gc_id, (const u8 *)"hello", 5, 50, 50, &arena);
+  }
 }
