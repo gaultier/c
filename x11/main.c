@@ -274,9 +274,9 @@ static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
     sys_exit(1);
   }
 
-  connection->setup =(x11_connection_setup_t*) read_buffer;
-  u8 *p = read_buffer + sizeof(x11_connection_setup_t) +
-          connection->setup->vendor_length;
+  connection->setup = (x11_connection_setup_t *)read_buffer;
+  void *p = read_buffer + sizeof(x11_connection_setup_t) +
+            connection->setup->vendor_length;
   assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
 
   p += sizeof(x11_pixmap_format_t) * connection->setup->formats;
@@ -287,6 +287,11 @@ static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
   assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
   connection->depth = (x11_depth_t *)p;
   connection->visual = (x11_visual_t *)p;
+}
+
+static u32 x11_generate_id(x11_connection_t *conn) {
+  static u32 id = 0;
+  return ((conn->setup->id_mask & id++) | conn->setup->id_base);
 }
 
 int main() {
