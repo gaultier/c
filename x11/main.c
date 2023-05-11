@@ -117,11 +117,21 @@ static void *sys_mmap(void *addr, u64 len, i32 prot, i32 flags, i32 fd,
   return (void *)syscall6(9, (i64)addr, len, prot, flags, fd, offset);
 }
 
+struct timespec {
+  u64 tv_sec;
+  u64 tv_nsec;
+};
+
+static void sys_nanosleep(u64 seconds, u64 nanoseconds) {
+  struct timespec t = {.tv_sec = seconds, .tv_nsec = nanoseconds};
+  syscall2(35, (i64)&t, 0);
+}
+
 #define X11_OP_REQ_CREATE_WINDOW 0x01
 #define X11_OP_REQ_MAP_WINDOW 0x08
 #define X11_OP_REQ_CREATE_PIX 0x35
 #define X11_OP_REQ_CREATE_GC 0x37
-#define X11_OP_REQ_PUT_IMG 0x48
+#define X11_OP_REQ_OPEN_FONT 0x2d
 
 #define X11_FLAG_GC_FUNC 0x00000001
 #define X11_FLAG_GC_PLANE 0x00000002
@@ -268,6 +278,30 @@ static void x11_read_error_maybe(i32 fd) {
   }
 }
 
+static void x11_open_font(i32 fd, u32 font_id) {
+#define OPEN_FONT_NAME "fixed"
+#define OPEN_FONT_PACKET_U32_COUNT (3 + 3)
+
+  const u32 packet[OPEN_FONT_PACKET_U32_COUNT] = {
+      [0] = X11_OP_REQ_OPEN_FONT | (OPEN_FONT_PACKET_U32_COUNT << 16),
+      [1] = font_id,
+      [2] = sizeof(OPEN_FONT_NAME) - 1,
+      [3] = 'f' | ('i' << 8) | ('x' << 16) | ('e' << 24),
+      [4] = 'd',
+      [5] = 0,
+  };
+
+  const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
+  if (res != sizeof(packet)) {
+    sys_exit(1);
+  }
+
+  // x11_read_error_maybe(fd);
+
+#undef OPEN_FONT_PACKET_U32_COUNT
+#undef OPEN_FONT_NAME
+}
+
 static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
                           u64 read_buffer_length) {
   assert(fd > 0);
@@ -410,6 +444,9 @@ int main() {
   x11_handshake(fd, &connection, read_buffer, read_buffer_length);
 
   const u32 gc_id = x11_generate_id(&connection);
+  const u32 font_id = x11_generate_id(&connection);
+
+  x11_open_font(fd, font_id);
 
   x11_create_gc(fd, gc_id, connection.root->id);
 
@@ -421,6 +458,8 @@ int main() {
                     connection.root->root_visual_id);
 
   x11_map_window(fd, window_id);
+
+  sys_nanosleep(100, 0);
 
   sys_exit(0);
 }
