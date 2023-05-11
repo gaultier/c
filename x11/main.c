@@ -152,7 +152,10 @@ static i64 sys_fcntl(i32 fd, i32 cmd, i32 val) {
 #define X11_FLAG_WIN_BORDER_COLOR 0x00000008
 #define X11_FLAG_WIN_EVENT 0x00000800
 
+#define X11_EVENT_FLAG_KEY_RELEASE 0x0002
 #define X11_EVENT_FLAG_EXPOSURE 0x8000
+
+#define X11_EVENT_KEY_RELEASE 0x3
 #define X11_EVENT_EXPOSURE 0xc
 
 #define MY_COLOR_ARGB 0x00ffffff
@@ -444,7 +447,7 @@ static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
       [6] = root_visual_id,
       [7] = flags,
       [8] = 0,
-      [9] = X11_EVENT_FLAG_EXPOSURE,
+      [9] = X11_EVENT_FLAG_KEY_RELEASE | X11_EVENT_FLAG_EXPOSURE,
   };
 
   const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
@@ -524,8 +527,16 @@ int main() {
     const u64 read_byte_count = x11_read_response(fd, buf, sizeof(buf));
     assert(read_byte_count == 32);
 
-    assert(buf[0] == X11_EVENT_EXPOSURE);
+    switch (buf[0]) {
+    case X11_EVENT_EXPOSURE:
+      x11_draw_text(fd, window_id, gc_id, (const u8 *)"hello", 5, 50, 50,
+                    &arena);
+      break;
+    case X11_EVENT_KEY_RELEASE:
+      if (buf[1] == 9)
+      return 0;
 
-    x11_draw_text(fd, window_id, gc_id, (const u8 *)"hello", 5, 50, 50, &arena);
+      break;
+    }
   }
 }
