@@ -94,6 +94,13 @@ static __inline i64 syscall6(i64 n, i64 a1, i64 a2, i64 a3, i64 a4, i64 a5,
 #define FD_STDOUT 1
 #define FD_STDERR 2
 
+#define F_GETFL 3
+#define F_SETFL 4
+
+#define O_NONBLOCK 04000
+
+#define EAGAIN 11 /* Try again */
+
 static i64 sys_write(i32 fd, const void *data, u64 len) {
   return syscall3(1, fd, (i64)data, (i64)len);
 }
@@ -115,6 +122,10 @@ static i32 sys_connect(i32 fd, const void *sock_addr, u32 len) {
 static void *sys_mmap(void *addr, u64 len, i32 prot, i32 flags, i32 fd,
                       i64 offset) {
   return (void *)syscall6(9, (i64)addr, len, prot, flags, fd, offset);
+}
+
+static i64 sys_fcntl(i32 fd, i32 cmd, i32 val) {
+  return syscall3(72, fd, cmd, val);
 }
 
 struct timespec {
@@ -270,9 +281,26 @@ static void *arena_alloc(arena_t *arena, u64 len) {
   return arena->base + arena->current_offset - len;
 }
 
-static void x11_read_error_maybe(i32 fd) {
-  u8 error[16] = {0};
-  const i64 res = sys_read(fd, error, sizeof(error));
+static void set_fd_non_blocking(i32 fd) {
+  i64 res = sys_fcntl(fd, F_GETFL, 0);
+  if (res < 0) {
+    sys_exit((i32)-res);
+  }
+
+  res = sys_fcntl(fd, F_SETFL, (i32)((u64)res | (u64)O_NONBLOCK));
+  if (res != 0) {
+    sys_exit((i32)-res);
+  }
+}
+
+static void x11_read_response(i32 fd) {
+  set_fd_non_blocking(fd);
+
+  u32 response[32] = {0};
+  const i64 res = sys_read(fd, response, sizeof(response));
+  if (res == -EAGAIN)
+    return;
+
   if (res > 0) {
     sys_exit(1);
   }
@@ -280,15 +308,15 @@ static void x11_read_error_maybe(i32 fd) {
 
 static void x11_open_font(i32 fd, u32 font_id) {
 #define OPEN_FONT_NAME "fixed"
-#define OPEN_FONT_PACKET_U32_COUNT (3 + 3)
+#define OPEN_FONT_PACKET_U32_COUNT (3 + 2)
+  const u8 font_name_byte_count = sizeof(OPEN_FONT_NAME) - 1;
 
   const u32 packet[OPEN_FONT_PACKET_U32_COUNT] = {
-      [0] = X11_OP_REQ_OPEN_FONT | (OPEN_FONT_PACKET_U32_COUNT << 16),
+      [0] = X11_OP_REQ_OPEN_FONT | (font_name_byte_count << 16),
       [1] = font_id,
-      [2] = sizeof(OPEN_FONT_NAME) - 1,
+      [2] = font_name_byte_count,
       [3] = 'f' | ('i' << 8) | ('x' << 16) | ('e' << 24),
       [4] = 'd',
-      [5] = 0,
   };
 
   const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
@@ -296,7 +324,7 @@ static void x11_open_font(i32 fd, u32 font_id) {
     sys_exit(1);
   }
 
-  // x11_read_error_maybe(fd);
+  x11_read_response(fd);
 
 #undef OPEN_FONT_PACKET_U32_COUNT
 #undef OPEN_FONT_NAME
@@ -353,14 +381,14 @@ static u32 x11_generate_id(x11_connection_t const *conn) {
   return ((conn->setup->id_mask & id++) | conn->setup->id_base);
 }
 
-static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id) {
+static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id, u32 font_id) {
   assert(fd > 0);
   assert(gc_id > 0);
   assert(root_id > 0);
 
-  const u32 flags = X11_FLAG_GC_BG | X11_FLAG_GC_EXPOSE;
+  const u32 flags = X11_FLAG_GC_BG | X11_FLAG_GC_FONT | X11_FLAG_GC_EXPOSE;
 
-#define CREATE_GC_PACKET_U32_COUNT (4 + 2)
+#define CREATE_GC_PACKET_U32_COUNT (4 + 3)
 
   const u32 packet[CREATE_GC_PACKET_U32_COUNT] = {
       [0] = X11_OP_REQ_CREATE_GC | (CREATE_GC_PACKET_U32_COUNT << 16),
@@ -368,7 +396,8 @@ static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id) {
       [2] = root_id,
       [3] = flags,
       [4] = MY_COLOR_ARGB,
-      [5] = 0,
+      [5] = font_id,
+      [6] = 0,
   };
 
   const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
@@ -376,6 +405,7 @@ static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id) {
     sys_exit(1);
   }
 
+  x11_read_response(fd);
 #undef CREATE_GC_PACKET_U32_COUNT
 }
 
@@ -448,7 +478,7 @@ int main() {
 
   x11_open_font(fd, font_id);
 
-  x11_create_gc(fd, gc_id, connection.root->id);
+  x11_create_gc(fd, gc_id, connection.root->id, font_id);
 
   const u32 window_id = x11_generate_id(&connection);
   assert(window_id > 0);
