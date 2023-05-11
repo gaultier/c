@@ -1,134 +1,25 @@
+#include <fcntl.h>
 #include <poll.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/socket.h>
+#include <unistd.h>
 
-#define u64 unsigned long int
-#define i64 signed long int
-#define u32 unsigned int
-#define i32 signed int
-#define u16 unsigned short
-#define i16 signed short
-#define u8 unsigned char
-#define i8 signed char
-#define NULL 0
+#define u64 uint64_t
+#define i64 int64_t
+#define u32 uint32_t
+#define i32 int32_t
+#define u16 uint16_t
+#define i16 int16_t
+#define u8 uint8_t
+#define i8 int8_t
 
-#define assert(condition)                                                      \
+#define pg_assert(condition)                                                   \
   do {                                                                         \
     if (!(condition))                                                          \
       __builtin_trap();                                                        \
   } while (0)
-
-static __inline i64 syscall0(i64 n) {
-  u64 ret;
-  __asm__ __volatile__("syscall" : "=a"(ret) : "a"(n) : "rcx", "r11", "memory");
-  return (i64)ret;
-}
-
-static __inline i64 syscall1(i64 n, i64 a1) {
-  u64 ret;
-  __asm__ __volatile__("syscall"
-                       : "=a"(ret)
-                       : "a"(n), "D"(a1)
-                       : "rcx", "r11", "memory");
-  return (i64)ret;
-}
-
-static __inline i64 syscall2(i64 n, i64 a1, i64 a2) {
-  u64 ret;
-  __asm__ __volatile__("syscall"
-                       : "=a"(ret)
-                       : "a"(n), "D"(a1), "S"(a2)
-                       : "rcx", "r11", "memory");
-  return (i64)ret;
-}
-
-static __inline i64 syscall3(i64 n, i64 a1, i64 a2, i64 a3) {
-  u64 ret;
-  __asm__ __volatile__("syscall"
-                       : "=a"(ret)
-                       : "a"(n), "D"(a1), "S"(a2), "d"(a3)
-                       : "rcx", "r11", "memory");
-  return (i64)ret;
-}
-
-static __inline i64 syscall4(i64 n, i64 a1, i64 a2, i64 a3, i64 a4) {
-  u64 ret;
-  register i64 r10 __asm__("r10") = a4;
-  __asm__ __volatile__("syscall"
-                       : "=a"(ret)
-                       : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10)
-                       : "rcx", "r11", "memory");
-  return (i64)ret;
-}
-
-static __inline i64 syscall5(i64 n, i64 a1, i64 a2, i64 a3, i64 a4, i64 a5) {
-  u64 ret;
-  register i64 r10 __asm__("r10") = a4;
-  register i64 r8 __asm__("r8") = a5;
-  __asm__ __volatile__("syscall"
-                       : "=a"(ret)
-                       : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8)
-                       : "rcx", "r11", "memory");
-  return (i64)ret;
-}
-
-static __inline i64 syscall6(i64 n, i64 a1, i64 a2, i64 a3, i64 a4, i64 a5,
-                             i64 a6) {
-  u64 ret;
-  register i64 r10 __asm__("r10") = a4;
-  register i64 r8 __asm__("r8") = a5;
-  register i64 r9 __asm__("r9") = a6;
-  __asm__ __volatile__("syscall"
-                       : "=a"(ret)
-                       : "a"(n), "D"(a1), "S"(a2), "d"(a3), "r"(r10), "r"(r8),
-                         "r"(r9)
-                       : "rcx", "r11", "memory");
-  return (i64)ret;
-}
-
-#define PROT_READ 0x1
-#define PROT_WRITE 0x2
-
-#define MAP_PRIVATE 0x2
-#define MAP_ANON 0x20
-
-#define AF_UNIX 1
-#define SOCK_STREAM 1
-
-#define FD_STDOUT 1
-#define FD_STDERR 2
-
-#define F_GETFL 3
-#define F_SETFL 4
-
-#define O_NONBLOCK 04000
-
-#define EAGAIN 11 /* Try again */
-
-static i64 sys_write(i32 fd, const void *data, u64 len) {
-  return syscall3(1, fd, (i64)data, (i64)len);
-}
-
-static i64 sys_read(i32 fd, void *data, u64 len) {
-  return syscall3(0, fd, (i64)data, (i64)len);
-}
-
-static void sys_exit(i32 code) { syscall1(60, code); }
-
-static i32 sys_socket(i32 domain, i32 type, i32 protocol) {
-  return (i32)syscall3(41, (i64)domain, (i64)type, (i64)protocol);
-}
-
-static i32 sys_connect(i32 fd, const void *sock_addr, u32 len) {
-  return (i32)syscall3(42, (i64)fd, (i64)sock_addr, (i64)len);
-}
-
-static void *sys_mmap(void *addr, u64 len, i32 prot, i32 flags, i32 fd,
-                      i64 offset) {
-  return (void *)syscall6(9, (i64)addr, len, prot, flags, fd, offset);
-}
-
-static i64 sys_fcntl(i32 fd, i32 cmd, i32 val) {
-  return syscall3(72, fd, cmd, val);
-}
 
 #define X11_OP_REQ_CREATE_WINDOW 0x01
 #define X11_OP_REQ_MAP_WINDOW 0x08
@@ -252,7 +143,7 @@ typedef struct {
   char sun_path[108];
 } sockaddr_un;
 
-#define eprint(s) sys_write(FD_STDERR, s, sizeof(s))
+#define eprint(s) write(STDERR_FILENO, s, sizeof(s))
 
 typedef struct {
   u8 *base;
@@ -261,19 +152,19 @@ typedef struct {
 } arena_t;
 
 static void arena_init(arena_t *arena, u64 capacity) {
-  assert(arena != NULL);
+  pg_assert(arena != NULL);
 
-  arena->base = sys_mmap(NULL, capacity, PROT_READ | PROT_WRITE,
-                         MAP_ANON | MAP_PRIVATE, -1, 0);
-  assert(arena->base != NULL);
+  arena->base = mmap(NULL, capacity, PROT_READ | PROT_WRITE,
+                     MAP_ANON | MAP_PRIVATE, -1, 0);
+  pg_assert(arena->base != NULL);
   arena->capacity = capacity;
   arena->current_offset = 0;
 }
 
 static void *arena_alloc(arena_t *arena, u64 len) {
-  assert(arena != NULL);
-  assert(arena->current_offset < arena->capacity);
-  assert(arena->current_offset + len < arena->capacity);
+  pg_assert(arena != NULL);
+  pg_assert(arena->current_offset < arena->capacity);
+  pg_assert(arena->current_offset + len < arena->capacity);
 
   // TODO: align?
   arena->current_offset += len;
@@ -281,22 +172,22 @@ static void *arena_alloc(arena_t *arena, u64 len) {
 }
 
 static void set_fd_non_blocking(i32 fd) {
-  i64 res = sys_fcntl(fd, F_GETFL, 0);
+  i64 res = fcntl(fd, F_GETFL, 0);
   if (res < 0) {
-    sys_exit((i32)-res);
+    exit((i32)-res);
   }
 
-  res = sys_fcntl(fd, F_SETFL, (i32)((u64)res | (u64)O_NONBLOCK));
+  res = fcntl(fd, F_SETFL, (i32)((u64)res | (u64)O_NONBLOCK));
   if (res != 0) {
-    sys_exit((i32)-res);
+    exit((i32)-res);
   }
 }
 
 static u64 x11_read_response(i32 fd, u8 *read_buffer, u64 read_buffer_length) {
 
-  const i64 res = sys_read(fd, read_buffer, read_buffer_length);
+  const i64 res = read(fd, read_buffer, read_buffer_length);
   if (res <= 0) {
-    sys_exit(1);
+    exit(1);
   }
   return (u64)res;
 }
@@ -315,9 +206,9 @@ static void x11_open_font(i32 fd, u32 font_id) {
   };
   __builtin_memcpy(&packet[3], OPEN_FONT_NAME, OPEN_FONT_NAME_BYTE_COUNT);
 
-  const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
+  const i64 res = write(fd, (const void *)packet, sizeof(packet));
   if (res != sizeof(packet)) {
-    sys_exit(1);
+    exit(1);
   }
 
 #undef PADDING
@@ -327,14 +218,14 @@ static void x11_open_font(i32 fd, u32 font_id) {
 
 static void x11_draw_text(i32 fd, u32 window_id, u32 gc_id, const u8 *text,
                           u8 text_byte_count, u16 x, u16 y, arena_t *arena) {
-  assert(fd > 0);
-  assert(text != NULL);
-  assert(arena != NULL);
+  pg_assert(fd > 0);
+  pg_assert(text != NULL);
+  pg_assert(arena != NULL);
 
   const u32 padding = (4 - (text_byte_count % 4)) % 4;
   const u32 packet_u32_count = 4 + ((text_byte_count + padding) / 4);
   u32 *const packet = arena_alloc(arena, packet_u32_count);
-  assert(packet != NULL);
+  pg_assert(packet != NULL);
 
   packet[0] = X11_OP_REQ_IMAGE_TEXT8 | ((u32)text_byte_count << 8) |
               (packet_u32_count << 16);
@@ -343,55 +234,55 @@ static void x11_draw_text(i32 fd, u32 window_id, u32 gc_id, const u8 *text,
   packet[3] = (u32)x | ((u32)y << 16);
   __builtin_memcpy(&packet[4], text, text_byte_count);
 
-  const i64 res = sys_write(fd, packet, packet_u32_count * 4);
+  const i64 res = write(fd, packet, packet_u32_count * 4);
   if (res != packet_u32_count * 4) {
-    sys_exit(1);
+    exit(1);
   }
 }
 
 static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
                           u64 read_buffer_length) {
-  assert(fd > 0);
-  assert(connection != NULL);
-  assert(read_buffer != NULL);
-  assert(read_buffer_length > 0);
+  pg_assert(fd > 0);
+  pg_assert(connection != NULL);
+  pg_assert(read_buffer != NULL);
+  pg_assert(read_buffer_length > 0);
 
   x11_connection_req_t req = {.order = 'l', .major = 11};
 
-  i64 res = sys_write(fd, &req, sizeof(req));
+  i64 res = write(fd, &req, sizeof(req));
   if (res != sizeof(req)) {
-    sys_exit((i32)-res);
+    exit((i32)-res);
   }
 
   x11_connection_reply_t header = {0};
-  res = sys_read(fd, &header, sizeof(header));
+  res = read(fd, &header, sizeof(header));
   if (res != sizeof(header)) {
-    sys_exit((i32)-res);
+    exit((i32)-res);
   }
 
   if (!header.success) {
-    sys_exit(1);
+    exit(1);
   }
 
-  assert(header.length * (u64)sizeof(i32) < read_buffer_length);
+  pg_assert(header.length * (u64)sizeof(i32) < read_buffer_length);
   const u64 expected_read_length = header.length * (u64)sizeof(i32);
-  res = sys_read(fd, read_buffer, expected_read_length);
+  res = read(fd, read_buffer, expected_read_length);
   if (res != (i64)expected_read_length) {
-    sys_exit(1);
+    exit(1);
   }
 
   // TODO: better deserializing.
   connection->setup = (x11_connection_setup_t *)read_buffer;
   void *p = read_buffer + sizeof(x11_connection_setup_t) +
             connection->setup->vendor_length;
-  assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
+  pg_assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
 
   p += sizeof(x11_pixmap_format_t) * connection->setup->formats;
-  assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
+  pg_assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
 
   connection->root = (x11_root_window_t *)p;
   p += sizeof(x11_root_window_t) * connection->setup->roots;
-  assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
+  pg_assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
   connection->depth = (x11_depth_t *)p;
   connection->visual = (x11_visual_t *)p;
 }
@@ -402,9 +293,9 @@ static u32 x11_generate_id(x11_connection_t const *conn) {
 }
 
 static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id, u32 font_id) {
-  assert(fd > 0);
-  assert(gc_id > 0);
-  assert(root_id > 0);
+  pg_assert(fd > 0);
+  pg_assert(gc_id > 0);
+  pg_assert(root_id > 0);
 
   const u32 flags = X11_FLAG_GC_BG | X11_FLAG_GC_FG | X11_FLAG_GC_FONT;
 
@@ -421,9 +312,9 @@ static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id, u32 font_id) {
       [6] = font_id,
   };
 
-  const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
+  const i64 res = write(fd, (const void *)packet, sizeof(packet));
   if (res != sizeof(packet)) {
-    sys_exit(1);
+    exit(1);
   }
 
 #undef CREATE_GC_PACKET_U32_COUNT
@@ -451,9 +342,9 @@ static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
       [9] = X11_EVENT_FLAG_KEY_RELEASE | X11_EVENT_FLAG_EXPOSURE,
   };
 
-  const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
+  const i64 res = write(fd, (const void *)packet, sizeof(packet));
   if (res != sizeof(packet)) {
-    sys_exit((i32)-res);
+    exit((i32)-res);
   }
 
 #undef CREATE_WINDOW_FLAG_COUNT
@@ -464,9 +355,9 @@ static void x11_map_window(i32 fd, u32 window_id) {
   const u32 packet[2] = {
       [0] = X11_OP_REQ_MAP_WINDOW | (2 << 16), [1] = window_id};
 
-  const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
+  const i64 res = write(fd, (const void *)packet, sizeof(packet));
   if (res != sizeof(packet)) {
-    sys_exit((i32)-res);
+    exit((i32)-res);
   }
 }
 
@@ -474,19 +365,19 @@ int main() {
   arena_t arena = {0};
   arena_init(&arena, 1 << 16);
 
-  i32 fd = sys_socket(AF_UNIX, SOCK_STREAM, 0);
+  i32 fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (fd < 0) {
     eprint("Error opening socket");
-    sys_exit(-fd);
+    exit(-fd);
   }
-  assert(fd > 0);
+  pg_assert(fd > 0);
 
   const sockaddr_un addr = {.sun_family = AF_UNIX,
                             .sun_path = "/tmp/.X11-unix/X0"};
-  const i32 res = sys_connect(fd, &addr, sizeof(addr));
+  const i32 res = connect(fd,(struct sockaddr*) &addr, sizeof(addr));
   if (res != 0) {
     eprint("Error connecting");
-    sys_exit(-res);
+    exit(-res);
   }
 
   const u64 read_buffer_length = 1 << 15;
@@ -503,7 +394,7 @@ int main() {
   x11_create_gc(fd, gc_id, connection.root->id, font_id);
 
   const u32 window_id = x11_generate_id(&connection);
-  assert(window_id > 0);
+  pg_assert(window_id > 0);
 
   const u16 x = 200, y = 200, w = 400, h = 200;
   x11_create_window(fd, window_id, connection.root->id, x, y, w, h,
@@ -516,17 +407,17 @@ int main() {
   for (;;) {
     const int changed = poll(&fds, 1, -1);
     if (changed == -1) {
-      sys_exit(1);
+      exit(1);
     }
-    assert(changed == 1);
+    pg_assert(changed == 1);
     if ((fds.revents & POLLERR) || (fds.revents & POLLHUP)) {
-      sys_exit(1);
+      exit(1);
     }
-    assert(fds.revents & POLLIN);
+    pg_assert(fds.revents & POLLIN);
 
     u8 buf[32] = {0};
     const u64 read_byte_count = x11_read_response(fd, buf, sizeof(buf));
-    assert(read_byte_count == 32);
+    pg_assert(read_byte_count == 32);
 
     switch (buf[0]) {
     case X11_EVENT_EXPOSURE:
