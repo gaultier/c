@@ -160,7 +160,7 @@ static void sys_nanosleep(u64 seconds, u64 nanoseconds) {
 #define X11_FLAG_WIN_BORDER_COLOR 0x00000008
 #define X11_FLAG_WIN_EVENT 0x00000800
 
-#define MY_COLOR_ARGB 0x00aa00ff
+#define MY_COLOR_ARGB 0x00ffffff
 
 typedef struct {
   u8 order;
@@ -337,8 +337,9 @@ static void x11_draw_text(i32 fd, u32 window_id, u32 gc_id, const u8 *text,
   assert(text != NULL);
   assert(arena != NULL);
 
-  const u32 packet_u32_count =
-      4 + (text_byte_count * 2 / 4) ; //+ (((text_byte_count * 2) % 4) != 0);
+  const u32 padding = (4 - (text_byte_count % 4)) % 4;
+  const u32 packet_u32_count = 4 + ((text_byte_count + padding) /
+                                    4); 
   u32 *const packet = arena_alloc(arena, packet_u32_count);
   assert(packet != NULL);
 
