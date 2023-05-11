@@ -260,6 +260,14 @@ static void *arena_alloc(arena_t *arena, u64 len) {
   return arena->base + arena->current_offset - len;
 }
 
+static void x11_read_error_maybe(i32 fd) {
+  u8 error[16] = {0};
+  const i64 res = sys_read(fd, error, sizeof(error));
+  if (res > 0) {
+    sys_exit(1);
+  }
+}
+
 static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
                           u64 read_buffer_length) {
   assert(fd > 0);
