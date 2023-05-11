@@ -280,6 +280,13 @@ static void *arena_alloc(arena_t *arena, u64 len) {
   return arena->base + arena->current_offset - len;
 }
 
+static void arena_reset_at(arena_t *arena, u64 offset) {
+  assert(arena != NULL);
+  assert(arena->current_offset < arena->capacity);
+
+  arena->current_offset = offset;
+}
+
 static void set_fd_non_blocking(i32 fd) {
   i64 res = sys_fcntl(fd, F_GETFL, 0);
   if (res < 0) {
@@ -333,6 +340,8 @@ static void x11_draw_text(i32 fd, u32 window_id, u32 gc_id, const u8 *text,
 
   const u32 padding = (4 - (text_byte_count % 4)) % 4;
   const u32 packet_u32_count = 4 + ((text_byte_count + padding) / 4);
+
+  const u64 arena_offset = arena->current_offset;
   u32 *const packet = arena_alloc(arena, packet_u32_count);
   assert(packet != NULL);
 
@@ -347,6 +356,8 @@ static void x11_draw_text(i32 fd, u32 window_id, u32 gc_id, const u8 *text,
   if (res != packet_u32_count * 4) {
     sys_exit(1);
   }
+
+  arena_reset_at(arena, arena_offset);
 }
 
 static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
