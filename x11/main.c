@@ -94,7 +94,7 @@ static __inline i64 syscall6(i64 n, i64 a1, i64 a2, i64 a3, i64 a4, i64 a5,
 #define FD_STDOUT 1
 #define FD_STDERR 2
 
-static i64 sys_write(i32 fd, void *data, u64 len) {
+static i64 sys_write(i32 fd, const void *data, u64 len) {
   return syscall3(1, fd, (i64)data, (i64)len);
 }
 
@@ -131,6 +131,12 @@ static void *sys_mmap(void *addr, u64 len, i32 prot, i32 flags, i32 fd,
 #define X11_FLAG_GC_LINE_STYLE 0x00000020
 #define X11_FLAG_GC_FONT 0x00004000
 #define X11_FLAG_GC_EXPOSE 0x00010000
+
+#define X11_FLAG_WIN_BG_IMG 0x00000001
+#define X11_FLAG_WIN_BG_COLOR 0x00000002
+#define X11_FLAG_WIN_BORDER_IMG 0x00000004
+#define X11_FLAG_WIN_BORDER_COLOR 0x00000008
+#define X11_FLAG_WIN_EVENT 0x00000800
 
 #define MY_COLOR_ARGB 0x00aa00ff
 
@@ -263,9 +269,9 @@ static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
 
   x11_connection_req_t req = {.order = 'l', .major = 11};
 
-  i32 res = sys_write(fd, &req, sizeof(req));
+  i64 res = sys_write(fd, &req, sizeof(req));
   if (res != sizeof(req)) {
-    sys_exit(-res);
+    sys_exit((i32)-res);
   }
 
   x11_connection_reply_t header = {0};
@@ -323,10 +329,40 @@ static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id) {
       [5] = 0,
   };
 
-  const int res = sys_write(fd, (void *)packet, sizeof(packet));
+  const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
   if (res != sizeof(packet)) {
     sys_exit(1);
   }
+
+#undef CREATE_GC_PACKET_U32_COUNT
+}
+
+static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
+                              u16 w, u16 h, u32 root_visual_id) {
+
+  const u32 flags = X11_FLAG_WIN_BG_COLOR;
+#define CREATE_WINDOW_PACKET_U32_COUNT (8 + 1)
+
+  const u16 border = 1, group = 1;
+
+  const u32 packet[CREATE_WINDOW_PACKET_U32_COUNT] = {
+      [0] = X11_OP_REQ_CREATE_WINDOW | (CREATE_WINDOW_PACKET_U32_COUNT << 16),
+      [1] = window_id,
+      [2] = root_id,
+      [3] = x | ((u32)y << 16),
+      [4] = w | ((u32)h << 16),
+      [5] = group | (border << 16),
+      [6] = root_visual_id,
+      [7] = flags,
+      [8] = MY_COLOR_ARGB,
+  };
+
+  const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
+  if (res != sizeof(packet)){
+    sys_exit((i32)-res);
+  }
+
+#undef CREATE_WINDOW_PACKET_U32_COUNT
 }
 
 int main() {
@@ -358,6 +394,13 @@ int main() {
   const u32 gc_id = x11_generate_id(&connection);
 
   x11_create_gc(fd, gc_id, connection.root->id);
+
+  const u32 window_id = x11_generate_id(&connection);
+  assert(window_id > 0);
+
+  const u16 x = 200, y = 200, w = 400, h = 200;
+  x11_create_window(fd, window_id, connection.root->id, x, y, w, h,
+                    connection.root->root_visual_id);
 
   sys_exit(0);
 }
