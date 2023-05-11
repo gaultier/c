@@ -309,16 +309,17 @@ static void x11_read_response(i32 fd) {
 
 static void x11_open_font(i32 fd, u32 font_id) {
 #define OPEN_FONT_NAME "fixed"
-#define OPEN_FONT_PACKET_U32_COUNT (3 + 2)
-  const u8 font_name_byte_count = sizeof(OPEN_FONT_NAME) - 1;
+#define OPEN_FONT_NAME_BYTE_COUNT 5
+#define PADDING ((4 - (OPEN_FONT_NAME_BYTE_COUNT % 4)) % 4)
+#define OPEN_FONT_PACKET_U32_COUNT                                             \
+  (3 + (OPEN_FONT_NAME_BYTE_COUNT + PADDING) / 4)
 
-  const u32 packet[OPEN_FONT_PACKET_U32_COUNT] = {
-      [0] = X11_OP_REQ_OPEN_FONT | (font_name_byte_count << 16),
+  u32 packet[OPEN_FONT_PACKET_U32_COUNT] = {
+      [0] = X11_OP_REQ_OPEN_FONT | (OPEN_FONT_NAME_BYTE_COUNT << 16),
       [1] = font_id,
-      [2] = font_name_byte_count,
-      [3] = 'f' | ('i' << 8) | ('x' << 16) | ('e' << 24),
-      [4] = 'd',
+      [2] = OPEN_FONT_NAME_BYTE_COUNT,
   };
+  __builtin_memcpy(&packet[3], OPEN_FONT_NAME, OPEN_FONT_NAME_BYTE_COUNT);
 
   const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
   if (res != sizeof(packet)) {
@@ -327,6 +328,7 @@ static void x11_open_font(i32 fd, u32 font_id) {
 
   x11_read_response(fd);
 
+#undef PADDING
 #undef OPEN_FONT_PACKET_U32_COUNT
 #undef OPEN_FONT_NAME
 }
@@ -338,8 +340,7 @@ static void x11_draw_text(i32 fd, u32 window_id, u32 gc_id, const u8 *text,
   assert(arena != NULL);
 
   const u32 padding = (4 - (text_byte_count % 4)) % 4;
-  const u32 packet_u32_count = 4 + ((text_byte_count + padding) /
-                                    4); 
+  const u32 packet_u32_count = 4 + ((text_byte_count + padding) / 4);
   u32 *const packet = arena_alloc(arena, packet_u32_count);
   assert(packet != NULL);
 
@@ -413,9 +414,10 @@ static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id, u32 font_id) {
   assert(gc_id > 0);
   assert(root_id > 0);
 
-  const u32 flags = X11_FLAG_GC_BG | X11_FLAG_GC_FONT | X11_FLAG_GC_EXPOSE;
+  const u32 flags = X11_FLAG_GC_BG | X11_FLAG_GC_FG | X11_FLAG_GC_FONT;
 
-#define CREATE_GC_PACKET_U32_COUNT (4 + 3)
+#define CREATE_GC_FLAG_COUNT 3
+#define CREATE_GC_PACKET_U32_COUNT (4 + CREATE_GC_FLAG_COUNT)
 
   const u32 packet[CREATE_GC_PACKET_U32_COUNT] = {
       [0] = X11_OP_REQ_CREATE_GC | (CREATE_GC_PACKET_U32_COUNT << 16),
@@ -423,8 +425,8 @@ static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id, u32 font_id) {
       [2] = root_id,
       [3] = flags,
       [4] = MY_COLOR_ARGB,
-      [5] = font_id,
-      [6] = 0,
+      [5] = 0,
+      [6] = font_id,
   };
 
   const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
