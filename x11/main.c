@@ -270,13 +270,24 @@ static void arena_init(arena_t *arena, u64 capacity) {
   arena->current_offset = 0;
 }
 
+static u64 align_forward_16(u64 n) {
+  const u64 modulo = n & (16 - 1);
+  if (modulo != 0)
+    n += 16 - modulo;
+
+  assert((n % 16) == 0);
+  return n;
+}
+
 static void *arena_alloc(arena_t *arena, u64 len) {
   assert(arena != NULL);
   assert(arena->current_offset < arena->capacity);
   assert(arena->current_offset + len < arena->capacity);
 
   // TODO: align?
-  arena->current_offset += len;
+  arena->current_offset = align_forward_16(arena->current_offset + len);
+  assert((arena->current_offset % 16) == 0);
+
   return arena->base + arena->current_offset - len;
 }
 
