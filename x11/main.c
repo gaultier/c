@@ -358,11 +358,21 @@ static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
   };
 
   const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
-  if (res != sizeof(packet)){
+  if (res != sizeof(packet)) {
     sys_exit((i32)-res);
   }
 
 #undef CREATE_WINDOW_PACKET_U32_COUNT
+}
+
+static void x11_map_window(i32 fd, u32 window_id) {
+  const u32 packet[2] = {
+      [0] = X11_OP_REQ_MAP_WINDOW | (2 << 16), [1] = window_id};
+
+  const i64 res = sys_write(fd, (const void *)packet, sizeof(packet));
+  if (res != sizeof(packet)) {
+    sys_exit((i32)-res);
+  }
 }
 
 int main() {
@@ -401,6 +411,8 @@ int main() {
   const u16 x = 200, y = 200, w = 400, h = 200;
   x11_create_window(fd, window_id, connection.root->id, x, y, w, h,
                     connection.root->root_visual_id);
+
+  x11_map_window(fd, window_id);
 
   sys_exit(0);
 }
