@@ -143,6 +143,7 @@ static void sys_nanosleep(u64 seconds, u64 nanoseconds) {
 #define X11_OP_REQ_CREATE_PIX 0x35
 #define X11_OP_REQ_CREATE_GC 0x37
 #define X11_OP_REQ_OPEN_FONT 0x2d
+#define X11_OP_REQ_IMAGE_TEXT8 0x4c
 
 #define X11_FLAG_GC_FUNC 0x00000001
 #define X11_FLAG_GC_PLANE 0x00000002
@@ -330,6 +331,31 @@ static void x11_open_font(i32 fd, u32 font_id) {
 #undef OPEN_FONT_NAME
 }
 
+static void x11_draw_text(i32 fd, u32 window_id, u32 gc_id, const u8 *text,
+                          u8 text_byte_count, u16 x, u16 y, arena_t *arena) {
+  assert(fd > 0);
+  assert(text != NULL);
+  assert(arena != NULL);
+
+  const u32 packet_u32_count =
+      4 + (text_byte_count * 2 / 4) ; //+ (((text_byte_count * 2) % 4) != 0);
+  u32 *const packet = arena_alloc(arena, packet_u32_count);
+  assert(packet != NULL);
+
+  packet[0] = X11_OP_REQ_IMAGE_TEXT8 | ((u32)text_byte_count << 8) |
+              (packet_u32_count << 16);
+  packet[1] = window_id;
+  packet[2] = gc_id;
+  packet[3] = (u32)x | ((u32)y << 16);
+  __builtin_memcpy(&packet[4], text, text_byte_count);
+
+  const i64 res = sys_write(fd, packet, packet_u32_count * 4);
+  if (res != packet_u32_count * 4) {
+    sys_exit(1);
+  }
+  x11_read_response(fd);
+}
+
 static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
                           u64 read_buffer_length) {
   assert(fd > 0);
@@ -433,6 +459,7 @@ static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
   if (res != sizeof(packet)) {
     sys_exit((i32)-res);
   }
+  x11_read_response(fd);
 
 #undef CREATE_WINDOW_PACKET_U32_COUNT
 }
@@ -445,10 +472,10 @@ static void x11_map_window(i32 fd, u32 window_id) {
   if (res != sizeof(packet)) {
     sys_exit((i32)-res);
   }
+  x11_read_response(fd);
 }
 
 int main() {
-
   arena_t arena = {0};
   arena_init(&arena, 1 << 16);
 
@@ -488,6 +515,8 @@ int main() {
                     connection.root->root_visual_id);
 
   x11_map_window(fd, window_id);
+
+  x11_draw_text(fd, window_id, gc_id, (const u8 *)"hello", 5, 50, 50, &arena);
 
   sys_nanosleep(100, 0);
 
