@@ -380,6 +380,7 @@ static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
     sys_exit(1);
   }
 
+  // TODO: better deserializing.
   connection->setup = (x11_connection_setup_t *)read_buffer;
   void *p = read_buffer + sizeof(x11_connection_setup_t) +
             connection->setup->vendor_length;
