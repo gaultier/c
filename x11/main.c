@@ -123,6 +123,17 @@ static void *sys_mmap(void *addr, u64 len, i32 prot, i32 flags, i32 fd,
 #define X11_OP_REQ_CREATE_GC 0x37
 #define X11_OP_REQ_PUT_IMG 0x48
 
+#define X11_FLAG_GC_FUNC 0x00000001
+#define X11_FLAG_GC_PLANE 0x00000002
+#define X11_FLAG_GC_BG 0x00000004
+#define X11_FLAG_GC_FG 0x00000008
+#define X11_FLAG_GC_LINE_WIDTH 0x00000010
+#define X11_FLAG_GC_LINE_STYLE 0x00000020
+#define X11_FLAG_GC_FONT 0x00004000
+#define X11_FLAG_GC_EXPOSE 0x00010000
+
+#define MY_COLOR_ARGB 0x00aa00ff
+
 typedef struct {
   u8 order;
   u8 pad1;
@@ -289,9 +300,33 @@ static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
   connection->visual = (x11_visual_t *)p;
 }
 
-static u32 x11_generate_id(x11_connection_t *conn) {
+static u32 x11_generate_id(x11_connection_t const *conn) {
   static u32 id = 0;
   return ((conn->setup->id_mask & id++) | conn->setup->id_base);
+}
+
+static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id) {
+  assert(fd > 0);
+  assert(gc_id > 0);
+  assert(root_id > 0);
+
+  const u32 flags = X11_FLAG_GC_BG | X11_FLAG_GC_EXPOSE;
+
+#define CREATE_GC_PACKET_U32_COUNT (4 + 2)
+
+  const u32 packet[CREATE_GC_PACKET_U32_COUNT] = {
+      [0] = X11_OP_REQ_CREATE_GC | (CREATE_GC_PACKET_U32_COUNT << 16),
+      [1] = gc_id,
+      [2] = root_id,
+      [3] = flags,
+      [4] = MY_COLOR_ARGB,
+      [5] = 0,
+  };
+
+  const int res = sys_write(fd, (void *)packet, sizeof(packet));
+  if (res != sizeof(packet)) {
+    sys_exit(1);
+  }
 }
 
 int main() {
@@ -319,6 +354,10 @@ int main() {
 
   x11_connection_t connection = {0};
   x11_handshake(fd, &connection, read_buffer, read_buffer_length);
+
+  const u32 gc_id = x11_generate_id(&connection);
+
+  x11_create_gc(fd, gc_id, connection.root->id);
 
   sys_exit(0);
 }
