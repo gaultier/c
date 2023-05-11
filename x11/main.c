@@ -366,7 +366,7 @@ static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
   x11_connection_reply_t header = {0};
   res = sys_read(fd, &header, sizeof(header));
   if (res != sizeof(header)) {
-    sys_exit(-res);
+    sys_exit((i32)-res);
   }
 
   if (!header.success) {
@@ -533,8 +533,8 @@ int main() {
                     &arena);
       break;
     case X11_EVENT_KEY_RELEASE:
-      if (buf[1] == 9)
-      return 0;
+      if (buf[1] == 9) // Escape.
+        return 0;
 
       break;
     }
