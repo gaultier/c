@@ -1,4 +1,5 @@
 #include <poll.h>
+#include <stdbool.h>
 
 #define u64 unsigned long int
 #define i64 signed long int
@@ -136,6 +137,7 @@ static i64 sys_fcntl(i32 fd, i32 cmd, i32 val) {
 #define X11_OP_REQ_CREATE_GC 0x37
 #define X11_OP_REQ_OPEN_FONT 0x2d
 #define X11_OP_REQ_IMAGE_TEXT8 0x4c
+#define X11_OP_REQ_QUERY_TEXT_EXTENTS 0x30
 
 #define X11_FLAG_GC_FUNC 0x00000001
 #define X11_FLAG_GC_PLANE 0x00000002
@@ -502,6 +504,37 @@ static void x11_map_window(i32 fd, u32 window_id) {
   }
 }
 
+static void x11_query_text_extents(i32 fd, u32 font_id, const u8 *text,
+                                   u32 text_byte_count, arena_t *arena) {
+  const u32 padding = (4 - (2 * text_byte_count % 4)) % 4;
+  const u32 packet_u32_count = 2 + ((2 * text_byte_count + padding) / 4);
+
+  const u64 arena_offset = arena->current_offset;
+  u32 *const packet = arena_alloc(arena, packet_u32_count);
+  assert(packet != NULL);
+
+  const bool is_odd_length = (padding == 2);
+
+  packet[0] = X11_OP_REQ_QUERY_TEXT_EXTENTS | ((u32)is_odd_length << 8) |
+              (packet_u32_count << 16);
+  packet[1] = font_id;
+  for (u32 i = 0; i < text_byte_count; i++) {
+    packet[2 + 2 * i] = 0;
+    packet[2 + 2 * i + 1] = text[i];
+  }
+
+  const i64 res = sys_write(fd, packet, packet_u32_count * 4);
+  if (res != packet_u32_count * 4) {
+    sys_exit(1);
+  }
+
+  u8 response[32] = {0};
+
+  x11_read_response(fd, response, sizeof(response));
+
+  arena_reset_at(arena, arena_offset);
+}
+
 int main() {
   arena_t arena = {0};
   arena_init(&arena, 1 << 20);
@@ -543,6 +576,8 @@ int main() {
 
   x11_map_window(fd, window_id);
 
+  x11_query_text_extents(fd, font_id, (const u8 *)"hello", 5, &arena);
+
   set_fd_non_blocking(fd);
   struct pollfd fds = {.fd = fd, .events = POLLIN};
 
@@ -573,8 +608,7 @@ int main() {
       const char keysym = keycode_to_keysym[buf[1]];
       if (keysym != 0) {
         text[text_len++] = keysym;
-        x11_draw_text(fd, window_id, gc_id, text, (u8)text_len, 10, 10,
-                      &arena);
+        x11_draw_text(fd, window_id, gc_id, text, (u8)text_len, 10, 10, &arena);
       }
       break;
     }
