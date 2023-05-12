@@ -160,6 +160,7 @@ static i64 sys_fcntl(i32 fd, i32 cmd, i32 val) {
 
 #define MY_COLOR_ARGB 0x00ffffff
 
+// TODO: Use X11's GetKeyboardMapping instead?
 static const char keycode_to_keysym[255] = {
     [24] = 'q', [25] = 'w', [26] = 'e', [27] = 'r', [28] = 't',
     [29] = 'y', [30] = 'u', [31] = 'i', [32] = 'o', [33] = 'p',
