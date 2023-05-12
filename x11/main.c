@@ -303,6 +303,7 @@ static void *arena_alloc(arena_t *arena, u64 len) {
 static void arena_reset_at(arena_t *arena, u64 offset) {
   assert(arena != NULL);
   assert(arena->current_offset < arena->capacity);
+  assert((arena->current_offset % 16) == 0);
 
   arena->current_offset = offset;
 }
