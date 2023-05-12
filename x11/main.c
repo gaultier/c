@@ -504,7 +504,7 @@ static void x11_map_window(i32 fd, u32 window_id) {
 
 int main() {
   arena_t arena = {0};
-  arena_init(&arena, 1 << 16);
+  arena_init(&arena, 1 << 20);
 
   i32 fd = sys_socket(AF_UNIX, SOCK_STREAM, 0);
   if (fd < 0) {
@@ -546,8 +546,8 @@ int main() {
   set_fd_non_blocking(fd);
   struct pollfd fds = {.fd = fd, .events = POLLIN};
 
-  char s[10] = "";
-  u64 s_len = 0;
+  u8 *text = arena_alloc(&arena, 1 << 16);
+  u64 text_len = 0;
   for (;;) {
     const int changed = poll(&fds, 1, -1);
     if (changed == -1) {
@@ -572,8 +572,8 @@ int main() {
 
       const char keysym = keycode_to_keysym[buf[1]];
       if (keysym != 0) {
-        s[s_len++] = keysym;
-        x11_draw_text(fd, window_id, gc_id, (const u8 *)s, (u8)s_len, 10, 10,
+        text[text_len++] = keysym;
+        x11_draw_text(fd, window_id, gc_id, text, (u8)text_len, 10, 10,
                       &arena);
       }
       break;
