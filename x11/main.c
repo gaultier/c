@@ -537,7 +537,7 @@ int main() {
   const u32 window_id = x11_generate_id(&connection);
   assert(window_id > 0);
 
-  const u16 x = 200, y = 200, w = 400, h = 200;
+  const u16 x = 200, y = 200, w = 800, h = 600;
   x11_create_window(fd, window_id, connection.root->id, x, y, w, h,
                     connection.root->root_visual_id);
 
@@ -546,7 +546,8 @@ int main() {
   set_fd_non_blocking(fd);
   struct pollfd fds = {.fd = fd, .events = POLLIN};
 
-  char c = 0;
+  char s[10] = "";
+  u64 s_len = 0;
   for (;;) {
     const int changed = poll(&fds, 1, -1);
     if (changed == -1) {
@@ -564,8 +565,6 @@ int main() {
 
     switch (buf[0]) {
     case X11_EVENT_EXPOSURE:
-      x11_draw_text(fd, window_id, gc_id, (const u8 *)"hello", 5, 50, 50,
-                    &arena);
       break;
     case X11_EVENT_KEY_RELEASE:
       if (buf[1] == 9) // Escape.
@@ -573,8 +572,9 @@ int main() {
 
       const char keysym = keycode_to_keysym[buf[1]];
       if (keysym != 0) {
-        c = keysym;
-        x11_draw_text(fd, window_id, gc_id, (const u8 *)&c, 1, 50, 50, &arena);
+        s[s_len++] = keysym;
+        x11_draw_text(fd, window_id, gc_id, (const u8 *)s, (u8)s_len, 10, 10,
+                      &arena);
       }
       break;
     }
