@@ -160,6 +160,14 @@ static i64 sys_fcntl(i32 fd, i32 cmd, i32 val) {
 
 #define MY_COLOR_ARGB 0x00ffffff
 
+static const char keycode_to_keysym[255] = {
+    [24] = 'q', [25] = 'w', [26] = 'e', [27] = 'r', [28] = 't',
+    [29] = 'y', [30] = 'u', [31] = 'i', [32] = 'o', [33] = 'p',
+    [38] = 'a', [39] = 's', [40] = 'd', [41] = 'f', [42] = 'g',
+    [43] = 'h', [44] = 'j', [45] = 'k', [46] = 'l', [52] = 'z',
+    [53] = 'x', [54] = 'c', [55] = 'v', [56] = 'b', [58] = 'm',
+};
+
 typedef struct {
   u8 order;
   u8 pad1;
@@ -535,6 +543,8 @@ int main() {
 
   set_fd_non_blocking(fd);
   struct pollfd fds = {.fd = fd, .events = POLLIN};
+
+  char c = 0;
   for (;;) {
     const int changed = poll(&fds, 1, -1);
     if (changed == -1) {
@@ -559,6 +569,11 @@ int main() {
       if (buf[1] == 9) // Escape.
         return 0;
 
+      const char keysym = keycode_to_keysym[buf[1]];
+      if (keysym != 0) {
+        c = keysym;
+        x11_draw_text(fd, window_id, gc_id, (const u8 *)&c, 1, 50, 50, &arena);
+      }
       break;
     }
   }
