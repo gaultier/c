@@ -173,6 +173,17 @@ static i32 sys_dup2(i32 oldfd, i32 newfd) {
   return (i32)syscall2(33, oldfd, newfd);
 }
 
+static i32 sys_fork() { return (i32)syscall0(57); }
+
+static i32 sys_execve(const char *pathname, const char *const argv[],
+                      const char *const envp[]) {
+  return (i32)syscall3(59, (i64)pathname, (i64)argv, (i64)envp);
+}
+
+static i32 sys_setsid(){
+  return (i32)syscall0(112);
+}
+
 struct winsize {
   u32 ws_row;
   u32 ws_col;
@@ -713,8 +724,9 @@ static i32 spawn_shell(i32 num_lines, i32 num_columns, i32 *child_pid) {
     /* sys_signal(SIGTERM, SIG_DFL); */
     /* sys_signal(SIGALRM, SIG_DFL); */
 
-    char *const envp[] = {"HOME=/home/pg", "USER=pg", 0};
-    if (sys_execle("/bin/sh", "/bin/sh", (char *)0, envp) == -1) {
+    const char *const argv[] = {"/bin/sh", 0};
+    const char *const envp[] = {"HOME=/home/pg", "USER=pg", 0};
+    if (sys_execve("/bin/sh", argv, envp) == -1) {
       sys_exit(1);
     }
 
