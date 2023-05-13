@@ -147,6 +147,109 @@ static i32 sys_poll(struct pollfd *fds, i32 nfds, i32 timeout_ms) {
   return (i32)syscall3(7, (i64)fds, (i64)nfds, (i64)timeout_ms);
 }
 
+#define O_RDONLY 00
+#define O_WRONLY 01
+#define O_RDWR 02
+#define O_NOCTTY 0400
+i32 sys_open(const char *pathname, i32 flags) {
+  return (i32)syscall2(0, (i64)pathname, (i64)flags);
+}
+
+i32 sys_close(i32 fd) { return (i32)syscall1(3, (i32)fd); }
+
+i32 sys_ioctl3(i32 fd, u32 req, i64 flags) {
+  return (i32)syscall3(16, fd, req, flags);
+}
+
+struct winsize {
+  u32 ws_row;
+  u32 ws_col;
+  u32 ws_xpixel;
+  u32 ws_ypixel;
+};
+
+#define NCCS 32
+struct termios {
+  u32 c_iflag;   /* input mode flags */
+  u32 c_oflag;   /* output mode flags */
+  u32 c_cflag;   /* control mode flags */
+  u32 c_lflag;   /* local mode flags */
+  u8 c_line;     /* line discipline */
+  u8 c_cc[NCCS]; /* control characters */
+  u32 c_ispeed;  /* input speed */
+  u32 c_ospeed;  /* output speed */
+};
+
+#define TCSETS 0x5402
+i32 tcsetattr(i32 fd, i32 act, const struct termios *tio) {
+  assert(act == 0 || act == 1);
+  return sys_ioctl3(fd, TCSETS + act, (i64)tio);
+}
+
+void str_append_u32(u8 *s, u64 *s_len, u64 s_cap, u32 n) {
+  assert(s != NULL);
+  assert(s_len != NULL);
+
+  u8 buf[30] = "";
+  u64 buf_len = 0;
+
+  for (u64 i = 0; i < sizeof(buf); i++) {
+    const u8 x = (u8)(n % 10);
+    buf[buf_len++] = x + '0';
+    n = n / 10;
+
+    if (n == 0)
+      break;
+  }
+  assert(n == 0);
+  assert(buf_len > 0);
+  assert(buf_len <= sizeof(buf));
+  assert(*s_len + buf_len < s_cap);
+
+  for (i64 i = buf_len - 1; i >= 0; i--) {
+    s[*s_len] = buf[i];
+    *s_len += 1;
+  }
+
+  s[*s_len] = 0;
+}
+
+#define TIOCGPTN 0x80045430
+#define TIOCSPTLCK 0x40045431
+#define TIOCSWINSZ 0x5414
+#define TCSANOW 0
+i32 openpty(i32 *pm, i32 *ps, const struct winsize *ws) {
+  i32 m, s, n = 0;
+  u8 name[20] = "/dev/pts";
+
+  m = sys_open("/dev/ptmx", O_RDWR | O_NOCTTY);
+  assert(m >= 0);
+
+  /* pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs); */
+
+  s = sys_ioctl3(m, TIOCSPTLCK, (i64)&n);
+  assert(s == 0);
+  s = sys_ioctl3(m, TIOCGPTN, (i64)&n);
+  assert(s == 0);
+
+  u64 name_len = sizeof("/dev/pts") - 1;
+  str_append_u32(name, &name_len, sizeof(name) - 1, m);
+  assert(name_len <= sizeof(name) - 1);
+  assert(name[name_len] == 0);
+
+  s = sys_open((char *)name, O_RDWR | O_NOCTTY);
+  assert(s >= 0);
+
+  if (ws)
+    sys_ioctl3(s, TIOCSWINSZ, (i64)ws);
+
+  *pm = m;
+  *ps = s;
+
+  /* pthread_setcancelstate(cs, 0); */
+  return 0;
+}
+
 #define X11_OP_REQ_CREATE_WINDOW 0x01
 #define X11_OP_REQ_MAP_WINDOW 0x08
 #define X11_OP_REQ_CREATE_PIX 0x35
@@ -552,6 +655,10 @@ static void x11_query_text_extents(i32 fd, u32 font_id, const u8 *text,
 }
 
 int main() {
+  u8 s[50] = "abc";
+  u64 s_len = 3;
+  str_append_u32(s, &s_len, 49, 123);
+
   arena_t arena = {0};
   arena_init(&arena, 1 << 20);
 
@@ -610,7 +717,7 @@ int main() {
     }
     assert(fds.revents & POLLIN);
 
-    u8 buf[32] = {0};
+    u8 buf[1024] = {0};
     const u64 read_byte_count = x11_read_response(fd, buf, sizeof(buf));
     assert(read_byte_count == 32);
 
