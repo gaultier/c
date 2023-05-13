@@ -98,8 +98,15 @@ static __inline i64 syscall6(i64 n, i64 a1, i64 a2, i64 a3, i64 a4, i64 a5,
 
 #define F_GETFL 3
 #define F_SETFL 4
+const int width = 800;
+const int height = 600;
+const int font_size = 20;
 
 #define O_NONBLOCK 04000
+
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+#define STDERR_FILENO 0
 
 #define EAGAIN 11 /* Try again */
 
@@ -135,6 +142,7 @@ struct pollfd {
   i16 events;  /* Types of events poller cares about.  */
   i16 revents; /* Types of events that actually occurred.  */
 };
+
 #define POLLIN 0x001  /* There is data to read.  */
 #define POLLPRI 0x002 /* There is urgent data to read.  */
 #define POLLOUT 0x004 /* Writing now will not block.  */
@@ -151,14 +159,18 @@ static i32 sys_poll(struct pollfd *fds, i32 nfds, i32 timeout_ms) {
 #define O_WRONLY 01
 #define O_RDWR 02
 #define O_NOCTTY 0400
-i32 sys_open(const char *pathname, i32 flags) {
+static i32 sys_open(const char *pathname, i32 flags) {
   return (i32)syscall2(0, (i64)pathname, (i64)flags);
 }
 
-i32 sys_close(i32 fd) { return (i32)syscall1(3, (i32)fd); }
+static i32 sys_close(i32 fd) { return (i32)syscall1(3, (i32)fd); }
 
-i32 sys_ioctl3(i32 fd, u32 req, i64 flags) {
+static i32 sys_ioctl3(i32 fd, u32 req, i64 flags) {
   return (i32)syscall3(16, fd, req, flags);
+}
+
+static i32 sys_dup2(i32 oldfd, i32 newfd) {
+  return (i32)syscall2(33, oldfd, newfd);
 }
 
 struct winsize {
@@ -217,6 +229,7 @@ void str_append_u32(u8 *s, u64 *s_len, u64 s_cap, u32 n) {
 #define TIOCGPTN 0x80045430
 #define TIOCSPTLCK 0x40045431
 #define TIOCSWINSZ 0x5414
+#define TIOCSCTTY 0x540E
 #define TCSANOW 0
 i32 openpty(i32 *pm, i32 *ps, const struct winsize *ws) {
   i32 m, s, n = 0;
@@ -654,10 +667,79 @@ static void x11_query_text_extents(i32 fd, u32 font_id, const u8 *text,
   arena_reset_at(arena, arena_offset);
 }
 
-int main() {
-  u8 s[50] = "abc";
-  u64 s_len = 3;
-  str_append_u32(s, &s_len, 49, 123);
+static i32 spawn_shell(i32 num_lines, i32 num_columns, i32 *child_pid) {
+  assert(num_lines > 0);
+  assert(num_columns > 0);
+  assert(child_pid != NULL);
+
+  i32 master = 0, slave = 0;
+  struct winsize winp = {.ws_row = num_lines, .ws_col = num_columns};
+  openpty(&master, &slave, &winp);
+
+  *child_pid = sys_fork();
+  if (*child_pid == -1) {
+    sys_exit(1);
+  }
+
+  if (*child_pid == 0) { // Child
+    if (sys_dup2(slave, STDIN_FILENO) == -1) {
+      sys_exit(1);
+    }
+    if (sys_dup2(slave, STDOUT_FILENO) == -1) {
+      sys_exit(1);
+    }
+    if (sys_dup2(slave, STDERR_FILENO) == -1) {
+      sys_exit(1);
+    }
+
+    // Create a new process group.
+    if (sys_setsid() == -1) {
+      sys_exit(1);
+    }
+
+    // Set controlling terminal.
+    if (sys_ioctl3(slave, TIOCSCTTY, 0) != 0) {
+      sys_exit(1);
+    }
+
+    // Close now unneeded file descriptors.
+    sys_close(slave);
+    sys_close(master);
+
+    /* sys_signal(SIGCHLD, SIG_DFL); */
+    /* sys_signal(SIGHUP, SIG_DFL); */
+    /* sys_signal(SIGINT, SIG_DFL); */
+    /* sys_signal(SIGQUIT, SIG_DFL); */
+    /* sys_signal(SIGTERM, SIG_DFL); */
+    /* sys_signal(SIGALRM, SIG_DFL); */
+
+    char *const envp[] = {"HOME=/home/pg", "USER=pg", 0};
+    if (sys_execle("/bin/sh", "/bin/sh", (char *)0, envp) == -1) {
+      sys_exit(1);
+    }
+
+    __builtin_unreachable();
+  }
+  // Parent.
+
+  sys_close(slave);
+  set_fd_non_blocking(master);
+  /* signal(SIGCHLD, sigchld); */
+
+  return master;
+}
+
+i32 main() {
+  const int width = 800;
+  const int height = 600;
+  const int font_size = 20; // FIXME: Get it from server.
+  const int num_lines = height / font_size;
+  const int num_columns = width / font_size;
+
+  i32 child_pid = 0;
+  const i32 master = spawn_shell(num_lines, num_columns, &child_pid);
+  assert(child_pid > 0);
+  assert(master > 0);
 
   arena_t arena = {0};
   arena_init(&arena, 1 << 20);
@@ -707,7 +789,7 @@ int main() {
   u8 *text = arena_alloc(&arena, 1 << 16);
   u64 text_len = 0;
   for (;;) {
-    const int changed = sys_poll(&fds, 1, -1);
+    const i32 changed = sys_poll(&fds, 1, -1);
     if (changed == -1) {
       sys_exit(1);
     }
