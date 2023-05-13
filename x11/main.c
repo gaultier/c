@@ -1,4 +1,3 @@
-#include <poll.h>
 #include <stdbool.h>
 
 #define u64 unsigned long int
@@ -129,6 +128,23 @@ static void *sys_mmap(void *addr, u64 len, i32 prot, i32 flags, i32 fd,
 
 static i64 sys_fcntl(i32 fd, i32 cmd, i32 val) {
   return syscall3(72, fd, cmd, val);
+}
+
+struct pollfd {
+  i32 fd;      /* File descriptor to poll.  */
+  i16 events;  /* Types of events poller cares about.  */
+  i16 revents; /* Types of events that actually occurred.  */
+};
+#define POLLIN 0x001  /* There is data to read.  */
+#define POLLPRI 0x002 /* There is urgent data to read.  */
+#define POLLOUT 0x004 /* Writing now will not block.  */
+
+#define POLLERR 0x008  /* Error condition.  */
+#define POLLHUP 0x010  /* Hung up.  */
+#define POLLNVAL 0x020 /* Invalid polling request.  */
+
+static i32 sys_poll(struct pollfd *fds, i32 nfds, i32 timeout_ms) {
+  return (i32)syscall3(7, (i64)fds, (i64)nfds, (i64)timeout_ms);
 }
 
 #define X11_OP_REQ_CREATE_WINDOW 0x01
@@ -576,7 +592,7 @@ int main() {
 
   x11_map_window(fd, window_id);
 
-  x11_query_text_extents(fd, font_id, (const u8 *)"hello", 5, &arena);
+  x11_query_text_extents(fd, font_id, (const u8 *)"hello", 0, &arena);
 
   set_fd_non_blocking(fd);
   struct pollfd fds = {.fd = fd, .events = POLLIN};
@@ -584,7 +600,7 @@ int main() {
   u8 *text = arena_alloc(&arena, 1 << 16);
   u64 text_len = 0;
   for (;;) {
-    const int changed = poll(&fds, 1, -1);
+    const int changed = sys_poll(&fds, 1, -1);
     if (changed == -1) {
       sys_exit(1);
     }
