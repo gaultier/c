@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -242,12 +241,6 @@ static void parse_input(const u8 *s, u64 s_byte_count, token_t *tokens,
   pg_assert(tokens != NULL);
   pg_assert(tokens_count != NULL);
 
-  static void find_special_char(const u8 *s, u64 s_byte_count,
-                                u64 *consumed_byte_count, token_t *token) {
-    pg_assert(s != NULL);
-    pg_assert(consumed_byte_count != NULL);
-    pg_assert(token != NULL);
-
 #if 0
     u64 i = 0;
     while (i < s_byte_count) {
@@ -303,42 +296,41 @@ static void parse_input(const u8 *s, u64 s_byte_count, token_t *tokens,
     }
 #endif
 
-    for (u64 i = 0; i < s_byte_count; i++) {
-      switch (s[i]) {
-      case 0x08: // BS
-        tokens[*tokens_count] =
-            (token_t){.kind = TK_BACKSPACE, .start = i, .end_excl = i + 1};
-        *tokens_count += 1;
-        break;
+  for (u64 i = 0; i < s_byte_count; i++) {
+    switch (s[i]) {
+    case 0x08: // BS
+      tokens[*tokens_count] =
+          (token_t){.kind = TK_BACKSPACE, .start = i, .end_excl = i + 1};
+      *tokens_count += 1;
+      break;
 
-      case 0x09: // TAB
-        tokens[*tokens_count] =
-            (token_t){.kind = TK_TAB, .start = i, .end_excl = i + 1};
-        *tokens_count += 1;
-        break;
+    case 0x09: // TAB
+      tokens[*tokens_count] =
+          (token_t){.kind = TK_TAB, .start = i, .end_excl = i + 1};
+      *tokens_count += 1;
+      break;
 
-      case 0x0a: // LF
-        tokens[*tokens_count] =
-            (token_t){.kind = TK_LINE_FEED, .start = i, .end_excl = i + 1};
-        *tokens_count += 1;
-        break;
+    case 0x0a: // LF
+      tokens[*tokens_count] =
+          (token_t){.kind = TK_LINE_FEED, .start = i, .end_excl = i + 1};
+      *tokens_count += 1;
+      break;
 
-      case 0x0d: // CR
-        tokens[*tokens_count] = (token_t){
-            .kind = TK_CARRIAGE_RETURN, .start = i, .end_excl = i + 1};
-        *tokens_count += 1;
-        break;
+    case 0x0d: // CR
+      tokens[*tokens_count] =
+          (token_t){.kind = TK_CARRIAGE_RETURN, .start = i, .end_excl = i + 1};
+      *tokens_count += 1;
+      break;
 
-      default:
-        tokens[*tokens_count] = (token_t){.kind = TK_TEXT, .start = i};
-        *tokens_count += 1;
+    default:
+      tokens[*tokens_count] = (token_t){.kind = TK_TEXT, .start = i};
+      *tokens_count += 1;
 
-        while (i < s_byte_count &&
-               !(s[i] == 0x08 || s[i] == 0x09 || s[i] == 0x0a || s[i] == 0x0d))
-          i++;
+      while (i < s_byte_count &&
+             !(s[i] == 0x08 || s[i] == 0x09 || s[i] == 0x0a || s[i] == 0x0d))
+        i++;
 
-        tokens[*tokens_count - 1].end_excl = i;
-      }
+      tokens[*tokens_count - 1].end_excl = i;
     }
   }
 }
@@ -705,26 +697,32 @@ i32 main() {
       }
       pg_assert(changed.revents & POLLIN);
 
-      u8 buf[1024] = {0};
-      const u64 read_byte_count =
-          x11_read_response(x11_socket_fd, buf, sizeof(buf));
-      pg_assert(read_byte_count == 32);
+      u8 read_buffer[1024] = {0};
+      const i64 read_byte_count =
+          read(changed.fd, read_buffer, sizeof(read_buffer));
+      pg_assert(read_byte_count >= 0);
 
-      switch (buf[0]) {
-      case X11_EVENT_EXPOSURE:
-        break;
-      case X11_EVENT_KEY_RELEASE:
-        if (buf[1] == 9) // Escape.
-          return 0;
-
-        const char keysym = keycode_to_keysym[buf[1]];
-        if (keysym != 0) {
-          text[text_len++] = keysym;
-          x11_draw_text(x11_socket_fd, window_id, gc_id, text, (u8)text_len, 10,
-                        10, &arena);
-        }
-        break;
-      }
+      //      const u64 read_byte_count =
+      //          x11_read_response(x11_socket_fd, read_buffer,
+      //          sizeof(read_buffer));
+      //      pg_assert(read_byte_count == 32);
+      //
+      //      switch (read_buffer[0]) {
+      //      case X11_EVENT_EXPOSURE:
+      //        break;
+      //      case X11_EVENT_KEY_RELEASE:
+      //        if (read_buffer[1] == 9) // Escape.
+      //          return 0;
+      //
+      //        const char keysym = keycode_to_keysym[read_buffer[1]];
+      //        if (keysym != 0) {
+      //          text[text_len++] = keysym;
+      //          x11_draw_text(x11_socket_fd, window_id, gc_id, text,
+      //          (u8)text_len, 10,
+      //                        10, &arena);
+      //        }
+      //        break;
+      //      }
     }
   }
 }
