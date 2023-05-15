@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/poll.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -19,6 +20,8 @@
 #define i16 int16_t
 #define u8 uint8_t
 #define i8 int8_t
+
+#define PG_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
 
 #define pg_assert(condition)                                                   \
   do {                                                                         \
@@ -214,6 +217,129 @@ static void set_fd_non_blocking(i32 fd) {
   res = fcntl(fd, F_SETFL, (i32)((u64)res | (u64)O_NONBLOCK));
   if (res != 0) {
     exit((i32)-res);
+  }
+}
+
+typedef enum {
+  TK_NONE,
+  TK_BACKSPACE = 0x08,
+  TK_TAB = 0x09,
+  TK_LINE_FEED = 0x0a,       // '\n'
+  TK_CARRIAGE_RETURN = 0x0d, // '\r'
+  TK_DEL = 0x7f,
+  TK_TEXT = 0x100,
+} token_kind_t;
+
+typedef struct {
+  uint64_t start;
+  uint64_t end_excl;
+  token_kind_t kind;
+} token_t;
+
+static void parse_input(const u8 *s, u64 s_byte_count, token_t *tokens,
+                        u64 *tokens_count) {
+  pg_assert(s != NULL);
+  pg_assert(tokens != NULL);
+  pg_assert(tokens_count != NULL);
+
+  static void find_special_char(const u8 *s, u64 s_byte_count,
+                                u64 *consumed_byte_count, token_t *token) {
+    pg_assert(s != NULL);
+    pg_assert(consumed_byte_count != NULL);
+    pg_assert(token != NULL);
+
+#if 0
+    u64 i = 0;
+    while (i < s_byte_count) {
+      {
+        const u8 *const bs = __builtin_memchr(s, 0x08, s_byte_count);
+        if (bs != NULL) {
+          tokens[*tokens_count] =
+              (token_t){.kind = TK_BACKSPACE, .start = i, .end_excl = i + 1};
+          *tokens_count += 1;
+          i += (tab - s);
+
+          continue;
+        }
+      }
+
+      {
+        const u8 *const tab = __builtin_memchr(s, 0x09, s_byte_count);
+        if (tab != NULL) {
+          tokens[*tokens_count] =
+              (token_t){.kind = TK_TAB, .start = i, .end_excl = i + 1};
+          *tokens_count += 1;
+          i += (tab - s);
+
+          continue;
+        }
+      }
+      {
+        const u8 *const tab = __builtin_memchr(s, 0x0a, s_byte_count);
+        if (tab != NULL) {
+          tokens[*tokens_count] =
+              (token_t){.kind = TK_LINE_FEED, .start = i, .end_excl = i + 1};
+          *tokens_count += 1;
+          i += (tab - s);
+
+          continue;
+        }
+      }
+      {
+        const u8 *const tab = __builtin_memchr(s, 0x0d, s_byte_count);
+        if (tab != NULL) {
+          tokens[*tokens_count] = (token_t){
+              .kind = TK_CARRIAGE_RETURN, .start = i, .end_excl = i + 1};
+          *tokens_count += 1;
+          i += (tab - s);
+
+          continue;
+        }
+      }
+      
+          tokens[*tokens_count] = (token_t){
+              .kind = TK_CARRIAGE_RETURN, .start = i, .end_excl = i + 1};
+          *tokens_count += 1;
+    }
+#endif
+
+    for (u64 i = 0; i < s_byte_count; i++) {
+      switch (s[i]) {
+      case 0x08: // BS
+        tokens[*tokens_count] =
+            (token_t){.kind = TK_BACKSPACE, .start = i, .end_excl = i + 1};
+        *tokens_count += 1;
+        break;
+
+      case 0x09: // TAB
+        tokens[*tokens_count] =
+            (token_t){.kind = TK_TAB, .start = i, .end_excl = i + 1};
+        *tokens_count += 1;
+        break;
+
+      case 0x0a: // LF
+        tokens[*tokens_count] =
+            (token_t){.kind = TK_LINE_FEED, .start = i, .end_excl = i + 1};
+        *tokens_count += 1;
+        break;
+
+      case 0x0d: // CR
+        tokens[*tokens_count] = (token_t){
+            .kind = TK_CARRIAGE_RETURN, .start = i, .end_excl = i + 1};
+        *tokens_count += 1;
+        break;
+
+      default:
+        tokens[*tokens_count] = (token_t){.kind = TK_TEXT, .start = i};
+        *tokens_count += 1;
+
+        while (i < s_byte_count &&
+               !(s[i] == 0x08 || s[i] == 0x09 || s[i] == 0x0a || s[i] == 0x0d))
+          i++;
+
+        tokens[*tokens_count - 1].end_excl = i;
+      }
+    }
   }
 }
 
@@ -513,16 +639,17 @@ i32 main() {
   arena_t arena = {0};
   arena_init(&arena, 1 << 20);
 
-  i32 fd = socket(AF_UNIX, SOCK_STREAM, 0);
-  if (fd < 0) {
+  i32 x11_socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
+  if (x11_socket_fd < 0) {
     eprint("Error opening socket");
-    exit(-fd);
+    exit(-x11_socket_fd);
   }
-  pg_assert(fd > 0);
+  pg_assert(x11_socket_fd > 0);
 
   const sockaddr_un addr = {.sun_family = AF_UNIX,
                             .sun_path = "/tmp/.X11-unix/X0"};
-  const i32 res = connect(fd, (const struct sockaddr *)&addr, sizeof(addr));
+  const i32 res =
+      connect(x11_socket_fd, (const struct sockaddr *)&addr, sizeof(addr));
   if (res != 0) {
     eprint("Error connecting");
     exit(-res);
@@ -532,59 +659,72 @@ i32 main() {
   u8 *const read_buffer = arena_alloc(&arena, read_buffer_length);
 
   x11_connection_t connection = {0};
-  x11_handshake(fd, &connection, read_buffer, read_buffer_length);
+  x11_handshake(x11_socket_fd, &connection, read_buffer, read_buffer_length);
 
   const u32 gc_id = x11_generate_id(&connection);
   const u32 font_id = x11_generate_id(&connection);
 
-  x11_open_font(fd, font_id);
+  x11_open_font(x11_socket_fd, font_id);
 
-  x11_create_gc(fd, gc_id, connection.root->id, font_id);
+  x11_create_gc(x11_socket_fd, gc_id, connection.root->id, font_id);
 
   const u32 window_id = x11_generate_id(&connection);
   pg_assert(window_id > 0);
 
   const u16 x = 200, y = 200, w = 800, h = 600;
-  x11_create_window(fd, window_id, connection.root->id, x, y, w, h,
+  x11_create_window(x11_socket_fd, window_id, connection.root->id, x, y, w, h,
                     connection.root->root_visual_id);
 
-  x11_map_window(fd, window_id);
+  x11_map_window(x11_socket_fd, window_id);
 
-  x11_query_text_extents(fd, font_id, (const u8 *)"hello", 0, &arena);
+  x11_query_text_extents(x11_socket_fd, font_id, (const u8 *)"hello", 0,
+                         &arena);
 
-  set_fd_non_blocking(fd);
-  struct pollfd fds = {.fd = fd, .events = POLLIN};
+  set_fd_non_blocking(x11_socket_fd);
+  struct pollfd fds[] = {{.fd = x11_socket_fd, .events = POLLIN},
+                         {.fd = master, .events = POLLIN}};
 
   u8 *text = arena_alloc(&arena, 1 << 16);
   u64 text_len = 0;
   for (;;) {
-    const i32 changed = poll(&fds, 1, -1);
-    if (changed == -1) {
+    const i32 changed_count = poll(fds, PG_ARRAY_SIZE(fds), -1);
+    if (changed_count == -1) {
       exit(1);
     }
-    pg_assert(changed == 1);
-    if ((fds.revents & POLLERR) || (fds.revents & POLLHUP)) {
-      exit(1);
-    }
-    pg_assert(fds.revents & POLLIN);
+    pg_assert((u64)changed_count <= PG_ARRAY_SIZE(fds));
 
-    u8 buf[1024] = {0};
-    const u64 read_byte_count = x11_read_response(fd, buf, sizeof(buf));
-    pg_assert(read_byte_count == 32);
+    for (u64 i = 0; i < (u64)changed_count; i++) {
+      const struct pollfd changed = fds[i];
 
-    switch (buf[0]) {
-    case X11_EVENT_EXPOSURE:
-      break;
-    case X11_EVENT_KEY_RELEASE:
-      if (buf[1] == 9) // Escape.
-        return 0;
+      pg_assert((changed.revents & POLLNVAL) == 0);
+      pg_assert((changed.revents & POLLPRI) == 0); // Unimplemented yet.
 
-      const char keysym = keycode_to_keysym[buf[1]];
-      if (keysym != 0) {
-        text[text_len++] = keysym;
-        x11_draw_text(fd, window_id, gc_id, text, (u8)text_len, 10, 10, &arena);
+      // Other end is closed, stop.
+      if ((changed.revents & POLLERR) || (changed.revents & POLLHUP)) {
+        exit(1);
       }
-      break;
+      pg_assert(changed.revents & POLLIN);
+
+      u8 buf[1024] = {0};
+      const u64 read_byte_count =
+          x11_read_response(x11_socket_fd, buf, sizeof(buf));
+      pg_assert(read_byte_count == 32);
+
+      switch (buf[0]) {
+      case X11_EVENT_EXPOSURE:
+        break;
+      case X11_EVENT_KEY_RELEASE:
+        if (buf[1] == 9) // Escape.
+          return 0;
+
+        const char keysym = keycode_to_keysym[buf[1]];
+        if (keysym != 0) {
+          text[text_len++] = keysym;
+          x11_draw_text(x11_socket_fd, window_id, gc_id, text, (u8)text_len, 10,
+                        10, &arena);
+        }
+        break;
+      }
     }
   }
 }
