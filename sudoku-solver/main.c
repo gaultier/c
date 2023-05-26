@@ -1,3 +1,5 @@
+#include <bits/stdint-intn.h>
+#include <bits/stdint-uintn.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -123,7 +125,50 @@ static bool is_grid_valid(const uint8_t *grid) {
   return true;
 }
 
+// [start]
+// [ 0  ]: 1 1 1 1
+// [ 1  ]: 1 1 1 2
+// [ 2  ]: 1 1 1 3
+// [ 3  ]: 1 1 1 4
+// [...]
+// [ 9  ]: 1 1 1 9
+// [10  ]: 1 1 2 1
+// [11  ]: 1 1 2 2
+// [...]
+// [ N  ]: 1 1 2 9
+// [ N+1]: 1 1 3 1
+// [...]
+// [ M  ]: 2 1 1 1
+// [ M+1]: 2 1 1 2
+// [...]
+// [ P  ]: 9 9 9 9
+// [end]
+static void increment_solution_vector(uint8_t *solution,
+                                      uint8_t solution_size) {
+  pg_assert(solution != 0);
+
+  if (solution_size == 0)
+    return;
+
+  uint8_t *const value = &solution[solution_size - 1];
+  pg_assert(value != 0);
+  pg_assert(*value > 0);
+  pg_assert(*value <= 9);
+
+  // Easy case, single increment.
+  if (*value != 9) {
+    *value += 1;
+    return;
+  }
+
+  // Harder cases, need to wrap around.
+  *value = 1;
+  increment_solution_vector(solution, solution_size - 1);
+}
+
 int main() {
+  uint8_t solution[4] = {1, 1, 1, 1};
+
   const uint8_t grid[9 * 9] = {
       // clang-format off
     5,3,0,0,7,0,0,0,0,
