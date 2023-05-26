@@ -1,3 +1,4 @@
+#include <bits/stdint-uintn.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -49,14 +50,18 @@ static bool is_row_valid(const uint8_t *grid, uint8_t row) {
 static bool is_block_valid(const uint8_t *grid, uint8_t block) {
   pg_assert(grid != 0);
 
-  const uint8_t position = block * 3;
-  const uint8_t start_i = (position / 3) * 3;
+  const uint8_t position = block / 3 * 3 * 9 + (block % 3) * 3;
+  pg_assert(position < 9 * 9);
+  const uint8_t start_i = position/9;
+  pg_assert(start_i < 9 * 9);
   const uint8_t start_j = position % 9;
+  pg_assert(start_j < 9 * 9);
 
   uint64_t id = 1;
   for (uint8_t i = start_i; i < start_i + 3; i++) {
     for (uint8_t j = start_j; j < start_j + 3; j++) {
       const uint8_t block_position = i * 9 + j;
+      pg_assert(block_position < 9 * 9);
       const uint8_t value = grid[block_position];
       pg_assert(value <= 9);
 
@@ -196,6 +201,51 @@ int main() {
       // clang-format on
   };
 
+  const uint8_t final[9 * 9] = {
+      // clang-format off
+    5,3,4,6,7,8,9,1,2,
+    6,7,2,1,9,5,3,4,8,
+    1,9,8,3,4,2,5,6,7,
+    8,5,9,7,6,1,4,2,3,
+    4,2,6,8,5,3,7,9,1,
+    7,1,3,9,2,4,8,5,6,
+    9,6,1,5,3,7,2,8,4,
+    2,8,7,4,1,9,6,3,5,
+    3,4,5,2,8,6,1,7,9,
+      // clang-format on
+  };
+  pg_assert(is_row_valid(final, 0));
+  pg_assert(is_row_valid(final, 1));
+  pg_assert(is_row_valid(final, 2));
+  pg_assert(is_row_valid(final, 3));
+  pg_assert(is_row_valid(final, 4));
+  pg_assert(is_row_valid(final, 5));
+  pg_assert(is_row_valid(final, 6));
+  pg_assert(is_row_valid(final, 7));
+  pg_assert(is_row_valid(final, 8));
+
+  pg_assert(is_column_valid(final, 0));
+  pg_assert(is_column_valid(final, 1));
+  pg_assert(is_column_valid(final, 2));
+  pg_assert(is_column_valid(final, 3));
+  pg_assert(is_column_valid(final, 4));
+  pg_assert(is_column_valid(final, 5));
+  pg_assert(is_column_valid(final, 6));
+  pg_assert(is_column_valid(final, 7));
+  pg_assert(is_column_valid(final, 8));
+
+  pg_assert(is_block_valid(final, 0));
+  pg_assert(is_block_valid(final, 1));
+  pg_assert(is_block_valid(final, 2));
+  pg_assert(is_block_valid(final, 3));
+  pg_assert(is_block_valid(final, 4));
+  pg_assert(is_block_valid(final, 5));
+  pg_assert(is_block_valid(final, 6));
+  pg_assert(is_block_valid(final, 7));
+  pg_assert(is_block_valid(final, 8));
+
+  pg_assert(is_grid_valid(final));
+
   // Init the solution vector. E.g.:
   // 0 0 1 1 0 1 1 1 1
   // 0 1 1 0 0 0 1 1 1
@@ -213,20 +263,21 @@ int main() {
   }
 
   for (;;) {
-    print_grid(solution);
+    /* print_grid(solution); */
     increment_solution_vector(solution, PG_ARRAY_SIZE(solution));
-    puts("--------------");
+    /* puts("--------------"); */
 
     merge_grids(grid, solution);
-    print_grid(grid);
 
     const bool valid = is_grid_valid(grid);
-    printf("is_grid_valid=%d\n", valid);
 
-    if (valid)
+    if (valid) {
+      printf("is_grid_valid=%d\n", valid);
+      print_grid(grid);
       return 0;
+    }
 
-    puts("==============");
-    puts("");
+    /* puts("=============="); */
+    /* puts(""); */
   }
 }
