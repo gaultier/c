@@ -222,30 +222,4 @@ int main() {
     puts("==============");
     puts("");
   }
-
-#if 0
-  __builtin_memcpy(work_grid, grid, 9 * 9);
-
-  for (uint8_t position = 0; position < 9 * 9; position++) {
-    const uint8_t value = grid[position];
-    if (value != 0)
-      continue;
-
-    for (uint8_t v = 1; v <= 9; v++) {
-      work_grid[position] = v;
-      if (is_grid_valid(work_grid)) {
-        break;
-      } else {
-        print_grid(work_grid);
-        printf("is_grid_valid=%d\n", is_grid_valid(work_grid));
-
-        pg_assert(0);
-      }
-    }
-  }
-
-  puts("============");
-  print_grid(grid);
-  printf("is_grid_valid=%d\n", is_grid_valid(grid));
-#endif
 }
