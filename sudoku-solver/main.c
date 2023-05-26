@@ -1,4 +1,3 @@
-#include <bits/stdint-uintn.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -52,7 +51,7 @@ static bool is_block_valid(const uint8_t *grid, uint8_t block) {
 
   const uint8_t position = block / 3 * 3 * 9 + (block % 3) * 3;
   pg_assert(position < 9 * 9);
-  const uint8_t start_i = position/9;
+  const uint8_t start_i = position / 9;
   pg_assert(start_i < 9 * 9);
   const uint8_t start_j = position % 9;
   pg_assert(start_j < 9 * 9);
