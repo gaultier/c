@@ -198,8 +198,17 @@ int main() {
       // clang-format on
   };
 
+  // Init the solution vector. E.g.:
+  // 0 0 1 1 0 1 1 1 1
+  // 0 1 1 0 0 0 1 1 1
+  // 1 0 0 1 1 1 1 0 1
+  // 0 1 1 1 0 1 1 1 0
+  // 0 1 1 0 1 0 1 1 0
+  // 0 1 1 1 0 1 1 1 0
+  // 1 0 1 1 1 1 0 0 1
+  // 1 1 1 0 0 0 1 1 0
+  // 1 1 1 1 0 1 1 0 0
   uint8_t solution[9 * 9] = {0};
-
   for (uint8_t i = 0; i < 9 * 9; i++) {
     if (grid[i] == 0)
       solution[i] = 1;
