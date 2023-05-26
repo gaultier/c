@@ -324,13 +324,13 @@ static void parse_input(const u8 *s, u64 s_byte_count, token_t *tokens,
 
     default:
       tokens[*tokens_count] = (token_t){.kind = TK_TEXT, .start = i};
-      *tokens_count += 1;
 
       while (i < s_byte_count &&
              !(s[i] == 0x08 || s[i] == 0x09 || s[i] == 0x0a || s[i] == 0x0d))
         i++;
 
-      tokens[*tokens_count - 1].end_excl = i;
+      tokens[*tokens_count].end_excl = i;
+      *tokens_count += 1;
     }
   }
 }
@@ -345,7 +345,7 @@ static u64 x11_read_response(i32 fd, u8 *read_buffer, u64 read_buffer_length) {
 }
 
 static void x11_open_font(i32 fd, u32 font_id) {
-#define OPEN_FONT_NAME "fixed"
+#define OPEN_FONT_NAME "*-lucida-*"
 #define OPEN_FONT_NAME_BYTE_COUNT 5
 #define PADDING ((4 - (OPEN_FONT_NAME_BYTE_COUNT % 4)) % 4)
 #define OPEN_FONT_PACKET_U32_COUNT                                             \
@@ -541,10 +541,6 @@ static void x11_query_text_extents(i32 fd, u32 font_id, const u8 *text,
     exit(1);
   }
 
-  u8 response[32] = {0};
-
-  x11_read_response(fd, response, sizeof(response));
-
   arena_reset_at(arena, arena_offset);
 }
 
@@ -619,7 +615,7 @@ static i32 spawn_shell(u16 num_lines, u16 num_columns, i32 *child_pid) {
 i32 main() {
   const u16 width = 800;
   const u16 height = 600;
-  const u16 font_size = 20; // FIXME: Get it from server.
+  const u16 font_size = 10; // FIXME: Get it from server.
   const u16 num_lines = height / font_size;
   const u16 num_columns = width / font_size;
 
@@ -629,7 +625,7 @@ i32 main() {
   pg_assert(master > 0);
 
   arena_t arena = {0};
-  arena_init(&arena, 1 << 20);
+  arena_init(&arena, 1 << 22); // 4 MiB.
 
   i32 x11_socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (x11_socket_fd < 0) {
@@ -678,6 +674,12 @@ i32 main() {
 
   u8 *text = arena_alloc(&arena, 1 << 16);
   u64 text_len = 0;
+
+  token_t *tokens = arena_alloc(&arena, 1 << 16);
+  u64 tokens_count = 0;
+
+  u16 cursor_x = 0, cursor_y = 0;
+
   for (;;) {
     const i32 changed_count = poll(fds, PG_ARRAY_SIZE(fds), -1);
     if (changed_count == -1) {
@@ -695,34 +697,61 @@ i32 main() {
       if ((changed.revents & POLLERR) || (changed.revents & POLLHUP)) {
         exit(1);
       }
-      pg_assert(changed.revents & POLLIN);
+      if (changed.revents == 0)
+        continue; // Nothing to read.
 
       u8 read_buffer[1024] = {0};
       const i64 read_byte_count =
           read(changed.fd, read_buffer, sizeof(read_buffer));
       pg_assert(read_byte_count >= 0);
 
-      //      const u64 read_byte_count =
-      //          x11_read_response(x11_socket_fd, read_buffer,
-      //          sizeof(read_buffer));
-      //      pg_assert(read_byte_count == 32);
-      //
-      //      switch (read_buffer[0]) {
-      //      case X11_EVENT_EXPOSURE:
-      //        break;
-      //      case X11_EVENT_KEY_RELEASE:
-      //        if (read_buffer[1] == 9) // Escape.
-      //          return 0;
-      //
-      //        const char keysym = keycode_to_keysym[read_buffer[1]];
-      //        if (keysym != 0) {
-      //          text[text_len++] = keysym;
-      //          x11_draw_text(x11_socket_fd, window_id, gc_id, text,
-      //          (u8)text_len, 10,
-      //                        10, &arena);
-      //        }
-      //        break;
-      //      }
+      if (i == 0) { // x11
+        pg_assert(read_byte_count >= 32);
+
+        switch (read_buffer[0]) {
+        case X11_EVENT_EXPOSURE:
+          break;
+        case X11_EVENT_KEY_RELEASE: {
+          const u8 keycode = read_buffer[1];
+
+          if (keycode == 9) { // Escape.
+            return 0;
+          } else if (keycode == 36) { // Enter
+            const i64 bytes_written = write(master, "\r", 1);
+            pg_assert(bytes_written == (i64)1);
+          } else {
+            const u8 keysym = keycode_to_keysym[keycode];
+            if (keysym != 0) {
+              /* text[text_len++] = keysym; */
+              /* x11_draw_text(x11_socket_fd, window_id, gc_id, text,
+               * (u8)text_len, */
+              /*               10, 10, &arena); */
+              const i64 bytes_written = write(master, &keysym, 1);
+              pg_assert(bytes_written == (i64)1);
+            }
+          }
+          break;
+        }
+        }
+      } else if (i == 1) { // tty
+        parse_input(read_buffer, read_byte_count, tokens, &tokens_count);
+        for (u64 j = 0; j < tokens_count; j++) {
+          const token_t token = tokens[j];
+          if (token.kind == TK_TEXT) {
+            pg_assert(token.end_excl > token.start);
+            const u64 len = token.end_excl - token.start;
+            x11_draw_text(x11_socket_fd, window_id, gc_id,
+                          read_buffer + token.start, (u8)len, 10 + cursor_x,
+                          10 + cursor_y, &arena);
+            cursor_x += (u16)len * 5; // FIXME
+          } else {
+            // TODO
+          }
+        }
+
+      } else {
+        pg_assert(0);
+      }
     }
   }
 }
