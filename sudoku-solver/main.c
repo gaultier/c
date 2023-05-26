@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#define PG_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
+
 #define pg_assert(condition)                                                   \
   do {                                                                         \
     if (!(condition))                                                          \
@@ -151,7 +153,11 @@ static void increment_solution_vector(uint8_t *solution,
     return;
 
   uint8_t *const value = &solution[solution_size - 1];
-  pg_assert(value != 0);
+  if (*value == 0) {
+    increment_solution_vector(solution, solution_size - 1);
+    return;
+  }
+
   pg_assert(*value > 0);
   pg_assert(*value <= 9);
 
@@ -166,10 +172,19 @@ static void increment_solution_vector(uint8_t *solution,
   increment_solution_vector(solution, solution_size - 1);
 }
 
-int main() {
-  uint8_t solution[4] = {1, 1, 1, 1};
+static void merge_grids(uint8_t *dst, uint8_t *src) {
+  pg_assert(dst != 0);
+  pg_assert(src != 0);
 
-  const uint8_t grid[9 * 9] = {
+  for (uint8_t i = 0; i < 9 * 9; i++) {
+    if (src[i] != 0) {
+      dst[i] = src[i];
+    }
+  }
+}
+
+int main() {
+  uint8_t grid[9 * 9] = {
       // clang-format off
     5,3,0,0,7,0,0,0,0,
     6,0,0,1,9,5,0,0,0,
@@ -182,10 +197,33 @@ int main() {
     0,0,0,0,8,0,0,7,9,
       // clang-format on
   };
-  print_grid(grid);
-  printf("is_grid_valid=%d\n", is_grid_valid(grid));
 
-  uint8_t work_grid[9 * 9] = {0};
+  uint8_t solution[9 * 9] = {0};
+
+  for (uint8_t i = 0; i < 9 * 9; i++) {
+    if (grid[i] == 0)
+      solution[i] = 1;
+  }
+
+  for (;;) {
+    print_grid(solution);
+    increment_solution_vector(solution, PG_ARRAY_SIZE(solution));
+    puts("--------------");
+
+    merge_grids(grid, solution);
+    print_grid(grid);
+
+    const bool valid = is_grid_valid(grid);
+    printf("is_grid_valid=%d\n", valid);
+
+    if (valid)
+      return 0;
+
+    puts("==============");
+    puts("");
+  }
+
+#if 0
   __builtin_memcpy(work_grid, grid, 9 * 9);
 
   for (uint8_t position = 0; position < 9 * 9; position++) {
@@ -209,4 +247,5 @@ int main() {
   puts("============");
   print_grid(grid);
   printf("is_grid_valid=%d\n", is_grid_valid(grid));
+#endif
 }
