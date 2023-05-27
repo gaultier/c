@@ -142,7 +142,6 @@ static validity_t is_grid_valid(const uint8_t *grid) {
 static uint8_t possibilities[9 * 9 * 9] = {0};
 
 int main() {
-#if 0
   uint8_t grid[9 * 9] = {
       // clang-format off
     5,3,0,0,7,0,0,0,0,
@@ -156,10 +155,10 @@ int main() {
     0,0,0,0,8,0,0,7,9,
       // clang-format on
   };
-#endif
+#if 0
   uint8_t grid[9 * 9] = {
       // clang-format off
-    5,3,0,6,7,8,9,1,2,
+    5,3,0,6,7,0,0,0,0,
     6,7,2,1,9,5,0,4,8,
     1,9,8,3,4,2,5,6,7,
     8,5,9,7,6,1,4,2,3,
@@ -167,9 +166,10 @@ int main() {
     7,1,3,9,2,4,8,5,6,
     9,6,1,5,3,7,2,8,4,
     2,8,7,4,1,9,6,3,5,
-    3,4,5,2,8,6,1,7,9,
+    0,0,0,0,8,0,0,7,9,
       // clang-format on
   };
+#endif
 
 #if 0
   const uint8_t final[9 * 9] = {
