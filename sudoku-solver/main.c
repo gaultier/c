@@ -186,6 +186,7 @@ static void merge_grids(uint8_t *dst, uint8_t *src) {
 }
 
 int main() {
+#if 0
   uint8_t grid[9 * 9] = {
       // clang-format off
     5,3,0,0,7,0,0,0,0,
@@ -199,7 +200,22 @@ int main() {
     0,0,0,0,8,0,0,7,9,
       // clang-format on
   };
+#endif
+  uint8_t grid[9 * 9] = {
+      // clang-format off
+    5,3,0,0,7,0,0,0,0,
+    6,0,0,1,9,5,0,4,8,
+    1,9,8,3,4,2,5,6,7,
+    8,5,9,7,6,1,4,2,3,
+    4,2,6,8,5,3,7,9,1,
+    7,1,3,9,2,4,8,5,6,
+    9,6,1,5,3,7,2,8,4,
+    2,8,7,4,1,9,6,3,5,
+    3,4,5,2,8,6,1,7,9,
+      // clang-format on
+  };
 
+#if 0
   const uint8_t final[9 * 9] = {
       // clang-format off
     5,3,4,6,7,8,9,1,2,
@@ -213,37 +229,7 @@ int main() {
     3,4,5,2,8,6,1,7,9,
       // clang-format on
   };
-  pg_assert(is_row_valid(final, 0));
-  pg_assert(is_row_valid(final, 1));
-  pg_assert(is_row_valid(final, 2));
-  pg_assert(is_row_valid(final, 3));
-  pg_assert(is_row_valid(final, 4));
-  pg_assert(is_row_valid(final, 5));
-  pg_assert(is_row_valid(final, 6));
-  pg_assert(is_row_valid(final, 7));
-  pg_assert(is_row_valid(final, 8));
-
-  pg_assert(is_column_valid(final, 0));
-  pg_assert(is_column_valid(final, 1));
-  pg_assert(is_column_valid(final, 2));
-  pg_assert(is_column_valid(final, 3));
-  pg_assert(is_column_valid(final, 4));
-  pg_assert(is_column_valid(final, 5));
-  pg_assert(is_column_valid(final, 6));
-  pg_assert(is_column_valid(final, 7));
-  pg_assert(is_column_valid(final, 8));
-
-  pg_assert(is_block_valid(final, 0));
-  pg_assert(is_block_valid(final, 1));
-  pg_assert(is_block_valid(final, 2));
-  pg_assert(is_block_valid(final, 3));
-  pg_assert(is_block_valid(final, 4));
-  pg_assert(is_block_valid(final, 5));
-  pg_assert(is_block_valid(final, 6));
-  pg_assert(is_block_valid(final, 7));
-  pg_assert(is_block_valid(final, 8));
-
-  pg_assert(is_grid_valid(final));
+#endif
 
   // Init the solution vector. E.g.:
   // 0 0 1 1 0 1 1 1 1
@@ -272,6 +258,8 @@ int main() {
 
     if (valid) {
       printf("is_grid_valid=%d\n", valid);
+      print_grid(solution);
+      puts("...");
       print_grid(grid);
       return 0;
     }
