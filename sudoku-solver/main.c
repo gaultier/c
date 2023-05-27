@@ -248,10 +248,7 @@ int main() {
   }
 
   for (;;) {
-    /* print_grid(solution); */
     increment_solution_vector(solution, PG_ARRAY_SIZE(solution));
-    /* puts("--------------"); */
-
     merge_grids(grid, solution);
 
     const bool valid = is_grid_valid(grid);
@@ -263,8 +260,5 @@ int main() {
       print_grid(grid);
       return 0;
     }
-
-    /* puts("=============="); */
-    /* puts(""); */
   }
 }
