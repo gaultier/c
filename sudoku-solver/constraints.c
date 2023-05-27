@@ -171,7 +171,7 @@ int main() {
   };
 #endif
 
-#if 0
+#if 1
   const uint8_t final[9 * 9] = {
       // clang-format off
     5,3,4,6,7,8,9,1,2,
@@ -185,6 +185,34 @@ int main() {
     3,4,5,2,8,6,1,7,9,
       // clang-format on
   };
+  pg_assert(is_row_valid(final, 0) == VALIDITY_VALID);
+  pg_assert(is_row_valid(final, 1) == VALIDITY_VALID);
+  pg_assert(is_row_valid(final, 2) == VALIDITY_VALID);
+  pg_assert(is_row_valid(final, 3) == VALIDITY_VALID);
+  pg_assert(is_row_valid(final, 4) == VALIDITY_VALID);
+  pg_assert(is_row_valid(final, 5) == VALIDITY_VALID);
+  pg_assert(is_row_valid(final, 6) == VALIDITY_VALID);
+  pg_assert(is_row_valid(final, 7) == VALIDITY_VALID);
+  pg_assert(is_row_valid(final, 8) == VALIDITY_VALID);
+  pg_assert(is_column_valid(final, 0) == VALIDITY_VALID);
+  pg_assert(is_column_valid(final, 1) == VALIDITY_VALID);
+  pg_assert(is_column_valid(final, 2) == VALIDITY_VALID);
+  pg_assert(is_column_valid(final, 3) == VALIDITY_VALID);
+  pg_assert(is_column_valid(final, 4) == VALIDITY_VALID);
+  pg_assert(is_column_valid(final, 5) == VALIDITY_VALID);
+  pg_assert(is_column_valid(final, 6) == VALIDITY_VALID);
+  pg_assert(is_column_valid(final, 7) == VALIDITY_VALID);
+  pg_assert(is_column_valid(final, 8) == VALIDITY_VALID);
+  pg_assert(is_block_valid(final, 0) == VALIDITY_VALID);
+  pg_assert(is_block_valid(final, 1) == VALIDITY_VALID);
+  pg_assert(is_block_valid(final, 2) == VALIDITY_VALID);
+  pg_assert(is_block_valid(final, 3) == VALIDITY_VALID);
+  pg_assert(is_block_valid(final, 4) == VALIDITY_VALID);
+  pg_assert(is_block_valid(final, 5) == VALIDITY_VALID);
+  pg_assert(is_block_valid(final, 6) == VALIDITY_VALID);
+  pg_assert(is_block_valid(final, 7) == VALIDITY_VALID);
+  pg_assert(is_block_valid(final, 8) == VALIDITY_VALID);
+  pg_assert(is_grid_valid(final) == VALIDITY_VALID);
 #endif
 
   for (uint8_t i = 0; i < 9 * 9; i++) {
@@ -203,6 +231,7 @@ int main() {
     const uint8_t block = row / 3 * 3 + column / 3;
     pg_assert(block < 9);
 
+    uint8_t possibilities_count_for_cell = 0;
     for (uint8_t j = 1; j <= 9; j++) {
       grid[i] = j;
       if (is_row_valid(grid, row) & VALIDITY_INVALID)
@@ -214,9 +243,16 @@ int main() {
 
       pg_assert((uint64_t)i * 9 + (uint64_t)j < 9 * 9 * 9);
       possibilities[(uint64_t)i * 9 + (uint64_t)j] = j;
+      possibilities_count_for_cell += 1;
     }
-    // Restore value.
-    grid[i] = value;
+
+    pg_assert(possibilities_count_for_cell >= 1);
+    pg_assert(possibilities_count_for_cell <= 9);
+
+    if (possibilities_count_for_cell > 1) {
+      // Restore value.
+      grid[i] = value;
+    }
   }
 
   for (uint8_t i = 0; i < 9 * 9; i++) {
