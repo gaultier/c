@@ -61,7 +61,7 @@ static validity_t is_block_valid(const uint8_t *grid, uint8_t block) {
   uint8_t seen[10] = {0};
   for (uint8_t i = 0; i < 3; i++) {
     for (uint8_t j = 0; j < 3; j++) {
-      const uint8_t block_position = (start_i * 9 + i) + (start_j + j);
+      const uint8_t block_position = (start_i * 9 + i * 3) + (start_j + j);
       pg_assert(block_position < 9 * 9);
       const uint8_t value = grid[block_position];
       pg_assert(value <= 9);
@@ -159,8 +159,8 @@ int main() {
 #endif
   uint8_t grid[9 * 9] = {
       // clang-format off
-    5,3,0,0,7,0,0,0,0,
-    6,0,0,1,9,5,0,4,8,
+    5,3,0,6,7,8,9,1,2,
+    6,7,2,1,9,5,0,4,8,
     1,9,8,3,4,2,5,6,7,
     8,5,9,7,6,1,4,2,3,
     4,2,6,8,5,3,7,9,1,
@@ -205,7 +205,11 @@ int main() {
 
     for (uint8_t j = 1; j <= 9; j++) {
       grid[i] = j;
-      if (is_grid_valid(grid) & VALIDITY_INVALID)
+      if (is_row_valid(grid, row) & VALIDITY_INVALID)
+        continue;
+      if (is_column_valid(grid, column) & VALIDITY_INVALID)
+        continue;
+      if (is_block_valid(grid, block) & VALIDITY_INVALID)
         continue;
 
       pg_assert((uint64_t)i * 9 + (uint64_t)j < 9 * 9 * 9);
