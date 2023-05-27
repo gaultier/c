@@ -232,6 +232,7 @@ int main() {
     pg_assert(block < 9);
 
     uint8_t possibilities_count_for_cell = 0;
+    uint8_t last_valid_value_for_cell = 0;
     for (uint8_t j = 1; j <= 9; j++) {
       grid[i] = j;
       if (is_row_valid(grid, row) & VALIDITY_INVALID)
@@ -244,6 +245,7 @@ int main() {
       pg_assert((uint64_t)i * 9 + (uint64_t)j < 9 * 9 * 9);
       possibilities[(uint64_t)i * 9 + (uint64_t)j] = j;
       possibilities_count_for_cell += 1;
+      last_valid_value_for_cell = j;
     }
 
     pg_assert(possibilities_count_for_cell >= 1);
@@ -252,8 +254,16 @@ int main() {
     if (possibilities_count_for_cell > 1) {
       // Restore value.
       grid[i] = value;
+    } else {
+      pg_assert(last_valid_value_for_cell > 0);
+      pg_assert(last_valid_value_for_cell <= 9);
+      grid[i] = last_valid_value_for_cell;
     }
   }
+
+
+
+  print_grid(grid);
 
   for (uint8_t i = 0; i < 9 * 9; i++) {
     printf("[%d]: ", i);
@@ -264,8 +274,6 @@ int main() {
       if (value == 0)
         continue;
       printf("%d ", j);
-
-      pg_assert(grid[i] == 0);
     }
     puts("");
   }
