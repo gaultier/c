@@ -190,6 +190,7 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
       continue;
     }
 
+    // Explore children in the tree of possible values.
     grid_solve(work_grid, possibilities, position + 1);
   }
 }
