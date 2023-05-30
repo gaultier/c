@@ -178,10 +178,12 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
 
     // Set values in a scratch grid stored on the stack so that reverting is a
     // no-op.
+    // The scratch grid is the same as the grid passed as argument with one
+    // change: the cell at position `position` is set to `value`.
     uint8_t work_grid[9 * 9] = {0};
     __builtin_memcpy(work_grid, grid, 9 * 9);
-
     work_grid[position] = value;
+
     if ((compute_row_validity(work_grid, row) & VALIDITY_INVALID) ||
         (compute_column_validity(work_grid, column) & VALIDITY_INVALID) ||
         (compute_block_validity(work_grid, block) & VALIDITY_INVALID)) {
