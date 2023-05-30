@@ -153,6 +153,8 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
 
   const uint8_t original_value = grid[position];
   pg_assert(original_value <= 9);
+
+  // Nothing to try, skip and go to next cell.
   if (original_value != 0) {
     grid_solve(grid, possibilities, position + 1);
     return;
