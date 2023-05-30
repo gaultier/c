@@ -122,7 +122,7 @@ static void print_grid(const uint8_t *grid) {
 }
 
 static validity_t compute_grid_validity(const uint8_t *grid) {
-  validity_t validity = 0;
+  validity_t validity = VALIDITY_UNKNOWN;
   for (uint8_t r = 0; r < 9; r++) {
     validity |= compute_row_validity(grid, r);
   }
