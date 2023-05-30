@@ -3,26 +3,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-// Algorithm:
-// Solve(cell, possibility):
-//  if cell == last cell + 1:
-//    assert(possibility==0)
-//    assert(grid is valid)
-//    print(grid)
-//    exit
-//
-//  if possibility == last possibility+1:
-//    solve(cell + 1, 0)
-//    return
-//
-//  scratch_grid[cell]=possibility
-//
-//  if row is invalid or column is invalid or block is invalid:
-//    revert -- ?
-//    return
-//  else
-//    solve(cell+1, possibility)
-
 #define pg_assert(condition)                                                   \
   do {                                                                         \
     if (!(condition))                                                          \
@@ -36,7 +16,7 @@ typedef enum {
   VALIDITY_INCOMPLETE = 4
 } validity_t;
 
-static validity_t is_row_valid(const uint8_t *grid, uint8_t row) {
+static validity_t compute_row_validity(const uint8_t *grid, uint8_t row) {
   pg_assert(grid != 0);
   pg_assert(row < 9);
 
@@ -65,7 +45,7 @@ static validity_t is_row_valid(const uint8_t *grid, uint8_t row) {
   return VALIDITY_VALID;
 }
 
-static validity_t is_block_valid(const uint8_t *grid, uint8_t block) {
+static validity_t compute_block_validity(const uint8_t *grid, uint8_t block) {
   pg_assert(grid != 0);
   pg_assert(block < 9);
 
@@ -102,7 +82,7 @@ static validity_t is_block_valid(const uint8_t *grid, uint8_t block) {
   return VALIDITY_VALID;
 }
 
-static validity_t is_column_valid(const uint8_t *grid, uint8_t column) {
+static validity_t compute_column_validity(const uint8_t *grid, uint8_t column) {
   pg_assert(grid != 0);
   pg_assert(column < 9);
 
@@ -141,17 +121,17 @@ static void print_grid(const uint8_t *grid) {
   }
 }
 
-static validity_t is_grid_valid(const uint8_t *grid) {
+static validity_t compute_grid_validity(const uint8_t *grid) {
   validity_t validity = 0;
   for (uint8_t r = 0; r < 9; r++) {
-    validity |= is_row_valid(grid, r);
+    validity |= compute_row_validity(grid, r);
   }
   for (uint8_t c = 0; c < 9; c++) {
-    validity |= is_column_valid(grid, c);
+    validity |= compute_column_validity(grid, c);
   }
 
   for (uint8_t b = 0; b < 9; b++) {
-    validity |= is_block_valid(grid, b);
+    validity |= compute_block_validity(grid, b);
   }
 
   return validity;
@@ -166,9 +146,9 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
   if (position == 9 * 9) {
     puts("-------");
     printf("grid_solve end: position=%d valid=%d\n", position,
-           is_grid_valid(grid));
+           compute_grid_validity(grid));
     print_grid(grid);
-    pg_assert(is_grid_valid(grid) == VALIDITY_VALID);
+    pg_assert(compute_grid_validity(grid) == VALIDITY_VALID);
     puts("-------");
     return;
   }
@@ -203,9 +183,9 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
     }
 
     work_grid[position] = value;
-    if ((is_row_valid(work_grid, row) & VALIDITY_INVALID) ||
-        (is_column_valid(work_grid, column) & VALIDITY_INVALID) ||
-        (is_block_valid(work_grid, block) & VALIDITY_INVALID)) {
+    if ((compute_row_validity(work_grid, row) & VALIDITY_INVALID) ||
+        (compute_column_validity(work_grid, column) & VALIDITY_INVALID) ||
+        (compute_block_validity(work_grid, block) & VALIDITY_INVALID)) {
       printf("[D001] position=%d possibility=%d INVALID\n", position,
              possibility);
       continue;
@@ -294,11 +274,11 @@ int main() {
     uint8_t last_valid_value_for_cell = 0;
     for (uint8_t j = 1; j <= 9; j++) {
       grid[i] = j;
-      if (is_row_valid(grid, row) & VALIDITY_INVALID)
+      if (compute_row_validity(grid, row) & VALIDITY_INVALID)
         continue;
-      if (is_column_valid(grid, column) & VALIDITY_INVALID)
+      if (compute_column_validity(grid, column) & VALIDITY_INVALID)
         continue;
-      if (is_block_valid(grid, block) & VALIDITY_INVALID)
+      if (compute_block_validity(grid, block) & VALIDITY_INVALID)
         continue;
 
       pg_assert((uint64_t)i * 9 + (uint64_t)j < 9 * 9 * 10);
