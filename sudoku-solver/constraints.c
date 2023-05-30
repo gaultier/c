@@ -145,8 +145,6 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
 
   if (position == 9 * 9) {
     puts("-------");
-    printf("grid_solve end: position=%d valid=%d\n", position,
-           compute_grid_validity(grid));
     print_grid(grid);
     pg_assert(compute_grid_validity(grid) == VALIDITY_VALID);
     puts("-------");
@@ -170,10 +168,6 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
   pg_assert(block < 9);
 
   for (uint8_t possibility = 1; possibility <= 9; possibility++) {
-    printf("[D001] position=%d possibility=%d\n", position, possibility);
-
-    uint8_t work_grid[9 * 9] = {0};
-    __builtin_memcpy(work_grid, grid, 9 * 9);
     pg_assert((uint64_t)position * 9 + (uint64_t)possibility < 9 * 9 * 10);
     const uint8_t value =
         possibilities[(uint64_t)position * 9 + (uint64_t)possibility];
@@ -182,14 +176,20 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
       continue;
     }
 
+    // Set values in a scratch grid stored on the stack so that reverting is a
+    // no-op.
+    uint8_t work_grid[9 * 9] = {0};
+    __builtin_memcpy(work_grid, grid, 9 * 9);
+
     work_grid[position] = value;
     if ((compute_row_validity(work_grid, row) & VALIDITY_INVALID) ||
         (compute_column_validity(work_grid, column) & VALIDITY_INVALID) ||
         (compute_block_validity(work_grid, block) & VALIDITY_INVALID)) {
-      printf("[D001] position=%d possibility=%d INVALID\n", position,
-             possibility);
+      // Do not explore (i.e. recurse) the children in the tree of possible
+      // values, this is a dead-end.
       continue;
     }
+
     grid_solve(work_grid, possibilities, position + 1);
   }
 }
@@ -226,6 +226,7 @@ int main() {
   };
 #endif
 
+  // First pass: for each cell, compute the list of possible values.
   for (uint8_t i = 0; i < 9 * 9; i++) {
     const uint8_t value = grid[i];
     pg_assert(value <= 9);
@@ -275,21 +276,6 @@ int main() {
 
   print_grid(grid);
 
-  for (uint8_t i = 0; i < 9 * 9; i++) {
-    printf("[%d]: ", i);
-
-    for (uint8_t j = 1; j <= 9; j++) {
-      pg_assert((uint64_t)i * 9 + (uint64_t)j < 9 * 9 * 10);
-
-      const uint8_t value = possibilities[(uint64_t)i * 9 + (uint64_t)j];
-      pg_assert(value <= 9);
-      if (value == 0)
-        continue;
-
-      printf("%d ", j);
-    }
-    puts("");
-  }
-
+  // Second pass: solve using backtracking.
   grid_solve(grid, possibilities, 0);
 }
