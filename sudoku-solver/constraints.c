@@ -265,7 +265,8 @@ int main() {
     if (possibilities_count_for_cell > 1) {
       // Restore value.
       grid[i] = value;
-    } else {
+    } else { // Optimization: if there is only one possibility for a cell, set
+             // it right away in the grid.
       pg_assert(last_valid_value_for_cell > 0);
       pg_assert(last_valid_value_for_cell <= 9);
       grid[i] = last_valid_value_for_cell;
