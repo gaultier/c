@@ -144,10 +144,9 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
   pg_assert(position <= 9 * 9);
 
   if (position == 9 * 9) {
-    puts("-------");
+    puts("");
     print_grid(grid);
     pg_assert(compute_grid_validity(grid) == VALIDITY_VALID);
-    puts("-------");
     exit(0);
   }
 
