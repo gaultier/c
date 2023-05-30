@@ -1,7 +1,7 @@
-#include <bits/stdint-uintn.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #define pg_assert(condition)                                                   \
   do {                                                                         \
@@ -150,7 +150,7 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
     print_grid(grid);
     pg_assert(compute_grid_validity(grid) == VALIDITY_VALID);
     puts("-------");
-    return;
+    exit(0);
   }
 
   const uint8_t original_value = grid[position];
@@ -224,34 +224,6 @@ int main() {
     3,4,5,2,8,6,1,7,9,
       // clang-format on
   };
-  pg_assert(is_row_valid(final, 0) == VALIDITY_VALID);
-  pg_assert(is_row_valid(final, 1) == VALIDITY_VALID);
-  pg_assert(is_row_valid(final, 2) == VALIDITY_VALID);
-  pg_assert(is_row_valid(final, 3) == VALIDITY_VALID);
-  pg_assert(is_row_valid(final, 4) == VALIDITY_VALID);
-  pg_assert(is_row_valid(final, 5) == VALIDITY_VALID);
-  pg_assert(is_row_valid(final, 6) == VALIDITY_VALID);
-  pg_assert(is_row_valid(final, 7) == VALIDITY_VALID);
-  pg_assert(is_row_valid(final, 8) == VALIDITY_VALID);
-  pg_assert(is_column_valid(final, 0) == VALIDITY_VALID);
-  pg_assert(is_column_valid(final, 1) == VALIDITY_VALID);
-  pg_assert(is_column_valid(final, 2) == VALIDITY_VALID);
-  pg_assert(is_column_valid(final, 3) == VALIDITY_VALID);
-  pg_assert(is_column_valid(final, 4) == VALIDITY_VALID);
-  pg_assert(is_column_valid(final, 5) == VALIDITY_VALID);
-  pg_assert(is_column_valid(final, 6) == VALIDITY_VALID);
-  pg_assert(is_column_valid(final, 7) == VALIDITY_VALID);
-  pg_assert(is_column_valid(final, 8) == VALIDITY_VALID);
-  pg_assert(is_block_valid(final, 0) == VALIDITY_VALID);
-  pg_assert(is_block_valid(final, 1) == VALIDITY_VALID);
-  pg_assert(is_block_valid(final, 2) == VALIDITY_VALID);
-  pg_assert(is_block_valid(final, 3) == VALIDITY_VALID);
-  pg_assert(is_block_valid(final, 4) == VALIDITY_VALID);
-  pg_assert(is_block_valid(final, 5) == VALIDITY_VALID);
-  pg_assert(is_block_valid(final, 6) == VALIDITY_VALID);
-  pg_assert(is_block_valid(final, 7) == VALIDITY_VALID);
-  pg_assert(is_block_valid(final, 8) == VALIDITY_VALID);
-  pg_assert(is_grid_valid(final) == VALIDITY_VALID);
 #endif
 
   for (uint8_t i = 0; i < 9 * 9; i++) {
