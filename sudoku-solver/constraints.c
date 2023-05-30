@@ -139,7 +139,78 @@ static validity_t is_grid_valid(const uint8_t *grid) {
   return validity;
 }
 
-static uint8_t possibilities[9 * 9 * 9] = {0};
+static void grid_solve(const uint8_t *grid, uint8_t *possibilities,
+                       uint8_t position, uint8_t *work_grid) {
+  pg_assert(grid != 0);
+  pg_assert(possibilities != 0);
+  pg_assert(work_grid != 0);
+
+  if (position == 9 * 9)
+    return;
+
+  puts("-------");
+  printf("grid_solve: position=%d valid=%d\n", position,
+         is_grid_valid(work_grid));
+  print_grid(work_grid);
+  puts("-------");
+
+  pg_assert(position < 9 * 9);
+
+  const uint8_t original_value = grid[position];
+  pg_assert(original_value <= 9);
+  if (original_value != 0) {
+    grid_solve(grid, possibilities, position + 1, work_grid);
+    return;
+  }
+
+  const uint8_t row = position / 9;
+  pg_assert(row < 9);
+
+  const uint8_t column = position % 9;
+  pg_assert(column < 9);
+
+  const uint8_t block = row / 3 * 3 + column / 3;
+  pg_assert(block < 9);
+
+  uint8_t work_grid_copy[9 * 9] = {0};
+  __builtin_memcpy(work_grid_copy, work_grid, 9 * 9);
+
+  for (uint8_t j = 1; j <= 9; j++) {
+    pg_assert((uint64_t)position * 9 + (uint64_t)j < 9 * 9 * 10);
+    const uint8_t value = possibilities[(uint64_t)position * 9 + (uint64_t)j];
+    pg_assert(value <= 9);
+    if (value == 0) {
+      continue;
+    }
+
+    pg_assert(grid[position] == 0);
+    work_grid_copy[position] = value;
+    if ((is_row_valid(work_grid_copy, row) & VALIDITY_INVALID) ||
+        (is_column_valid(work_grid_copy, column) & VALIDITY_INVALID) ||
+        (is_block_valid(work_grid_copy, block) & VALIDITY_INVALID)) {
+      __builtin_memcpy(work_grid_copy, work_grid, 9 * 9);
+      continue;
+    }
+
+    if ((is_row_valid(work_grid_copy, row) & VALIDITY_VALID) ||
+        (is_column_valid(work_grid_copy, column) & VALIDITY_VALID) ||
+        (is_block_valid(work_grid_copy, block) & VALIDITY_VALID)) {
+      work_grid[position] = value; // Commit.
+    }
+
+    grid_solve(grid, possibilities, position + 1, work_grid_copy);
+  }
+
+  if (position == 80) {
+    pg_assert(is_grid_valid(work_grid));
+    puts("!!!!");
+    print_grid(work_grid);
+    puts("!!!!");
+    return;
+  }
+}
+
+static uint8_t possibilities[9 * 9 * 10] = {0};
 
 int main() {
   uint8_t grid[9 * 9] = {
@@ -242,7 +313,7 @@ int main() {
       if (is_block_valid(grid, block) & VALIDITY_INVALID)
         continue;
 
-      pg_assert((uint64_t)i * 9 + (uint64_t)j < 9 * 9 * 9);
+      pg_assert((uint64_t)i * 9 + (uint64_t)j < 9 * 9 * 10);
       possibilities[(uint64_t)i * 9 + (uint64_t)j] = j;
       possibilities_count_for_cell += 1;
       last_valid_value_for_cell = j;
@@ -261,20 +332,29 @@ int main() {
     }
   }
 
-
-
   print_grid(grid);
 
   for (uint8_t i = 0; i < 9 * 9; i++) {
     printf("[%d]: ", i);
 
     for (uint8_t j = 1; j <= 9; j++) {
+      pg_assert((uint64_t)i * 9 + (uint64_t)j < 9 * 9 * 10);
+
       const uint8_t value = possibilities[(uint64_t)i * 9 + (uint64_t)j];
       pg_assert(value <= 9);
       if (value == 0)
         continue;
+
       printf("%d ", j);
     }
     puts("");
   }
+
+  uint8_t work_grid[9 * 9] = {0};
+  __builtin_memcpy(work_grid, grid, 9 * 9);
+  grid_solve(grid, possibilities, 0, work_grid);
+
+  print_grid(grid);
+  puts("");
+  print_grid(work_grid);
 }
