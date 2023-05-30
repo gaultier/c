@@ -198,6 +198,18 @@ static void grid_solve(const uint8_t *grid, const uint8_t *possibilities,
   }
 }
 
+static void read_grid_from_bytes(uint8_t *grid, const uint8_t *input) {
+  pg_assert(grid != 0);
+  pg_assert(input != 0);
+
+  for (uint8_t i = 0; i < 9 * 9; i++) {
+    const uint8_t value = input[i];
+    pg_assert(value == '.' || ('1' <= value && value <= '9'));
+
+    grid[i] = value == '.' ? 0 : value - '0';
+  }
+}
+
 int main() {
   uint8_t grid[9 * 9] = {
       // clang-format off
@@ -212,6 +224,10 @@ int main() {
     0,0,0,0,8,0,0,7,9,
       // clang-format on
   };
+
+  const uint8_t input[] = "4.....8.5.3..........7......2.....6.....8.4......1.."
+                          ".....6.3.7.5..2.....1.4......";
+  read_grid_from_bytes(grid, input);
   uint8_t possibilities[9 * 9 * 10] = {0};
 
 #if 0
