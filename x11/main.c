@@ -351,6 +351,41 @@ static void x11_create_pixmap(i32 fd, u32 window_id, u32 pixmap_id, u16 w,
   }
 }
 
+static void x11_put_image(i32 fd, u32 gc_id, u8 *image_data,
+                          u32 image_data_byte_count, u16 w, u16 h, u16 x, u16 y,
+                          u32 pixmap_id) {
+  pg_assert(image_data != NULL);
+
+  const u8 X11_OP_REQ_PUT_IMAGE = 72;
+  const u8 X11_PUT_IMAGE_FORMAT_ZPIXMAP = 2;
+  const u8 depth = 24; // RGB
+  const u8 left_pad = 0;
+
+  // Shortcut. Sue me!
+  pg_assert(w == 34);
+  pg_assert(h == 34);
+  pg_assert(image_data_byte_count == w * h * depth);
+  const u8 padding = 0;
+  const u32 packet_length = 6 + (image_data_byte_count + padding) / 4;
+
+  u32 packet[2048] = {
+      [0] = X11_OP_REQ_PUT_IMAGE | (X11_PUT_IMAGE_FORMAT_ZPIXMAP << 8),
+      [1] = pixmap_id,
+      [2] = gc_id,
+      [3] = x | (y << 16),
+      [4] = w | (h << 16),
+      [5] = left_pad | (depth << 8),
+  };
+  pg_assert(sizeof(packet) >= packet_length);
+  __builtin_memcpy(packet + 6, image_data, image_data_byte_count);
+
+
+  const i64 res = write(fd, (const void *)packet, sizeof(packet));
+  if (res != sizeof(packet)) {
+    exit(1);
+  }
+}
+
 i32 main() {
   i32 x11_socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (x11_socket_fd < 0) {
@@ -400,9 +435,9 @@ i32 main() {
     pg_assert(read_byte_count >= 32);
 
     switch (read_buffer[0]) {
-      case 0: 
-        eprint("X11 server error");
-        exit(1);
+    case 0:
+      eprint("X11 server error");
+      exit(1);
     case X11_EVENT_EXPOSURE:
       x11_draw_text(x11_socket_fd, window_id, gc_id, (const u8 *)"Hello world!",
                     12, 50, 50);
