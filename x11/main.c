@@ -1,3 +1,6 @@
+// GC components: function, plane-mask, subwindow-mode, clip-x-origin,
+// clip-y-origin, clip-mask
+// GC mode-dependent components: foreground, background
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -13,7 +16,7 @@
 #define u8 uint8_t
 #define i8 int8_t
 
-#include "crate_rgba.h"
+#include "crate_rgb.h"
 
 // Taken from libX11
 #define ROUNDUP(nbytes, pad) (((nbytes) + ((pad)-1)) & ~(long)((pad)-1))
@@ -36,17 +39,15 @@
 
 #define X11_FLAG_GC_FUNC 0x00000001
 #define X11_FLAG_GC_PLANE 0x00000002
-#define X11_FLAG_GC_BG 0x00000004
-#define X11_FLAG_GC_FG 0x00000008
+#define X11_FLAG_GC_FG 0x00000004
+#define X11_FLAG_GC_BG 0x00000008
 #define X11_FLAG_GC_LINE_WIDTH 0x00000010
 #define X11_FLAG_GC_LINE_STYLE 0x00000020
 #define X11_FLAG_GC_FONT 0x00004000
 #define X11_FLAG_GC_EXPOSE 0x00010000
 
-#define X11_FLAG_WIN_BG_IMG 0x00000001
-#define X11_FLAG_WIN_BG_COLOR 0x00000002
-#define X11_FLAG_WIN_BORDER_IMG 0x00000004
-#define X11_FLAG_WIN_BORDER_COLOR 0x00000008
+#define X11_FLAG_WIN_BG_PIXMAP 0x00000001
+#define X11_FLAG_WIN_BG_PIXEL 0x00000002
 #define X11_FLAG_WIN_EVENT 0x00000800
 
 #define X11_EVENT_FLAG_KEY_RELEASE 0x0002
@@ -267,14 +268,14 @@ static u32 x11_generate_id(x11_connection_t const *conn) {
   return ((conn->setup->id_mask & id++) | conn->setup->id_base);
 }
 
-static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id, u32 font_id) {
+static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id) {
   pg_assert(fd > 0);
   pg_assert(gc_id > 0);
   pg_assert(root_id > 0);
 
-  const u32 flags = X11_FLAG_GC_BG | X11_FLAG_GC_FG | X11_FLAG_GC_FONT;
+  const u32 flags = X11_FLAG_GC_BG;
 
-#define CREATE_GC_FLAG_COUNT 3
+#define CREATE_GC_FLAG_COUNT 1
 #define CREATE_GC_PACKET_U32_COUNT (4 + CREATE_GC_FLAG_COUNT)
 
   const u32 packet[CREATE_GC_PACKET_U32_COUNT] = {
@@ -282,9 +283,7 @@ static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id, u32 font_id) {
       [1] = gc_id,
       [2] = root_id,
       [3] = flags,
-      [4] = MY_COLOR_ARGB,
-      [5] = 0,
-      [6] = font_id,
+      [4] = 0x0000ff00,
   };
 
   const i64 res = write(fd, (const void *)packet, sizeof(packet));
@@ -298,7 +297,7 @@ static void x11_create_gc(i32 fd, u32 gc_id, u32 root_id, u32 font_id) {
 static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
                               u16 w, u16 h, u32 root_visual_id) {
 
-  const u32 flags = X11_FLAG_WIN_BG_COLOR | X11_FLAG_WIN_EVENT;
+  const u32 flags = X11_FLAG_WIN_BG_PIXEL | X11_FLAG_WIN_EVENT;
 #define CREATE_WINDOW_FLAG_COUNT 2
 #define CREATE_WINDOW_PACKET_U32_COUNT (8 + CREATE_WINDOW_FLAG_COUNT)
 
@@ -313,7 +312,7 @@ static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
       [5] = group | (border << 16),
       [6] = root_visual_id,
       [7] = flags,
-      [8] = 0,
+[8] = 0x00ffff00,
       [9] = X11_EVENT_FLAG_KEY_RELEASE | X11_EVENT_FLAG_EXPOSURE,
   };
 
@@ -339,7 +338,7 @@ static void x11_map_window(i32 fd, u32 window_id) {
 static void x11_create_pixmap(i32 fd, u32 window_id, u32 pixmap_id, u16 w,
                               u16 h) {
   const u8 X11_OP_REQ_CREATE_PIXMAP = 53;
-  const u8 depth = 32; // RGBA
+  const u8 depth = 24; // RGBA
   const u8 packet_length = 4;
   const u32 packet[4] = {
       [0] = X11_OP_REQ_CREATE_PIXMAP | (depth << 8) | (packet_length << 16),
@@ -361,7 +360,7 @@ static void x11_put_image(i32 fd, u32 gc_id, u8 *image_data,
 
   const u8 X11_OP_REQ_PUT_IMAGE = 72;
   const u8 X11_PUT_IMAGE_FORMAT_ZPIXMAP = 2;
-  const u8 depth = 32; // RGBA
+  const u8 depth = 24; // RGBA
   const u8 left_pad = 0;
 
   // Shortcut. Sue me!
@@ -377,12 +376,34 @@ static void x11_put_image(i32 fd, u32 gc_id, u8 *image_data,
             (packet_length << 16),
       [1] = pixmap_id,
       [2] = gc_id,
-      [3] = x | (y << 16),
-      [4] = w | (h << 16),
+      [3] = w | (h << 16),
+      [4] = x | (y << 16),
       [5] = left_pad | (depth << 8),
   };
   pg_assert(sizeof(packet) >= packet_length);
   __builtin_memcpy(packet + 6, image_data, image_data_byte_count);
+
+  const i64 res = write(fd, (const void *)packet, packet_length);
+  if (res != packet_length) {
+    exit(1);
+  }
+}
+
+static void x11_copy_area(i32 fd, u32 gc_id, u32 dst_id, u32 src_id, u16 src_x,
+                          u16 src_y, u16 w, u16 h, u16 dst_x, u16 dst_y) {
+  const u8 X11_OP_REQ_COPY_AREA = 62;
+  const u8 packet_length = 28;
+  const u8 request_length = 7;
+
+  const u32 packet[28] = {
+      [0] = X11_OP_REQ_COPY_AREA | (request_length << 16),
+      [1] = src_id,
+      [2] = dst_id,
+      [3] = gc_id,
+      [4] = src_x | (src_y << 16),
+      [5] = dst_x | (dst_y << 16),
+      [6] = w | (h << 16),
+  };
 
   const i64 res = write(fd, (const void *)packet, packet_length);
   if (res != packet_length) {
@@ -412,11 +433,11 @@ i32 main() {
   x11_handshake(x11_socket_fd, &connection, read_buffer, sizeof(read_buffer));
 
   const u32 gc_id = x11_generate_id(&connection);
-  const u32 font_id = x11_generate_id(&connection);
+  /* const u32 font_id = x11_generate_id(&connection); */
 
-  x11_open_font(x11_socket_fd, font_id);
-
-  x11_create_gc(x11_socket_fd, gc_id, connection.root->id, font_id);
+  // x11_open_font(x11_socket_fd, font_id);
+  //
+  x11_create_gc(x11_socket_fd, gc_id, connection.root->id);
 
   const u32 window_id = x11_generate_id(&connection);
   pg_assert(window_id > 0);
@@ -427,10 +448,11 @@ i32 main() {
 
   x11_map_window(x11_socket_fd, window_id);
 
-  const u32 pixmap_id = x11_generate_id(&connection);
-  x11_create_pixmap(x11_socket_fd, window_id, pixmap_id, 34, 34);
-  x11_put_image(x11_socket_fd, gc_id, crate_rgba, crate_rgba_len, 34, 34, 0, 0,
-                pixmap_id);
+  // const u32 pixmap_id = x11_generate_id(&connection);
+  // x11_create_pixmap(x11_socket_fd, window_id, pixmap_id, 34, 34);
+  //  x11_put_image(x11_socket_fd, gc_id, crate_rgb, crate_rgb_len, 34, 34, 0,
+  //  0,
+  //               pixmap_id);
 
   for (;;) {
     u8 read_buffer[1024] = {0};
@@ -445,9 +467,14 @@ i32 main() {
       eprint("X11 server error");
       exit(1);
     case X11_EVENT_EXPOSURE:
-      /* x11_draw_text(x11_socket_fd, window_id, gc_id, (const u8 *)"Hello
-       * world!", */
-      /*               12, 50, 50); */
+      //     x11_draw_text(x11_socket_fd, window_id, gc_id,
+      //                   (const u8 *)"Hello world !", 12, 50, 50);
+      //    x11_copy_area(x11_socket_fd, gc_id, window_id, pixmap_id, 0, 0, 34,
+      //    34,
+      //                  100, 100);
+      //    x11_put_image(x11_socket_fd, gc_id, crate_rgb, crate_rgb_len, 34,
+      //    34, 0,
+      //                  0, window_id);
       break;
     case X11_EVENT_KEY_RELEASE: {
       /* const u8 keycode = read_buffer[1]; */
