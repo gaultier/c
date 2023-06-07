@@ -1,11 +1,7 @@
-#include <fcntl.h>
-#include <poll.h>
-#include <pty.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
@@ -19,6 +15,9 @@
 #define i16 int16_t
 #define u8 uint8_t
 #define i8 int8_t
+
+// Taken from libX11
+#define ROUNDUP(nbytes, pad) (((nbytes) + ((pad)-1)) & ~(long)((pad)-1))
 
 #define PG_ARRAY_SIZE(array) (sizeof(array) / sizeof((array)[0]))
 
@@ -57,16 +56,7 @@
 #define X11_EVENT_KEY_RELEASE 0x3
 #define X11_EVENT_EXPOSURE 0xc
 
-#define MY_COLOR_ARGB 0x00ffffff
-
-// TODO: Use X11's GetKeyboardMapping instead?
-static const char keycode_to_keysym[255] = {
-    [24] = 'q', [25] = 'w', [26] = 'e', [27] = 'r', [28] = 't',
-    [29] = 'y', [30] = 'u', [31] = 'i', [32] = 'o', [33] = 'p',
-    [38] = 'a', [39] = 's', [40] = 'd', [41] = 'f', [42] = 'g',
-    [43] = 'h', [44] = 'j', [45] = 'k', [46] = 'l', [52] = 'z',
-    [53] = 'x', [54] = 'c', [55] = 'v', [56] = 'b', [58] = 'm',
-};
+#define MY_COLOR_ARGB 0x00ff00ff
 
 typedef struct {
   u8 order;
@@ -207,17 +197,6 @@ static void arena_reset_at(arena_t *arena, u64 offset) {
   arena->current_offset = offset;
 }
 
-static void set_fd_non_blocking(i32 fd) {
-  i64 res = fcntl(fd, F_GETFL, 0);
-  if (res < 0) {
-    exit((i32)-res);
-  }
-
-  res = fcntl(fd, F_SETFL, (i32)((u64)res | (u64)O_NONBLOCK));
-  if (res != 0) {
-    exit((i32)-res);
-  }
-}
 
 typedef enum {
   TK_NONE,
@@ -235,106 +214,6 @@ typedef struct {
   token_kind_t kind;
 } token_t;
 
-static void parse_input(const u8 *s, u64 s_byte_count, token_t *tokens,
-                        u64 *tokens_count) {
-  pg_assert(s != NULL);
-  pg_assert(tokens != NULL);
-  pg_assert(tokens_count != NULL);
-
-#if 0
-    u64 i = 0;
-    while (i < s_byte_count) {
-      {
-        const u8 *const bs = __builtin_memchr(s, 0x08, s_byte_count);
-        if (bs != NULL) {
-          tokens[*tokens_count] =
-              (token_t){.kind = TK_BACKSPACE, .start = i, .end_excl = i + 1};
-          *tokens_count += 1;
-          i += (tab - s);
-
-          continue;
-        }
-      }
-
-      {
-        const u8 *const tab = __builtin_memchr(s, 0x09, s_byte_count);
-        if (tab != NULL) {
-          tokens[*tokens_count] =
-              (token_t){.kind = TK_TAB, .start = i, .end_excl = i + 1};
-          *tokens_count += 1;
-          i += (tab - s);
-
-          continue;
-        }
-      }
-      {
-        const u8 *const tab = __builtin_memchr(s, 0x0a, s_byte_count);
-        if (tab != NULL) {
-          tokens[*tokens_count] =
-              (token_t){.kind = TK_LINE_FEED, .start = i, .end_excl = i + 1};
-          *tokens_count += 1;
-          i += (tab - s);
-
-          continue;
-        }
-      }
-      {
-        const u8 *const tab = __builtin_memchr(s, 0x0d, s_byte_count);
-        if (tab != NULL) {
-          tokens[*tokens_count] = (token_t){
-              .kind = TK_CARRIAGE_RETURN, .start = i, .end_excl = i + 1};
-          *tokens_count += 1;
-          i += (tab - s);
-
-          continue;
-        }
-      }
-      
-          tokens[*tokens_count] = (token_t){
-              .kind = TK_CARRIAGE_RETURN, .start = i, .end_excl = i + 1};
-          *tokens_count += 1;
-    }
-#endif
-
-  for (u64 i = 0; i < s_byte_count; i++) {
-    switch (s[i]) {
-    case 0x08: // BS
-      tokens[*tokens_count] =
-          (token_t){.kind = TK_BACKSPACE, .start = i, .end_excl = i + 1};
-      *tokens_count += 1;
-      break;
-
-    case 0x09: // TAB
-      tokens[*tokens_count] =
-          (token_t){.kind = TK_TAB, .start = i, .end_excl = i + 1};
-      *tokens_count += 1;
-      break;
-
-    case 0x0a: // LF
-      tokens[*tokens_count] =
-          (token_t){.kind = TK_LINE_FEED, .start = i, .end_excl = i + 1};
-      *tokens_count += 1;
-      break;
-
-    case 0x0d: // CR
-      tokens[*tokens_count] =
-          (token_t){.kind = TK_CARRIAGE_RETURN, .start = i, .end_excl = i + 1};
-      *tokens_count += 1;
-      break;
-
-    default:
-      tokens[*tokens_count] = (token_t){.kind = TK_TEXT, .start = i};
-
-      while (i < s_byte_count &&
-             !(s[i] == 0x08 || s[i] == 0x09 || s[i] == 0x0a || s[i] == 0x0d))
-        i++;
-
-      tokens[*tokens_count].end_excl = i;
-      *tokens_count += 1;
-    }
-  }
-}
-
 static u64 x11_read_response(i32 fd, u8 *read_buffer, u64 read_buffer_length) {
 
   const i64 res = read(fd, read_buffer, read_buffer_length);
@@ -345,7 +224,7 @@ static u64 x11_read_response(i32 fd, u8 *read_buffer, u64 read_buffer_length) {
 }
 
 static void x11_open_font(i32 fd, u32 font_id) {
-#define OPEN_FONT_NAME "*-lucida-*"
+#define OPEN_FONT_NAME "fixed"
 #define OPEN_FONT_NAME_BYTE_COUNT 5
 #define PADDING ((4 - (OPEN_FONT_NAME_BYTE_COUNT % 4)) % 4)
 #define OPEN_FONT_PACKET_U32_COUNT                                             \
@@ -369,16 +248,14 @@ static void x11_open_font(i32 fd, u32 font_id) {
 }
 
 static void x11_draw_text(i32 fd, u32 window_id, u32 gc_id, const u8 *text,
-                          u8 text_byte_count, u16 x, u16 y, arena_t *arena) {
+                          u8 text_byte_count, u16 x, u16 y) {
   pg_assert(fd > 0);
   pg_assert(text != NULL);
-  pg_assert(arena != NULL);
 
   const u32 padding = (4 - (text_byte_count % 4)) % 4;
   const u32 packet_u32_count = 4 + ((text_byte_count + padding) / 4);
 
-  const u64 arena_offset = arena->current_offset;
-  u32 *const packet = arena_alloc(arena, packet_u32_count);
+  u32 packet[256] = {0};
   pg_assert(packet != NULL);
 
   packet[0] = X11_OP_REQ_IMAGE_TEXT8 | ((u32)text_byte_count << 8) |
@@ -386,14 +263,15 @@ static void x11_draw_text(i32 fd, u32 window_id, u32 gc_id, const u8 *text,
   packet[1] = window_id;
   packet[2] = gc_id;
   packet[3] = (u32)x | ((u32)y << 16);
+
+  pg_assert(ROUNDUP(text_byte_count, 4) >= text_byte_count);
+  pg_assert((4 * sizeof(u32) + ROUNDUP(text_byte_count, 4)) < sizeof(packet));
   __builtin_memcpy(&packet[4], text, text_byte_count);
 
   const i64 res = write(fd, packet, packet_u32_count * 4);
   if (res != packet_u32_count * 4) {
     exit(1);
   }
-
-  arena_reset_at(arena, arena_offset);
 }
 
 static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
@@ -433,17 +311,25 @@ static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
             connection->setup->vendor_length;
   pg_assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
 
-  p += sizeof(x11_pixmap_format_t) * connection->setup->formats;
+  for (uint64_t i = 0; i < connection->setup->formats; i++) {
+    p += sizeof(x11_pixmap_format_t);
+  }
   pg_assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
 
   connection->root = (x11_root_window_t *)p;
-  p += sizeof(x11_root_window_t) * connection->setup->roots;
+  for (uint64_t i = 0; i < connection->setup->roots; i++) {
+    p += sizeof(x11_root_window_t) * connection->setup->roots;
+  }
   pg_assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
   connection->depth = (x11_depth_t *)p;
   connection->visual = (x11_visual_t *)p;
+
+  printf("[D001] %d \n", connection->root->depth);
 }
 
 static u32 x11_generate_id(x11_connection_t const *conn) {
+  printf("[D002] %d %#x %lu\n", conn->setup->id_mask, conn->setup->id_base,
+         __builtin_offsetof(x11_connection_setup_t, id_base));
   static u32 id = 0;
   return ((conn->setup->id_mask & id++) | conn->setup->id_base);
 }
@@ -544,86 +430,7 @@ static void x11_query_text_extents(i32 fd, u32 font_id, const u8 *text,
   arena_reset_at(arena, arena_offset);
 }
 
-static i32 spawn_shell(u16 num_lines, u16 num_columns, i32 *child_pid) {
-  pg_assert(num_lines > 0);
-  pg_assert(num_columns > 0);
-  pg_assert(child_pid != NULL);
-
-  i32 master = 0, slave = 0;
-  struct winsize winp = {.ws_row = num_lines, .ws_col = num_columns};
-  openpty(&master, &slave, NULL, NULL, &winp);
-
-  *child_pid = fork();
-  if (*child_pid == -1) {
-    exit(1);
-  }
-
-  if (*child_pid == 0) { // Child
-    if (dup2(slave, STDIN_FILENO) == -1) {
-      eprint("Failed to dup2 stdin");
-      exit(1);
-    }
-    if (dup2(slave, STDOUT_FILENO) == -1) {
-      eprint("Failed to dup2 stdout");
-      exit(1);
-    }
-    if (dup2(slave, STDERR_FILENO) == -1) {
-      eprint("Failed to dup2 stderr");
-      exit(1);
-    }
-
-    // Create a new process group.
-    if (setsid() == -1) {
-      eprint("Failed to setsid");
-      exit(1);
-    }
-
-    // Set controlling terminal.
-    if (ioctl(slave, TIOCSCTTY, 0) != 0) {
-      eprint("Failed to ioctl TIOCSCTTY");
-      exit(1);
-    }
-
-    // Close now unneeded file descriptors.
-    close(slave);
-    close(master);
-
-    /* signal(SIGCHLD, SIG_DFL); */
-    /* signal(SIGHUP, SIG_DFL); */
-    /* signal(SIGINT, SIG_DFL); */
-    /* signal(SIGQUIT, SIG_DFL); */
-    /* signal(SIGTERM, SIG_DFL); */
-    /* signal(SIGALRM, SIG_DFL); */
-
-    char *const argv[] = {(char *)"/bin/sh", 0};
-    char *const envp[] = {(char *)"HOME=/home/pg", (char *)"USER=pg", 0};
-    if (execve("/bin/sh", argv, envp) == -1) {
-      exit(1);
-    }
-
-    __builtin_unreachable();
-  }
-  // Parent.
-
-  close(slave);
-  set_fd_non_blocking(master);
-  /* signal(SIGCHLD, sigchld); */
-
-  return master;
-}
-
 i32 main() {
-  const u16 width = 800;
-  const u16 height = 600;
-  const u16 font_size = 10; // FIXME: Get it from server.
-  const u16 num_lines = height / font_size;
-  const u16 num_columns = width / font_size;
-
-  i32 child_pid = 0;
-  const i32 master = spawn_shell(num_lines, num_columns, &child_pid);
-  pg_assert(child_pid > 0);
-  pg_assert(master > 0);
-
   arena_t arena = {0};
   arena_init(&arena, 1 << 22); // 4 MiB.
 
@@ -656,6 +463,7 @@ i32 main() {
 
   x11_create_gc(x11_socket_fd, gc_id, connection.root->id, font_id);
 
+  printf("[D003] %d\n", connection.root->id);
   const u32 window_id = x11_generate_id(&connection);
   pg_assert(window_id > 0);
 
@@ -668,90 +476,23 @@ i32 main() {
   x11_query_text_extents(x11_socket_fd, font_id, (const u8 *)"hello", 0,
                          &arena);
 
-  set_fd_non_blocking(x11_socket_fd);
-  struct pollfd fds[] = {{.fd = x11_socket_fd, .events = POLLIN},
-                         {.fd = master, .events = POLLIN}};
-
-  u8 *text = arena_alloc(&arena, 1 << 16);
-  u64 text_len = 0;
-
-  token_t *tokens = arena_alloc(&arena, 1 << 16);
-  u64 tokens_count = 0;
-
-  u16 cursor_x = 0, cursor_y = 0;
-
   for (;;) {
-    const i32 changed_count = poll(fds, PG_ARRAY_SIZE(fds), -1);
-    if (changed_count == -1) {
-      exit(1);
+    u8 read_buffer[1024] = {0};
+    const i64 read_byte_count =
+        read(x11_socket_fd, read_buffer, sizeof(read_buffer));
+    pg_assert(read_byte_count >= 0);
+
+    pg_assert(read_byte_count >= 32);
+
+    switch (read_buffer[0]) {
+    case X11_EVENT_EXPOSURE:
+      x11_draw_text(x11_socket_fd, window_id, gc_id, (const u8 *)"Hello world!",
+                    12, 50, 50);
+      break;
+    case X11_EVENT_KEY_RELEASE: {
+      /* const u8 keycode = read_buffer[1]; */
+      break;
     }
-    pg_assert((u64)changed_count <= PG_ARRAY_SIZE(fds));
-
-    for (u64 i = 0; i < (u64)changed_count; i++) {
-      const struct pollfd changed = fds[i];
-
-      pg_assert((changed.revents & POLLNVAL) == 0);
-      pg_assert((changed.revents & POLLPRI) == 0); // Unimplemented yet.
-
-      // Other end is closed, stop.
-      if ((changed.revents & POLLERR) || (changed.revents & POLLHUP)) {
-        exit(1);
-      }
-      if (changed.revents == 0)
-        continue; // Nothing to read.
-
-      u8 read_buffer[1024] = {0};
-      const i64 read_byte_count =
-          read(changed.fd, read_buffer, sizeof(read_buffer));
-      pg_assert(read_byte_count >= 0);
-
-      if (i == 0) { // x11
-        pg_assert(read_byte_count >= 32);
-
-        switch (read_buffer[0]) {
-        case X11_EVENT_EXPOSURE:
-          break;
-        case X11_EVENT_KEY_RELEASE: {
-          const u8 keycode = read_buffer[1];
-
-          if (keycode == 9) { // Escape.
-            return 0;
-          } else if (keycode == 36) { // Enter
-            const i64 bytes_written = write(master, "\r", 1);
-            pg_assert(bytes_written == (i64)1);
-          } else {
-            const u8 keysym = keycode_to_keysym[keycode];
-            if (keysym != 0) {
-              /* text[text_len++] = keysym; */
-              /* x11_draw_text(x11_socket_fd, window_id, gc_id, text,
-               * (u8)text_len, */
-              /*               10, 10, &arena); */
-              const i64 bytes_written = write(master, &keysym, 1);
-              pg_assert(bytes_written == (i64)1);
-            }
-          }
-          break;
-        }
-        }
-      } else if (i == 1) { // tty
-        parse_input(read_buffer, read_byte_count, tokens, &tokens_count);
-        for (u64 j = 0; j < tokens_count; j++) {
-          const token_t token = tokens[j];
-          if (token.kind == TK_TEXT) {
-            pg_assert(token.end_excl > token.start);
-            const u64 len = token.end_excl - token.start;
-            x11_draw_text(x11_socket_fd, window_id, gc_id,
-                          read_buffer + token.start, (u8)len, 10 + cursor_x,
-                          10 + cursor_y, &arena);
-            cursor_x += (u16)len * 5; // FIXME
-          } else {
-            // TODO
-          }
-        }
-
-      } else {
-        pg_assert(0);
-      }
     }
   }
 }
