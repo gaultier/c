@@ -334,6 +334,23 @@ static void x11_map_window(i32 fd, u32 window_id) {
   }
 }
 
+static void x11_create_pixmap(i32 fd, u32 window_id, u32 pixmap_id, u16 w,
+                              u16 h) {
+  const u8 X11_OP_REQ_CREATE_PIXMAP = 53;
+  const u8 depth = 24; // RGB
+  const u32 packet[4] = {
+      [0] = X11_OP_REQ_CREATE_PIXMAP | (depth << 8) | (4 << 16),
+      [1] = pixmap_id,
+      [2] = window_id,
+      [3] = w | (h << 16),
+  };
+
+  const i64 res = write(fd, (const void *)packet, sizeof(packet));
+  if (res != sizeof(packet)) {
+    exit(1);
+  }
+}
+
 i32 main() {
   i32 x11_socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (x11_socket_fd < 0) {
@@ -371,6 +388,9 @@ i32 main() {
 
   x11_map_window(x11_socket_fd, window_id);
 
+  const u32 pixmap_id = x11_generate_id(&connection);
+  x11_create_pixmap(x11_socket_fd, window_id, pixmap_id, 34, 34);
+
   for (;;) {
     u8 read_buffer[1024] = {0};
     const i64 read_byte_count =
@@ -380,6 +400,9 @@ i32 main() {
     pg_assert(read_byte_count >= 32);
 
     switch (read_buffer[0]) {
+      case 0: 
+        eprint("X11 server error");
+        exit(1);
     case X11_EVENT_EXPOSURE:
       x11_draw_text(x11_socket_fd, window_id, gc_id, (const u8 *)"Hello world!",
                     12, 50, 50);
