@@ -301,10 +301,12 @@ static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
 #define CREATE_WINDOW_FLAG_COUNT 2
 #define CREATE_WINDOW_PACKET_U32_COUNT (8 + CREATE_WINDOW_FLAG_COUNT)
 
-  const u16 border = 1, group = 1;
+  const u8 depth = 24;
+  const u16 border = 0, group = 1;
 
   const u32 packet[CREATE_WINDOW_PACKET_U32_COUNT] = {
-      [0] = X11_OP_REQ_CREATE_WINDOW | (CREATE_WINDOW_PACKET_U32_COUNT << 16),
+      [0] = X11_OP_REQ_CREATE_WINDOW | (depth << 8) |
+            (CREATE_WINDOW_PACKET_U32_COUNT << 16),
       [1] = window_id,
       [2] = root_id,
       [3] = x | ((u32)y << 16),
@@ -312,7 +314,7 @@ static void x11_create_window(i32 fd, u32 window_id, u32 root_id, u16 x, u16 y,
       [5] = group | (border << 16),
       [6] = root_visual_id,
       [7] = flags,
-[8] = 0x00ffff00,
+      [8] = 0x00ffff00,
       [9] = X11_EVENT_FLAG_KEY_RELEASE | X11_EVENT_FLAG_EXPOSURE,
   };
 
@@ -437,7 +439,6 @@ i32 main() {
 
   // x11_open_font(x11_socket_fd, font_id);
   //
-  x11_create_gc(x11_socket_fd, gc_id, connection.root->id);
 
   const u32 window_id = x11_generate_id(&connection);
   pg_assert(window_id > 0);
@@ -445,6 +446,7 @@ i32 main() {
   const u16 x = 200, y = 200, w = 800, h = 600;
   x11_create_window(x11_socket_fd, window_id, connection.root->id, x, y, w, h,
                     connection.root->root_visual_id);
+  x11_create_gc(x11_socket_fd, gc_id, connection.root->id);
 
   x11_map_window(x11_socket_fd, window_id);
 
@@ -472,9 +474,8 @@ i32 main() {
       //    x11_copy_area(x11_socket_fd, gc_id, window_id, pixmap_id, 0, 0, 34,
       //    34,
       //                  100, 100);
-      //    x11_put_image(x11_socket_fd, gc_id, crate_rgb, crate_rgb_len, 34,
-      //    34, 0,
-      //                  0, window_id);
+      x11_put_image(x11_socket_fd, gc_id, crate_rgb, crate_rgb_len, 34, 34, 0,
+                    0, window_id);
       break;
     case X11_EVENT_KEY_RELEASE: {
       /* const u8 keycode = read_buffer[1]; */
