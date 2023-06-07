@@ -152,68 +152,6 @@ typedef struct {
 
 #define eprint(s) write(STDERR_FILENO, s, sizeof(s))
 
-typedef struct {
-  u8 *base;
-  u64 current_offset;
-  u64 capacity;
-} arena_t;
-
-static void arena_init(arena_t *arena, u64 capacity) {
-  pg_assert(arena != NULL);
-
-  arena->base = mmap(NULL, capacity, PROT_READ | PROT_WRITE,
-                     MAP_ANON | MAP_PRIVATE, -1, 0);
-  pg_assert(arena->base != NULL);
-  arena->capacity = capacity;
-  arena->current_offset = 0;
-}
-
-static u64 align_forward_16(u64 n) {
-  const u64 modulo = n & (16 - 1);
-  if (modulo != 0)
-    n += 16 - modulo;
-
-  pg_assert((n % 16) == 0);
-  return n;
-}
-
-static void *arena_alloc(arena_t *arena, u64 len) {
-  pg_assert(arena != NULL);
-  pg_assert(arena->current_offset < arena->capacity);
-  pg_assert(arena->current_offset + len < arena->capacity);
-
-  // TODO: align?
-  arena->current_offset = align_forward_16(arena->current_offset + len);
-  pg_assert((arena->current_offset % 16) == 0);
-
-  return arena->base + arena->current_offset - len;
-}
-
-static void arena_reset_at(arena_t *arena, u64 offset) {
-  pg_assert(arena != NULL);
-  pg_assert(arena->current_offset < arena->capacity);
-  pg_assert((arena->current_offset % 16) == 0);
-
-  arena->current_offset = offset;
-}
-
-
-typedef enum {
-  TK_NONE,
-  TK_BACKSPACE = 0x08,
-  TK_TAB = 0x09,
-  TK_LINE_FEED = 0x0a,       // '\n'
-  TK_CARRIAGE_RETURN = 0x0d, // '\r'
-  TK_DEL = 0x7f,
-  TK_TEXT = 0x100,
-} token_kind_t;
-
-typedef struct {
-  uint64_t start;
-  uint64_t end_excl;
-  token_kind_t kind;
-} token_t;
-
 static u64 x11_read_response(i32 fd, u8 *read_buffer, u64 read_buffer_length) {
 
   const i64 res = read(fd, read_buffer, read_buffer_length);
@@ -323,13 +261,9 @@ static void x11_handshake(i32 fd, x11_connection_t *connection, u8 *read_buffer,
   pg_assert((u8 *)p < (u8 *)read_buffer + read_buffer_length);
   connection->depth = (x11_depth_t *)p;
   connection->visual = (x11_visual_t *)p;
-
-  printf("[D001] %d \n", connection->root->depth);
 }
 
 static u32 x11_generate_id(x11_connection_t const *conn) {
-  printf("[D002] %d %#x %lu\n", conn->setup->id_mask, conn->setup->id_base,
-         __builtin_offsetof(x11_connection_setup_t, id_base));
   static u32 id = 0;
   return ((conn->setup->id_mask & id++) | conn->setup->id_base);
 }
@@ -403,37 +337,7 @@ static void x11_map_window(i32 fd, u32 window_id) {
   }
 }
 
-static void x11_query_text_extents(i32 fd, u32 font_id, const u8 *text,
-                                   u32 text_byte_count, arena_t *arena) {
-  const u32 padding = (4 - (2 * text_byte_count % 4)) % 4;
-  const u32 packet_u32_count = 2 + ((2 * text_byte_count + padding) / 4);
-
-  const u64 arena_offset = arena->current_offset;
-  u32 *const packet = arena_alloc(arena, packet_u32_count);
-  pg_assert(packet != NULL);
-
-  const bool is_odd_length = (padding == 2);
-
-  packet[0] = X11_OP_REQ_QUERY_TEXT_EXTENTS | ((u32)is_odd_length << 8) |
-              (packet_u32_count << 16);
-  packet[1] = font_id;
-  for (u32 i = 0; i < text_byte_count; i++) {
-    packet[2 + 2 * i] = 0;
-    packet[2 + 2 * i + 1] = text[i];
-  }
-
-  const i64 res = write(fd, packet, packet_u32_count * 4);
-  if (res != packet_u32_count * 4) {
-    exit(1);
-  }
-
-  arena_reset_at(arena, arena_offset);
-}
-
 i32 main() {
-  arena_t arena = {0};
-  arena_init(&arena, 1 << 22); // 4 MiB.
-
   i32 x11_socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
   if (x11_socket_fd < 0) {
     eprint("Error opening socket");
@@ -450,11 +354,9 @@ i32 main() {
     exit(-res);
   }
 
-  const u64 read_buffer_length = 1 << 15;
-  u8 *const read_buffer = arena_alloc(&arena, read_buffer_length);
-
+  u8 read_buffer[1 << 16] = {0};
   x11_connection_t connection = {0};
-  x11_handshake(x11_socket_fd, &connection, read_buffer, read_buffer_length);
+  x11_handshake(x11_socket_fd, &connection, read_buffer, sizeof(read_buffer));
 
   const u32 gc_id = x11_generate_id(&connection);
   const u32 font_id = x11_generate_id(&connection);
@@ -463,7 +365,6 @@ i32 main() {
 
   x11_create_gc(x11_socket_fd, gc_id, connection.root->id, font_id);
 
-  printf("[D003] %d\n", connection.root->id);
   const u32 window_id = x11_generate_id(&connection);
   pg_assert(window_id > 0);
 
@@ -472,9 +373,6 @@ i32 main() {
                     connection.root->root_visual_id);
 
   x11_map_window(x11_socket_fd, window_id);
-
-  x11_query_text_extents(x11_socket_fd, font_id, (const u8 *)"hello", 0,
-                         &arena);
 
   for (;;) {
     u8 read_buffer[1024] = {0};
