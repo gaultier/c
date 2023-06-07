@@ -13,6 +13,8 @@
 #define u8 uint8_t
 #define i8 int8_t
 
+#include "crate_rgba.h"
+
 // Taken from libX11
 #define ROUNDUP(nbytes, pad) (((nbytes) + ((pad)-1)) & ~(long)((pad)-1))
 
@@ -337,9 +339,10 @@ static void x11_map_window(i32 fd, u32 window_id) {
 static void x11_create_pixmap(i32 fd, u32 window_id, u32 pixmap_id, u16 w,
                               u16 h) {
   const u8 X11_OP_REQ_CREATE_PIXMAP = 53;
-  const u8 depth = 24; // RGB
+  const u8 depth = 32; // RGBA
+  const u8 packet_length = 4;
   const u32 packet[4] = {
-      [0] = X11_OP_REQ_CREATE_PIXMAP | (depth << 8) | (4 << 16),
+      [0] = X11_OP_REQ_CREATE_PIXMAP | (depth << 8) | (packet_length << 16),
       [1] = pixmap_id,
       [2] = window_id,
       [3] = w | (h << 16),
@@ -358,18 +361,20 @@ static void x11_put_image(i32 fd, u32 gc_id, u8 *image_data,
 
   const u8 X11_OP_REQ_PUT_IMAGE = 72;
   const u8 X11_PUT_IMAGE_FORMAT_ZPIXMAP = 2;
-  const u8 depth = 24; // RGB
+  const u8 depth = 32; // RGBA
   const u8 left_pad = 0;
 
   // Shortcut. Sue me!
   pg_assert(w == 34);
   pg_assert(h == 34);
-  pg_assert(image_data_byte_count == w * h * depth);
+  pg_assert(image_data_byte_count == w * h * (depth / 8));
   const u8 padding = 0;
+
   const u32 packet_length = 6 + (image_data_byte_count + padding) / 4;
 
   u32 packet[2048] = {
-      [0] = X11_OP_REQ_PUT_IMAGE | (X11_PUT_IMAGE_FORMAT_ZPIXMAP << 8),
+      [0] = X11_OP_REQ_PUT_IMAGE | (X11_PUT_IMAGE_FORMAT_ZPIXMAP << 8) |
+            (packet_length << 16),
       [1] = pixmap_id,
       [2] = gc_id,
       [3] = x | (y << 16),
@@ -379,9 +384,8 @@ static void x11_put_image(i32 fd, u32 gc_id, u8 *image_data,
   pg_assert(sizeof(packet) >= packet_length);
   __builtin_memcpy(packet + 6, image_data, image_data_byte_count);
 
-
-  const i64 res = write(fd, (const void *)packet, sizeof(packet));
-  if (res != sizeof(packet)) {
+  const i64 res = write(fd, (const void *)packet, packet_length);
+  if (res != packet_length) {
     exit(1);
   }
 }
@@ -425,6 +429,8 @@ i32 main() {
 
   const u32 pixmap_id = x11_generate_id(&connection);
   x11_create_pixmap(x11_socket_fd, window_id, pixmap_id, 34, 34);
+  x11_put_image(x11_socket_fd, gc_id, crate_rgba, crate_rgba_len, 34, 34, 0, 0,
+                pixmap_id);
 
   for (;;) {
     u8 read_buffer[1024] = {0};
@@ -439,8 +445,9 @@ i32 main() {
       eprint("X11 server error");
       exit(1);
     case X11_EVENT_EXPOSURE:
-      x11_draw_text(x11_socket_fd, window_id, gc_id, (const u8 *)"Hello world!",
-                    12, 50, 50);
+      /* x11_draw_text(x11_socket_fd, window_id, gc_id, (const u8 *)"Hello
+       * world!", */
+      /*               12, 50, 50); */
       break;
     case X11_EVENT_KEY_RELEASE: {
       /* const u8 keycode = read_buffer[1]; */
