@@ -148,6 +148,7 @@ int main(int argc, char *argv[]) {
 
   log_fd = fopen(log_file_path, "a");
   assert(log_fd != NULL);
+  fprintf(log_fd,"\n");
 
   if (argc != 4) {
     fprintf(log_fd, "time=%ld err=wrong number of arguments argc=%d\n",
