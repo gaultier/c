@@ -1,0 +1,227 @@
+#include <assert.h>
+#include <spawn.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <time.h>
+
+#include "../pg/pg.h"
+
+#ifdef __APPLE__
+#define PG_COMMAND_COPY "pbcopy"
+#define PG_COMMAND_OPEN "open"
+#else
+#define PG_COMMAND_COPY "xclip -i -selection clipboard"
+#define PG_COMMAND_OPEN "xdg-open"
+#endif
+
+static FILE *log_fd;
+
+#define MAX_URL_LEN 2048
+
+static pg_string_t path_get_directory(const pg_string_t path) {
+  const char *sep = pg_char_last_occurence(path, '/');
+  assert(sep != NULL);
+  pg_string_t dir =
+      pg_string_make_length(pg_heap_allocator(), path, (uint64_t)(sep - path));
+
+  return dir;
+}
+static void open_url_in_browser(pg_string_t url) {
+  pg_string_t cmd = pg_string_make_reserve(
+      pg_heap_allocator(), sizeof(PG_COMMAND_OPEN " ''") + pg_string_len(url));
+  const uint64_t cmd_len =
+      (uint64_t)snprintf(cmd, pg_string_cap(cmd), PG_COMMAND_OPEN " '%s'", url);
+  pg__set_string_len(cmd, cmd_len);
+  printf("Running: %s\n", cmd);
+  FILE *cmd_handle = popen(cmd, "r");
+  assert(cmd_handle != NULL);
+
+  pg_string_free(cmd);
+}
+
+static void copy_to_clipboard(pg_string_t s) {
+  pg_string_t cmd = pg_string_make_reserve(
+      pg_heap_allocator(),
+      sizeof("printf '' | " PG_COMMAND_COPY) + pg_string_len(s));
+  const uint64_t cmd_len = (uint64_t)snprintf(
+      cmd, pg_string_cap(cmd), "printf '%s' | " PG_COMMAND_COPY, s);
+  pg__set_string_len(cmd, cmd_len);
+  printf("Running: %s\n", cmd);
+  FILE *cmd_handle = popen(cmd, "r");
+  assert(cmd_handle != NULL);
+
+  pg_string_free(cmd);
+}
+
+static pg_string_t get_path_from_git_root(void) {
+  char *argv[] = {"git", "rev-parse", "--show-prefix", 0};
+  pg_string_t cmd_stdio =
+      pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
+  pg_string_t cmd_stderr = pg_string_make_reserve(pg_heap_allocator(), 0);
+  int exit_status = 0;
+  if (!pg_exec(argv, &cmd_stdio, &cmd_stderr, &exit_status)) {
+    fprintf(stderr, "Failed to execute command: %d %s\n", errno,
+            strerror(errno));
+    exit(errno);
+  }
+  if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
+    fprintf(stderr,
+            "Command exited with non-zero status code: status=%d err=%s\n",
+            WEXITSTATUS(exit_status), cmd_stderr);
+    exit(errno);
+  }
+
+  cmd_stdio = pg_string_trim(cmd_stdio, "\n");
+  pg_string_free(cmd_stderr);
+
+  return cmd_stdio;
+}
+
+static pg_string_t get_current_git_commit(void) {
+  char *argv[] = {"git", "rev-parse", "HEAD", 0};
+  pg_string_t cmd_stdio =
+      pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
+  pg_string_t cmd_stderr = pg_string_make_reserve(pg_heap_allocator(), 0);
+  int exit_status = 0;
+  if (!pg_exec(argv, &cmd_stdio, &cmd_stderr, &exit_status)) {
+    fprintf(stderr, "Failed to execute command: %d %s\n", errno,
+            strerror(errno));
+    exit(errno);
+  }
+  if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
+    fprintf(stderr,
+            "Command exited with non-zero status code: status=%d err=%s\n",
+            WEXITSTATUS(exit_status), cmd_stderr);
+    exit(errno);
+  }
+
+  cmd_stdio = pg_string_trim(cmd_stdio, "\n");
+  assert(pg_string_len(cmd_stdio) > 0);
+
+  pg_string_free(cmd_stderr);
+
+  return cmd_stdio;
+}
+
+static pg_string_t get_git_origin_remote_url(void) {
+  const char *const cmd = "git remote get-url origin";
+  printf("Running: %s\n", cmd);
+
+  char *argv[] = {"git", "remote", "get-url", "origin", 0};
+  pg_string_t cmd_stdio =
+      pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
+  pg_string_t cmd_stderr = pg_string_make_reserve(pg_heap_allocator(), 0);
+  int exit_status = 0;
+  if (!pg_exec(argv, &cmd_stdio, &cmd_stderr, &exit_status)) {
+    fprintf(stderr, "Failed to execute command: %d %s\n", errno,
+            strerror(errno));
+    exit(errno);
+  }
+  if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
+    fprintf(stderr,
+            "Command exited with non-zero status code: status=%d err=%s\n",
+            WEXITSTATUS(exit_status), cmd_stderr);
+    exit(errno);
+  }
+
+  cmd_stdio = pg_string_trim(cmd_stdio, "\n");
+  assert(pg_string_len(cmd_stdio) > 0);
+
+  pg_string_free(cmd_stderr);
+
+  return cmd_stdio;
+}
+int main(int argc, char *argv[]) {
+  log_fd = fopen(".ado-link.log", "a");
+  assert(log_fd != NULL);
+
+  if (argc != 5) {
+    fprintf(log_fd, "time=%ld err=wrong number of arguments argc=%d\n",
+            time(NULL), argc);
+    exit(1);
+  }
+
+  const char *const path = argv[1];
+  const char *const file = argv[2];
+  const char *const line_start = argv[3];
+  const char *const line_end = argv[4];
+
+  const pg_string_t file_path = pg_string_make(pg_heap_allocator(), argv[1]);
+  const pg_string_t dir = path_get_directory(file_path);
+
+  fprintf(log_fd,
+          "time=%ld argc=%d path=%s file=%s line_start=%s line_end=%s\n",
+          time(NULL), argc, path, file, line_start, line_end);
+
+  int ret = 0;
+  if ((ret = chdir(dir)) != 0) {
+    fprintf(stderr, "Failed to chdir(2): file_path=%s errno=%d %s\n", dir,
+            errno, strerror(errno));
+    exit(errno);
+  }
+  printf("Changed directory to: %s\n", dir);
+  pg_string_t const remote_url = get_git_origin_remote_url();
+  const pg_string_t const commit = get_current_git_commit();
+
+  pg_span_t const path_span =
+      (pg_span_t){.data = remote_url, .len = pg_string_len(remote_url)};
+  pg_span_t org_path = {0};
+  pg_span_t dir_path = {0};
+  pg_span_t project_path = {0};
+  pg_span_t remaining = path_span;
+
+  pg_span_t discard = {0};
+  assert(pg_span_split_at_first(remaining, '/', &discard, &remaining));
+  assert(remaining.len > 0);
+  assert(remaining.data[0] == '/');
+  pg_span_consume_left(&remaining, 1);
+
+  assert(pg_span_split_at_first(remaining, '/', &org_path, &remaining));
+  assert(remaining.len > 0);
+  assert(remaining.data[0] == '/');
+  pg_span_consume_left(&remaining, 1);
+
+  assert(pg_span_split_at_first(remaining, '/', &dir_path, &remaining));
+  assert(remaining.len > 0);
+  assert(remaining.data[0] == '/');
+  pg_span_consume_left(&remaining, 1);
+
+  project_path = remaining;
+
+  fprintf(
+      log_fd,
+      "time=%ld remote_url=%s org_path=%.*s dir_path=%.*s project_path=%.*s\n",
+      time(NULL), remote_url, (int)org_path.len, org_path.data,
+      (int)dir_path.len, dir_path.data, (int)project_path.len,
+      project_path.data);
+
+  pg_string_t res_url =
+      pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
+  res_url = pg_string_appendc(res_url, "https://dev.azure.com/");
+  res_url = pg_string_append_length(res_url, org_path.data, org_path.len);
+  res_url = pg_string_appendc(res_url, "/");
+  res_url = pg_string_append_length(res_url, dir_path.data, dir_path.len);
+  res_url = pg_string_appendc(res_url, "/_git/");
+  res_url =
+      pg_string_append_length(res_url, project_path.data, project_path.len);
+
+  res_url = pg_string_appendc(res_url, "?path=");
+  res_url = pg_string_appendc(res_url, file);
+
+  res_url = pg_string_appendc(res_url, "&version=GC");
+  res_url = pg_string_appendc(res_url, commit);
+
+  res_url = pg_string_appendc(res_url, "&line=");
+  res_url = pg_string_appendc(res_url, line_start);
+
+  res_url = pg_string_appendc(res_url, "&lineEnd=");
+  res_url = pg_string_appendc(res_url, line_end);
+
+  res_url = pg_string_appendc(res_url,
+                              "&lineStartColumn=1&lineStyle=plain&_a=contents");
+
+  fprintf(log_fd, "time=%ld res_url=%s\n", time(NULL), res_url);
+
+  copy_to_clipboard(res_url);
+  open_url_in_browser(res_url);
+}
