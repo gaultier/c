@@ -26,13 +26,14 @@ static pg_string_t path_get_directory(const pg_string_t path) {
 
   return dir;
 }
+
 static void open_url_in_browser(pg_string_t url) {
   pg_string_t cmd = pg_string_make_reserve(
       pg_heap_allocator(), sizeof(PG_COMMAND_OPEN " ''") + pg_string_len(url));
   const uint64_t cmd_len =
       (uint64_t)snprintf(cmd, pg_string_cap(cmd), PG_COMMAND_OPEN " '%s'", url);
   pg__set_string_len(cmd, cmd_len);
-  printf("Running: %s\n", cmd);
+  fprintf(log_fd, "time=%ld msg=running_cmd cmd=%s\n", time(NULL), cmd);
   FILE *cmd_handle = popen(cmd, "r");
   assert(cmd_handle != NULL);
 
@@ -46,7 +47,7 @@ static void copy_to_clipboard(pg_string_t s) {
   const uint64_t cmd_len = (uint64_t)snprintf(
       cmd, pg_string_cap(cmd), "printf '%s' | " PG_COMMAND_COPY, s);
   pg__set_string_len(cmd, cmd_len);
-  printf("Running: %s\n", cmd);
+  fprintf(log_fd, "time=%ld msg=running_cmd cmd=%s\n", time(NULL), cmd);
   FILE *cmd_handle = popen(cmd, "r");
   assert(cmd_handle != NULL);
 
@@ -60,14 +61,16 @@ static pg_string_t get_path_from_git_root(void) {
   pg_string_t cmd_stderr = pg_string_make_reserve(pg_heap_allocator(), 0);
   int exit_status = 0;
   if (!pg_exec(argv, &cmd_stdio, &cmd_stderr, &exit_status)) {
-    fprintf(stderr, "Failed to execute command: %d %s\n", errno,
-            strerror(errno));
+    fprintf(stderr,
+            "time=%ld err=failed to execute command errno=%d err_msg=%s\n",
+            time(NULL), errno, strerror(errno));
     exit(errno);
   }
   if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
     fprintf(stderr,
-            "Command exited with non-zero status code: status=%d err=%s\n",
-            WEXITSTATUS(exit_status), cmd_stderr);
+            "time=%ld err=command exited with non-zero status code status=%d "
+            "err=%s\n",
+            time(NULL), WEXITSTATUS(exit_status), cmd_stderr);
     exit(errno);
   }
 
@@ -84,14 +87,16 @@ static pg_string_t get_current_git_commit(void) {
   pg_string_t cmd_stderr = pg_string_make_reserve(pg_heap_allocator(), 0);
   int exit_status = 0;
   if (!pg_exec(argv, &cmd_stdio, &cmd_stderr, &exit_status)) {
-    fprintf(stderr, "Failed to execute command: %d %s\n", errno,
-            strerror(errno));
+    fprintf(stderr,
+            "time=%ld err=failed to execute command errno=%d err_msg=%s\n",
+            time(NULL), errno, strerror(errno));
     exit(errno);
   }
   if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
     fprintf(stderr,
-            "Command exited with non-zero status code: status=%d err=%s\n",
-            WEXITSTATUS(exit_status), cmd_stderr);
+            "time=%ld err=command exited with non-zero status code status=%d "
+            "err=%s\n",
+            time(NULL), WEXITSTATUS(exit_status), cmd_stderr);
     exit(errno);
   }
 
@@ -105,7 +110,7 @@ static pg_string_t get_current_git_commit(void) {
 
 static pg_string_t get_git_origin_remote_url(void) {
   const char *const cmd = "git remote get-url origin";
-  printf("Running: %s\n", cmd);
+  fprintf(log_fd, "time=%ld msg=running_cmd cmd=%s\n", time(NULL), cmd);
 
   char *argv[] = {"git", "remote", "get-url", "origin", 0};
   pg_string_t cmd_stdio =
@@ -113,14 +118,16 @@ static pg_string_t get_git_origin_remote_url(void) {
   pg_string_t cmd_stderr = pg_string_make_reserve(pg_heap_allocator(), 0);
   int exit_status = 0;
   if (!pg_exec(argv, &cmd_stdio, &cmd_stderr, &exit_status)) {
-    fprintf(stderr, "Failed to execute command: %d %s\n", errno,
-            strerror(errno));
+    fprintf(stderr,
+            "time=%ld err=failed to execute command errno=%d err_msg=%s\n",
+            time(NULL), errno, strerror(errno));
     exit(errno);
   }
   if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
     fprintf(stderr,
-            "Command exited with non-zero status code: status=%d err=%s\n",
-            WEXITSTATUS(exit_status), cmd_stderr);
+            "time=%ld err=command exited with non-zero status code status=%d "
+            "err=%s\n",
+            time(NULL), WEXITSTATUS(exit_status), cmd_stderr);
     exit(errno);
   }
 
@@ -132,34 +139,45 @@ static pg_string_t get_git_origin_remote_url(void) {
   return cmd_stdio;
 }
 int main(int argc, char *argv[]) {
-  log_fd = fopen(".ado-link.log", "a");
+  const char *const home_dir = getenv("HOME");
+
+  pg_string_t const log_file_path =
+      pg_string_make_reserve(pg_heap_allocator(), MAX_URL_LEN);
+  pg_string_appendc(log_file_path, home_dir);
+  pg_string_appendc(log_file_path, "/.ado-link.log");
+
+  log_fd = fopen(log_file_path, "a");
   assert(log_fd != NULL);
 
-  if (argc != 5) {
+  if (argc != 4) {
     fprintf(log_fd, "time=%ld err=wrong number of arguments argc=%d\n",
             time(NULL), argc);
     exit(1);
   }
 
-  const char *const path = argv[1];
-  const char *const file = argv[2];
-  const char *const line_start = argv[3];
-  const char *const line_end = argv[4];
+  const char *const file = argv[1];
+  const char *const line_start = argv[2];
+  const char *const line_end = argv[3];
 
   const pg_string_t file_path = pg_string_make(pg_heap_allocator(), argv[1]);
   const pg_string_t dir = path_get_directory(file_path);
 
   fprintf(log_fd,
-          "time=%ld argc=%d path=%s file=%s line_start=%s line_end=%s\n",
-          time(NULL), argc, path, file, line_start, line_end);
+          "time=%ld argc=%d file=%s line_start=%s line_end=%s file_path=%s "
+          "dir=%s\n",
+          time(NULL), argc, file, line_start, line_end, file_path, dir);
 
   int ret = 0;
   if ((ret = chdir(dir)) != 0) {
-    fprintf(stderr, "Failed to chdir(2): file_path=%s errno=%d %s\n", dir,
-            errno, strerror(errno));
+    fprintf(
+        stderr,
+        "time=%ld err=failed to chdir(2) file_path=%s errno=%d err_msg=%s\n",
+        time(NULL), dir, errno, strerror(errno));
     exit(errno);
   }
-  printf("Changed directory to: %s\n", dir);
+  fprintf(log_fd, "time=%ld msg=changed directory dir=%s\n", time(NULL), dir);
+
+  const pg_string_t const path_from_git_root = get_path_from_git_root();
   pg_string_t const remote_url = get_git_origin_remote_url();
   const pg_string_t const commit = get_current_git_commit();
 
@@ -206,7 +224,8 @@ int main(int argc, char *argv[]) {
       pg_string_append_length(res_url, project_path.data, project_path.len);
 
   res_url = pg_string_appendc(res_url, "?path=");
-  res_url = pg_string_appendc(res_url, file);
+  res_url = pg_string_append(res_url, path_from_git_root);
+  res_url = pg_string_appendc(res_url, pg_path_base_name(file_path));
 
   res_url = pg_string_appendc(res_url, "&version=GC");
   res_url = pg_string_appendc(res_url, commit);

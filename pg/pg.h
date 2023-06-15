@@ -406,7 +406,7 @@ __attribute__((unused)) static void pg_string_free_ptr(pg_string_t *str) {
   pg_string_free(*str);
 }
 
-__attribute__((unused)) static uint64_t pg_string_len(pg_string_t const str) {
+__attribute__((unused)) static uint64_t pg_string_len(const pg_string_t  str) {
   return PG_STRING_HEADER(str)->length;
 }
 
@@ -503,7 +503,7 @@ pg_string_append_length(pg_string_t str, void const *other,
 }
 
 __attribute__((unused)) static pg_string_t
-pg_string_append(pg_string_t str, pg_string_t const other) {
+pg_string_append(pg_string_t str, const pg_string_t other) {
   return pg_string_append_length(str, other, pg_string_len(other));
 }
 
