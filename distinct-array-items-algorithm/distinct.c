@@ -57,7 +57,6 @@ static int cmp(const void *va, const void *vb) {
 static bool distinct_big(entity_t *x, uint64_t x_len, uint64_t bytes_len) {
   const uint64_t item_size = sizeof(entity_t) + bytes_len;
 
-  qsort(x, x_len, item_size, cmp);
 
   for (uint64_t i = 0; i < x_len - 1; i++) {
     const entity_t *const a =
@@ -127,6 +126,7 @@ static void distinct_big_bench_n(uint64_t n) {
     v++;
   }
 
+  qsort(x, n, item_size, cmp);
   // Run twice to warm-up cache.
   assert(distinct_big(x, n, bytes_len) == true);
   assert(distinct_big(x, n, bytes_len) == true);
@@ -171,6 +171,7 @@ int main() {
     v->bytes.data[2] = 3;
     v->bytes.data[3] = 4;
 
+  qsort(test, 2, item_size, cmp);
     assert(distinct_big(test, 2, 4) == true);
 
     free(test);
@@ -194,6 +195,7 @@ int main() {
     v->bytes.data[2] = 3;
     v->bytes.data[3] = 4;
 
+  qsort(test, 2, item_size, cmp);
     assert(distinct_big(test, 2, 4) == false);
   }
 
@@ -220,6 +222,12 @@ int main() {
   puts("");
   distinct_small_bench_n(20);
   distinct_big_bench_n(20);
+  puts("");
+  distinct_small_bench_n(30);
+  distinct_big_bench_n(30);
+  puts("");
+  distinct_small_bench_n(50);
+  distinct_big_bench_n(50);
   puts("");
   distinct_small_bench_n(100);
   distinct_big_bench_n(100);
