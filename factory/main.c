@@ -11,7 +11,7 @@
 #include "conveyor6.rgb.h"
 #include "conveyor7.rgb.h"
 
-#define PG_ARRAY_LEN(x)(sizeof(x) / sizeof((x)[0]))
+#define PG_ARRAY_LEN(x) (sizeof(x) / sizeof((x)[0]))
 
 static SDL_Texture *load_texture(SDL_Renderer *renderer, uint16_t w, uint16_t h,
                                  const uint8_t *data) {
@@ -49,13 +49,22 @@ int main() {
       load_texture(renderer, belt_texture_w, belt_texture_h, conveyor7),
   };
   uint8_t belt_current_texture = 0;
-  const SDL_Rect belt_rect = {
-      .w = belt_texture_w,
-      .h = belt_texture_h,
-      .x = 200,
-      .y = 200,
-  };
 
+  const SDL_Rect belt_rects[] = {
+      {
+          .w = belt_texture_w,
+          .h = belt_texture_h,
+          .x = 200,
+          .y = 200,
+      },
+      {
+          .w = belt_texture_w,
+          .h = belt_texture_h,
+          .x = 200 + belt_texture_w,
+          .y = 200,
+      },
+
+  };
   const uint64_t desired_frame_rate = 60;
   while (true) {
     const uint64_t loop_start = SDL_GetTicks();
@@ -77,8 +86,10 @@ int main() {
 
     SDL_RenderClear(renderer);
 
-    SDL_RenderCopy(renderer, belt_textures[belt_current_texture], 0,
-                   &belt_rect);
+    for (uint64_t i = 0; i < PG_ARRAY_LEN(belt_rects); i++) {
+      SDL_RenderCopy(renderer, belt_textures[belt_current_texture], 0,
+                     &belt_rects[i]);
+    }
 
     SDL_RenderPresent(renderer);
 
