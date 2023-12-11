@@ -8,7 +8,7 @@
 
 static void print_usage(int argc, char *argv[]) {
   assert(argc > 0);
-  printf("%s <port> <delay_ms> <batch_size_max>\nGot:", argv[0]);
+  printf("%s <port> <delay_ms> <batch_size_max> <payload_length>\nGot:", argv[0]);
   for (int i = 0; i < argc; i++)
     printf("%s ", argv[i]);
   puts("");

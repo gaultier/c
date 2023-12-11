@@ -268,6 +268,7 @@ int main(int argc, char *argv[]) {
       .sin_addr = {.s_addr = *(const uint32_t *)(const void *)ip},
       .sin_port = htons(12345),
   };
+  printf("[D001] %lu\n", sizeof(addr));
 
   if ((err = bind(sock_fd, (const struct sockaddr *)&addr, sizeof(addr))) ==
       -1) {
