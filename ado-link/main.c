@@ -1,5 +1,4 @@
 #include <assert.h>
-#include <bits/stdint-uintn.h>
 #include <spawn.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,12 +9,6 @@
 #include <unistd.h>
 
 #include "../pg/pg.h"
-
-#ifdef __APPLE__
-#define PG_COMMAND_OPEN "open"
-#else
-#define PG_COMMAND_OPEN "xdg-open"
-#endif
 
 static FILE *log_fd;
 
@@ -28,91 +21,6 @@ static pg_string_t path_get_directory(const pg_string_t path) {
       pg_string_make_length(pg_heap_allocator(), path, (uint64_t)(sep - path));
 
   return dir;
-}
-
-static void open_url_in_browser(pg_string_t url) {
-  pg_string_t cmd = pg_string_make_reserve(
-      pg_heap_allocator(), sizeof(PG_COMMAND_OPEN " ''") + pg_string_len(url));
-  const uint64_t cmd_len =
-      (uint64_t)snprintf(cmd, pg_string_cap(cmd), PG_COMMAND_OPEN " '%s'", url);
-  pg__set_string_len(cmd, cmd_len);
-  fprintf(log_fd, "time=%ld msg=running_cmd cmd=%s\n", time(NULL), cmd);
-  FILE *cmd_handle = popen(cmd, "r");
-  assert(cmd_handle != NULL);
-
-  pg_string_free(cmd);
-}
-
-static int os_copy_to_clipboard(char *cmd, char **argv, char *s) {
-  int stdin_pipe[2] = {0}; // {read, write}
-  if (pipe(stdin_pipe) == -1)
-    return -1;
-
-  int res = fork();
-  if (res == -1) { // Error.
-    exit(errno);
-  } else if (res == 0) { // Child.
-    close(stdin_pipe[1]);
-
-    if (dup2(stdin_pipe[0], 0) ==
-        -1) // Child's stdin is now the read end of the pipe.
-      goto child_err;
-
-    if (execvp(cmd, argv) == -1)
-      goto child_err;
-
-  child_err:
-    close(stdin_pipe[0]);
-    return -1;
-  } else { // Parent.
-    if (close(stdin_pipe[0]) == -1)
-      return -1; // Parent does not read - close it.
-
-    const uint64_t s_len = strlen(s);
-    uint64_t remaining = s_len;
-    while (remaining > 0) {
-      ssize_t written = write(stdin_pipe[1], s + s_len - remaining, remaining);
-      if (written == -1)
-        goto parent_err;
-
-      remaining -= (uint64_t)written;
-    }
-
-    close(stdin_pipe[1]);
-
-    int status = 0;
-    if (wait(&status) == -1)
-      goto parent_err;
-
-    return (WIFEXITED(status) && WEXITSTATUS(status) == 0) ? 0 : -1;
-
-  parent_err : {
-    int previous_errno = errno;
-    close(stdin_pipe[1]);
-    errno = previous_errno;
-    return -1;
-  }
-  }
-  __builtin_unreachable();
-}
-
-static void copy_to_clipboard(pg_string_t s) {
-  assert(s[pg_string_len(s)] == 0);
-
-#if defined(__linux__)
-  char *wl_copy_argv[] = {0};
-  if (os_copy_to_clipboard("wl-copy", wl_copy_argv, s) == 0)
-    return;
-
-  if (errno != ENOENT)
-    return;
-
-  char *xclip_argv[] = {"-i", "-selection", "clipboard", 0};
-  os_copy_to_clipboard("xclip", xclip_argv, s);
-
-#elif defined(__APPLE__)
-  os_copy_to_clipboard("pbcopy", xclip_argv, s);
-#endif
 }
 
 static pg_string_t get_path_from_git_root(void) {
@@ -129,7 +37,8 @@ static pg_string_t get_path_from_git_root(void) {
   }
   if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
     fprintf(stderr,
-            "time=%ld err=command exited with non-zero status code status=%d "
+            "time=%ld err='git rev-parse --show-prefix' exited with non-zero "
+            "status code status=%d "
             "err=%s\n",
             time(NULL), WEXITSTATUS(exit_status), cmd_stderr);
     exit(errno);
@@ -155,7 +64,8 @@ static pg_string_t get_current_git_commit(void) {
   }
   if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
     fprintf(stderr,
-            "time=%ld err=command exited with non-zero status code status=%d "
+            "time=%ld err='git rev-parse HEAD' exited with non-zero status "
+            "code status=%d "
             "err=%s\n",
             time(NULL), WEXITSTATUS(exit_status), cmd_stderr);
     exit(errno);
@@ -186,7 +96,8 @@ static pg_string_t get_git_origin_remote_url(void) {
   }
   if (WIFEXITED(exit_status) && WEXITSTATUS(exit_status) != 0) {
     fprintf(stderr,
-            "time=%ld err=command exited with non-zero status code status=%d "
+            "time=%ld err='git remote get-url origin' exited with non-zero "
+            "status code status=%d "
             "err=%s\n",
             time(NULL), WEXITSTATUS(exit_status), cmd_stderr);
     exit(errno);
@@ -194,11 +105,11 @@ static pg_string_t get_git_origin_remote_url(void) {
 
   cmd_stdio = pg_string_trim(cmd_stdio, "\n");
   assert(pg_string_len(cmd_stdio) > 0);
-
   pg_string_free(cmd_stderr);
 
   return cmd_stdio;
 }
+
 int main(int argc, char *argv[]) {
   const char *const home_dir = getenv("HOME");
 
@@ -303,6 +214,5 @@ int main(int argc, char *argv[]) {
 
   fprintf(log_fd, "time=%ld res_url=%s\n", time(NULL), res_url);
 
-  copy_to_clipboard(res_url);
-  open_url_in_browser(res_url);
+  puts(res_url);
 }
