@@ -1,6 +1,0 @@
-Makefile
-editor
-main.c
-
-editor.dSYM:
-Contents
