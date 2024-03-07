@@ -65,6 +65,8 @@ Not even mentioning that the rules around what is a POD change with nearly every
 
 `clang` does not report any issue even when called with `-Weverything`.
 
+EDIT: `cppcheck` spots this without issues, so use that instead.
+
 ### Building
 
 ```sh
