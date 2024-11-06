@@ -56,3 +56,13 @@ static inline long syscall6(long n, long a, long b, long c, long d, long e,
   register long x5 __asm__("x5") = f;
   __asm_syscall("r"(x8), "0"(x0), "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x5));
 }
+
+__asm__(".text \n"
+        ".global _start\n"
+        ".type _start,%function\n"
+        "_start:\n"
+        "	mov x29, #0\n"
+        "	mov x30, #0\n"
+        "	mov x0, sp\n"
+        "	and sp, x0, #-16\n"
+        "	b _start_c\n");
