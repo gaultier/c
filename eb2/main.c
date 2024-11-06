@@ -11,8 +11,8 @@ int main(int argc, char *argv[]) {
       return pid;
     }
     if (0 == pid) {
-      char *cmd_argv[] = {argv[2], "-l", "/tmp/a/b", 0};
-      execve(argv[1], cmd_argv, 0);
+      argv += 1;
+      execve(argv[0], argv, 0);
     } else {
       int status = 0;
       int err = wait(&status);
