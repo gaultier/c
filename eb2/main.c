@@ -1,6 +1,6 @@
 #include "libc.c"
 
-// TODO: sleep/poll(?)
+// TODO: signalfd/poll/timer_create
 int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
