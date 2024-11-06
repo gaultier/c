@@ -12,9 +12,9 @@ typedef int64_t ssize_t;
     defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) ||                     \
     defined(__ARM_ARCH_6K__) || defined(__ARM_ARCH_6Z__) ||                    \
     defined(__ARM_ARCH_6KZ__) || defined(__ARM_ARCH_7_)
-typedef unsigned long int uint32_t;
+typedef unsigned int uint32_t;
 typedef uint32_t size_t;
-typedef signed long int int32_t;
+typedef signed int int32_t;
 typedef int32_t ssize_t;
 #else
 #error "os/arch not implemented"
