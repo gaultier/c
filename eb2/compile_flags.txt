@@ -1,0 +1,15 @@
+-std=c23
+-Weverything 
+-Wno-gnu-alignof-expression 
+-Wno-strict-prototypes 
+-Wno-declaration-after-statement 
+-Wno-padded 
+-Wno-reserved-macro-identifier 
+-Wno-unsafe-buffer-usage 
+-Wno-reserved-identifier
+-Wno-covered-switch-default
+-Wno-class-varargs 
+-Wno-pre-c23-compat
+-Wno-cast-qual
+-Werror
+-Wno-missing-prototypes
