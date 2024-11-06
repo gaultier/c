@@ -1,6 +1,6 @@
 #include "libc.c"
 
-// TODO: fork/exec/sleep/wait/poll(?)
+// TODO: fork/exec/sleep/poll(?)
 // TODO: build for all os/archs
 int main(int argc, char *argv[]) {
   (void)argc;
