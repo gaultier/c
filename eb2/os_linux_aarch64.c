@@ -22,3 +22,17 @@ int wait(int *status) { return wait4(-1, status, 0, 0); }
 int execve(const char *path, char *const argv[], char *const envp[]) {
   return (int)syscall3(221, (long)path, (long)argv, (long)envp);
 }
+
+struct timespec {
+  long tv_sec;
+  long tv_nsec;
+};
+
+int nanosleep(struct timespec *req, struct timespec *rem) {
+  return (int)syscall2(101, (long)req, (long)rem);
+}
+
+unsigned int sleep(unsigned int secs) {
+  struct timespec tv = {.tv_sec = (long)secs};
+  return (unsigned int)nanosleep(&tv, &tv);
+}
