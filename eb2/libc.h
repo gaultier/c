@@ -1,5 +1,7 @@
 #pragma once
 
+typedef unsigned int uint32_t;
+
 #if defined(__x86_64__) || defined(__aarch64__)
 typedef unsigned long int uint64_t;
 typedef uint64_t size_t;
@@ -24,6 +26,7 @@ int fork();
 int wait4(int pid, int *status, int options, void *rusage);
 int wait(int *status);
 int execve(const char *path, char *const argv[], char *const envp[]);
+unsigned int sleep(unsigned int secs);
 
 static inline long syscall0(long n);
 static inline long syscall1(long n, long a1);

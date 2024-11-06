@@ -5,26 +5,28 @@ int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  {
-    char msg[] = "Hello world!\n";
-    write(1, msg, sizeof(msg) - 1);
-  }
+  for (;;) {
+    int pid = fork();
+    if (pid < 0) {
+      return pid;
+    }
+    if (0 == pid) {
+      char *cmd_argv[] = {"ls", "-l", "/tmp/a/b", 0};
+      execve("/bin/ls", cmd_argv, 0);
+    } else {
+      int status = 0;
+      int err = wait(&status);
+      if (err < 0) {
+        return -err;
+      }
 
-  int pid = fork();
-  if (pid < 0) {
-    return pid;
-  }
-  if (0 == pid) {
-    char msg[] = "Child\n";
-    write(1, msg, sizeof(msg) - 1);
+      int exited = 0 == ((uint32_t)status & 0x7f);
+      int exit_code = (((uint32_t)status) & 0xff00) >> 8;
+      if (exited && 0 == exit_code) {
+        return 0;
+      }
 
-    char *cmd_argv[] = {"ls", "-l", 0};
-    execve("/bin/ls", cmd_argv, 0);
-  } else {
-    char msg[] = "Parent\n";
-    write(1, msg, sizeof(msg) - 1);
-
-    wait(0);
+      sleep(1);
+    }
   }
-  return 0;
 }
