@@ -16,3 +16,7 @@ int wait4(int pid, int *status, int options, void *rusage) {
 }
 
 int wait(int *status) { return wait4(-1, status, 0, 0); }
+
+int execve(const char *path, char *const argv[], char *const envp[]) {
+  return (int)syscall3(59, (long)path, (long)argv, (long)envp);
+}

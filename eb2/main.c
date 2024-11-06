@@ -1,7 +1,6 @@
 #include "libc.c"
 
-// TODO: fork/exec/sleep/poll(?)
-// TODO: build for all os/archs
+// TODO: sleep/poll(?)
 int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
@@ -18,6 +17,9 @@ int main(int argc, char *argv[]) {
   if (0 == pid) {
     char msg[] = "Child\n";
     write(1, msg, sizeof(msg) - 1);
+
+    char *cmd_argv[] = {"ls", "-l", 0};
+    execve("/bin/ls", cmd_argv, 0);
   } else {
     char msg[] = "Parent\n";
     write(1, msg, sizeof(msg) - 1);
