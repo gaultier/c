@@ -1,7 +1,6 @@
 #pragma once
 
-/* unsigned int usleep(unsigned int secs); */
-#if defined(__x86_64__)
+#if defined(__x86_64__) || defined(__aarch64__)
 typedef unsigned long int uint64_t;
 typedef uint64_t size_t;
 typedef signed long int int64_t;
