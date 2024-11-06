@@ -20,6 +20,19 @@
 #error "os/arch not implemented"
 #endif
 
+#elif defined(__ARM_ARCH_5_) || defined(__ARM_ARCH_5E_) ||                     \
+    defined(__ARM_ARCH_6_) || defined(__ARM_ARCH_6T2_) ||                      \
+    defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) ||                     \
+    defined(__ARM_ARCH_6K__) || defined(__ARM_ARCH_6Z__) ||                    \
+    defined(__ARM_ARCH_6KZ__) || defined(__ARM_ARCH_7_)
+#include "os_arm.c"
+
+#if defined(__linux__)
+#include "os_linux_arm.c"
+#else
+#error "os/arch not implemented"
+#endif
+
 #else
 #error "os/arch not implemented"
 #endif

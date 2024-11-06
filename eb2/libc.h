@@ -5,6 +5,15 @@ typedef unsigned long int uint64_t;
 typedef uint64_t size_t;
 typedef signed long int int64_t;
 typedef int64_t ssize_t;
+#elif defined(__ARM_ARCH_5_) || defined(__ARM_ARCH_5E_) ||                     \
+    defined(__ARM_ARCH_6_) || defined(__ARM_ARCH_6T2_) ||                      \
+    defined(__ARM_ARCH_6__) || defined(__ARM_ARCH_6J__) ||                     \
+    defined(__ARM_ARCH_6K__) || defined(__ARM_ARCH_6Z__) ||                    \
+    defined(__ARM_ARCH_6KZ__) || defined(__ARM_ARCH_7_)
+typedef unsigned long int uint32_t;
+typedef uint32_t size_t;
+typedef signed long int int32_t;
+typedef int32_t ssize_t;
 #else
 #error "os/arch not implemented"
 #endif
