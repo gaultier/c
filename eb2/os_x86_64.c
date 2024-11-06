@@ -1,3 +1,10 @@
+
+static inline long syscall0(long n) {
+  unsigned long ret;
+  __asm__ __volatile__("syscall" : "=a"(ret) : "a"(n) : "rcx", "r11", "memory");
+  return (long)ret;
+}
+
 static inline long syscall1(long n, long a1) {
   unsigned long ret;
   __asm__ __volatile__("syscall"

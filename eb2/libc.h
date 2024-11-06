@@ -20,7 +20,9 @@ typedef int32_t ssize_t;
 
 void exit(int);
 ssize_t write(int fd, const void *buf, size_t count);
+int fork();
 
+static inline long syscall0(long n);
 static inline long syscall1(long n, long a1);
 static inline long syscall2(long n, long a1, long a2);
 static inline long syscall3(long n, long a1, long a2, long a3);

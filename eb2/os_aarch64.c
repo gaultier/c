@@ -5,6 +5,12 @@
     return x0;                                                                 \
   } while (0)
 
+static inline long syscall0(long n) {
+  register long x8 __asm__("x8") = n;
+  register long x0 __asm__("x0");
+  __asm_syscall("r"(x8));
+}
+
 static inline long syscall1(long n, long a) {
   register long x8 __asm__("x8") = n;
   register long x0 __asm__("x0") = a;

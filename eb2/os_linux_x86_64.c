@@ -9,3 +9,5 @@ void exit(int status) {
 ssize_t write(int fd, const void *buf, size_t count) {
   return syscall3(1, fd, (long)buf, (long)count);
 }
+
+int fork() { return (int)syscall0(57); }
