@@ -66,10 +66,10 @@ static inline long syscall6(long n, long a, long b, long c, long d, long e,
                 "r"(r5));
 }
 
+#define START "_start"
 __asm__(".text \n"
-        ".global _start\n"
-        ".type _start,%function \n"
-        "_start: \n "
+        ".global " START " \n"
+        ".type " START ",%function \n" START ": \n"
         "	mov fp, #0 \n"
         "	mov lr, #0 \n"
         "	ldr a2, 1f \n"
@@ -77,4 +77,8 @@ __asm__(".text \n"
         "	mov a1, sp \n"
         "2:	and ip, a1, #-16 \n"
         "	mov sp, ip \n"
-        "	bl _start_c \n");
+        "	bl " START "_c \n"
+        ".weak _DYNAMIC \n"
+        ".hidden _DYNAMIC \n"
+        ".align 2 \n"
+        "1:	.word _DYNAMIC-2b \n");
