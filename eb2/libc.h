@@ -21,6 +21,8 @@ typedef int32_t ssize_t;
 void exit(int);
 ssize_t write(int fd, const void *buf, size_t count);
 int fork();
+int wait4(int pid, int *status, int options, void *rusage);
+int wait(int *status);
 
 static inline long syscall0(long n);
 static inline long syscall1(long n, long a1);
