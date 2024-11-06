@@ -2,8 +2,11 @@
 
 // TODO: fork/exec/sleep/wait/poll(?)
 // TODO: build for all os/archs
-[[noreturn]] void _start() {
+int main(int argc, char *argv[]) {
+  (void)argc;
+  (void)argv;
+
   char msg[] = "Hello world!";
   write(1, msg, sizeof(msg) - 1);
-  exit(0);
+  return 0;
 }

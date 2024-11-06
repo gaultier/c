@@ -65,3 +65,16 @@ static inline long syscall6(long n, long a, long b, long c, long d, long e,
   __asm_syscall(R7_OPERAND, "0"(r0), "r"(r1), "r"(r2), "r"(r3), "r"(r4),
                 "r"(r5));
 }
+
+__asm__(".text \n"
+        ".global _start\n"
+        ".type _start,%function \n"
+        "_start: \n "
+        "	mov fp, #0 \n"
+        "	mov lr, #0 \n"
+        "	ldr a2, 1f \n"
+        "	add a2, pc, a2 \n"
+        "	mov a1, sp \n"
+        "2:	and ip, a1, #-16 \n"
+        "	mov sp, ip \n"
+        "	bl _start_c \n");
