@@ -9,7 +9,9 @@ ssize_t write(int fd, const void *buf, size_t count) {
   return syscall3(64, fd, (long)buf, (long)count);
 }
 
-int fork() { return (int)syscall0(0); }
+#define SIGCHLD 17
+
+int fork() { return (int)syscall2(220, SIGCHLD, 0); }
 
 int wait4(int pid, int *status, int options, void *rusage) {
   return (int)syscall4(260, pid, (long)status, (long)options, (long)rusage);
