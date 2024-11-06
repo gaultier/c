@@ -1,7 +1,6 @@
 #include "libc.h"
 
-[[noreturn]]
-void exit(int status) {
+__attribute((noreturn)) void exit(int status) {
   for (;;)
     syscall1(60, status);
 }

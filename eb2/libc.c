@@ -39,7 +39,8 @@
 
 int main(int argc, char *argv[]);
 
-__attribute((__visibility__("hidden"))) [[noreturn]] void _start_c(long *p) {
+__attribute((__visibility__("hidden"))) __attribute((noreturn)) void
+_start_c(long *p) {
   int argc = (int)p[0];
   char **argv = (void *)(p + 1);
   exit(main(argc, argv));
