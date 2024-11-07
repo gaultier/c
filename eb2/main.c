@@ -1,10 +1,7 @@
 #include "libc.c"
 
-static void on_sigchld(int) {
-  // TODO
-  char msg[] = "SIGCHLD";
-  write(1, msg, sizeof(msg) - 1);
-}
+static volatile int punt;
+static void on_sigchld(int) { punt = 1; }
 
 // TODO: signal/pipe/poll
 int main(int argc, char *argv[]) {
@@ -23,7 +20,7 @@ int main(int argc, char *argv[]) {
       execve(argv[0], argv, 0);
     } else {
       int status = 0;
-      int err = wait(&status);
+      int err = wait(&status); // FIXME: poll.
       if (err < 0) {
         return -err;
       }
