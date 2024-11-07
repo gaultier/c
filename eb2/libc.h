@@ -33,7 +33,19 @@ struct timespec {
   long tv_sec, tv_nsec;
 };
 
+#define SIGKILL 9
 #define SIGCHLD 17 /* Child terminated or stopped.  */
+
+int kill(int pid, int sig);
+int pipe(int pipefd[2]);
+int close(int fd);
+
+#define WEXITSTATUS(s) (((s) & 0xff00) >> 8)
+#define WTERMSIG(s) ((s) & 0x7f)
+#define WSTOPSIG(s) WEXITSTATUS(s)
+#define WIFEXITED(s) (!WTERMSIG(s))
+#define WIFSTOPPED(s) ((short)((((s) & 0xffff) * 0x10001U) >> 8) > 0x7f00)
+#define WIFSIGNALED(s) (((s) & 0xffff) - 1U < 0xffu)
 
 #define POLLIN 0x0001
 #define POLLPRI 0x0002
