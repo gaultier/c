@@ -27,6 +27,21 @@ int wait4(int pid, int *status, int options, void *rusage);
 int wait(int *status);
 int execve(const char *path, char *const argv[], char *const envp[]);
 unsigned int sleep(unsigned int secs);
+void *signal(int sig, void (*fn)(int));
+
+struct sigaction {
+  union {
+    void (*sa_handler)(int);
+    void (*sa_sigaction)(int, int *, void *);
+  };
+  int sa_mask;
+  int sa_flags;
+  void (*sa_restorer)(void);
+};
+
+int sigaction(int sig, struct sigaction *act, struct sigaction *oldact);
+
+#define SIGCHLD 17 /* Child terminated or stopped.  */
 
 static inline long syscall0(long n);
 static inline long syscall1(long n, long a1);

@@ -1,9 +1,17 @@
 #include "libc.c"
 
-// TODO: signalfd/poll/timer_create
+static void on_sigchld(int) {
+  // TODO
+  char msg[] = "SIGCHLD";
+  write(1, msg, sizeof(msg) - 1);
+}
+
+// TODO: signal/pipe/poll
 int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
+
+  signal(SIGCHLD, on_sigchld);
 
   for (;;) {
     int pid = fork();

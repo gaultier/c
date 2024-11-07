@@ -2,6 +2,7 @@
 #include <getopt.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <signal.h>
 #include <spawn.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -84,6 +85,7 @@ static void *exit_after_max_duration(void *arg) {
 }
 
 int main(int argc, char *argv[], char *envp[]) {
+  signal(SIGUSR1, NULL);
   if (argc == 1) {
     return EINVAL;
   }
