@@ -19,19 +19,23 @@ int main(int argc, char *argv[]) {
       argv += 1;
       execve(argv[0], argv, 0);
     } else {
-      int status = 0;
       struct timespec tv = {.tv_sec = 1};
       long sigset = SIGCHLD;
       int err = pselect(0, 0, 0, 0, &tv, &sigset);
-      if (err < 0) {
-        return -err;
-      }
+      (void)err;
 
-      int exited = 0 == ((uint32_t)status & 0x7f);
-      int exit_code = (((uint32_t)status) & 0xff00) >> 8;
-      if (exited && 0 == exit_code) {
-        return 0;
-      }
+      /* if (EINTR == err) { */
+      /*   // TODO: get the exit code. */
+      /* } */
+      /* if (err < 0) { */
+      /*   return -err; */
+      /* } */
+
+      /* int exited = 0 == ((uint32_t)status & 0x7f); */
+      /* int exit_code = (((uint32_t)status) & 0xff00) >> 8; */
+      /* if (exited && 0 == exit_code) { */
+      /*   return 0; */
+      /* } */
 
       sleep(1);
     }
