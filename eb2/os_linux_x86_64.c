@@ -48,7 +48,18 @@ int signal(int sig, void (*fn)(int)) {
       .flags = SA_RESTORER | SA_RESTART,
       .restorer = __restore_rt,
   };
+  // rt_sigaction.
   return (int)syscall4(0xd, sig, (long)&ksa, 0, 8);
+}
+
+int poll(struct pollfd *fds, int nfds, int timeout) {
+  struct timespec ts = {
+      .tv_sec = timeout / 1000,
+      .tv_nsec = (timeout % 1000) * 1000000,
+  };
+
+  // ppoll.
+  return (int)syscall5(271, (long)fds, nfds, (long)&ts, 0, 0);
 }
 
 __asm__(".section .text.nolibc_memmove_memcpy\n"

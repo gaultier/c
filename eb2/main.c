@@ -18,9 +18,12 @@ int main(int argc, char *argv[]) {
       argv += 1;
       execve(argv[0], argv, 0);
     } else {
-      /* struct timespec tv = {.tv_sec = 1}; */
-      /* int err = poll(0, 0, 0, 0, &tv, &sigset); */
-      /* (void)err; */
+      struct pollfd poll_fd = {
+          .fd = 0, // TODO
+          .events = POLLIN,
+      };
+      int err = poll(&poll_fd, 1, 2000);
+      (void)err;
 
       /* if (EINTR == err) { */
       /*   // TODO: get the exit code. */

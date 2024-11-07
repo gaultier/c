@@ -30,22 +30,25 @@ unsigned int sleep(unsigned int secs);
 int signal(int sig, void (*fn)(int));
 
 struct timespec {
-  long tv_sec, tv_nsecs;
+  long tv_sec, tv_nsec;
 };
-
-struct sigaction {
-  union {
-    void (*sa_handler)(int);
-    void (*sa_sigaction)(int, int *, void *);
-  };
-  int sa_mask;
-  int sa_flags;
-  void (*sa_restorer)(void);
-};
-
-int sigaction(int sig, struct sigaction *act, struct sigaction *oldact);
 
 #define SIGCHLD 17 /* Child terminated or stopped.  */
+
+#define POLLIN 0x0001
+#define POLLPRI 0x0002
+#define POLLOUT 0x0004
+#define POLLERR 0x0008
+#define POLLHUP 0x0010
+#define POLLNVAL 0x0020
+
+struct pollfd {
+  int fd;
+  short int events;
+  short int revents;
+};
+
+int poll(struct pollfd *fds, int nfds, int timeout);
 
 static inline long syscall0(long n);
 static inline long syscall1(long n, long a1);
