@@ -33,9 +33,6 @@ struct timespec {
   long tv_sec, tv_nsecs;
 };
 
-int pselect(int n, long *restrict rfds, long *restrict wfds,
-            long *restrict efds, struct timespec *restrict tv, long *sigset);
-
 struct sigaction {
   union {
     void (*sa_handler)(int);

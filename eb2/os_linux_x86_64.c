@@ -59,10 +59,3 @@ void *signal(int sig, void (*fn)(int)) {
     return (void *)SIG_ERR;
   return 0; // Difference.
 }
-
-int pselect(int n, long *restrict rfds, long *restrict wfds,
-            long *restrict efds, struct timespec *restrict tv, long *sigset) {
-  long mask[2] = {(long)sigset, sizeof(long)};
-  return (int)syscall6(270, n, (long)rfds, (long)wfds, (long)efds, (long)tv,
-                       (long)mask);
-}

@@ -1,9 +1,6 @@
-#define _POSIX_C_SOURCE 200112L
-#include <poll.h>
-#include <signal.h>
-#include <stdio.h>
-#include <sys/time.h>
-#include <unistd.h>
+#include "/home/pg/not-my-code/linux/tools/include/nolibc/nolibc.h"
+#include "/home/pg/not-my-code/linux/tools/include/nolibc/signal.h"
+#include "/home/pg/not-my-code/linux/tools/include/nolibc/sys.h"
 
 static int pipe_fd[2];
 
@@ -13,7 +10,7 @@ static void sigchld_handler(int sig) {
 }
 
 int main(int argc, char *argv[]) {
-  signal(SIGCHLD, sigchld_handler);
+  // signal(SIGCHLD, sigchld_handler);
 
   pipe(pipe_fd);
 
@@ -25,7 +22,7 @@ int main(int argc, char *argv[]) {
     close(pipe_fd[0]);
     close(pipe_fd[1]);
 
-    execvp(argv[0], argv + 1);
+    execve(argv[0], argv + 1, 0);
   } else {
     struct pollfd poll_fd = {
         .fd = pipe_fd[0],
