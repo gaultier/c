@@ -1,7 +1,6 @@
 #include "libc.c"
 
-static volatile int punt;
-static void on_sigchld(int) { punt = 1; }
+static void on_sigchld(int) {}
 
 // TODO: signal/pipe/poll
 int main(int argc, char *argv[]) {
@@ -19,10 +18,9 @@ int main(int argc, char *argv[]) {
       argv += 1;
       execve(argv[0], argv, 0);
     } else {
-      struct timespec tv = {.tv_sec = 1};
-      long sigset = SIGCHLD;
-      int err = pselect(0, 0, 0, 0, &tv, &sigset);
-      (void)err;
+      /* struct timespec tv = {.tv_sec = 1}; */
+      /* int err = poll(0, 0, 0, 0, &tv, &sigset); */
+      /* (void)err; */
 
       /* if (EINTR == err) { */
       /*   // TODO: get the exit code. */

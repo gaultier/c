@@ -27,7 +27,7 @@ int wait4(int pid, int *status, int options, void *rusage);
 int wait(int *status);
 int execve(const char *path, char *const argv[], char *const envp[]);
 unsigned int sleep(unsigned int secs);
-void *signal(int sig, void (*fn)(int));
+int signal(int sig, void (*fn)(int));
 
 struct timespec {
   long tv_sec, tv_nsecs;

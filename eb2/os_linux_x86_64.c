@@ -30,32 +30,62 @@ unsigned int sleep(unsigned int secs) {
   return (unsigned int)nanosleep(&tv, &tv);
 }
 
-#define __SIGRTMAX 64
-#define _NSIG (__SIGRTMAX + 1)
-
 struct k_sigaction {
   void (*handler)(int);
   unsigned long flags;
   void (*restorer)(void);
   unsigned mask[2];
 };
-int sigaction(int sig, struct sigaction *act, struct sigaction *) {
-  struct k_sigaction ksa = {
-      .mask[0] = (uint32_t)act->sa_mask,
-      .mask[1] = (uint32_t)act->sa_mask,
-      .flags = (uint64_t)act->sa_flags,
-      .handler = act->sa_handler,
-      .restorer = act->sa_restorer,
-  };
-  return (int)syscall4(13, sig, (long)&ksa, 0, _NSIG / 8);
-}
 
+void __restore_rt();
+
+#define SA_RESTORER 0x04000000
 #define SA_RESTART 0x10000000
-#define SIG_ERR (-1)
 
-void *signal(int sig, void (*fn)(int)) {
-  struct sigaction sa_old, sa = {.sa_handler = fn, .sa_flags = SA_RESTART};
-  if (sigaction(sig, &sa, &sa_old) < 0)
-    return (void *)SIG_ERR;
-  return 0; // Difference.
+int signal(int sig, void (*fn)(int)) {
+  struct k_sigaction ksa = {
+      .handler = fn,
+      .flags = SA_RESTORER | SA_RESTART,
+      .restorer = __restore_rt,
+  };
+  return (int)syscall4(0xd, sig, (long)&ksa, 0, 8);
 }
+
+__asm__(".section .text.nolibc_memmove_memcpy\n"
+        ".weak memmove\n"
+        ".weak memcpy\n"
+        "memmove:\n"
+        "memcpy:\n"
+        "movq %rdx, %rcx\n\t"
+        "movq %rdi, %rax\n\t"
+        "movq %rdi, %rdx\n\t"
+        "subq %rsi, %rdx\n\t"
+        "cmpq %rcx, %rdx\n\t"
+        "jb   1f\n\t"
+        "rep movsb\n\t"
+        "retq\n"
+        "1:" /* backward copy */
+        "leaq -1(%rdi, %rcx, 1), %rdi\n\t"
+        "leaq -1(%rsi, %rcx, 1), %rsi\n\t"
+        "std\n\t"
+        "rep movsb\n\t"
+        "cld\n\t"
+        "retq\n"
+
+        ".section .text.nolibc_memset\n"
+        ".weak memset\n"
+        "memset:\n"
+        "xchgl %eax, %esi\n\t"
+        "movq  %rdx, %rcx\n\t"
+        "pushq %rdi\n\t"
+        "rep stosb\n\t"
+        "popq  %rax\n\t"
+        "retq\n"
+
+        ".global __restore_rt\n"
+        ".hidden __restore_rt\n"
+        ".type __restore_rt,@function\n"
+        "__restore_rt:\n"
+        "	mov $15, %rax\n"
+        "	syscall\n"
+        ".size __restore_rt,.-__restore_rt\n");
