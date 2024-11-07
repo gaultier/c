@@ -20,7 +20,9 @@ int main(int argc, char *argv[]) {
       execve(argv[0], argv, 0);
     } else {
       int status = 0;
-      int err = wait(&status); // FIXME: poll.
+      struct timespec tv = {.tv_sec = 1};
+      long sigset = SIGCHLD;
+      int err = pselect(0, 0, 0, 0, &tv, &sigset);
       if (err < 0) {
         return -err;
       }

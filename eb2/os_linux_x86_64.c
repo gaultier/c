@@ -21,11 +21,6 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
   return (int)syscall3(59, (long)path, (long)argv, (long)envp);
 }
 
-struct timespec {
-  long tv_sec;
-  long tv_nsec;
-};
-
 int nanosleep(struct timespec *req, struct timespec *rem) {
   return (int)syscall2(35, (long)req, (long)rem);
 }
@@ -63,4 +58,11 @@ void *signal(int sig, void (*fn)(int)) {
   if (sigaction(sig, &sa, &sa_old) < 0)
     return (void *)SIG_ERR;
   return 0; // Difference.
+}
+
+int pselect(int n, long *restrict rfds, long *restrict wfds,
+            long *restrict efds, struct timespec *restrict tv, long *sigset) {
+  long mask[2] = {(long)sigset, sizeof(long)};
+  return (int)syscall6(270, n, (long)rfds, (long)wfds, (long)efds, (long)tv,
+                       (long)mask);
 }
