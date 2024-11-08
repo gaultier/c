@@ -1,4 +1,13 @@
-#include "libc.c"
+#define _POSIX_C_SOURCE 1
+#define _GNU_SOURCE
+#include <errno.h>
+#include <poll.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+/* #include "/home/pg/not-my-code/linux-syscall-support/linux_syscall_support.h"
+ */
 
 static int pipe_fd[2];
 
@@ -32,9 +41,17 @@ int main(int argc, char *argv[]) {
           .fd = 0, // TODO
           .events = POLLIN,
       };
-      int err = poll(&poll_fd, 1, 2000);
+      sigset_t mask = {0};
+      sigemptyset(&mask);
+      sigaddset(&mask, SIGCHLD);
+      struct timespec ts = {.tv_sec = 2};
+      int err = ppoll(&poll_fd, 1, &ts, &mask);
+      //   0 -> Timeout.
+      //   1 -> Self-pipe read.
+      // < 0 -> Error.
+      // > 1 -> Unreachable.
       if (err < 0) { // Error.
-        return -err;
+        return errno;
       }
       if (err == 1) {
         // Child terminated normally.
@@ -46,7 +63,7 @@ int main(int argc, char *argv[]) {
         }
       }
 
-      // Retry;
+      // Retry (timeout or child exit with error);
       kill(pid, SIGKILL);
       wait(0); // Reap zombie.
       sleep(1);
