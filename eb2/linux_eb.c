@@ -7,24 +7,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-// High level os-independent API:
-// - Create child process -> return (err, child_pid, child_fd) e.g. `fork() +
-// pidfd_open()` (Linux) or `clone3(..., CLONE_PIDFD)` or  `pdfork()` (FreeBSD)
-// - if child -> do your thing
-// - if parent:
-//   + wait with timeout on child_fd with `poll` or `select`
-//   + if timed out:
-//     * kill child with SIGKILL using child_fd e.g.
-//     `pidfd_send_signal(child_fd)` (Linux) or `close(child_fd)` (FreeBSD).
-//     * sleep a bit
-//     * retry
-//  + else: the child exited by itself
-//    * get exit status using `wait4(child_pid, &status, ...)`
-//    * if status == 0: exit(0)
-//    * else:
-//      - sleep a bit
-//      - retry
-
 int main(int argc, char *argv[]) {
   (void)argc;
 
