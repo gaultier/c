@@ -1,10 +1,13 @@
-#include "libc.h"
+/* #include "libc.h" */
+// #include "/home/pg/not-my-code/linux-syscall-support/linux_syscall_support.h"
+#include "/home/pg/not-my-code/linux/tools/include/nolibc/nolibc.h"
 
 int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  for (;;) {
+  uint32_t sleep_ms = 100;
+  for (int retry = 0; retry < 10; retry += 1) {
     int child_pid = fork();
     if (child_pid < 0) {
       return child_pid;
@@ -15,7 +18,7 @@ int main(int argc, char *argv[]) {
       execve(argv[0], argv, 0);
     } else {
       // pidfd_open.
-      int child_fd = syscall2(434, child_pid, 0);
+      int child_fd = (int)syscall(434, child_pid, 0);
       struct pollfd poll_fd = {
           .fd = child_fd,
           .events = POLLIN,
@@ -41,7 +44,8 @@ int main(int argc, char *argv[]) {
       // Retry (timeout or child exit with error);
       kill(child_pid, SIGKILL);
       wait(0); // Reap zombie.
-      sleep(1);
+      sleep_ms *= 2;
+      sleep(sleep_ms);
     }
   }
 }
