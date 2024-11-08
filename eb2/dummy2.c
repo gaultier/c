@@ -4,9 +4,8 @@
 
 int main(int argc, char *argv[]) {
   (void)argc;
-  (void)argv;
 
-  uint32_t sleep_ms = 100;
+  uint32_t sleep_ms = 100 * 1000;
   for (int retry = 0; retry < 10; retry += 1) {
     int child_pid = fork();
     if (child_pid < 0) {
@@ -45,7 +44,8 @@ int main(int argc, char *argv[]) {
       kill(child_pid, SIGKILL);
       wait(0); // Reap zombie.
       sleep_ms *= 2;
-      sleep(sleep_ms);
+      usleep(sleep_ms);
     }
   }
+  return 1;
 }
