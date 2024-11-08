@@ -1,6 +1,9 @@
+#define _GNU_SOURCE
 #include <errno.h>
 #include <poll.h>
-#include <sys/procdesc.h>
+#include <sched.h>
+#include <stdint.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -24,19 +27,23 @@
 
 int main(int argc, char *argv[]) {
   (void)argc;
-  (void)argv;
 
-  for (;;) {
-    int child_fd = 0;
-    int child_pid = pdfork(&child_fd, PD_CLOEXEC);
+  uint32_t sleep_ms = 128 * 1000;
+
+  for (int retry = 0; retry < 10; retry += 1) {
+    int child_pid = fork();
     if (child_pid < 0) {
       return errno;
     }
     if (0 == child_pid) {
       argv += 1;
-      // TODO: execvp.
-      execve(argv[0], argv, 0);
+      execvp(argv[0], argv);
     } else {
+      int child_fd = (int)syscall(SYS_pidfd_open, child_pid, 0);
+      if (child_fd < 0) {
+        return 1;
+      }
+
       struct pollfd poll_fd = {
           .fd = child_fd,
           .events = POLLHUP,
@@ -51,18 +58,23 @@ int main(int argc, char *argv[]) {
       }
       if (err == 0) { // Timeout fired.
         // Kill the child.
-        close(child_fd);
+        syscall(SYS_pidfd_send_signal, child_pid, SIGKILL, NULL, 0);
       } else { // Child finished by itself.
         // Get exit status of child.
         int status = 0;
-        wait4(child_pid, &status, 0, 0); // Reap zombie.
+        siginfo_t siginfo = {0};
+        waitid(P_PIDFD, (__id_t)child_fd, &siginfo, 0); // Reap zombie.
 
-        if (WIFEXITED(status) && 0 == WEXITSTATUS(status)) {
+        if (WIFEXITED(siginfo.si_status) &&
+            0 == WEXITSTATUS(siginfo.si_status)) {
           return 0;
         }
       }
 
-      sleep(1);
+      sleep_ms *= 2;
+      usleep(sleep_ms);
+
+      close(child_fd);
     }
   }
 }
