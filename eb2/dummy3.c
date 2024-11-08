@@ -1,8 +1,8 @@
-#define _POSIX_C_SOURCE 1
-#define _GNU_SOURCE
+#define _POSIX_C_SOURCE 199309L
 #include <errno.h>
 #include <poll.h>
 #include <signal.h>
+#include <sys/timerfd.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -25,6 +25,12 @@ int main(int argc, char *argv[]) {
   pipe(pipe_fd);
   signal(SIGCHLD, on_sigchld);
 
+  int timer_fd = timerfd_create(CLOCK_MONOTONIC, TFD_CLOEXEC);
+  if (-1 == timer_fd) {
+    return errno;
+  }
+  timerfd_settime(timer_fd, 
+
   for (;;) {
     int pid = fork();
     if (pid < 0) {
@@ -41,11 +47,7 @@ int main(int argc, char *argv[]) {
           .fd = 0, // TODO
           .events = POLLIN,
       };
-      sigset_t mask = {0};
-      sigemptyset(&mask);
-      sigaddset(&mask, SIGCHLD);
-      struct timespec ts = {.tv_sec = 2};
-      int err = ppoll(&poll_fd, 1, &ts, &mask);
+      int err = poll(&poll_fd, 1, 2000);
       //   0 -> Timeout.
       //   1 -> Self-pipe read.
       // < 0 -> Error.
