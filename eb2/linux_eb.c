@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
         // Get exit status of child.
         siginfo_t siginfo = {0};
         // Reap zombie.
-        if (-1 == waitid(P_PIDFD, (__id_t)child_fd, &siginfo, WEXITED)) {
+        if (-1 == waitid(P_PIDFD, (id_t)child_fd, &siginfo, WEXITED)) {
           return errno;
         }
 
