@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
 
       struct pollfd poll_fd = {
           .fd = child_fd,
-          .events = POLLHUP,
+          .events = POLLHUP | POLLIN,
       };
       int err = poll(&poll_fd, 1, 2000);
       //   0 -> Timeout.
@@ -61,9 +61,11 @@ int main(int argc, char *argv[]) {
         syscall(SYS_pidfd_send_signal, child_pid, SIGKILL, NULL, 0);
       } else { // Child finished by itself.
         // Get exit status of child.
-        int status = 0;
         siginfo_t siginfo = {0};
-        waitid(P_PIDFD, (__id_t)child_fd, &siginfo, 0); // Reap zombie.
+        // Reap zombie.
+        if (-1 == waitid(P_PIDFD, (__id_t)child_fd, &siginfo, WEXITED)) {
+          return errno;
+        }
 
         if (WIFEXITED(siginfo.si_status) &&
             0 == WEXITSTATUS(siginfo.si_status)) {
