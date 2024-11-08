@@ -13,51 +13,51 @@ int main(int argc, char *argv[]) {
 
   for (int retry = 0; retry < 10; retry += 1) {
     int child_pid = fork();
-    if (child_pid < 0) {
+    if (-1 == child_pid) {
       return errno;
     }
-    if (0 == child_pid) {
+    if (0 == child_pid) { // Child
       argv += 1;
-      execvp(argv[0], argv);
-    } else {
-      int child_fd = (int)syscall(SYS_pidfd_open, child_pid, 0);
-      if (child_fd < 0) {
-        return 1;
-      }
-
-      struct pollfd poll_fd = {
-          .fd = child_fd,
-          .events = POLLHUP | POLLIN,
-      };
-      int err = poll(&poll_fd, 1, 2000);
-      //   0 -> Timeout.
-      //   1 -> Child finished.
-      // < 0 -> Error.
-      // > 1 -> Unreachable.
-      if (err < 0) { // Error.
+      if (-1 == execvp(argv[0], argv)) {
         return errno;
       }
-      if (err == 0) { // Timeout fired.
-        // Kill the child.
-        syscall(SYS_pidfd_send_signal, child_pid, SIGKILL, NULL, 0);
-      } else { // Child finished by itself.
-        // Get exit status of child.
-        siginfo_t siginfo = {0};
-        // Reap zombie.
-        if (-1 == waitid(P_PIDFD, (id_t)child_fd, &siginfo, WEXITED)) {
-          return errno;
-        }
-
-        if (WIFEXITED(siginfo.si_status) &&
-            0 == WEXITSTATUS(siginfo.si_status)) {
-          return 0;
-        }
-      }
-
-      sleep_ms *= 2;
-      usleep(sleep_ms);
-
-      close(child_fd);
+      __builtin_unreachable();
     }
+
+    // Parent.
+
+    int child_fd = (int)syscall(SYS_pidfd_open, child_pid, 0);
+    if (-1 == child_fd) {
+      return errno;
+    }
+
+    struct pollfd poll_fd = {
+        .fd = child_fd,
+        .events = POLLHUP | POLLIN,
+    };
+    if (-1 == poll(&poll_fd, 1, 2000)) {
+      return errno;
+    }
+
+    // Maybe kill the child (the child might have terminated by itself even if
+    // poll(2) timed-out).
+    if (-1 == syscall(SYS_pidfd_send_signal, child_pid, SIGKILL, NULL, 0)) {
+      return errno;
+    }
+
+    siginfo_t siginfo = {0};
+    // Get exit status of child & reap zombie.
+    if (-1 == waitid(P_PIDFD, (id_t)child_fd, &siginfo, WEXITED)) {
+      return errno;
+    }
+
+    if (WIFEXITED(siginfo.si_status) && 0 == WEXITSTATUS(siginfo.si_status)) {
+      return 0;
+    }
+
+    sleep_ms *= 2;
+    usleep(sleep_ms);
+
+    close(child_fd);
   }
 }
