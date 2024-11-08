@@ -43,7 +43,7 @@ int main(int argc, char *argv[]) {
 
     // Maybe kill the child (the child might have terminated by itself even if
     // poll(2) timed-out).
-    if (-1 == syscall(SYS_pidfd_send_signal, child_pid, SIGKILL, NULL, 0)) {
+    if (-1 == syscall(SYS_pidfd_send_signal, child_fd, SIGKILL, NULL, 0)) {
       return errno;
     }
 
