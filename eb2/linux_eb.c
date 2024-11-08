@@ -16,6 +16,7 @@ int main(int argc, char *argv[]) {
     if (-1 == child_pid) {
       return errno;
     }
+
     if (0 == child_pid) { // Child
       argv += 1;
       if (-1 == execvp(argv[0], argv)) {
@@ -35,6 +36,7 @@ int main(int argc, char *argv[]) {
         .fd = child_fd,
         .events = POLLHUP | POLLIN,
     };
+    // Wait for the child to finish with a timeout.
     if (-1 == poll(&poll_fd, 1, 2000)) {
       return errno;
     }
