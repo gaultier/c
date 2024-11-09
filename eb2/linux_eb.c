@@ -9,7 +9,7 @@
 int main(int argc, char *argv[]) {
   (void)argc;
 
-  uint32_t sleep_ms = 128 * 1000;
+  uint32_t sleep_ms = 128;
 
   for (int retry = 0; retry < 10; retry += 1) {
     int child_pid = fork();
@@ -58,7 +58,7 @@ int main(int argc, char *argv[]) {
     }
 
     sleep_ms *= 2;
-    usleep(sleep_ms);
+    usleep(sleep_ms * 1000);
 
     close(child_fd);
   }
