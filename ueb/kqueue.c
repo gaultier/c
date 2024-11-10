@@ -10,7 +10,7 @@ int main(int argc, char *argv[]) {
   (void)argc;
 
   uint32_t wait_ms = 128;
-  int queue = kqueuex(KQUEUE_CLOEXEC);
+  int queue = kqueue();
 
   for (int retry = 0; retry < 10; retry += 1) {
     int child_pid = fork();
