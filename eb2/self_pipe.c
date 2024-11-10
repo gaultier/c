@@ -50,18 +50,21 @@ int main(int argc, char *argv[]) {
     if (1 == ret) {
       char dummy = 0;
       read(pipe_fd[0], &dummy, 1);
+      int status = 0;
+      if (-1 == wait(&status)) {
+        return errno;
+      }
+      if (WIFEXITED(status) && 0 == WEXITSTATUS(status)) {
+        return 0;
+      }
     }
 
     if (-1 == kill(child_pid, SIGKILL)) {
       return errno;
     }
 
-    int status = 0;
-    if (-1 == wait(&status)) {
+    if (-1 == wait(NULL)) {
       return errno;
-    }
-    if (WIFEXITED(status) && 0 == WEXITSTATUS(status)) {
-      return 0;
     }
 
     usleep(wait_ms * 1000);
