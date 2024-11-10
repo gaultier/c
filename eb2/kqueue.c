@@ -63,7 +63,7 @@ int main(int argc, char *argv[]) {
         .fflags = NOTE_EXIT,
         .flags = EV_DELETE,
     };
-    kevent(queue, &change_list, 1, NULL, 0, &timeout);
+    kevent(queue, &change_list, 1, NULL, 0, NULL);
 
     usleep(wait_ms * 1000);
     wait_ms *= 2;
