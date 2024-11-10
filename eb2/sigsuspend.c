@@ -2,14 +2,17 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdint.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 void on_sigchld(int sig) { (void)sig; }
+void on_sigalrm(int sig) { (void)sig; }
 
 int main(int argc, char *argv[]) {
   (void)argc;
   signal(SIGCHLD, on_sigchld);
+  signal(SIGALRM, on_sigalrm);
 
   uint32_t wait_ms = 128;
 
@@ -27,25 +30,28 @@ int main(int argc, char *argv[]) {
       __builtin_unreachable();
     }
 
+    struct itimerval timer = {
+        .it_interval =
+            {
+                .tv_sec = wait_ms / 1000,
+                .tv_usec = (wait_ms % 1000) * 1000,
+            },
+    };
+    if (-1 == setitimer(ITIMER_REAL, &timer, NULL)) {
+      return errno;
+    }
+
     sigset_t sigset = {0};
     sigemptyset(&sigset);
     sigaddset(&sigset, SIGCHLD);
+    sigaddset(&sigset, SIGALRM);
 
-    siginfo_t siginfo = {0};
-
-    struct timespec timeout = {
-        .tv_sec = wait_ms / 1000,
-        .tv_nsec = (wait_ms % 1000) * 1000 * 1000,
-    };
-
-    int sig = sigtimedwait(&sigset, &siginfo, &timeout);
-    if (-1 == sig && EAGAIN != errno) { // Error
-      return errno;
+    int status = 0;
+    while (0 == waitpid(child_pid, &status, WNOHANG)) {
+      sigsuspend(&sigset);
     }
-    if (-1 != sig) { // Child finished.
-      if (WIFEXITED(siginfo.si_status) && 0 == WEXITSTATUS(siginfo.si_status)) {
-        return 0;
-      }
+    if (WIFEXITED(status) && 0 == WEXITSTATUS(status)) {
+      return 0;
     }
 
     if (-1 == kill(child_pid, SIGKILL)) {

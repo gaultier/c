@@ -1,14 +1,25 @@
 #define _GNU_SOURCE
 #include <errno.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdint.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-void on_sigchld(int sig) { (void)sig; }
+static int pipe_fd[2] = {0};
+void on_sigchld(int sig) {
+  (void)sig;
+  char dummy = 0;
+  write(pipe_fd[1], &dummy, 1);
+}
 
 int main(int argc, char *argv[]) {
   (void)argc;
+
+  if (-1 == pipe(pipe_fd)) {
+    return errno;
+  }
+
   signal(SIGCHLD, on_sigchld);
 
   uint32_t wait_ms = 128;
@@ -27,33 +38,30 @@ int main(int argc, char *argv[]) {
       __builtin_unreachable();
     }
 
-    sigset_t sigset = {0};
-    sigemptyset(&sigset);
-    sigaddset(&sigset, SIGCHLD);
-
-    siginfo_t siginfo = {0};
-
-    struct timespec timeout = {
-        .tv_sec = wait_ms / 1000,
-        .tv_nsec = (wait_ms % 1000) * 1000 * 1000,
+    struct pollfd poll_fd = {
+        .fd = pipe_fd[0],
+        .events = POLLIN,
     };
-
-    int sig = sigtimedwait(&sigset, &siginfo, &timeout);
-    if (-1 == sig && EAGAIN != errno) { // Error
+    // Wait for the child to finish with a timeout.
+    int ret = poll(&poll_fd, 1, (int)wait_ms);
+    if (-1 == ret && EINTR != ret) {
       return errno;
     }
-    if (-1 != sig) { // Child finished.
-      if (WIFEXITED(siginfo.si_status) && 0 == WEXITSTATUS(siginfo.si_status)) {
-        return 0;
-      }
+    if (1 == ret) {
+      char dummy = 0;
+      read(pipe_fd[0], &dummy, 1);
     }
 
     if (-1 == kill(child_pid, SIGKILL)) {
       return errno;
     }
 
-    if (-1 == wait(NULL)) {
+    int status = 0;
+    if (-1 == wait(&status)) {
       return errno;
+    }
+    if (WIFEXITED(status) && 0 == WEXITSTATUS(status)) {
+      return 0;
     }
 
     usleep(wait_ms * 1000);
