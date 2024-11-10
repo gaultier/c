@@ -66,7 +66,6 @@ int main(int argc, char *argv[]) {
     if (-1 == wait(NULL)) {
       return errno;
     }
-
     usleep(wait_ms * 1000);
     wait_ms *= 2;
   }
