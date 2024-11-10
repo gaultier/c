@@ -44,7 +44,7 @@ int main(int argc, char *argv[]) {
     };
     // Wait for the child to finish with a timeout.
     int ret = poll(&poll_fd, 1, (int)wait_ms);
-    if (-1 == ret && EINTR != ret) {
+    if (-1 == ret && EINTR != errno) {
       return errno;
     }
     if (1 == ret) {
