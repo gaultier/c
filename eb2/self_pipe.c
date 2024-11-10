@@ -42,30 +42,30 @@ int main(int argc, char *argv[]) {
         .fd = pipe_fd[0],
         .events = POLLIN,
     };
+    sigset_t sigset = {0};
+    sigemptyset(&sigset);
+    sigaddset(&sigset, SIGCHLD);
+
+    struct timespec timeout = {
+        .tv_sec = wait_ms / 1000,
+        .tv_nsec = (wait_ms % 1000) * 1000 * 1000,
+    };
     // Wait for the child to finish with a timeout.
-    int ret = poll(&poll_fd, 1, (int)wait_ms);
-    if (-1 == ret && EINTR != errno) {
-      return errno;
-    }
-    if (1 == ret) {
-      char dummy = 0;
-      read(pipe_fd[0], &dummy, 1);
-      int status = 0;
-      if (-1 == wait(&status)) {
-        return errno;
-      }
-      if (WIFEXITED(status) && 0 == WEXITSTATUS(status)) {
-        return 0;
-      }
-    }
-
-    if (-1 == kill(child_pid, SIGKILL)) {
+    int ret = ppoll(&poll_fd, 1, &timeout, &sigset);
+    if (-1 == ret) {
       return errno;
     }
 
-    if (-1 == wait(NULL)) {
-      return errno;
+    kill(child_pid, SIGKILL);
+    int status = 0;
+    wait(&status);
+    if (WIFEXITED(status) && 0 == WEXITSTATUS(status)) {
+      return 0;
     }
+
+    char dummy = 0;
+    read(pipe_fd[0], &dummy, 1);
+
     usleep(wait_ms * 1000);
     wait_ms *= 2;
   }
