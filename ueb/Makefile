@@ -1,4 +1,4 @@
-all: process_descriptor.bin self_pipe.bin sigtimedwait.bin kqueue.bin
+all: process_descriptor.bin self_pipe.bin sigtimedwait.bin kqueue.bin io_uring.bin
 
 process_descriptor.bin: process_descriptor.c
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
@@ -11,6 +11,9 @@ sigtimedwait.bin: sigtimedwait.c
 
 kqueue.bin: kqueue.c
 	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS)
+
+io_uring.bin: io_uring.c
+	$(CC) $^ -o $@ $(CFLAGS) $(LDFLAGS) -luring
 
 clean:
 	rm ./*.bin
