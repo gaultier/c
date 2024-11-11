@@ -55,21 +55,19 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
+    uint64_t user_data = cqe ? cqe->user_data : 0;
     io_uring_cqe_seen(&ring, cqe);
 
     kill(child_pid, SIGKILL);
 
     // Drain the CQE.
-    if (ret != 1) {
+    if (1 != user_data) {
       for (;;) {
-        struct __kernel_timespec ts_drain = {
-            .tv_sec = 0,
-            .tv_nsec = 1000,
-        };
-        ret = io_uring_wait_cqe_timeout(&ring, &cqe, &ts_drain);
+        ret = io_uring_wait_cqe(&ring, &cqe);
+        user_data = cqe ? cqe->user_data : 0;
         io_uring_cqe_seen(&ring, cqe);
         printf("[D002] %d\n", ret);
-        if (ret == 1) {
+        if (ret == 0 && 1 == user_data) {
           break;
         }
       }
