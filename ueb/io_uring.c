@@ -55,9 +55,7 @@ int main(int argc, char *argv[]) {
       return 0;
     }
 
-    if (NULL != cqe) {
-      io_uring_cqe_seen(&ring, cqe);
-    }
+    io_uring_cqe_seen(&ring, cqe);
 
     kill(child_pid, SIGKILL);
 
@@ -69,6 +67,8 @@ int main(int argc, char *argv[]) {
             .tv_nsec = 1000,
         };
         ret = io_uring_wait_cqe_timeout(&ring, &cqe, &ts_drain);
+        io_uring_cqe_seen(&ring, cqe);
+        printf("[D002] %d\n", ret);
         if (ret == 1) {
           break;
         }
